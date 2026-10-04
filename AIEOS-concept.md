@@ -1,8 +1,9 @@
 # AIEOS — Control Plane for AI Software Engineering
 
-> **Concept Document v0.3**
+> **Concept Document v0.4**
 > Ngày: 2026-10-04 · Trạng thái: Draft
-> Thay đổi so với v0.2: chuyển trọng tâm từ *"giúp AI tiếp tục làm việc"* sang *"đảm bảo AI không làm project sai"*; gom mô hình về 5 primitives; thêm Project Constitution, Truth Hierarchy, Capability Boundary, Risk → Autonomy, Assurance Levels, Change Impact Engine, Zero-friction path, ICP và product thesis.
+> v0.3: chuyển trọng tâm từ *"giúp AI tiếp tục làm việc"* sang *"đảm bảo AI không làm project sai"*; gom mô hình về 5 primitives; thêm Constitution, Truth Hierarchy, Capability Boundary, Risk → Autonomy, Assurance Levels, Change Impact Engine, Zero-friction path, ICP.
+> v0.4: tái tích hợp continuity — **continuity là phương tiện, correctness là mục tiêu**; thêm Product Hierarchy, Correctness Loop với các verdict (CONTINUE / REPLAN / STOP), và Resume Check.
 
 ---
 
@@ -12,8 +13,37 @@
 |---|---|
 | **Technical thesis** | AIEOS là một **control plane độc lập với AI model**, duy trì **intent** của project, **giới hạn** việc thực thi của agent, thu thập **evidence kiểm chứng được**, và liên tục **đối chiếu** các thay đổi do AI tạo ra với trạng thái dự định của hệ thống phần mềm. |
 | **Product thesis** | AIEOS cho phép developer **giao ngày càng nhiều phần việc phát triển phần mềm cho AI agents mà không mất quyền kiểm soát project**. |
-| **Killer capability** | Một AI agent có thể làm việc trên project qua hàng trăm session, qua nhiều model và runtime khác nhau, trong khi AIEOS luôn biết: project **phải là gì**, **thực tế đã đổi gì**, agent **được phép làm gì**, và điều gì **đã thực sự được chứng minh**. |
+| **Killer capability** | AIEOS cho phép AI agents **làm việc liên tục qua hàng trăm session, agent và model**, trong khi vẫn duy trì **intent** của project, **ranh giới thực thi** và **tính đúng đắn có thể kiểm chứng**. |
 | **Tagline** | **Agents write the code. AIEOS keeps the project correct.** |
+
+### Continuity là phương tiện, correctness là mục tiêu
+
+"Giúp AI tiếp tục làm việc" và "đảm bảo AI không làm project sai" **không phải hai thesis cạnh tranh** — chúng là hai tầng của cùng một hệ thống. Không có continuity thì không thể giữ correctness qua hàng trăm session; nhưng continuity *không có* correctness chỉ là memory, thứ đang bị commodity hoá nhanh.
+
+| Continuity kiểu memory *(không bán)* | Continuity kiểu controlled execution *(AIEOS)* |
+|---|---|
+| Lưu summary → session sau đọc → tiếp tục | Session sau được đưa vào **trạng thái thực thi hợp lệ hiện tại** của project |
+| "Hôm qua tôi đang làm gì?" | "Sau mọi thay đổi vừa xảy ra, project đang ở đâu và việc nào còn hợp lệ?" |
+| "TASK-142 đã done." | "TASK-142 từng done, nhưng ADR-031 v2 đã vô hiệu giả định của nó → STALE." |
+| Luôn nói **Continue** | Nói **Continue**, **Continue với Work Order này**, **Replan**, hoặc **Stop — và đây là lý do** |
+
+> **AIEOS duy trì tính liên tục của quá trình thực thi có kiểm soát (continuity of controlled execution) qua nhiều session, agent và model.**
+
+### Product hierarchy
+
+```text
+L1  MISSION      Keep AI-built software correct.                         (WHY)
+L2  MECHANISM    Maintain a continuously reconciled project state.       (HOW)
+L3  PRIMITIVES   Intent · Work · Control · Evidence · Reconciliation
+L4  CAPABILITIES Context Compiler · Task Contracts · Handoffs · Resume Check
+                 Capability Boundaries · Risk Engine · Autonomy Budgets
+                 Verification · Evidence Graph · Change Impact · Drift Detection
+L5  OUTCOME      AI làm việc lâu hơn, qua nhiều session/agent/model,
+                 ít can thiệp của con người hơn —
+                 MÀ KHÔNG mất correctness và quyền kiểm soát project.
+```
+
+Mọi capability ở L4 phải trả lời được: *"nó giữ correctness như thế nào?"* — nếu không trả lời được, nó không thuộc AIEOS.
 
 > "Hệ điều hành cho việc xây dựng phần mềm bằng AI" vẫn là một **phép so sánh marketing** tốt — nhưng **không phải định nghĩa kỹ thuật**. AIEOS không sở hữu compute, process isolation, filesystem hay network. Nó *điều khiển* những hệ thống sở hữu chúng. Không để phép so sánh OS trở thành ràng buộc kiến trúc.
 
@@ -104,8 +134,8 @@ AI coding agent có ba tính chất nền tảng; mọi thiết kế của AIEOS
 ### Non-goals
 - Không phải coding agent, IDE, CI, Git hay LLM framework.
 - Không phải Jira cho con người.
-- Không phải "AI memory" — memory chỉ là hệ quả phụ của việc quản lý state.
-- Không phải "multi-agent orchestration" chung chung — orchestration chỉ phục vụ mục tiêu giữ project đúng.
+- Không cung cấp memory chỉ để có memory. AIEOS cung cấp **persistent project state** để agent **resume với đúng intent, context, constraints và evidence**.
+- Không điều phối agent chỉ để tăng throughput. AIEOS **điều phối thực thi để bảo toàn correctness và quyền kiểm soát** project.
 
 ---
 
@@ -154,38 +184,72 @@ AIEOS:    DRIFT  · class: architectural · severity: high
 
 ---
 
-## 5. Năm primitives
+## 5. Năm primitives & Correctness Loop
 
 Toàn bộ AIEOS gom về 5 khái niệm. Mọi thực thể khác là chi tiết bên trong chúng.
 
+### 5.1. Correctness Loop
+
+Năm primitives tạo thành một vòng lặp khép kín. **"Tiếp tục làm việc" là đầu ra của vòng lặp — chỉ xảy ra sau khi correctness được xác nhận.**
+
 ```text
-                      AIEOS
-                        │
-        ┌───────────────┼───────────────┐
-        ▼               ▼               ▼
-     INTENT           WORK           CONTROL
-  "Cái gì phải     "Cái gì cần     "Agent được
-    tồn tại?"        làm?"         phép làm gì?"
-        └───────────────┼───────────────┘
-                        ▼
-                      AGENT  (execution plane)
-                        ▼
-                      CHANGE
-                        ▼
-                     EVIDENCE
-              "Làm sao biết nó đúng?"
-                        ▼
-                  RECONCILIATION
-           "Thực tế còn khớp intent không?"
-                  ┌─────┴─────┐
-                  ▼           ▼
-                MATCH       DRIFT → propose
+        ┌──────────────────────────────────────────────────────┐
+        │                                                      │
+        ▼                                                      │
+   ┌──────────┐                                                │
+   │  INTENT  │  "điều gì phải đúng"                           │
+   └────┬─────┘                                                │
+        ▼                                                      │
+   ┌──────────┐                                                │
+   │   WORK   │  "làm việc này" (task contract + work order)   │
+   └────┬─────┘                                                │
+        ▼                                                      │
+   ┌──────────┐                                                │
+   │ CONTROL  │  "được phép làm thế này"                       │
+   └────┬─────┘                                                │
+        ▼                                                      │
+      AGENT  ──►  CHANGE                                       │
+                    ▼                                          │
+   ┌──────────┐                                                │
+   │ EVIDENCE │  "chứng minh điều này"                         │
+   └────┬─────┘                                                │
+        ▼                                                      │
+   ┌────────────────┐                                          │
+   │ RECONCILIATION │  "điều đó còn đúng không?"               │
+   └───────┬────────┘                                          │
+     ┌─────┼──────────────┐                                    │
+     ▼     ▼              ▼                                    │
+  MATCH  DRIFT          VIOLATION                              │
+     │     │              │                                    │
+     │     ▼              ▼                                    │
+     │  invalidate →   STOP + escalate                         │
+     │  impact →                                               │
+     │  revalidate                                             │
+     ▼     ▼                                                   │
+ CONTINUE  REPLAN ─────────────────────────────────────────────┘
 ```
+
+### 5.2. Verdicts — AIEOS biết khi nào agent *không được* tiếp tục
+
+Một hệ thống memory chỉ có một câu trả lời: *Continue*. AIEOS có nhiều câu trả lời, mỗi câu kèm lý do cụ thể:
+
+| Verdict | Khi nào | Ví dụ |
+|---|---|---|
+| **CONTINUE** | Mọi thứ còn hợp lệ | Task tiếp theo READY, context không đổi |
+| **CONTINUE_WITH** | Hợp lệ nhưng context đã đổi | Work Order mới vì dependency vừa merge thay đổi interface |
+| **REPLAN** | Downstream mất hiệu lực | "3 artifact stale do ADR-031 v2 — đây là revalidation plan" |
+| **STOP: intent changed** | Upstream intent đổi sau khi task bắt đầu | SPEC-012.1 v1 → v2 giữa chừng |
+| **STOP: scope invalid** | Phạm vi task không còn đúng | File trong `write` scope đã bị task khác sở hữu |
+| **STOP: evidence missing** | Không đủ assurance để chấp nhận | AC2 cần A4, chỉ có A1 |
+| **STOP: runtime insufficient** | Runtime không enforce được capability cần chặn | Task risk high giao cho adapter T1 |
+| **ESCALATE** | Hết budget / vượt risk / cần quyết định | Retry 3 lần thất bại; drift cần human chọn hướng |
+
+### 5.3. Năm primitives
 
 | Primitive | Câu hỏi | Gồm |
 |---|---|---|
 | **Intent** | Cái gì phải tồn tại? | Vision, Constitution, Requirement, Spec (+AC), Architecture, ADR, Convention |
-| **Work** | Cái gì cần làm? | Plan, Task (execution contract), Dependency, Lease, Session, Handoff, Work Order |
+| **Work** | Cái gì cần làm — và tiếp tục từ đâu? | Plan, Task (execution contract), Dependency, Lease, Session, Handoff, Work Order, Resume Check |
 | **Control** | Agent được phép làm gì? | Policy, Risk, Autonomy Budget, Capability Grant, Approval, Escalation |
 | **Evidence** | Làm sao biết nó đúng? | Change (SHA), Verification Run, Evidence item, Assurance level, Evidence graph |
 | **Reconciliation** | Thực tế còn khớp intent? | Drift detection, Change Impact Engine, Revalidation plan |
@@ -252,7 +316,17 @@ Mọi thực thể Intent có **version**. Thay đổi chỉ qua **Change Reques
 
 ---
 
-## 7. Primitive 2 — Work
+## 7. Primitive 2 — Work (continuity of controlled execution)
+
+Mọi thành phần của Work — task contract, context compiler, handoff, session protocol, lease — đều là **cơ chế duy trì correctness trong thực thi dài hạn**, không phải tính năng memory:
+
+| Cơ chế | Vai trò về continuity | Vai trò về correctness |
+|---|---|---|
+| **Task contract** | Định nghĩa đơn vị công việc có thể tiếp tục bởi bất kỳ agent nào | Ranh giới scope, capability, điều kiện "xong" |
+| **Context Compiler** | Session mới không cần nhớ gì | Context sai → reasoning sai → code sai → project sai. Context đúng là **cơ chế phòng ngừa** |
+| **Resume Check** | Quyết định session tiếp theo bắt đầu từ đâu | Chặn tiếp tục trên giả định đã mất hiệu lực |
+| **Handoff** | Chuyển giao giữa session/agent/model | Giả định, rủi ro, việc chưa xong được ghi rõ và kiểm tra lại |
+| **Lease** | Nhiều agent làm song song | Không ghi đè, không xung đột |
 
 ### 7.1. Task = Bounded Execution Contract
 
@@ -301,9 +375,27 @@ exit_conditions:
 
 Mười một thành phần: **Objective · Input state · Scope · Forbidden · Dependencies · Constitution · Acceptance criteria · Capabilities · Budget · Verification plan · Exit conditions.**
 
-### 7.2. Context Compiler → Work Order
+### 7.2. Resume Check — trước mỗi session
 
-Context Compiler biến *project state* + *task contract* thành **Work Order**: context tối thiểu đủ để làm task.
+Một session mới **không hỏi** *"agent trước đã làm đến đâu?"*. Nó hỏi: *"sau những thay đổi vừa xảy ra, project đang ở trạng thái nào và công việc nào còn hợp lệ?"*
+
+Trước khi phát Work Order, AIEOS chạy Resume Check — **deterministic, rẻ, luôn chạy**:
+
+| Kiểm tra | So sánh | Thất bại → verdict |
+|---|---|---|
+| Intent version | `intent_versions` trong task ↔ version hiện tại | STOP: intent changed / REPLAN |
+| Base commit | `base_commit` ↔ HEAD: file trong scope có bị đổi bởi task khác? | CONTINUE_WITH (rebase context) / STOP: scope invalid |
+| Dependencies | Mọi dependency còn DONE và không STALE? | BLOCKED |
+| Constitution | Reality hiện tại có đang vi phạm điều khoản task phụ thuộc? | STOP + escalate |
+| Evidence trước đó | Evidence của các phần đã làm còn khớp SHA? | CONTINUE_WITH (re-verify) |
+| Runtime | Adapter đủ assurance cho risk của task? | STOP: runtime insufficient |
+| Budget | Còn token / thời gian / retries / human attention? | ESCALATE |
+
+Chỉ khi Resume Check trả **CONTINUE** hoặc **CONTINUE_WITH**, Context Compiler mới chạy.
+
+### 7.3. Context Compiler → Work Order
+
+Context Compiler biến *project state* + *task contract* thành **Work Order**: context tối thiểu đủ để làm task. Đây là **cơ chế correctness phòng ngừa**: agent không thể làm đúng nếu không được đưa đúng context.
 
 - **Phân tầng**: Constitution áp dụng → Component liên quan → Spec/AC → File liên quan → Handoff gần nhất.
 - **Chọn theo graph**: traceability graph + code dependency graph, không tìm kiếm mù.
@@ -311,7 +403,7 @@ Context Compiler biến *project state* + *task contract* thành **Work Order**:
 - **Pull hơn push**: thứ không chắc cần thì để agent truy vấn qua AIEOS tools.
 - **Registry**: liệt kê utility/API đã có liên quan → agent dùng lại thay vì viết mới.
 
-### 7.3. Vòng đời task
+### 7.4. Vòng đời task
 
 ```text
 DRAFT ─approve─► READY ─lease─► IN_PROGRESS ─submit─► VERIFYING ─► VERIFIED ─► ACCEPTED ─► DONE
@@ -321,13 +413,13 @@ DRAFT ─approve─► READY ─lease─► IN_PROGRESS ─submit─► VERIFYIN
      upstream intent đổi / reality drift ───────────────► STALE (từ bất kỳ trạng thái sau READY)
 ```
 
-### 7.4. Session protocol & handoff
+### 7.5. Session protocol & handoff
 
-Boot (nhận Work Order, không dùng chat history) → Acknowledge (liệt kê giả định; mơ hồ → hỏi) → Work → Submit (diff + report có cấu trúc) → Handoff.
+**Resume Check** (7.2) → Boot (nhận Work Order, không dùng chat history) → Acknowledge (liệt kê giả định; mơ hồ → hỏi) → Work → Submit (diff + report có cấu trúc) → Handoff.
 
 Handoff có cấu trúc: `done`, `not_done`, `assumptions`, `discoveries`, `risks`, `proposals`. **Discoveries và proposals không tự thành sự thật** — chúng vào hàng đợi chờ duyệt.
 
-### 7.5. Coordination
+### 7.6. Coordination
 
 - **Lease độc quyền** trên task + write scope; scope chồng nhau không chạy song song (hoặc mỗi task một worktree, merge theo thứ tự).
 - Chỉ task có mọi dependency `DONE` mới `READY`.
@@ -647,7 +739,7 @@ Những thứ **có thể thành moat**:
 
 ### Đối thủ cần nghiên cứu kỹ
 - Bản thân các runtime (Claude Code, Codex, Cursor) — đang tự thêm task management, memory, multi-agent, hooks.
-- Công cụ spec-driven development và persistent work state cho agents.
+- Công cụ spec-driven development và persistent work state cho agents (vd: AWR). Đây là vùng continuity kiểu memory — AIEOS phải khác ở chỗ continuity luôn đi qua Resume Check, Evidence và Reconciliation.
 - Nghiên cứu về "harness engineering" và "agentic SDLC control plane" — xác nhận thesis, nhưng cũng nghĩa là thuật ngữ "control plane" không đủ để khác biệt; **khác biệt phải nằm ở implementation primitives** (Constitution kiểm tra được, Evidence có assurance level, Reconciliation).
 
 Lợi thế cấu trúc: nhà cung cấp runtime có động lực khoá user vào runtime của mình; AIEOS **trung lập** — governance nằm ngoài mọi runtime.
@@ -678,7 +770,7 @@ Mục tiêu đo được: trên một project thật ~100 task, AIEOS **bắt đ
 - [ ] `.aieos/` format: constitution (có `check`), requirement, spec+AC, ADR, task contract, handoff
 - [ ] `aieos init` / `aieos import` (đề xuất constitution từ repo)
 - [ ] `aieos run "<ý định>"` — zero-friction path
-- [ ] Context Compiler v1 (graph-based, không semantic search)
+- [ ] Resume Check (deterministic) + Context Compiler v1 (graph-based, không semantic search)
 - [ ] MCP server ~8 tools
 - [ ] Adapter **Claude Code (T3)**: hooks enforce write scope, shell allowlist, chặn git push
 - [ ] Adapter **Codex (T1/T2)** — để chứng minh core trung lập ngay từ đầu
