@@ -1,0 +1,176 @@
+# AIEOS Decision Matrix
+
+> **Status: PRE-GENESIS DRAFT — non-authoritative.**
+> Nothing in this file is a Genesis fact. It records what the owner has decided, what is only proposed, and what must be measured before it may be assumed.
+> Normative concept: `AIEOS-concept.md` v0.5 (Vietnamese, immutable). This document cites it by section (e.g. "concept §5.3").
+> Revision 2 — 2026-10-05
+
+## How to read this matrix
+
+There are **two independent axes**. They must never be merged.
+
+**Axis 1 — row status** (the lifecycle of a decision or control):
+
+| Row status | Meaning | May other artifacts rely on it? |
+|---|---|---|
+| **DECIDED** | The owner has made this decision. | Yes, as a decision. Not as evidence that any mechanism works. |
+| **PROPOSED** | An architectural proposal, not ratified by the owner. | **No.** It may be referenced only as a proposal. |
+| **TBD** | Open. Needs a measurement or an owner decision. | **No.** |
+| **MEASURED** | A measurement artifact exists and the owner has approved it. | Yes, within the recorded environment fingerprint, and **with whatever result it has**. |
+
+**Axis 2 — measurement result** (recorded on the measurement artifact; after owner approval, a result of `PASS`, `FAIL` or `INCONCLUSIVE` makes the row MEASURED, while `NOT_RUN` leaves the row TBD):
+
+| Field | Values |
+|---|---|
+| `control_status` | `PASS` · `FAIL` · `INCONCLUSIVE` · `NOT_RUN` |
+| `authority_effect` | `preventive` · `detective` · `advisory` · `manual` |
+| `environment_fingerprint` | runtime × OS × version × configuration, as recorded in the artifact |
+| `artifact` | path of the measurement record |
+| `proposed_by` / `approved_by` | who proposed the finding / who approved it (only the owner approves) |
+
+Label meanings (`authority_effect`):
+
+- **preventive** — measured to block the action before it takes effect.
+- **detective** — measured to detect the action afterwards, through a channel the acting party cannot alter.
+- **advisory** — guidance only, or unmeasured. **Anything unmeasured defaults to advisory.**
+- **manual** — performed by a human.
+
+Rules:
+
+1. A PROPOSED or TBD row must not become an assumption because it appears in a Genesis draft, a plan, a task contract or a conversation.
+2. A row becomes MEASURED only through the measurement lifecycle in `measurement-protocol.md`: Claude prepares and explains the probe and may propose a finding (`proposed_by: claude`, `approved_by: none`); the owner inspects the probe, executes or supervises the authoritative run, reviews the raw evidence, and approves. **Claude never sets a row to MEASURED.**
+3. **MEASURED + FAIL is a valid state.** A FAIL describes the assurance level of the measured environment, not a failure of the architecture.
+4. A MEASURED row is valid only for its environment fingerprint. Any change to that fingerprint returns the row to TBD until re-measured.
+5. "DECIDED" for a principle does not mean any mechanism implementing it exists or works.
+
+---
+
+## A. Decided by the owner
+
+### A.1 Decisions
+
+| ID | Area | Decision | Notes |
+|---|---|---|---|
+| A1 | Repository visibility | **PUBLIC.** | Observed PUBLIC via API on 2026-10-05. Public history is permanent; earlier commits exposed e-mail addresses. Public ≠ secure. |
+| A2 | Governance boundary implementation (current) | **`github-public-free`**. | Its protection capabilities are **TBD → P-GH**. Nothing is assumed from documentation alone. |
+| A3 | GitHub plan | GitHub Free. No paid plan. | — |
+| A4 | GitHub's role | GitHub is **a governance implementation**, not the ultimate trust anchor. | See section E: the trust concerns are kept separate. |
+| A5 | Execution runtime | Claude Code. The owner chats in the desktop app on Windows; sessions execute inside WSL2. | Desktop-WSL support is documented; the actual configuration and its controls are **TBD → P-LOC**. Compatibility with the strongest credential isolation is an open risk (C15). |
+| A6 | Reviewer strategy | Only Claude Code is used to build AIEOS. | Cross-vendor AI review is unavailable. Any Claude review of Claude work may block but never authorizes. |
+| A7 | Documentation language | Specs and technical docs in English. The concept stays in Vietnamese and normative. | — |
+| A8 | Implementation stack (process) | Chosen by a TS / Go / Rust benchmark. The owner approves criteria and weights **before** the run. Not a blocker for the bootstrap. | The stack itself is TBD (C12). |
+| A9 | Bootstrap implementation | Python 3, standard library only. | Invariant: *the bootstrap implementation is disposable and must not become an accidental second core.* |
+| A10 | Sequence | `Python bootstrap → benchmark → native stack selection → native implementation`. | — |
+| A11 | Self-hosting | Progressive, **per capability**: bootstrap → shadow → assisted → native takeover → bootstrap retirement. A capability is taken over only when native is shown equivalent to or stricter than bootstrap through conformance. | A property of the lifecycle (cross-phase transition gates), not a phase. |
+| A12 | Runtime neutrality for v0.1 | Proven by `adapter contract + T0 manual adapter + replay adapter + conformance`. A second vendor runtime is not a v0.1 commitment. | The bootstrap must run with Claude Code from day one. |
+| A13 | Plan hierarchy | concept → Genesis → Master Plan → milestones → task contracts. No ROADMAP.md. The Master Plan is **ratified by Genesis, not bound by it**. | — |
+| A14 | Work sequence | 1 Decision Matrix → 2 measurement protocols → 3 measurements → 4 matrix updated from evidence → 5 resolve remaining decisions → 6 Assurance model → 7 Genesis model → 8 Genesis Charter → 9 Master Plan. No Master Plan and no implementation code before step 9. | Genesis must not ratify an unmeasured trust boundary. |
+| A15 | Resume Check & decision vocabulary | Keep the name **Resume Check** and the semantics of concept §5.3 / §7.2. The execution-decision vocabulary is **exactly** concept §5.3: `CONTINUE`, `CONTINUE_WITH`, `REPLAN`, `STOP: scope invalid`, `STOP: runtime insufficient`, `STOP: violation`, `BLOCKED`, `ESCALATE`. `ALLOW`, `BLOCK` and `RECONCILE` are **not** decisions (reconciliation is a primitive/operation, concept §10). A precondition layer ("check 0") may exist without changing §5.3 semantics. Bootstrap and native emit the **same JSON decision contract**. | *The decision vocabulary is a protocol surface, not implementation terminology.* Resolves former P1. |
+| A16 | Assurance model principle | No scalar assurance ladder (no L0–L5). Model = `fact_kind × source_class × evidence requirement`. Requirements are attached to the **decision / capability** being authorized; risk level only selects defaults. | Consistent with concept §9.2. |
+| A17 | Asymmetric rule | *Untrusted evidence may block or invalidate acceptance, but may never independently authorize acceptance.* | — |
+| A18 | Authorization ≠ availability | *Acceptance authorization is not equivalent to evidence availability.* | "Agent says tests passed" is a valid observation **of the claim**, source `agent_declared`, and authorizes nothing. |
+| A19 | Conformance Oracle | Core primitive: `Frozen Scenario → Runner → Observed Result → Expected Semantic Result → Pass/Fail`. Conditions: (1) owner approves each scenario; (2) scenarios are hashed; (3) runner and version are pinned; (4) an implementation task cannot modify scenarios to make its tests pass; (5) only a run in a channel with sufficient authority (CI) may be used for acceptance. | Main mechanism against circular self-validation. Its sufficiency is subject to C13. |
+| A20 | Genesis scope | Genesis binds **trust roots**, not the project plan. Candidate bound set: concept hash (+ errata), constitution, authority model, governance-boundary abstraction, assurance model, conformance methodology, bootstrap governor, amendment rules. | Exact contents stay PROPOSED (B2) until step 7. |
+| A21 | Human authority model | `Authority Role → Human Principal → Authentication / Signing Mechanism → Authority Action → Recorded Evidence`. Genesis binds the model and trust rules; concrete identities live in a **Genesis instance/version**. | Keeps AIEOS usable for teams later. |
+| A22 | Concept errata form | `AIEOS-concept.md` v0.5 stays **byte-identical (immutable)**. Corrections go into a **separate normative errata document (CR-001), written in Vietnamese**. | Preserves the audit trail: original concept → identified defect → explicit correction → ratified correction. Resolves former P2. |
+| A23 | Owner signing target | **Target:** a FIDO2 / security-key-backed signing key with **mandatory user presence for every signature**. | The concrete signing mechanism and its GitHub verification are **TBD → C14**. Resolves former P3 as a target, not as a fact. |
+| A24 | Agent identity | The agent identity is **separate from the owner identity**. Instance: agent = GitHub account `Namas1012` (collaborator, Write role); owner = `boomyfun`. | Concrete accounts are instance details (A21), not trust roots. Resolves former P4. |
+
+### A.2 Principles
+
+| ID | Principle |
+|---|---|
+| A25 | **Hook ≠ security boundary.** A hook is an enforcement mechanism whose strength depends on the execution boundary around it. At best it is preventive for cooperative or accidental actions; against a determined agent it is at most detective, and only through a channel outside the agent's reach. A hook cannot prove its own integrity. |
+| A26 | **Forkability is not a governance failure.** A public repository is not a private control plane; anyone may fork it. The protected property is: *nobody can create an authoritative AIEOS state transition inside the owner's canonical governance boundary without owner authority.* |
+| A27 | **Canonical identity binding.** Genesis and every verifier bind to: the **immutable repository identity**, the **immutable owner/authority identity**, the **Genesis version/hash**, and the **authority signing identity** (key fingerprints — primary and backup). They never bind to a repository name, an owner display name or login, a branch name, or a tag name. **The existence of a tag on the canonical repository is not proof of owner authorization;** owner authorization requires a verified signature or other authority evidence. The key list on a hosting account is only a secondary cross-check, because whoever controls that account can change it. |
+| A28 | **Attribution ≠ authentication.** Git author/committer identity is attribution metadata — not an authentication mechanism and not proof of human authority. The agent has its own Git identity so history is readable, not as a security control. |
+| A29 | **Composition invariant (C13).** *No execution path may exist in which the same authority domain can both change the evaluator or any input of the evaluator, and produce the evidence that evaluator uses to justify acceptance of that change.* **Authority domain** = every identity and channel that shares control; the agent's domain includes the agent account, everything in the agent's execution environment, and **every CI job that executes agent-modified code**. **Evaluator** = validators, fixtures, scenarios, workflows, runner version, governor, the dependencies and lockfiles they use, configuration they read from the change under evaluation, and the acceptance verifier itself. |
+| A30 | **Measurement authority.** Claude: prepares probes, explains them, proposes findings. Owner: inspects probes, executes or supervises the authoritative run, reviews raw evidence, approves the measurement. The Windows-side cross-check uses native commands and native UI; **Claude-authored code is never the sole source of a finding about Claude's own trust boundary.** |
+| A31 | **P-CRED is the prerequisite for non-advisory human authority.** No claim that human authority is preventive or detective may be made before P-CRED passes in the measured configuration. A baseline may be captured before hardening; a baseline FAIL means the current environment does not reach the target assurance level, not that the architecture failed. |
+| A32 | **Irreversible actions are decided separately.** An irreversible or outward-facing action (e.g. a force-push, a visibility change, a deletion) is never a side effect of another change; it is authorized on its own. |
+| A33 | **Prerequisites for authoritative measurement.** Before an authoritative P-GH measurement: the agent token is narrowed (no `workflow`, no `delete_repo`), and the agent Git identity is separated from the owner identity. A measurement taken with the current over-scoped token is not authoritative. |
+
+---
+
+## P. Pending owner decisions
+
+| ID | Question | Status |
+|---|---|---|
+| P1–P4 | Resolved → A15, A22, A23, A24. | — |
+| P5 | Owner review capacity (hours per week). | Deferred: a planning input, not a trust-root input. Not needed pre-Genesis. |
+| P6 | Whether WSL interop may be restricted for the agent's environment. | Deferred until P-CRED / P-LOC results. Not decided by intuition. |
+
+---
+
+## B. Proposed architecture (not ratified)
+
+| ID | Area | Proposal | Depends on |
+|---|---|---|---|
+| B1 | Change classes | `owner_act` (only the owner can perform) · `genesis_amendment` (changes a Genesis-bound artifact; isolated; judged under the previous Genesis version) · `critical_cr` (enforcement or authority changes that are not bound) · `normal_cr` (includes the owner's fixture-freeze approval on a hash) · `master_plan_update`. | — |
+| B2 | Genesis bound vs ratified | **Bound:** concept hash + errata hash, constitution, authority model, governance-boundary abstraction (+ "every label must be measured"), assurance model, conformance methodology + initial scenario-set hash, bootstrap governor identity + succession rule, change classes + amendment procedure, and the identities required by A27 (immutable repository id, immutable owner id, signing-key fingerprints). **Ratified, not bound:** Master Plan, ADRs, later scenarios, governor successors, the active boundary implementation, measurement results. | A20, A27 |
+| B3 | Source classes | Unordered: `agent_declared`, `same_lineage_review`, `deterministic_tool_local`, `deterministic_tool_external_ci`, `cross_vendor_review` (defined, dormant), `human_authority`. All may block. Only `deterministic_tool_external_ci` and `human_authority` may authorize, and only for requirement entries that name them. A deterministic replay is a deterministic tool; a fresh Claude session is `same_lineage_review`. | A16–A18, C7, C10, C13 |
+| B4 | Decision-scoped requirements | Requirements name the decision they authorize, e.g. `code_correctness: [deterministic_tool_external_ci]` · `governance_change: [human_authority]` · `security_boundary: [deterministic_tool_external_ci, human_authority]`. | A16 |
+| B5 | Event model | Each record carries `fact_kind` (claim / observation / interpretation / authority), `source_class` and `recorder` as separate fields. Interpretation facts are recomputable from observations plus a pinned ruleset. Agent claims are a separate record type. A locally written record counts at most as a claim unless it can be re-derived from Git or re-fetched from an external channel. | B3 |
+| B6 | Evidence & provenance chain | Evidence is stored by reference and re-fetched by the verifier. For a pull request the chain is: **check run → workflow run → ratified workflow path + blob → evaluated commit M′ (`refs/pull/N/merge`) with tree T → final merge commit M with tree = T, parent 1 = base at merge time, parent 2 = the evaluated head → accepted state records M, T and the check reference.** If any link fails, the evidence does not transfer to the merge result. `strict` (up-to-date) alone does not prove this chain. | P-GH-5 |
+| B7 | Layout | Single intent root `.aieos/intent/{requirements,specs,architecture,decisions,conventions}`; `.aieos/genesis/`; `.aieos/conformance/`; `.aieos/plan/`. | — |
+| B8 | Merge strategy | **Merge commits only.** Desired control (measurement target, not a confirmed capability): `allowed_merge_methods: [merge]` in the pull-request rule. **No `required_linear_history`** — it forbids merge commits and is incompatible with this strategy. Keep `strict` required status checks. `.gitattributes` with `eol=lf`. | B6, B16, C9 |
+| B9 | Spec lifecycle | `draft → baselined → superseded`; baselining is an owner act; no task is ACCEPTED against an unbaselined spec. | — |
+| B10 | Scenario change classes | Adding a scenario: `normal_cr` with fixture-freeze approval on its hash. Removing, weakening or re-expecting a scenario: `critical_cr` (or `genesis_amendment` if bound). Scenarios are tagged by capability; compatibility is evaluated per capability. | A19 |
+| B11 | Key custody | Two owner signing keys: a primary requiring user presence for every signature, and an offline backup for recovery. Genesis binds both fingerprints. Last-resort "re-genesis" is recorded permanently as a chain break. | A23, C14 |
+| B12 | Agent credential | Agent account token: classic token with only the scope needed for code on a public repo; **no `workflow`, no `delete_repo`**. | A33, C5 |
+| B13 | Concept errata CR-001 (content) | §8.5 adapter assurance must be measured per runtime × platform × version × configuration · Codex out of v0.1 · bootstrap exception to §13.3 (bootstrap-written records carry their recorder and are not authoritative) · layout · remove the unrelated project references in §16 and §17 Q4 (Q4 points to the stack ADR; the v0.1 measurement project is the AIEOS self-build). | A22 |
+| B14 | Exit tiers | Per phase: minimum / reliability / release, written as the Definition of Ready. Minimum tier = coverage of decision-table rows, lifecycle transitions and the adversarial catalogue. | — |
+| B15 | Claude Code version | Pin the version (managed `requiredMinimumVersion` / `requiredMaximumVersion`), prevent auto-update, re-measure on an owner-triggered schedule. | C3 |
+| B16 | Ruleset layout | Bypass applies to a **whole ruleset**, so rules are split: **R1** `update` (owner-only merge gate) — bypass: admin, PR only · **R2** required status checks + `strict` + `allowed_merge_methods: [merge]` + block force-push + block deletion — **no bypass** · **R3** require PR + approval + code-owner review — bypass: admin, PR only (owner's own PRs). Plus a tag ruleset over `refs/tags/**`. | C9 |
+| B17 | C13 candidate controls | (1) rules-at-base / immutable ref: evaluator and scenarios are taken from the base or a pinned ref, never from the change under evaluation; (2) CODEOWNERS + owner review for evaluator, fixture, scenario, dependency and CI-support files; (3) frozen scenario hash verified inside the CI run. **Proposed only. Not claimed sufficient until P-GH-7 demonstrates the property end-to-end and P-CRED passes.** | A29, C13 |
+
+---
+
+## C. TBD — must be measured before it may be assumed
+
+| ID | Question | Measured by | Status |
+|---|---|---|---|
+| C1 | Does a managed-settings anchor exist that the agent cannot modify (Windows `managed-settings.json` + `wslInheritsWindowsSettings`)? Is the WSL `/etc/claude-code` file agent-writable? | P-LOC | TBD |
+| C2 | WSL interop, automount and escalation from the agent's environment. | P-LOC, P-CRED | TBD |
+| C3 | Can the Claude Code version used by desktop WSL sessions be pinned, and auto-update prevented? | P-LOC | TBD |
+| C4 | Credential isolation: can the agent reach or use any credential or signing material of the owner? | P-CRED | TBD |
+| C5 | Agent-account permissions on the public repo: push, force-push, delete, tags, workflows, rulesets, settings, secrets, statuses, check runs, workflow runs. | P-GH | TBD |
+| C6 | Hook enforcement in desktop WSL sessions: firing, blocking semantics, fail-open behaviour, timeouts, SessionStart sources (incl. compact), Stop loop protection, tool coverage (incl. PowerShell, MCP, subagents), effective self-editing of hook configuration. | P-LOC | TBD |
+| C7 | CI integrity: which workflow definition runs for each event, whether required checks enforce, whether the full provenance chain (B6) can be verified. | P-GH | TBD |
+| C8 | Sandbox coverage and escape hatches in WSL2. | P-LOC | TBD |
+| C9 | A ruleset configuration that works for a solo owner + agent collaborator: availability of `allowed_merge_methods`; whether bypassing R1 leaves R2 enforced; who is bound by which rule. | P-GH | TBD |
+| C10 | Human authority channel: are owner merges/approvals attributable through the API, and are owner signatures verifiable? | P-GH, P-CRED | TBD |
+| C11 | Genesis integrity anchor: a location for the Genesis hash and signatures that the agent cannot rewrite. | After C4, C10, C14 | TBD |
+| C12 | Native implementation stack. | Benchmark (after bootstrap) | TBD |
+| C13 | **Boundary composition.** Do the controls compose into a non-circular authorization path (A29)? **Precondition:** P-CRED PASS in the measured configuration — if P-CRED is FAIL, the agent's authority domain contains the owner's and C13 is FAIL by implication; if P-CRED is INCONCLUSIVE or not run, C13 is not evaluable. **Known design gap (from documentation, before measurement):** files that CI executes but that are not workflow YAML (scripts, tests, fixtures, dependencies, configuration) are writable by the agent, so without B17 C13 is expected to FAIL. | P-CRED + P-GH (incl. P-GH-7) + P-LOC | TBD |
+| C14 | Owner signing mechanism: does GitHub verify the chosen user-presence key as a signing key (FIDO2 `-sk` SSH signing is undocumented; an OpenPGP hardware key with a touch policy is the fallback)? Is user presence enforced for every signature? | P-CRED, P-GH | TBD |
+| C15 | **Risk (not a confirmed conflict):** do desktop-app WSL sessions remain usable under the strongest P-CRED hardening (separate Windows user, interop disabled, no `/mnt/c` automount)? If not, the owner chooses between A5 with a lower authority level and a different working mode. | P-LOC, P-CRED | TBD |
+
+---
+
+## D. Measured
+
+None yet.
+
+Observations recorded so far are environment facts, not measured controls:
+
+| Observation | How | Date |
+|---|---|---|
+| Repository visibility: PUBLIC; agent account permission: WRITE; default branch: `main` | `gh repo view` from the agent's Windows session | 2026-10-05 |
+| WSL 2.6.1.0, kernel 6.6.87.2-1; distros `Ubuntu-22.04` (WSL2) and `docker-desktop` (WSL2) | `wsl --version`, `wsl --list --verbose` | 2026-10-05 |
+| Repository-local Git identity set to the agent identity (`Namas1012`, GitHub no-reply e-mail); global Git config unchanged | `git config --local`, owner-approved | 2026-10-05 |
+
+---
+
+## E. Trust concerns are separate
+
+Going public changes *repository protection*. It does not, by itself, change the others. No row in this table may be satisfied by "the repository is public".
+
+| Concern | Question it answers | Candidate mechanism | Status |
+|---|---|---|---|
+| Repository protection | Who can change which refs, paths and settings? | Rulesets R1/R2/R3 + tag ruleset on the public repo (B16) | TBD → P-GH |
+| CI integrity | Did the ratified evaluator run on exactly the evaluated tree, outside the agent's reach? | Provenance chain (B6); workflow files the agent token cannot edit | TBD → P-GH |
+| Human authority | Was this act performed by the human principal? | Owner-account action attributable through the API, and/or owner signature | TBD → P-GH, P-CRED |
+| Cryptographic identity | Can a signature be produced only by the human principal, and only with presence? | User-presence signing key unreachable or unusable by the agent (A23, B11) | TBD → C14, P-CRED |
+| Genesis integrity | Is the current trust root the one the owner ratified? | Signed Genesis chain bound to immutable ids and key fingerprints (A27) + a head-hash copy outside the agent's write reach | TBD → C11 |
+| Composition | Can any single authority domain both change the evaluator and authorize the change? | B17, verified by P-GH-7 under a passing P-CRED | TBD → C13 |
