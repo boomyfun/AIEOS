@@ -1,9 +1,10 @@
 # AIEOS — Control Plane for AI Software Engineering
 
-> **Concept Document v0.4**
-> Ngày: 2026-10-04 · Trạng thái: Draft
+> **Concept Document v0.5**
+> Ngày: 2026-10-04 · Trạng thái: **Concept freeze** — thay đổi tiếp theo đi vào technical specs (mục 18)
 > v0.3: chuyển trọng tâm từ *"giúp AI tiếp tục làm việc"* sang *"đảm bảo AI không làm project sai"*; gom mô hình về 5 primitives; thêm Constitution, Truth Hierarchy, Capability Boundary, Risk → Autonomy, Assurance Levels, Change Impact Engine, Zero-friction path, ICP.
 > v0.4: tái tích hợp continuity — **continuity là phương tiện, correctness là mục tiêu**; thêm Product Hierarchy, Correctness Loop với các verdict (CONTINUE / REPLAN / STOP), và Resume Check.
+> v0.5: định nghĩa phạm vi cam kết của "correctness"; 4 luật bất biến; tách **Execution decision** và **Acceptance decision**; phân loại sự kiện reconciliation (drift ≠ violation); **read-set / write-set** trong task contract và Resume Check; thay assurance tuyến tính bằng **Evidence Profile**; Constitution có scope/applicability; mô hình **state & recovery**.
 
 ---
 
@@ -44,6 +45,35 @@ L5  OUTCOME      AI làm việc lâu hơn, qua nhiều session/agent/model,
 ```
 
 Mọi capability ở L4 phải trả lời được: *"nó giữ correctness như thế nào?"* — nếu không trả lời được, nó không thuộc AIEOS.
+
+### Phạm vi cam kết của "correctness"
+
+Tagline *"AIEOS keeps the project correct"* là marketing. Về kỹ thuật, **không hệ thống nào chứng minh được toàn bộ phần mềm đúng**: test có thể sai, invariant có thể được đặc tả sai, requirement có thể thiếu, lỗi logic có thể lọt qua mọi gate.
+
+Định nghĩa kỹ thuật chính xác:
+
+> **AIEOS bảo toàn tính đúng đắn của project bằng cách thực thi các ràng buộc đã được định nghĩa, yêu cầu bằng chứng kiểm chứng được, và liên tục phát hiện sai lệch giữa trạng thái dự định và trạng thái thực tế.**
+
+| AIEOS cam kết | AIEOS **không** cam kết |
+|---|---|
+| Thực thi các ràng buộc **đã được định nghĩa** và kiểm tra được | Phát hiện lỗi mà không ràng buộc/evidence nào bao phủ |
+| Chặn hành động vi phạm policy **mà runtime enforce được** | Chặn hành động trên runtime không có enforcement |
+| Phát hiện thay đổi không còn khớp intent đã khai báo | Biết intent chưa được khai báo |
+| Không công nhận "xong" khi thiếu evidence yêu cầu | Đảm bảo bản thân evidence (test) là đúng |
+| Báo rõ **cái gì chưa được bao phủ** | Biến "không phát hiện vấn đề" thành "không có vấn đề" |
+
+Hệ quả thiết kế: AIEOS phải **luôn hiển thị vùng chưa được bao phủ** (requirement không có evidence, điều khoản `judgment` chưa review, runtime yếu) — chống **false confidence**, rủi ro lớn nhất của một hệ thống governance.
+
+### Bốn luật bất biến
+
+> **AIEOS không bao giờ cho phép agent tiếp tục dựa trên một project state không còn hợp lệ, và không bao giờ chấp nhận một thay đổi khi chưa đủ evidence.**
+
+1. **Không tiếp tục trên trạng thái lỗi thời.** (Resume Check, 7.2)
+2. **Không cấp quyền vượt quá khả năng kiểm soát.** (Capability boundary × adapter assurance, 8.2 · 8.5)
+3. **Không công nhận hoàn thành chỉ dựa trên lời agent.** (Acceptance decision, 5.3 · Evidence, 9)
+4. **Không để thay đổi upstream âm thầm vô hiệu hoá những gì đã được chấp nhận.** (Reconciliation, Impact, 10)
+
+Mọi tính năng mới phải không vi phạm 4 luật này; mọi bug vi phạm chúng là bug mức nghiêm trọng cao nhất.
 
 > "Hệ điều hành cho việc xây dựng phần mềm bằng AI" vẫn là một **phép so sánh marketing** tốt — nhưng **không phải định nghĩa kỹ thuật**. AIEOS không sở hữu compute, process isolation, filesystem hay network. Nó *điều khiển* những hệ thống sở hữu chúng. Không để phép so sánh OS trở thành ràng buộc kiến trúc.
 
@@ -217,41 +247,77 @@ Năm primitives tạo thành một vòng lặp khép kín. **"Tiếp tục làm 
    ┌────────────────┐                                          │
    │ RECONCILIATION │  "điều đó còn đúng không?"               │
    └───────┬────────┘                                          │
-     ┌─────┼──────────────┐                                    │
-     ▼     ▼              ▼                                    │
-  MATCH  DRIFT          VIOLATION                              │
-     │     │              │                                    │
-     │     ▼              ▼                                    │
-     │  invalidate →   STOP + escalate                         │
-     │  impact →                                               │
-     │  revalidate                                             │
-     ▼     ▼                                                   │
- CONTINUE  REPLAN ─────────────────────────────────────────────┘
+           ▼                                                   │
+   phân loại sự kiện (5.2)                                     │
+           ▼                                                   │
+   EXECUTION DECISION + ACCEPTANCE DECISION (5.3)              │
+     │              │               │                          │
+     ▼              ▼               ▼                          │
+  CONTINUE        REPLAN       STOP / ESCALATE                 │
+     │              │                                          │
+     └──────────────┴──────────────────────────────────────────┘
 ```
 
-### 5.2. Verdicts — AIEOS biết khi nào agent *không được* tiếp tục
+### 5.2. Phân loại sự kiện reconciliation
 
-Một hệ thống memory chỉ có một câu trả lời: *Continue*. AIEOS có nhiều câu trả lời, mỗi câu kèm lý do cụ thể:
+**Drift không đồng nghĩa với violation.** Các sự kiện khác nhau về bản chất, về ai có lỗi, và về cách xử lý:
 
-| Verdict | Khi nào | Ví dụ |
+| Sự kiện | Định nghĩa | Ví dụ | Xử lý mặc định |
+|---|---|---|---|
+| **INTENT_CHANGE** | Human thay đổi intent (qua CR đã duyệt) | SPEC-012.1 v1 → v2 | Impact analysis → artifact phụ thuộc thành STALE → REPLAN |
+| **DRIFT** | Reality ≠ intent, **không rõ bên nào sai** | Module ghi Redis trái ADR-031 | DETECT → CLASSIFY → PROPOSE (sửa code *hoặc* sửa intent); human chọn |
+| **VIOLATION** | Hành động phá một policy/ràng buộc **đã biết rõ** | Agent sửa file ngoài write-set; vi phạm INV-001 | Reject thay đổi; STOP session; ghi nhận vào metric của runtime/agent |
+| **STALE_EVIDENCE** | Evidence không còn khớp SHA hoặc intent version | Code đổi sau khi test pass | Lên lịch re-verify; **không** chặn thực thi |
+| **CONFLICT** | Hai luồng công việc va chạm | Task B đổi interface mà Task A đang đọc | CONTINUE_WITH (biên dịch lại context) hoặc REPLAN tuỳ mức độ (7.2) |
+
+### 5.3. Hai loại quyết định
+
+Hai câu hỏi khác nhau, không được trộn lẫn:
+
+- **Execution decision** — *agent có được tiếp tục thực thi không?* Đưa ra ở Resume Check và trong lúc chạy.
+- **Acceptance decision** — *kết quả có được công nhận hoàn thành không?* Đưa ra sau verification.
+
+Thiếu evidence là chuyện **bình thường** trong lúc đang làm — nó không bao giờ là lý do để dừng thực thi, chỉ là lý do để không chấp nhận.
+
+**Execution decisions** — AIEOS biết khi nào agent *không được* tiếp tục:
+
+| Decision | Khi nào | Ví dụ |
 |---|---|---|
-| **CONTINUE** | Mọi thứ còn hợp lệ | Task tiếp theo READY, context không đổi |
-| **CONTINUE_WITH** | Hợp lệ nhưng context đã đổi | Work Order mới vì dependency vừa merge thay đổi interface |
-| **REPLAN** | Downstream mất hiệu lực | "3 artifact stale do ADR-031 v2 — đây là revalidation plan" |
-| **STOP: intent changed** | Upstream intent đổi sau khi task bắt đầu | SPEC-012.1 v1 → v2 giữa chừng |
-| **STOP: scope invalid** | Phạm vi task không còn đúng | File trong `write` scope đã bị task khác sở hữu |
-| **STOP: evidence missing** | Không đủ assurance để chấp nhận | AC2 cần A4, chỉ có A1 |
+| **CONTINUE** | Mọi thứ còn hợp lệ | Task READY, context không đổi |
+| **CONTINUE_WITH** | Hợp lệ nhưng context đã đổi | Read-set thay đổi không phá interface → Work Order mới |
+| **REPLAN** | Kế hoạch mất hiệu lực | INTENT_CHANGE; read-set đổi phá interface; downstream stale |
+| **STOP: scope invalid** | Write-set xung đột | File trong write-set đã bị task khác sửa |
 | **STOP: runtime insufficient** | Runtime không enforce được capability cần chặn | Task risk high giao cho adapter T1 |
-| **ESCALATE** | Hết budget / vượt risk / cần quyết định | Retry 3 lần thất bại; drift cần human chọn hướng |
+| **STOP: violation** | Session vừa vi phạm policy | Ghi ngoài write-set |
+| **BLOCKED** | Dependency chưa sẵn sàng | TASK-140 chưa DONE hoặc đã STALE |
+| **ESCALATE** | Hết budget / vượt risk / cần quyết định | Retry quá giới hạn; drift cần human chọn hướng |
 
-### 5.3. Năm primitives
+**Acceptance decisions** — sau verification:
+
+| Decision | Khi nào |
+|---|---|
+| **ACCEPT** | Mọi gate pass, evidence profile đủ, policy cho phép auto-accept |
+| **NEEDS_REVIEW** | Đủ evidence tự động nhưng risk/policy yêu cầu human duyệt |
+| **INSUFFICIENT_EVIDENCE** | Thiếu loại evidence mà profile yêu cầu (9.2) |
+| **NEEDS_REWORK** | Gate fail (test, constitution, spec conformance) |
+| **REJECT** | Vi phạm không sửa được trong phạm vi task (sai hướng, ngoài scope) |
+
+```text
+Resume Check ─► Execution: CONTINUE ─► Agent implements ─► Verification
+                                                              │
+                                     Acceptance: INSUFFICIENT_EVIDENCE
+                                                              │
+                                         ─► REWORK (thêm test) hoặc REVIEW
+```
+
+### 5.4. Năm primitives
 
 | Primitive | Câu hỏi | Gồm |
 |---|---|---|
 | **Intent** | Cái gì phải tồn tại? | Vision, Constitution, Requirement, Spec (+AC), Architecture, ADR, Convention |
 | **Work** | Cái gì cần làm — và tiếp tục từ đâu? | Plan, Task (execution contract), Dependency, Lease, Session, Handoff, Work Order, Resume Check |
 | **Control** | Agent được phép làm gì? | Policy, Risk, Autonomy Budget, Capability Grant, Approval, Escalation |
-| **Evidence** | Làm sao biết nó đúng? | Change (SHA), Verification Run, Evidence item, Assurance level, Evidence graph |
+| **Evidence** | Làm sao biết nó đúng? | Change (SHA), Verification Run, Evidence item, Evidence Profile, Evidence graph |
 | **Reconciliation** | Thực tế còn khớp intent? | Drift detection, Change Impact Engine, Revalidation plan |
 
 ---
@@ -302,11 +368,39 @@ Ba mức `check`:
 
 > Giá trị thật của Constitution nằm ở **tỷ lệ điều khoản deterministic**. AIEOS nên chủ động giúp user chuyển điều khoản `judgment` thành `partial`/`deterministic` theo thời gian.
 
+#### Scope & applicability — để Constitution vận hành được ở quy mô lớn
+
+Project lớn có thể có hàng trăm điều khoản. Chạy tất cả cho mọi task là chậm và tạo nhiễu. Mỗi điều khoản khai báo **phạm vi** và **khi nào áp dụng**:
+
+```yaml
+  - id: INV-001
+    rule: "domain/ không được import infrastructure/"
+    scope:
+      components: [domain, infrastructure]
+      paths: ["src/domain/**"]
+    applicability:
+      task_types: [implementation, refactoring]
+    enforcement:
+      mode: blocking               # blocking | warning | advisory
+      checker: dependency_rule
+      cost: cheap                  # cheap | moderate | expensive
+```
+
+Ba thời điểm kiểm tra, mỗi thời điểm chỉ chạy tập điều khoản cần thiết:
+
+| Thời điểm | Tập điều khoản | Mục đích |
+|---|---|---|
+| **Task-time** (biên dịch Work Order) | Điều khoản có `scope` giao với write-set ∪ read-set của task | Đưa vào context để agent biết trước |
+| **Diff-time** (verification) | Điều khoản có `scope` giao với **file thực sự thay đổi** | Gate chặn vi phạm |
+| **Project-time** (định kỳ / trước release) | Toàn bộ, kể cả checker `expensive` | Bắt drift tích luỹ, điều khoản cross-cutting |
+
+Điều khoản không khai báo `scope` mặc định là project-wide và chỉ chạy ở project-time — để khuyến khích viết scope cụ thể.
+
 ### 6.2. Các thực thể Intent khác
 
 | Thực thể | Vai trò |
 |---|---|
-| **Requirement** `REQ-012` | WHAT + WHY; có `assurance_required` (mục 9.2) |
+| **Requirement** `REQ-012` | WHAT + WHY; có `evidence_profile` (mục 9.2) |
 | **Spec** `SPEC-012.1` | Chi tiết hoá; **acceptance criteria kiểm chứng được** |
 | **Architecture** `ARC-auth` | Component, trách nhiệm, interface, ranh giới |
 | **ADR** `ADR-031` | Quyết định + lý do + phương án bị loại |
@@ -342,10 +436,13 @@ input_state:
   depends_on: [TASK-140]            # phải DONE
   intent_versions: { SPEC-012.1: v2, ADR-031: v1 }
 
-scope:
-  write:     [src/auth/reset/**, tests/auth/reset/**]
-  read_only: [src/auth/core/**, src/shared/**]
-  forbidden: [migrations/**, src/billing/**]
+write_set:                          # được phép thay đổi
+  paths: [src/auth/reset/**, tests/auth/reset/**]
+read_set:                           # những gì task DỰA VÀO
+  paths:      [src/auth/core/**, src/shared/email/**]
+  interfaces: [TokenService, EmailPort]      # symbol/contract cụ thể
+  schemas:    [reset_tokens]
+forbidden: [migrations/**, src/billing/**]
 
 constitution: [INV-001, SEC-001]    # điều khoản áp dụng cho task này
 
@@ -369,27 +466,42 @@ verification_plan:
   - G0 scope · G1 build · G2 tests(AC1–AC3) · G3 constitution · G4 ai_review(cross-model)
 
 exit_conditions:
-  success:  all gates pass AND assurance(REQ-012 ACs) >= required
+  success:  all gates pass AND evidence_profile(REQ-012) satisfied
   escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded]
 ```
 
-Mười một thành phần: **Objective · Input state · Scope · Forbidden · Dependencies · Constitution · Acceptance criteria · Capabilities · Budget · Verification plan · Exit conditions.**
+Mười hai thành phần: **Objective · Input state · Write-set · Read-set · Forbidden · Dependencies · Constitution · Acceptance criteria · Capabilities · Budget · Verification plan · Exit conditions.**
+
+**Read-set được xác định từ ba nguồn**, vì không thể bắt agent khai báo đầy đủ từ trước:
+
+| Nguồn | Cách lấy | Độ tin cậy |
+|---|---|---|
+| **Declared** | Planner khai báo trong task contract | Có thể thiếu |
+| **Derived** | Static analysis: các symbol mà file trong write-set import/gọi tới | Tốt cho code; không thấy dependency động |
+| **Observed** | File agent thực sự đọc trong session (hooks của runtime T3+) | Chính xác nhất, chỉ có ở runtime hỗ trợ |
+
+Read-set hiệu lực = hợp của cả ba. Với runtime T0–T2 (không có observed), AIEOS ghi rõ read-set là *ước lượng* — đúng tinh thần "luôn hiển thị vùng chưa được bao phủ".
 
 ### 7.2. Resume Check — trước mỗi session
 
 Một session mới **không hỏi** *"agent trước đã làm đến đâu?"*. Nó hỏi: *"sau những thay đổi vừa xảy ra, project đang ở trạng thái nào và công việc nào còn hợp lệ?"*
 
-Trước khi phát Work Order, AIEOS chạy Resume Check — **deterministic, rẻ, luôn chạy**:
+Trước khi phát Work Order, AIEOS chạy Resume Check — **deterministic, rẻ, luôn chạy**.
 
-| Kiểm tra | So sánh | Thất bại → verdict |
-|---|---|---|
-| Intent version | `intent_versions` trong task ↔ version hiện tại | STOP: intent changed / REPLAN |
-| Base commit | `base_commit` ↔ HEAD: file trong scope có bị đổi bởi task khác? | CONTINUE_WITH (rebase context) / STOP: scope invalid |
-| Dependencies | Mọi dependency còn DONE và không STALE? | BLOCKED |
-| Constitution | Reality hiện tại có đang vi phạm điều khoản task phụ thuộc? | STOP + escalate |
-| Evidence trước đó | Evidence của các phần đã làm còn khớp SHA? | CONTINUE_WITH (re-verify) |
-| Runtime | Adapter đủ assurance cho risk của task? | STOP: runtime insufficient |
-| Budget | Còn token / thời gian / retries / human attention? | ESCALATE |
+**HEAD thay đổi không có nghĩa là phải dừng.** Hai task cùng xuất phát từ commit A; Task B merge (chỉ sửa `billing.ts`) → HEAD = C. Task A (chỉ sửa `auth.ts`) vẫn tiếp tục an toàn. Nhưng nếu Task B sửa `TokenService` mà Task A đang dựa vào → Task A phải được đánh giá lại. Vì vậy Resume Check xét **cái gì đã thay đổi so với `base_commit`**, giao với **write-set và read-set** của task:
+
+| # | Kiểm tra | So sánh | Kết quả |
+|---|---|---|---|
+| 1 | **Base freshness** | `base_commit` ↔ HEAD | Không đổi → bỏ qua 2–3. Đổi → tính tập thay đổi `Δ = diff(base, HEAD)` |
+| 2 | **Write-set conflict** | `Δ` ∩ write-set | Rỗng → OK. Có giao → **STOP: scope invalid** (hoặc rebase nếu xung đột tự giải được) |
+| 3 | **Read-set freshness** | `Δ` ∩ read-set | Rỗng → OK. Có giao, interface/schema **không đổi chữ ký** → **CONTINUE_WITH** (biên dịch lại context). Có giao, **phá interface** → **REPLAN** |
+| 4 | **Intent freshness** | `intent_versions` ↔ version hiện tại | Đổi → **REPLAN** (impact analysis xác định mức ảnh hưởng) |
+| 5 | **Dependency freshness** | Mọi dependency còn DONE, không STALE | Không → **BLOCKED** |
+| 6 | **Constitution** | Reality hiện tại vi phạm điều khoản áp dụng cho task? | Có → **ESCALATE** (không xây tiếp trên nền đang vi phạm) |
+| 7 | **Runtime** | Adapter `max_risk` ≥ risk của task | Không → **STOP: runtime insufficient** |
+| 8 | **Budget** | Còn token / thời gian / retries / human attention | Không → **ESCALATE** |
+
+Evidence cũ bị stale **không** nằm trong Resume Check — đó là việc của acceptance (STALE_EVIDENCE → re-verify), không phải lý do dừng thực thi.
 
 Chỉ khi Resume Check trả **CONTINUE** hoặc **CONTINUE_WITH**, Context Compiler mới chạy.
 
@@ -406,11 +518,16 @@ Context Compiler biến *project state* + *task contract* thành **Work Order**:
 ### 7.4. Vòng đời task
 
 ```text
-DRAFT ─approve─► READY ─lease─► IN_PROGRESS ─submit─► VERIFYING ─► VERIFIED ─► ACCEPTED ─► DONE
-                   ▲                 │                   │
-                   └─── BLOCKED ◄────┘                   ├─ fail ─► REWORK (≤ retries) ─► ESCALATED
-                                                         │
-     upstream intent đổi / reality drift ───────────────► STALE (từ bất kỳ trạng thái sau READY)
+DRAFT ─approve─► READY ─lease─► IN_PROGRESS ─submit─► VERIFYING ─► (acceptance decision)
+                   ▲                 │                                 │
+                   └─── BLOCKED ◄────┘     ACCEPT ──────────────────────┼─► ACCEPTED ─► DONE
+                                           NEEDS_REVIEW ─► IN_REVIEW ───┤
+                                           INSUFFICIENT_EVIDENCE ───────┼─► REWORK ─► IN_PROGRESS
+                                           NEEDS_REWORK ────────────────┘   (quá retries → ESCALATED)
+                                           REJECT ─► REJECTED
+
+  INTENT_CHANGE / CONFLICT phá interface ─► STALE ─► REPLAN   (từ bất kỳ trạng thái sau READY)
+  STALE_EVIDENCE trên task DONE           ─► DONE (evidence: stale) ─► re-verify
 ```
 
 ### 7.5. Session protocol & handoff
@@ -421,7 +538,8 @@ Handoff có cấu trúc: `done`, `not_done`, `assumptions`, `discoveries`, `risk
 
 ### 7.6. Coordination
 
-- **Lease độc quyền** trên task + write scope; scope chồng nhau không chạy song song (hoặc mỗi task một worktree, merge theo thứ tự).
+- **Lease độc quyền** trên task + write-set; write-set chồng nhau không chạy song song (hoặc mỗi task một worktree, merge theo thứ tự).
+- Write-set của task này giao với read-set của task khác → được chạy song song, nhưng merge của task ghi sẽ kích hoạt Resume Check cho task đọc.
 - Chỉ task có mọi dependency `DONE` mới `READY`.
 - Role tách biệt: Planner, Implementer, Reviewer — quyền khác nhau.
 
@@ -551,32 +669,45 @@ Ai/cái gì kiểm tra?   → tool / model / human (không phải agent tự kha
 Còn hiệu lực không?   → không stale, intent version còn khớp
 ```
 
-### 9.2. Assurance levels (thay vì PASS/FAIL nhị phân)
+### 9.2. Evidence Profile (thay vì một thang assurance tuyến tính)
 
-Không phải mọi evidence mạnh như nhau:
+Các loại evidence **không nằm trên cùng một thang đo**. Formal verification chứng minh một thuộc tính trong phạm vi mô hình, nhưng không thấy vấn đề kiến trúc mà human review thấy. Production telemetry thấy hành vi thực tế mà test không bao phủ. Unit test và security analysis chứng minh những khía cạnh khác nhau. Không loại nào **thay thế** được loại khác.
 
-| Mức | Loại evidence |
-|---|---|
-| **A0** | Agent tự khai báo — *không tính* |
-| **A1** | Unit test, AI review |
-| **A2** | Integration test, static analysis, kiểm tra constitution deterministic |
-| **A3** | Property / fuzz / mutation test, security analysis |
-| **A4** | Human expert review, formal verification |
-| **A5** | Production evidence (telemetry, không có incident sau N ngày) |
+Vì vậy mỗi requirement khai báo **những loại evidence cần có, theo từng chiều**:
 
-**Mỗi requirement/AC khai báo mức assurance yêu cầu** (thường suy ra từ risk):
+```yaml
+requirement: REQ-012
+evidence_profile:
+  functional:    [unit_test, integration_test]
+  security:      [static_security_analysis, human_security_review]
+  architecture:  [deterministic_rule]
+  operational:   [migration_compatibility_test]
+```
+
+Acceptance kiểm tra **từng chiều đủ hay thiếu**, không cộng điểm:
 
 ```text
 REQ-012  "User không thể reset password của user khác"
-  required: A3 + A4
-  ├── AC1  unit test           A1 ✓
-  │        integration test    A2 ✓
-  │        property test       A3 ✓
-  └── AC2  security review     A4 ✗  ← thiếu
-  Status: UNDER-ASSURED (thiếu A4 cho AC2)
+  functional    unit_test ✓  integration_test ✓
+  security      static_security_analysis ✓  human_security_review ✗   ← thiếu
+  architecture  deterministic_rule ✓
+  Decision: INSUFFICIENT_EVIDENCE (security: thiếu human_security_review)
 ```
 
-> Không dùng một con số kiểu *"assurance 93%"*: không có cơ sở để cộng một unit test với một security review thành phần trăm, và con số đó tạo cảm giác an toàn giả. Thay vào đó: **đạt / chưa đạt mức yêu cầu, và thiếu cụ thể cái gì.**
+**Chống bureaucracy:** không bắt user viết profile cho mọi requirement. **Risk level → profile mặc định** (template), requirement chỉ khai báo phần khác biệt:
+
+| Risk | Profile mặc định |
+|---|---|
+| low | functional: [build, lint] |
+| medium | functional: [unit_test] · architecture: [deterministic_rule] |
+| high | + integration_test · ai_review (cross-model) · static_security_analysis |
+| critical | + human_review · property/fuzz test cho invariant liên quan |
+
+**Quy tắc độc lập:** evidence chỉ được tính khi **người/cái tạo ra nó độc lập với implementer** — agent tự khai báo không bao giờ được tính; AI review cùng model với implementer không được tính cho chiều đòi hỏi review.
+
+**Tier A0–A5** chỉ giữ lại làm **nhãn hiển thị tóm tắt trên UI** (mức kiểm chứng tổng quát của một requirement), **không** phải thang đo toán học, và **không** dùng để quyết định acceptance.
+
+> Không dùng con số kiểu *"assurance 93%"*: không có cơ sở để cộng một unit test với một security review, và con số đó tạo **false confidence**. Thay vào đó: **từng chiều đủ / thiếu, và thiếu cụ thể cái gì.**
 
 ### 9.3. Verification hierarchy
 
@@ -596,7 +727,7 @@ V6  Production evidence
 ### 9.4. Quy tắc evidence
 - Evidence luôn gắn **commit SHA** và **intent version**.
 - Evidence do **AIEOS/CI/tool/human** tạo ra, không do agent tự viết.
-- Mỗi AC phải map tới evidence đủ mức yêu cầu.
+- Mỗi AC phải map tới evidence thoả evidence profile của requirement.
 
 ---
 
@@ -685,13 +816,49 @@ Ngân sách friction: **thời gian human trên mỗi task risk thấp ≈ 0**; 
 | **Drift false positive rate** | % cảnh báo drift bị user đánh giá sai — phải thấp |
 | **Escaped defects** | Lỗi lọt qua mọi gate, phát hiện sau — metric trung thực nhất |
 | **Human time / task** | Theo risk level |
-| **Assurance coverage** | % requirement đạt mức assurance yêu cầu |
+| **Evidence coverage** | % requirement thoả evidence profile; vùng chưa bao phủ được liệt kê rõ |
 | **Cost / accepted task** | Token + thời gian |
 | **Rework rate** | % task DONE bị mở lại / revert |
 
 ---
 
-## 13. Lưu trữ
+## 13. State model, lưu trữ & recovery
+
+### 13.1. Hai loại state
+
+| | **Project State** | **Execution State** |
+|---|---|---|
+| Tuổi thọ | Dài hạn | Tạm thời |
+| Tính chất | Authoritative | Recoverable |
+| Gồm | Intent, Constitution, accepted changes, evidence hiện hành, architecture reality | Session đang chạy, lease, tiến độ task, checkpoint, retry counter, runtime telemetry |
+| Mất đi thì | **Không chấp nhận được** | Chấp nhận được — khôi phục hoặc làm lại |
+
+Một session có thể crash, agent có thể bị kill, máy có thể restart — **project state không được mất theo**.
+
+### 13.2. Phân loại theo độ tin cậy
+
+| Lớp | Ví dụ | Nguồn sự thật | Mất thì |
+|---|---|---|---|
+| **Authoritative** | Code (Git), intent/constitution files, event log | Chính nó | Không được mất |
+| **Derived** | State projection, traceability index, impact graph, read-set derived | Tính lại từ authoritative | Rebuild |
+| **Ephemeral** | Lease, session, telemetry, checkpoint chưa submit | Không | Bỏ hoặc làm lại |
+
+**Khi mâu thuẫn:**
+- **Code ↔ event log về những gì đã thay đổi** → Git thắng (commit tồn tại là sự thật). Event log được vá bằng cách quét commit trailer `AIEOS-Task:`.
+- **Intent files ↔ projection** → file thắng; projection rebuild.
+- **Lease ↔ thực tế** → lease hết hạn là hết hạn, bất kể agent nghĩ gì (fencing, bên dưới).
+
+### 13.3. Recovery & tính nhất quán
+
+| Vấn đề | Cơ chế |
+|---|---|
+| **Crash giữa transaction** (đã commit Git, chưa ghi event) | Khi khởi động: **reconcile Git ↔ event log**; commit có trailer mà không có event → tạo event bù, đưa task về VERIFYING |
+| **Duplicate events** (retry ghi) | Mỗi event có **ID idempotent**; ghi trùng bị bỏ qua |
+| **Stale writes** — agent "zombie" vẫn chạy sau khi lease hết hạn và task đã giao cho agent khác | **Fencing token**: mỗi lần cấp lease tăng một số đơn điệu; mọi submit phải mang token; token cũ bị từ chối |
+| **Ghi đồng thời vào `.aieos/`** | Chỉ AIEOS core ghi, qua một writer duy nhất; agent ghi qua protocol |
+| **Projection hỏng** | Xoá và replay event log |
+
+### 13.4. Lưu trữ
 
 Git-native cho Intent và Constitution; local store cho runtime state.
 
@@ -731,7 +898,7 @@ Những thứ **dễ copy**: CLI, MCP server, web UI, từng adapter riêng lẻ
 Những thứ **có thể thành moat**:
 1. **Project state protocol mở** (`.aieos/`: Intent · Work · Evidence) — nếu trở thành chuẩn de-facto.
 2. **Reconciliation engine** với false-positive thấp.
-3. **Evidence graph + assurance model**.
+3. **Evidence graph + evidence profile model**.
 4. **Risk → autonomy engine**.
 5. **Historical intelligence**: dữ liệu *task type × agent × model × context strategy → first-pass rate, cost, escaped defects*. Khi đó scheduler biết *"task loại này, runtime X + chiến lược context Y có first-pass 91%"*.
 
@@ -754,7 +921,8 @@ Lợi thế cấu trúc: nhà cung cấp runtime có động lực khoá user v�
 | **Drift false positive** làm user tắt tính năng | Deterministic trước; confidence; đo FP rate |
 | **Constitution chỉ là văn xuôi** | Bắt buộc khai báo `check`; chuyển dần judgment → deterministic |
 | **Không kiểm soát được hành động ngoài diff** | Capability boundary + adapter assurance + từ chối giao task rủi ro cho runtime yếu |
-| **AI review tạo cảm giác an toàn giả** | Assurance levels; AI review chỉ là A1 |
+| **False confidence** — tuyên bố đúng khi kiểm tra không bao phủ lỗi | Phạm vi cam kết rõ ràng (mục 0); luôn hiển thị vùng chưa bao phủ; evidence profile theo chiều; AI review chỉ là một loại evidence |
+| **Implementation complexity** — quá nhiều policy, state, gate, graph | Concept freeze; MVP chỉ phần deterministic; profile mặc định theo risk; Constitution có scope |
 | **State tự drift khỏi code** | Reconciliation; code là sự thật về hiện trạng |
 | **Runtime tự xây tính năng tương tự** | Trung lập đa runtime; định dạng mở; tập trung vào correctness |
 | **Cold start với repo có sẵn** | `aieos import`: AI quét repo, đề xuất architecture + constitution, human duyệt |
@@ -767,20 +935,23 @@ Lợi thế cấu trúc: nhà cung cấp runtime có động lực khoá user v�
 
 Mục tiêu đo được: trên một project thật ~100 task, AIEOS **bắt được thay đổi sai mà agent báo là xong**, với human time thấp.
 
-- [ ] `.aieos/` format: constitution (có `check`), requirement, spec+AC, ADR, task contract, handoff
+- [ ] `.aieos/` format: constitution (có `check`, `scope`), requirement (+ evidence profile), spec+AC, ADR, task contract (write-set/read-set), handoff
 - [ ] `aieos init` / `aieos import` (đề xuất constitution từ repo)
 - [ ] `aieos run "<ý định>"` — zero-friction path
-- [ ] Resume Check (deterministic) + Context Compiler v1 (graph-based, không semantic search)
+- [ ] Resume Check (8 kiểm tra, deterministic) với read-set declared + derived
+- [ ] Context Compiler v1 (graph-based, không semantic search)
+- [ ] Execution decision + Acceptance decision tách biệt
 - [ ] MCP server ~8 tools
-- [ ] Adapter **Claude Code (T3)**: hooks enforce write scope, shell allowlist, chặn git push
+- [ ] Adapter **Claude Code (T3)**: hooks enforce write-set, shell allowlist, chặn git push, ghi observed read-set
 - [ ] Adapter **Codex (T1/T2)** — để chứng minh core trung lập ngay từ đầu
-- [ ] Verification V0–V2, evidence gắn SHA, assurance A1–A2
+- [ ] Verification V0–V2, evidence gắn SHA, evidence profile mặc định theo risk (low/medium)
 - [ ] Reconciliation deterministic (constitution, scope, stale evidence)
 - [ ] Risk rule-based, autonomy L1–L2
-- [ ] Event log; chạy tuần tự (chưa song song)
+- [ ] Event log (event ID idempotent), fencing token, recovery Git ↔ event log khi khởi động
+- [ ] Chạy tuần tự (chưa song song)
 
 ### v0.2 — Assurance
-V3 cross-model review, Change Impact Engine, assurance A3–A4, drift semantic (AI) với confidence, metrics.
+V3 cross-model review, Change Impact Engine, profile high/critical, drift semantic (AI) với confidence, metrics.
 
 ### v0.3 — Parallel
 Lease + worktree, nhiều agent song song, role-based agents, thêm adapter.
@@ -799,3 +970,30 @@ Web UI, multi-user, approval workflow, cloud sync, quyết định về historic
 3. **Dispatch**: MVP để agent *kéo* Work Order qua MCP (đơn giản), hay AIEOS *đẩy* qua headless (tự động hơn)?
 4. **Ngôn ngữ đầu tiên** cho constitution checker (TS? Python?) — quyết định theo Boomy.
 5. **Tên**: chốt "AIEOS".
+
+---
+
+## 18. Concept freeze
+
+Từ v0.5, concept được **đóng băng**: không thêm primitive, không thêm module. Thay đổi concept chỉ khi technical spec hoặc dogfooding chứng minh một giả định sai.
+
+**Những gì đã đóng băng:**
+- Mission, thesis, phạm vi cam kết của correctness, 4 luật bất biến
+- 5 primitives và Correctness Loop
+- Phân loại sự kiện (INTENT_CHANGE / DRIFT / VIOLATION / STALE_EVIDENCE / CONFLICT)
+- Execution decision ≠ Acceptance decision
+- Truth Hierarchy; Project State ≠ Execution State
+
+**Bước tiếp theo — technical specs, theo thứ tự:**
+
+| # | Spec | Nội dung |
+|---|---|---|
+| 1 | **State & Event Model** | Schema các thực thể, danh sách event, projection, recovery, fencing |
+| 2 | **`.aieos/` File Format** | Schema YAML/MD cho constitution, requirement, spec, ADR, task contract, handoff |
+| 3 | **Resume Check & Decision Engine** | Thuật toán 8 kiểm tra, tính `Δ`, phát hiện thay đổi chữ ký interface, bảng quyết định |
+| 4 | **Verification & Evidence** | Gate pipeline, evidence profile, quy tắc độc lập, mapping AC ↔ test |
+| 5 | **Adapter Contract + Claude Code adapter** | Interface adapter, khai báo assurance, hooks mapping |
+| 6 | **MCP Protocol** | Danh sách tool, input/output, lỗi |
+| 7 | **CLI & zero-friction UX** | `aieos run / status / init / import`, luồng duyệt |
+
+**Hoãn lại (P2):** historical intelligence, semantic drift detection bằng AI — chỉ làm sau khi reconciliation deterministic đã ổn định.
