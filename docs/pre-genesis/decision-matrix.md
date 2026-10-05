@@ -3,7 +3,7 @@
 > **Status: PRE-GENESIS DRAFT — non-authoritative.**
 > Nothing in this file is a Genesis fact. It records what the owner has decided, what is only proposed, and what must be measured before it may be assumed.
 > Normative concept: `AIEOS-concept.md` v0.5 (Vietnamese, immutable). This document cites it by section (e.g. "concept §5.3").
-> Revision 2 — 2026-10-05
+> Revision 3 — 2026-10-05
 
 ## How to read this matrix
 
@@ -88,7 +88,8 @@ Rules:
 | A30 | **Measurement authority.** Claude: prepares probes, explains them, proposes findings. Owner: inspects probes, executes or supervises the authoritative run, reviews raw evidence, approves the measurement. The Windows-side cross-check uses native commands and native UI; **Claude-authored code is never the sole source of a finding about Claude's own trust boundary.** |
 | A31 | **P-CRED is the prerequisite for non-advisory human authority.** No claim that human authority is preventive or detective may be made before P-CRED passes in the measured configuration. A baseline may be captured before hardening; a baseline FAIL means the current environment does not reach the target assurance level, not that the architecture failed. |
 | A32 | **Irreversible actions are decided separately.** An irreversible or outward-facing action (e.g. a force-push, a visibility change, a deletion) is never a side effect of another change; it is authorized on its own. |
-| A33 | **Prerequisites for authoritative measurement.** Before an authoritative P-GH measurement: the agent token is narrowed (no `workflow`, no `delete_repo`), and the agent Git identity is separated from the owner identity. A measurement taken with the current over-scoped token is not authoritative. |
+| A33 | **[Superseded by A34 on 2026-10-05: the token clause ('the agent token is narrowed (no `workflow`, no `delete_repo`), and') and the last sentence. Kept for the audit trail, not in force. The Git-identity clause remains in force.]** **Prerequisites for authoritative measurement.** Before an authoritative P-GH measurement: the agent token is narrowed (no `workflow`, no `delete_repo`), and the agent Git identity is separated from the owner identity. A measurement taken with the current over-scoped token is not authoritative. |
+| A34 | **Agent token scopes kept (owner decision, 2026-10-05).** The agent token deliberately keeps its `workflow` and `delete_repo` scopes (owner's intent): a known governance decision, not a TODO and not a missing prerequisite. Keeping them does not mean treating them as safe; when measurement is designed later, these capabilities can still be recorded as part of the authority surface. Not remediated at this time. A P-GH run is authoritative only for the configuration recorded in its environment fingerprint, which includes the token's scope list (matrix rule 4; measurement-protocol §0.2, §0.3); there is no separate dry-run-only status for this token. Supersedes the token clause and the last sentence of A33, B12, and the workflow-file clause of the CI-integrity row in section E; the Git-identity clause of A33 remains in force. (The last two sentences: Claude proposal adopted by the owner, 2026-10-05.) |
 
 ---
 
@@ -117,7 +118,7 @@ Rules:
 | B9 | Spec lifecycle | `draft → baselined → superseded`; baselining is an owner act; no task is ACCEPTED against an unbaselined spec. | — |
 | B10 | Scenario change classes | Adding a scenario: `normal_cr` with fixture-freeze approval on its hash. Removing, weakening or re-expecting a scenario: `critical_cr` (or `genesis_amendment` if bound). Scenarios are tagged by capability; compatibility is evaluated per capability. | A19 |
 | B11 | Key custody | Two owner signing keys: a primary requiring user presence for every signature, and an offline backup for recovery. Genesis binds both fingerprints. Last-resort "re-genesis" is recorded permanently as a chain break. | A23, C14 |
-| B12 | Agent credential | Agent account token: classic token with only the scope needed for code on a public repo; **no `workflow`, no `delete_repo`**. | A33, C5 |
+| B12 | Agent credential | **[Superseded by A34 on 2026-10-05. Kept for the audit trail, not in force.]** Agent account token: classic token with only the scope needed for code on a public repo; **no `workflow`, no `delete_repo`**. | A33, C5 |
 | B13 | Concept errata CR-001 (content) | §8.5 adapter assurance must be measured per runtime × platform × version × configuration · Codex out of v0.1 · bootstrap exception to §13.3 (bootstrap-written records carry their recorder and are not authoritative) · layout · remove the unrelated project references in §16 and §17 Q4 (Q4 points to the stack ADR; the v0.1 measurement project is the AIEOS self-build). | A22 |
 | B14 | Exit tiers | Per phase: minimum / reliability / release, written as the Definition of Ready. Minimum tier = coverage of decision-table rows, lifecycle transitions and the adversarial catalogue. | — |
 | B15 | Claude Code version | Pin the version (managed `requiredMinimumVersion` / `requiredMaximumVersion`), prevent auto-update, re-measure on an owner-triggered schedule. | C3 |
@@ -142,7 +143,7 @@ Rules:
 | C10 | Human authority channel: are owner merges/approvals attributable through the API, and are owner signatures verifiable? | P-GH, P-CRED | TBD |
 | C11 | Genesis integrity anchor: a location for the Genesis hash and signatures that the agent cannot rewrite. | After C4, C10, C14 | TBD |
 | C12 | Native implementation stack. | Benchmark (after bootstrap) | TBD |
-| C13 | **Boundary composition.** Do the controls compose into a non-circular authorization path (A29)? **Precondition:** P-CRED PASS in the measured configuration — if P-CRED is FAIL, the agent's authority domain contains the owner's and C13 is FAIL by implication; if P-CRED is INCONCLUSIVE or not run, C13 is not evaluable. **Known design gap (from documentation, before measurement):** files that CI executes but that are not workflow YAML (scripts, tests, fixtures, dependencies, configuration) are writable by the agent, so without B17 C13 is expected to FAIL. | P-CRED + P-GH (incl. P-GH-7) + P-LOC | TBD |
+| C13 | **Boundary composition.** Do the controls compose into a non-circular authorization path (A29)? **Precondition:** P-CRED PASS in the measured configuration — if P-CRED is FAIL, the agent's authority domain contains the owner's and C13 is FAIL by implication; if P-CRED is INCONCLUSIVE or not run, C13 is not evaluable. **Known design gap (from documentation, before measurement):** files that CI executes but that are not workflow YAML (scripts, tests, fixtures, dependencies, configuration) are writable by the agent, so without B17 C13 is expected to FAIL. Because the agent token keeps the `workflow` scope (A34), workflow YAML itself may also be writable by the agent; P-GH-4 measures whether such pushes are accepted. | P-CRED + P-GH (incl. P-GH-7) + P-LOC | TBD |
 | C14 | Owner signing mechanism: does GitHub verify the chosen user-presence key as a signing key (FIDO2 `-sk` SSH signing is undocumented; an OpenPGP hardware key with a touch policy is the fallback)? Is user presence enforced for every signature? | P-CRED, P-GH | TBD |
 | C15 | **Risk (not a confirmed conflict):** do desktop-app WSL sessions remain usable under the strongest P-CRED hardening (separate Windows user, interop disabled, no `/mnt/c` automount)? If not, the owner chooses between A5 with a lower authority level and a different working mode. | P-LOC, P-CRED | TBD |
 
@@ -169,7 +170,7 @@ Going public changes *repository protection*. It does not, by itself, change the
 | Concern | Question it answers | Candidate mechanism | Status |
 |---|---|---|---|
 | Repository protection | Who can change which refs, paths and settings? | Rulesets R1/R2/R3 + tag ruleset on the public repo (B16) | TBD → P-GH |
-| CI integrity | Did the ratified evaluator run on exactly the evaluated tree, outside the agent's reach? | Provenance chain (B6); workflow files the agent token cannot edit | TBD → P-GH |
+| CI integrity | Did the ratified evaluator run on exactly the evaluated tree, outside the agent's reach? | Provenance chain (B6); workflow files the agent token cannot edit **[Workflow-file clause superseded by A34 on 2026-10-05; kept for the audit trail, not in force; see C13 and P-GH-4]** | TBD → P-GH |
 | Human authority | Was this act performed by the human principal? | Owner-account action attributable through the API, and/or owner signature | TBD → P-GH, P-CRED |
 | Cryptographic identity | Can a signature be produced only by the human principal, and only with presence? | User-presence signing key unreachable or unusable by the agent (A23, B11) | TBD → C14, P-CRED |
 | Genesis integrity | Is the current trust root the one the owner ratified? | Signed Genesis chain bound to immutable ids and key fingerprints (A27) + a head-hash copy outside the agent's write reach | TBD → C11 |

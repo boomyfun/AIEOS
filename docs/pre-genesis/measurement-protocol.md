@@ -1,7 +1,7 @@
 # AIEOS Measurement Protocols — P-CRED, P-GH, P-LOC
 
 > **Status: PRE-GENESIS DRAFT.** These protocols produce the evidence that moves `TBD` rows of `decision-matrix.md` to `MEASURED`. Nothing here is a Genesis fact.
-> Revision 2 — 2026-10-05. Sources: official GitHub and Claude Code documentation, checked 2026-10-05. Documentation describes defaults; it does not describe this machine, these accounts or this Claude Code version. Every documented behaviour below is a **hypothesis to measure**, not an assumption.
+> Revision 3 — 2026-10-05. Sources: official GitHub and Claude Code documentation, checked 2026-10-05. Documentation describes defaults; it does not describe this machine, these accounts or this Claude Code version. Every documented behaviour below is a **hypothesis to measure**, not an assumption.
 
 ## 0. Roles, results and lifecycle
 
@@ -131,11 +131,11 @@ Artifact: `docs/pre-genesis/measurements/P-CRED-<baseline|remeasure>-<date>.md` 
 
 **Scope note.** Forkability is not a governance failure (matrix A26). P-GH measures the **canonical** repository only, identified by its immutable repository id and owner id (A27), never by name.
 
-### 2.0 Preconditions for an authoritative run (matrix A33)
+### 2.0 Preconditions for an authoritative run (matrix A33, A34)
 
-- The agent token is narrowed: no `workflow`, no `delete_repo`. Record the token's scope list as returned by the API.
+- Record the agent token's scope list as returned by the API; it is part of the environment fingerprint (§0.3). Token scopes are not a precondition: the token keeps `workflow` and `delete_repo` by owner decision (matrix A34).
 - The agent Git identity is separated from the owner identity (repository-local identity set on 2026-10-05; recorded in the matrix as an observation).
-- The owner has configured the rulesets of §2.2. Runs taken with the current over-scoped token are dry runs only.
+- The owner has configured the rulesets of §2.2. A run is authoritative only for the configuration recorded in its environment fingerprint, including the token's scope list; if the scopes change, the rows measured under that fingerprint return to TBD (§0.2, matrix rule 4).
 
 ### 2.1 P-GH-1 — Ruleset capability (owner)
 
@@ -181,7 +181,7 @@ Known gaps are designed around, not assumed away: secrets stay out of push and P
 
 ### 2.4 P-GH-4 — Workflow-file protection
 
-With the narrowed token, record accept/reject and the verbatim server message for: editing an existing workflow file; adding a workflow file; deleting a workflow file; the documented "identical file on another branch" exception, including a branch pushed from an older commit whose workflow differs from `main`; and changing files that a workflow executes but that are not workflow YAML (scripts, tests, local composite actions, dependency manifests). The last case is expected to be **accepted**: "the agent cannot edit workflow files" ≠ "the agent cannot change what CI does".
+With the agent's actual token (scopes recorded per §2.0), record accept/reject and the verbatim server message for: editing an existing workflow file; adding a workflow file; deleting a workflow file; the documented "identical file on another branch" exception, including a branch pushed from an older commit whose workflow differs from `main`; and changing files that a workflow executes but that are not workflow YAML (scripts, tests, local composite actions, dependency manifests). The last case is expected to be **accepted** regardless of the `workflow` scope: protecting workflow files is not the same as controlling what CI does. Because the token keeps `workflow` (matrix A34), the first three cases may also be accepted; this is a documentation-based hypothesis, and only the measured result counts.
 
 ### 2.5 P-GH-5 — End-to-end provenance chain (matrix B6)
 
@@ -259,7 +259,7 @@ C13 is not a separate probe; it is evaluated from P-CRED, P-GH (including P-GH-7
 
 1. **P-CRED baseline** (expected FAIL) → owner approves the baseline finding.
 2. Owner decides and applies hardening → **P-CRED re-measurement**.
-3. Owner narrows the agent token and configures rulesets → **P-GH** (P-GH-7 only if P-CRED passed).
+3. Owner configures rulesets (agent token scopes recorded per §2.0) → **P-GH** (P-GH-7 only if P-CRED passed).
 4. **P-LOC**, including P-LOC-6.
 5. **C13** evaluation (§4).
 6. Owner-approved results update the decision matrix. Only then: remaining decisions → Assurance model → Genesis model.
