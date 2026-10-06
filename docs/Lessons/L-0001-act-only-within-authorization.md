@@ -33,8 +33,9 @@ Handled correctly once: at :3798 Claude re-asked the questions that a delegation
 One incident in session 2026-10-06-0306 (../History/2026-10/2026-10-06-0306-real-decider-rechecks-and-push.md):
 - **2026-10-06 (:672 to :711; D-013 K5, found by D-014).** Claude wrote memory files before showing the exact text in a chat message, although the decision required it. Claude believed it had shown the text; the transcript showed no such message. Since then, the display is checked in the transcript before the first write (:1172).
 
-One incident in session 2026-10-07-0100 (../History/2026-10/2026-10-07-0100-a14-steps-1-5-audit.md):
+Two incidents in session 2026-10-07-0100 (../History/2026-10/2026-10-07-0100-a14-steps-1-5-audit.md):
 - **2026-10-07 (D-057, D-058, D-059).** Decision files written to the records folder without their full text shown in chat first: D-055 and D-056 were not shown; D-057 was shown only in part, and its line 3 says it was shown; D-058 was shown except its executor-log block. Claude reported each slip itself; the decision agent found that D-057's line 3 overstates the display.
+- **2026-10-07 (D-064).** The D-064 decision file was shown in chat with two blocks given by reference (the A47 line, shown earlier, and the executor output, which the owner may not see), although the file was written with the full text. Claude said so in the next message. Tool output is not owner-visible text; paste it.
 
 ## Why it happens
 - Claude reads "approve the scope" or "follow your proposal" as approval of every method choice inside it.
