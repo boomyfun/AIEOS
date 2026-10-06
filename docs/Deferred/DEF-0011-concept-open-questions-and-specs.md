@@ -27,3 +27,4 @@ The A14 sequence (DM).
 
 ## Log
 - 2026-10-04: questions left open (:48); spec #1 offered (:357).
+- 2026-10-06 (session 02bd7476): the owner answered "4 có, 5 có, 6 b, 7 để sau, 8 AIEOS" (:851, repeated at :901), recorded in DM A43 (decision file D-034): the first user is the owner; AI drafts specs and a human approves; agents pull their work from AIEOS; the name is "AIEOS". Still open: open source (deferred by the owner), historical intelligence, the §18 specs and the advisor sources. ../History/2026-10/2026-10-06-1957-owner-answers-p5-p7-and-product-questions.md
