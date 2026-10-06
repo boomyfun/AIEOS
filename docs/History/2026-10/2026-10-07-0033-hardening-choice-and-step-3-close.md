@@ -24,3 +24,7 @@
 ## State at the end and next step
 
 - **A14:** step 1 done; step 2 done (MP revision 5); step 3 done at the level the owner chose (minimal P-CRED baseline; no hardening; P-GH and P-LOC not run now); step 4 done for the results that exist (C2, C13); step 5 done (CR-001). Next: step 6, the assurance model, starting with DEF-0017 (B3/B4) and DEF-0008 (E10). No code before step 9.
+
+## Correction, 2026-10-07
+
+The next step above is out of date. After this file was written the owner wrote (:2316): "tôi muốn trong phiên sau bạn check lại xem bước 1 đến bước 5 đã làm chính xác chưa, có sai sót, lỗi, xung đột, hay bất kì vấn đề nào hay không trước khi sang "bước 6. Mô hình bảo đảm chất lượng". Hãy làm một bảng ghi lại các vấn đề, và chúng ta sẽ vá/fix trong phiên sau, trước khi sang bước 6." The next session first audits A14 steps 1-5, lists every problem in a table, and fixes them; step 6 starts only after that.

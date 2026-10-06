@@ -30,6 +30,10 @@ One incident in session 2026-10-06-0602 (../History/2026-10/2026-10-06-0602-rule
 
 Handled well: the same-model blind pass was labelled as independent of context but not of the model (:1941).
 
+Two in session 02bd7476 (../History/2026-10/2026-10-07-0033-hardening-choice-and-step-3-close.md and the History files of 2026-10-06 16:35 to 2026-10-07 00:19):
+- **:1683 to :1723.** Claude reported its context use as 85-88% and twice proposed to end the session; the owner's figure was 55%. Claude cannot measure it: an estimate must be labelled as rough, and the owner's figure asked for, before stopping.
+- **:2069.** Claude reported A14 steps 2-5 as done when steps 2-4 were done only for the minimal baseline; the owner's request for a review found it.
+
 ## Why it happens
 - Claude wants to keep momentum, and disclosure feels like an admission.
 - A note in a log is mistaken for telling the owner.

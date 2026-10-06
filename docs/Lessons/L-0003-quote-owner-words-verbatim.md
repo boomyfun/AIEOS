@@ -29,6 +29,13 @@ At least ten in session 2026-10-04-1817 (../History/2026-10/2026-10-04-1817-idea
 
 Related: the automatic compaction summary silently corrected an owner typo (:4631).
 
+Five in session 02bd7476 (../History/2026-10/2026-10-07-0033-hardening-choice-and-step-3-close.md and the History files of 2026-10-06 16:35 to 2026-10-07 00:19), all caught by the decision agent before the text reached the owner or GitHub:
+- **D-030.** A pasted block was labelled "Lời owner" without its qualifier.
+- **D-031, D-036.** Commit messages paraphrased the owner's words instead of quoting them.
+- **D-034.** The owner's "bỏ qua" for P5 was first written as "Dropped".
+- **D-041.** The first CR-001 draft added clauses that the source rows do not contain.
+- **D-046.** The first finding said the owner had opened Task Manager and kept a screenshot; the owner had reported only the comparison.
+
 ## Why it happens
 - Translating from Vietnamese and summarising both invite small changes.
 - Claude wrote both the question and the record, so its own wording feels like the owner's.

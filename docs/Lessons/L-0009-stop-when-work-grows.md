@@ -15,6 +15,9 @@ Three in session 2026-10-04-1817 (../History/2026-10/2026-10-04-1817-idea-to-cs3
 - **2026-10-05 (:1627 to :1656).** The REG-0 method went through four rounds of refinement without a recorded owner decision. The owner then locked the method: "Không tiếp tục mở rộng phương pháp thành REG-0 v2.x. REG-0-lite là phiên bản được dùng." (:1664; see the source notes in the session History).
 - **2026-10-05 (:3716).** The "minimal" P-CRED baseline grew from about 1,000 to about 2,500 words, with nine states and about 15 owner steps, just to confirm an expected FAIL.
 
+One in session 02bd7476 (../History/2026-10/2026-10-07-0033-hardening-choice-and-step-3-close.md and the History files of 2026-10-06 16:35 to 2026-10-07 00:19):
+- **D-034 to D-037; owner :1299.** A "minimal" security check grew into a protocol revision, row notes, machine details and four owner questions. The owner called it drift ("lan man, vòng vo"); the decision agent recorded it as its own drift (D-038).
+
 ## Why it happens
 - No stop condition is tied to the decision the work serves.
 - Review agents always find something more.
