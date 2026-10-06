@@ -1,7 +1,7 @@
 # AIEOS Assurance Model
 
 > **Status: PRE-GENESIS DRAFT — proposed, not ratified.** A14 step 6. Every rule here is a proposal unless it cites a DECIDED row of `decision-matrix.md` (DM, section A), the concept, or CR-001 as approved. Nothing here is a Genesis fact; whether Genesis binds this model is decided at steps 7-8 (A20, B2).
-> Revision 1 — 2026-10-07. Written under decisions of the decision agent (A41); it is not an owner decision. Normative concept: `AIEOS-concept.md` v0.5 with CR-001 (A22). Rows are cited by ID, concept text by line ("concept line N").
+> Revision 2 — 2026-10-07 (revision 1, same day: first version). Written under decisions of the decision agent (A41); it is not an owner decision. Normative concept: `AIEOS-concept.md` v0.5 with CR-001 (A22). Rows are cited by ID, concept text by line ("concept line N").
 > Effect: until the trust-boundary measurements pass, every control described here is **advisory** (DM label rule "anything unmeasured defaults to advisory"; A31; section 9).
 
 ## 1. Principle
@@ -56,7 +56,7 @@ Proposed alignment of B5 with B3 (revision 16):
 - **v0.1 defaults** (concept lines 699-702; v0.1 scope at concept line 947): low: functional [build, lint]; medium: functional [unit_test], architecture [deterministic_rule]. The class for each default entry is `deterministic_tool_external_ci` (proposed). Whether `deterministic_rule` belongs to V1 or V2 (concept lines 716-717) is open.
 - **High and critical** (concept lines 703-704): v0.1 lists defaults for low and medium only; the high and critical profiles and V3 cross-model review come in v0.2 (concept lines 947, 954). The `ai_review (cross-model)` entry is **CR-001 E10, open** (concept line 703; DEF-0008); the G4 gate of the example task (concept line 466) is listed with it in B3. The owner was asked on 2026-10-07 (decision file D-061).
 - **While E10 is open** (mechanical consequence, not a route): if the high and critical defaults of concept lines 703-704 apply before v0.2 (which profile applies to such tasks in v0.1 is part of owner point 1), no class can satisfy the cross-model entry (`cross_vendor_review` is dormant, `same_lineage_review` never satisfies; B3), and the entry cannot be removed (section 8). A high or critical task therefore stays at INSUFFICIENT_EVIDENCE; the missing type is not human-only, so it goes to REWORK and, after the retry limit, to ESCALATED (concept lines 525-526). The owner's approval cannot fill the gap (section 3). How such tasks are handled meanwhile is open (owner; section 10).
-- **[The owner's answer, verbatim, and its consequence are added here when given.]**
+- **The owner's answer** (DM A47): "Câu trả lời là b" (2026-10-07, session 2963e747, transcript :1152), to the question of decision file D-061. Proposed consequence: a high or critical task of the AIEOS self-build gets a review by a Claude model other than the one that did the work. The review is a `same_lineage_review` record (B3): it may block, never satisfies an entry and never replaces the owner's approval (A6, A17). Whether it meets the cross-model entry (concept line 703) stays open (CR-001 E10), and so does the routing above while E10 is open.
 
 ## 6. Autonomy and auto-accept
 
@@ -91,7 +91,7 @@ Proposed alignment of B5 with B3 (revision 16):
 
 ## 10. Open owner points
 
-1. CR-001 E10: the cross-model entry and the meaning of "cross-model"; which profile applies to high and critical tasks in v0.1, and how they are handled while E10 is open (section 5; DEF-0008).
+1. CR-001 E10: whether the review chosen in A47 (another Claude model, advisory) meets the cross-model entry, and the meaning of "cross-model"; which profile applies to high and critical tasks in v0.1, and how they are handled while E10 is open (section 5; DEF-0008).
 2. Autonomy (A41 keeps the autonomy levels of A35 with the owner): raising any risk class to L2; who approves the auto-accept policy and each change to it; any bound above L2; "sufficient assurance"; whether L2 may be used while P-CRED or C13 is not PASS (section 6).
 3. Whether section 7's choice needs a CR-001 entry (A22).
 4. Whether a departure from the risk default needs a specific approval or change class (section 8).
