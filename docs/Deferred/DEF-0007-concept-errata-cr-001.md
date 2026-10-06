@@ -1,6 +1,6 @@
 # DEF-0007: Concept errata CR-001
 
-- Status: open
+- Status: resumed
 - Opened: 2026-10-05 (../History/2026-10/2026-10-04-1817-idea-to-cs3v2.md)
 - Deferred by: Claude (proposal, not a decision). CR-001 is planned and its content candidates are recorded in DM B13 and B18. The remaining decisions belong to A14 step 5.
 - Decision group: B (the concept and CR-001 are owner acts, DM A22; decision agent group B, item 5)
@@ -39,3 +39,4 @@ DEF-0008, for B18 (4).
 ## Log
 - 2026-10-05: CR-001 first proposed (:579); errata form decided (A22, in 238fae0).
 - 2026-10-05: concept audit (:1474); B18 recorded by CS-2 (5390902).
+- 2026-10-06 (session 02bd7476): resumed at A14 step 5 (A44). A CR-001 draft (8 corrections from B13 and B18, 2 left open) was approved by the decision agent as a draft (D-041) and put to the owner for approval (A22). ../History/2026-10/2026-10-06-2245-a14-continues-at-step-5.md
