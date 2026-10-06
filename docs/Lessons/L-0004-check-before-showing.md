@@ -32,6 +32,9 @@ Three incidents in session 2026-10-06-0602 (../History/2026-10/2026-10-06-0602-r
 - **2026-10-06 (before D-025).** The drafted order missed a precondition: the executor's clean-tree check fails after the D-022 write. Claude found it before sending, and the tests in the draft, run before that write, were re-run under D-025 K5.
 - **2026-10-06 (before D-025).** A hand-shortened SHA-256 in the draft had a wrong ending. Claude found it before sending and replaced the list with machine output.
 
+One incident in session 2026-10-06-1635 (../History/2026-10/2026-10-06-1635-gitattributes-closure-and-wording-delegation.md):
+- **2026-10-06 (:89; D-029).** Claude offered the owner, as a delegable fix, the decision agent's remark that the A41 marker describes only three of "four corrections", without checking it and without checking who may change row A41. The marker describes all four (decision log :4499), and A41 is the owner's. The part was withdrawn and the owner told.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

@@ -29,3 +29,7 @@ DEF-0008, for anything that touches the high-risk profile.
 
 ## Log
 - 2026-10-05: `.gitattributes` proposed (:990); the leftover list recorded with CS-2 (:3539).
+- 2026-10-06: `.gitattributes` with `eol=lf` added in commit e5e2af4 (decision file D-029; ../History/2026-10/2026-10-06-1635-gitattributes-closure-and-wording-delegation.md).
+- 2026-10-06: D9 checked (D-029): A30, matrix rule 2 and MP §0.1 and §0.2 concern only trust-boundary measurements, which A41 keeps with the owner, so there is no conflict and no change.
+- 2026-10-06: the two stale passages of `REG0-lite-CLOSURE.md` corrected; the old edition is kept beside it (D-030).
+- 2026-10-06: the owner widened the delegation to wording corrections in the DM that keep the meaning ("Cho agent quyết định việc sửa chữ trong bảng quyết định, miễn là không đổi nghĩa; đổi nghĩa thì vẫn hỏi tôi.", session 02bd7476 :354; DM A41 revision 7). The A16 label and the table A.2 title can now be decided by the decision agent, if the meaning stays the same. Still open: those two, and B3/B4.
