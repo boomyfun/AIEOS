@@ -1,6 +1,6 @@
 # DEF-0005: Measurement-protocol and WSL-era text to fix before measuring
 
-- Status: open
+- Status: set aside by the owner (2026-10-06)
 - Opened: 2026-10-05 (../History/2026-10/2026-10-04-1817-idea-to-cs3v2.md)
 - Deferred by: Claude (proposal, not a decision). MP changes were left until measurement planning (:4439).
 - Decision group: B. Any change to the measurement protocol is group B, item 4. P6 is a section P row, item 6.
@@ -31,3 +31,4 @@ When measurement planning starts (DEF-0004).
 ## Log
 - 2026-10-05: issues found in the next-step analysis (:3615) and in CS-3 v1 (:4237, :4344).
 - 2026-10-06: kept out of CS-3 v2.
+- 2026-10-06 (session 02bd7476): the owner wrote (:1299), about the questions and the baseline file Claude had sent: "những câu hỏi này hay file lần kiểm tra bào mật đầu tiên chẳng có ý nghĩa gì. Phiên bản Claude hay thông tin về máy chẳng để làm cái gì. ĐỪNG BAO GIỜ HỎI LẠI VỀ VẤN ĐỀ NÀY, NÓ KHÔNG ĐI VÀO TRỌNG TÂM CÔNG VIỆC LÀ BUILD AIEOS, giống như việc tôi yêu cầu Agent phải kiểm soát Claude để Claude làm đúng công việc, không được sai hướng, không lan man. Vậy mà giờ Agent lại đang đi sai hướng, lan man, vòng vo" Status: set aside by the owner (2026-10-06). Claude does not raise this again; it reopens only if the owner raises it in their own words (decision file D-038). ../History/2026-10/2026-10-06-2149-new-duties-and-owner-refocus.md
