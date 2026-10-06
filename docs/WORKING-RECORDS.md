@@ -35,6 +35,7 @@ Why this split:
   - numbers are never reused;
   - files are never renumbered or deleted.
 - Slugs are lowercase ASCII words joined by hyphens.
+- Dates that Claude writes in these records and in the decision matrix are local dates (UTC+7). Transcript timestamps are in UTC, so a message sent at or after 17:00 UTC carries the next day's local date.
 
 ## At the start of a session
 

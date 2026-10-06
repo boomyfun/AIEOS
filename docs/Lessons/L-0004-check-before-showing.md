@@ -35,6 +35,9 @@ Three incidents in session 2026-10-06-0602 (../History/2026-10/2026-10-06-0602-r
 One incident in session 2026-10-06-1635 (../History/2026-10/2026-10-06-1635-gitattributes-closure-and-wording-delegation.md):
 - **2026-10-06 (:89; D-029).** Claude offered the owner, as a delegable fix, the decision agent's remark that the A41 marker describes only three of "four corrections", without checking it and without checking who may change row A41. The marker describes all four (decision log :4499), and A41 is the owner's. The part was withdrawn and the owner told.
 
+One incident in session 2026-10-07-0100 (../History/2026-10/2026-10-07-0100-a14-steps-1-5-audit.md):
+- **2026-10-07 (D-055).** The audit table shown to the owner listed, as item 14, a missing pointer in decision file D-051 that already existed (D-051:116). Claude had not re-read the file before showing the table. The decision agent found it, and the item was dropped.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

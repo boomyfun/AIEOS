@@ -1,6 +1,6 @@
 # DEF-0004: Trust-boundary measurements (A14 step 3)
 
-- Status: resumed (2026-10-06)
+- Status: open
 - Opened: 2026-10-05 (../History/2026-10/2026-10-04-1817-idea-to-cs3v2.md)
 - Deferred by: owner. The authorization table at transcript :814 (see the source notes in the session History) marks "Đo probes / đánh dấu MEASURED" as "NO". No measurement was authorized at the end of the session.
 - Decision group: B (group B, item 4 of the decision agent's lists; DM A30, A31; Claude never sets MEASURED)
@@ -37,3 +37,4 @@ The owner authorizes a specific measurement in their own words.
 - 2026-10-06 (session 02bd7476): the owner wrote "hãy hoàn thành nốt đi, hãy làm đầy đủ" (:1711), quoting Claude's account of A14 steps 1-4, and "Hãy hoàn thành đi" (:1723). Status: resumed (2026-10-06) (decision file D-043; DM A45). Next: the A39 minimal P-CRED baseline, run by the owner (A30). ../History/2026-10/2026-10-06-2309-a14-steps-2-to-4.md
 - 2026-10-07 (session 02bd7476): the minimal P-CRED baseline (A39) ran: the owner's native check (:1872) and the owner's approval (:1927). Result FAIL, not exhaustive (`docs/pre-genesis/measurements/P-CRED-baseline-2026-10-07.md`). Remaining: the owner's hardening choice (MP §1.5), then the re-measurement, P-GH, P-LOC and C13. ../History/2026-10/2026-10-06-2309-a14-steps-2-to-4.md
 - 2026-10-06 (session 02bd7476): the owner chose "c. Giữ như hiện nay" (:2195) among Claude's hardening options, and answered "không" (:2228) to doing P-GH and P-LOC now. Recorded in DM A46. No re-measurement while no hardening is applied; P-GH and P-LOC can be run later. Status stays resumed. ../History/2026-10/2026-10-07-0033-hardening-choice-and-step-3-close.md
+- 2026-10-07 (session 2963e747): the Log line above dated 2026-10-06 refers to answers given on 2026-10-07, local time (00:33 and 00:41; session 02bd7476, :2195, :2228). No work on this item is active after A46, so its status goes from resumed to open. It resumes only if the owner asks for P-GH or P-LOC, or chooses hardening option a or b (A46); Claude does not raise it (decision file D-038). Decision files D-055, D-056. ../History/2026-10/2026-10-07-0100-a14-steps-1-5-audit.md

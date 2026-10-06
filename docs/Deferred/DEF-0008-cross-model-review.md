@@ -23,3 +23,4 @@ Nothing.
 ## Log
 - 2026-10-05: same-model blind pass accepted for D5 (:2107).
 - 2026-10-05: B18 (4) recorded by CS-2 (5390902).
+- 2026-10-07 (session 2963e747): CR-001 was approved by the owner ("kết quả: có; đính chính: có", session 02bd7476, transcript :1927) with E10 left open, to be decided at A14 step 6; this item tracks it. Decision files D-055, D-056. ../History/2026-10/2026-10-07-0100-a14-steps-1-5-audit.md
