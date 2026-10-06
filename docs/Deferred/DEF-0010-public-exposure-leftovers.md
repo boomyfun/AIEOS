@@ -1,6 +1,6 @@
 # DEF-0010: Public-exposure leftovers
 
-- Status: open
+- Status: done
 - Opened: 2026-10-05 (../History/2026-10/2026-10-04-1817-idea-to-cs3v2.md)
 - Deferred by: Claude (proposal, not a decision). Item (b) was left to the owner's own choice (:810, :4023).
 - Decision group: B (a DM section A row, a history rewrite, a force-push or a deletion: decision agent group B, items 1 and 6)
@@ -26,3 +26,9 @@ Nothing.
 ## Log
 - 2026-10-05: history rewritten locally (:939) and force-pushed (M4, :4023).
 - 2026-10-06: A24 noted as pre-existing during the CS-3 v2 checks (D-004; compaction summary :4631).
+- 2026-10-06 (session 02bd7476): Claude put four questions to the owner (:672), and the owner answered "2 giữ, 3 không, 4 không, 5 giữ" (:676):
+  - (a) A24 keeps the account names ("2 giữ"). Both names are already public through the GitHub repository and the commit authors.
+  - Question 3 concerned a further history rewrite; the owner answered no ("3 không"). Its details are kept in decision file D-033, outside the repository.
+  - (b) No request to GitHub Support ("4 không").
+  - (c) The local backup refs are kept ("5 giữ"). They are still never pushed: explicit refspecs only, never `--all`, `--mirror` or `--tags`.
+  - Status: done.

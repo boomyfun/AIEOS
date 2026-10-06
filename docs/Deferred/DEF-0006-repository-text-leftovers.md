@@ -1,6 +1,6 @@
 # DEF-0006: Leftover text fixes in the repository
 
-- Status: open
+- Status: done
 - Opened: 2026-10-05 (../History/2026-10/2026-10-04-1817-idea-to-cs3v2.md)
 - Deferred by: Claude (proposal, not a decision). The list is in `CS\records\CS-2-PLAN-as-approved.md` (:3539), plus a change-set proposed at :990.
 - Decision group: unknown (mixed):
@@ -33,3 +33,4 @@ DEF-0008, for anything that touches the high-risk profile.
 - 2026-10-06: D9 checked (D-029): A30, matrix rule 2 and MP §0.1 and §0.2 concern only trust-boundary measurements, which A41 keeps with the owner, so there is no conflict and no change.
 - 2026-10-06: the two stale passages of `REG0-lite-CLOSURE.md` corrected; the old edition is kept beside it (D-030).
 - 2026-10-06: the owner widened the delegation to wording corrections in the DM that keep the meaning ("Cho agent quyết định việc sửa chữ trong bảng quyết định, miễn là không đổi nghĩa; đổi nghĩa thì vẫn hỏi tôi.", session 02bd7476 :354; DM A41 revision 7). The A16 label and the table A.2 title can now be decided by the decision agent, if the meaning stays the same. Still open: those two, and B3/B4.
+- 2026-10-06 (session 02bd7476, later): the A16 label and the table A.2 title corrected in DM revision 8, as wording that keeps the meaning (decision agent, D-033). For B3/B4 the owner answered "1 có" (:676) to Claude's question 1 (:672): notes were added to B3 and B4, and the alignment moved to DEF-0017. Status: done.
