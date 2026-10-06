@@ -1,6 +1,6 @@
 # DEF-0014: Writes from the CS-3 v1 drafting turns that no decision covers
 
-- Status: open
+- Status: done
 - Opened: 2026-10-05 (../History/2026-10/2026-10-04-1817-idea-to-cs3v2.md)
 - Deferred by: Claude (proposal, not a decision). D-002 told the worker to raise `exec_cs_v2.py`, under D-003 or in its own request; that was not done.
 - Decision group: A to keep the files ("adding new files to the working folder"); B to delete them or move them out (as D-001 reasoned)
@@ -25,3 +25,4 @@ DEF-0001.
 - 2026-10-05: writes made (:4078 to :4329); listed in Claude's self-audit (:4344).
 - 2026-10-06: D-002 said to raise `exec_cs_v2.py` (decision log).
 - 2026-10-06 (session 5fd3e494): D-007 C4 says this goes to the decision agent as its own request. The request must include the list of CS-3 v1 files, and an unedited `diff -u` of `rehearsal_tests.py`, `verify_independent.py` and `make_plan_doc.py` against their `_cs2` editions in `CS\records`. It does not block anything else.
+- 2026-10-06 (session 8b846883): D-024, decided by: decision agent (A41): keep all CS-3 v1 files and tool editions as they are; decided as if not done, the writes would have been approved; nothing moved or deleted. CS-3 v1 is superseded and was never executed. Its "ratified by the owner" labels (`dm_after_cs3.md:96-98`) are not reused, and any reuse of v1 text (DEF-0005) goes through a new change-set and its own decision. A same-model audit finding on this subject (D2, 0302fdd2 :4263) was settled by D-024 under DISSENT. Claude's question at 0302fdd2 :4344 needs no owner answer: each write to the working folder now has the decision agent's decision before it happens (D-024). Status: done.

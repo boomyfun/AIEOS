@@ -28,6 +28,9 @@ Related: DM A5 recorded a permission as a fact about the runtime, without a chec
 One incident in session 2026-10-06-0306 (../History/2026-10/2026-10-06-0306-real-decider-rechecks-and-push.md):
 - **2026-10-06 (D-008 request; found by D-013).** A check of "files not in the manifest" excluded every file named `MANIFEST.sha256`, so it also hid a nested file with that name. Claude reported two files outside the manifest; there were three.
 
+One incident in session 2026-10-06-0602 (../History/2026-10/2026-10-06-0602-rules-book-definition-and-log-split.md):
+- **2026-10-06 (D-025, D-026).** Claude used the definition file's SHA-256 as if it showed which definition the running decision agent had been loaded with, and the D-025 request assumed the agent could go on deciding after the change. The harness did not reload the definition until the session was resumed (:1068). D-026 compared its loaded text with the files itself and escalated; the owner then allowed the earlier text to decide the session's remaining steps ("có cho cả hai câu", :1062).
+
 ## Why it happens
 - Proxies are cheaper than the real check.
 - The same model picks the evidence and judges it.

@@ -1,6 +1,6 @@
 # DEF-0002: Pending changes to the rules book and the decision-agent definition
 
-- Status: waiting-owner
+- Status: done
 - Opened: 2026-10-06 (../History/2026-10/2026-10-04-1817-idea-to-cs3v2.md)
 - Deferred by: decision agent D-002 (item b, ESCALATE_TO_OWNER), D-003 (item d) and D-005 (item c, carried forward); Claude for item (a) (proposal, not a decision)
 - Decision group: B (group B, item 3 of the decision agent's lists: the worker's rules file and the agent definition)
@@ -20,6 +20,7 @@ c. **Corrections in `%USERPROFILE%\.claude\agents\aieos-decider.md`.** D-005 car
 
    A fourth was found while these records were prepared: line 25 quotes the owner's "phan tích" (:4385) as "phân tích".
 d. **Rule 3 against A40.** D-003 notes that rule 3 of the rules book (announce out-of-scope steps, such as running agents beyond what the owner asked for) now needs alignment with A40's reviewer clause, under D-002.
+e. **The activation sentences** (added 2026-10-06, session 8b846883). D-007 C5 and D-009 C2 required the worker's activation edits to the definition to be put to the owner together with (c). Three of them, at definition lines 70, 257 and 263, record the owner's yes to question 2 (the normal-push authorization). They were never put to the owner. Decision agent D-025 escalated one yes/no question: keep the three sentences as they are, or not. The owner answered yes (see Log).
 
 ## Why deferred
 - Changes to these files are always the owner's (group B, item 3).
@@ -43,3 +44,7 @@ In the next session:
 - 2026-10-06 (session 5fd3e494): item (b): the owner answered "có" to recording the delegation (session 5fd3e494, :832). D-015 approved the text with substitutions; it is not yet written, and D-015 can no longer be executed (D-018), so a new decision is needed.
 - 2026-10-06 (session 5fd3e494): item (c): Claude asked whether to make these corrections together with the log split (DEF-0003). No answer yet.
 - 2026-10-06 (session 5fd3e494): item (d): decision agent (A41), D-015 read the delegation section as covering it, with no separate text needed. It closes when that section is written.
+- 2026-10-06 (session 8b846883): item (b) done. The delegation section is written in the rules book. Label: (a) owner said yes ("có", 5fd3e494 :832) to recording the delegation sentence; (b) owner's own words (8b846883 :3 item 4, confirmed :240; earlier :832, :1237); exact texts, including Claude's English renderings, additions and note, checked and write approved by decision agent (A41), D-023.
+- 2026-10-06 (session 8b846883): item (d) settled by the delegation section, by the decision agent's reading in D-023 (as in D-015), with no separate text.
+- 2026-10-06 (session 8b846883): item (c) done. The owner's instruction: "Sửa luôn 4 chỗ ghi chưa chính xác trong tệp hướng dẫn của agent khi tách sổ ghi quyết định. Sau đó tách sổ, mỗi quyết định một tệp (DEF-0003; tôi đã đồng ý)." (:3 item 6, confirmed :240). The four corrections were made together with the log split (DEF-0003). Label: owner's own words (8b846883 :3 item 6, confirmed :240) and "có" to the split (5fd3e494 :832); exact texts, including Claude's wording, checked and method approved by decision agent (A41), D-025. The definition in force is now 66dd7781… (DM A41 marker, CS-4); the running agent did not load it until the session was resumed (:1068): D-026 ran with the earlier text, and D-027 reported that it was loaded with the corrected text. The value 4001cc97… under "Depends on" is superseded.
+- 2026-10-06 (session 8b846883): item (e) added and done: the owner answered "có cho cả hai câu" (:1062) to the two questions put at :1056, the second being D-025's question (first put at :908): the three sentences are kept as they are. Status: done.

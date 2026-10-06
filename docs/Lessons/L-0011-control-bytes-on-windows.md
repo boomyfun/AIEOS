@@ -27,6 +27,10 @@ Line endings:
 One incident in session 2026-10-06-0306 (../History/2026-10/2026-10-06-0306-real-decider-rechecks-and-push.md):
 - **2026-10-06.** A path written inside a non-raw Python string turned `\r` (in `\req`) into a CR byte in a request draft. The CR check caught it before the request was sent, and the byte was fixed with a binary replace.
 
+Two incidents in session 2026-10-06-0602 (../History/2026-10/2026-10-06-0602-rules-book-definition-and-log-split.md):
+- **2026-10-06 (D-022 W3).** A CR check put `$'\r'` inside a double-quoted command substitution and printed 30, the number of lines containing the letter r. A Python re-check showed 0 CR bytes; the hash had already matched.
+- **2026-10-06 (D-025 request update).** Python heredocs dropped doubled backslashes. In one, the script's own assertion stopped it before any write; the script was then written with the Write tool.
+
 ## Why it happens
 - Git Bash heredocs interpret quotes and backslashes.
 - Python text mode on Windows writes CRLF.

@@ -25,7 +25,7 @@ At least ten in session 2026-10-04-1817 (../History/2026-10/2026-10-04-1817-idea
   - it dropped one of the question's cases;
   - it narrowed "the whole project" to pre-Genesis.
 - **2026-10-06 (:4895).** D-004 found "đổi" (change) narrowed to "reversing".
-- **2026-10-06 (:5058).** The activation sentence of `aieos-decider.md` overstates the owner's yes, and its question-1 quote is not verbatim. Line 25 of the same file also turns the owner's "phan tích" (:4385) into "phân tích" (open, DEF-0002).
+- **2026-10-06 (:5058).** The activation sentence of `aieos-decider.md` overstates the owner's yes, and its question-1 quote is not verbatim. Line 25 of the same file also turns the owner's "phan tích" (:4385) into "phân tích" (open, DEF-0002). Both were corrected on 2026-10-06 in session 8b846883, under D-025 (DEF-0002 item c).
 
 Related: the automatic compaction summary silently corrected an owner typo (:4631).
 

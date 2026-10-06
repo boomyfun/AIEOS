@@ -1,6 +1,6 @@
 # DEF-0003: Split the decision log into several files
 
-- Status: open
+- Status: done
 - Opened: 2026-10-06 (../History/2026-10/2026-10-04-1817-idea-to-cs3v2.md)
 - Deferred by: owner ("Tuy nhiên chúng ta sẽ tiếp tục những việc này trong phiên sau.", transcript :5113)
 - Decision group: B. The decision-agent definition names the log file, and changing that file is group B, item 3. Moving or removing existing entries would be group B, item 1.
@@ -24,3 +24,4 @@ The next session.
 - 2026-10-06: requested and deferred by the owner (:5113).
 - 2026-10-06 (session 5fd3e494): the line count above was corrected. It said "556 lines for D-001 to D-005"; the log ended that session with D-001 to D-006 (D-010 C8).
 - 2026-10-06 (session 5fd3e494): Claude proposed one file per decision. The existing log stays unchanged, apart from a final pointer line. The owner answered "có" (:832). Implementation needs a change to the agent definition (four references to the log), and therefore an A41 marker. Not yet done.
+- 2026-10-06 (session 8b846883): done. The old log `decision-log.md` holds D-001 to D-025 and is closed by a final pointer line. From D-026 on, each decision is its own file `D-NNN-<slug>.md` in the same folder, with the worker's notes appended to it. The definition's four references to the log were changed, and DM A41 carries a marker with the new SHA-256 of the definition (CS-4, commit fde983a). Label: owner's own words (8b846883 :3 item 6, confirmed :240) and "có" to the split (5fd3e494 :832); exact texts, including Claude's wording, checked and method approved by decision agent (A41), D-025.

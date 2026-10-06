@@ -25,6 +25,9 @@ At least eight in session 2026-10-04-1817 (../History/2026-10/2026-10-04-1817-id
   - a new executor replaced the proposed edit of the old one without a flag.
 - **2026-10-05 (:3977, :4344).** Claude stated as fact why the classifier blocked the push. It was a guess.
 
+One incident in session 2026-10-06-0602 (../History/2026-10/2026-10-06-0602-rules-book-definition-and-log-split.md):
+- **2026-10-06 (:580).** Claude told the owner the context level as "khoảng 18–25%" without saying it was an estimate. The next measurement showed 41% (:671), and Claude said at once that the earlier figure had been a guess and too low.
+
 Handled well: the same-model blind pass was labelled as independent of context but not of the model (:1941).
 
 ## Why it happens
