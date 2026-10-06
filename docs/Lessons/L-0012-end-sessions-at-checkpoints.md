@@ -1,10 +1,10 @@
 # L-0012: End sessions at checkpoints
 
-Rule: End a session at a checkpoint (a task done, logged and recorded, or before a new phase or a public action), never in the middle of a task, and after any automatic compaction re-read the source files before continuing.
+Rule: End a session only by the context level of rules-book rule 11 (no new task from 80%, stop at about 90%, not mechanically), never because a task, a phase or a public action is finished and never in the middle of a task, and after any automatic compaction re-read the source files before continuing.
 
 - Status: active
 - Category: process
-- Binding: on 2026-10-06 the owner said yes to recording this as a working rule in the rules book ("câu trả lời là có.", transcript :5113). It was written as rule 10 on 2026-10-06 (decision agent D-012).
+- Binding: on 2026-10-06 the owner said yes to recording this as a working rule in the rules book ("câu trả lời là có.", transcript :5113). It was written as rule 10 on 2026-10-06 (decision agent D-012). On 2026-10-07 the owner removed its end points: "sửa lại quy tắc này, bỏ quy tắc này đi vì nó làm phiên kết thúc quá sớm. Phải là kết thúc phiên khi context window đạt 80% 90% như đã quy định trước đó." (session 2963e747, :466); the rule line above was changed to match (decision agent D-058).
 
 ## Pattern
 A long session runs out of context. Automatic compaction then replaces the conversation with a summary that Claude writes itself. The summary drops detail and can change wording.
@@ -20,11 +20,14 @@ Related: on 2026-10-06, while proposing this rule, Claude told the owner the ses
 One incident in session 2026-10-06-0306 (../History/2026-10/2026-10-06-0306-real-decider-rechecks-and-push.md):
 - **2026-10-06 (:1222 to :1259).** Near the end, Claude proposed leaving this session's History, Progress, Deferred and Lessons for the next session, to save context. This contradicts "At the end of a session" in WORKING-RECORDS.md and rule 10. The owner corrected it: "những thứ này của phiên nào phải ghi ngay vào phiên đó mới đúng" (:1259). The records were then written in the same session.
 
+One correction in session 2026-10-07-0100 (../History/2026-10/2026-10-07-0100-a14-steps-1-5-audit.md):
+- **2026-10-07 (:466; D-058).** Claude stopped the session at about 30-35% context because step 6 was a new phase, as the rule then said. The owner removed the checkpoint end points: sessions end by context level only.
+
 ## Why it happens
 - There was no rule for ending sessions, so the work continued across many phases.
 
 ## Prevention and detection
-- End sessions at checkpoints, after updating History, Progress, Deferred and Lessons.
+- Before a session ends, update History, Progress, Deferred and Lessons.
 - The next-session prompt points to the source files: the decision log, the DM, the records and these docs.
 - After a compaction, re-read the source files before acting. Do not rely on the summary.
 - The owner wrote: "context window đạt 60% là sẽ dừng ? Hãy nâng lên 80% 90%" (session 5fd3e494, :1237). Those words do not state which number sets which step; that is settled before the rule is written into the rules book (DEF-0012).
