@@ -50,6 +50,9 @@ One incident in session 2026-10-07-2144 (../History/2026-10/2026-10-07-2144-def-
 One incident in session 2026-10-08-0010 (../History/2026-10/2026-10-08-0010-a51-approvals-and-draft-genesis-charter.md):
 - **2026-10-08 (:1342).** A read-only Bash command piped `grep` output into `python -c` without `timeout 110`; it stopped at once with an encoding error and wrote nothing (D-119). The guard of D-098 C2 stands: every Python run in a Bash command starts with `timeout 110`, and none reads from a pipe without it.
 
+One incident in session 2026-10-08-0211 (../History/2026-10/2026-10-08-0211-ratification-of-genesis-instance-1.md):
+- **2026-10-08 (:225).** A read-only Bash command ended with `timeout 110 python - < /dev/null`, a `python -` run that the D-098 C2 guard bans; with an empty program from `/dev/null` it ran nothing and wrote nothing (D-125). The guard stands; the next slip that it does not contain makes a mechanical block a point for the single owner question (D-125 C4).
+
 ## Why it happens
 - Git Bash heredocs interpret quotes and backslashes.
 - Python text mode on Windows writes CRLF.
