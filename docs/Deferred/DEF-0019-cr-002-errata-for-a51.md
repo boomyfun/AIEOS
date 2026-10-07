@@ -1,6 +1,6 @@
 # DEF-0019: CR-002, the concept errata that A51 requires
 
-- Status: open
+- Status: done
 - Opened: 2026-10-07 (decision files D-072, D-073)
 - Deferred by: decision agent (A41), D-072: CR-002 is drafted after the delegation update for A51 and the definition of the three A50 artifacts, so that it does not delay them.
 - Decision group: B (concept errata are the owner's, DM A22; the owner was told that the further errata is "do bạn duyệt")
@@ -23,3 +23,4 @@ DM A51; DEF-0008 (CR-001 E10).
 
 ## Log
 - 2026-10-07: opened (decision files D-072, D-073).
+- 2026-10-07 (session 1dace763): CR-002 approved by the owner (:729, :1105) and written as `docs/pre-genesis/CR-002-concept-errata.md`; recorded in DM A52 (revision 23), with the names gov-AIEOS and AIEOS in A53. The follow-up revisions are in DEF-0020. Decision files D-082 to D-087.
