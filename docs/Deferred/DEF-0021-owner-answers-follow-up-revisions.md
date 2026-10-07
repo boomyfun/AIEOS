@@ -26,3 +26,4 @@ DM A54; CR-002; DEF-0020.
 
 ## Log
 - 2026-10-07: opened (decision file D-104).
+- 2026-10-08 (session d66c6975): the revisions written as proposals: `assurance-model.md` revision 4, `constitution.md` revision 3, `governor-spec.md` revision 3, `conformance-methodology.md` revision 3, `conformance-scenarios-initial.md` revision 3 (no scenario changed), `genesis-model.md` revision 5 and DM revision 26 (row B4) (CS-35; decision files D-109 and D-110). Also in CS-35: two sentences of `assurance-model.md` aligned with CR-002 part 4 ("Cái giá") and part 1 ("Báo lên") (D-099 C3, D-101 C3), and the consistency edits that the checker's findings led to (decision file D-110). The A51 approvals follow. Status stays open.

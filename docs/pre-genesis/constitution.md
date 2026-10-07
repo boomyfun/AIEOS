@@ -1,8 +1,9 @@
 # AIEOS Project Constitution
 
 > **Status: PRE-GENESIS DRAFT — proposed, not ratified.** A14 step 7 (DM A50: "thực hiện ngay bộ luật nền riêng của dự án"). Every article is a proposal. Its sources are DECIDED rows and rules of `decision-matrix.md` (DM), the concept, CR-001 or CR-002; B-rows and the assurance, Genesis and conformance documents are cited as proposed, and working records as non-authoritative. Nothing here is a Genesis fact.
-> Revision 2 — 2026-10-07 (revision 1, same day: first version). Written under decisions of the decision agent (A41; decision files D-078, D-088 and D-094); not an owner decision. Normative concept: `AIEOS-concept.md` v0.5 with CR-001 and CR-002 (A22, A52). Rows are cited by ID, concept text by line ("concept line N"), CR-002 by part or entry. Names (A53): **gov-AIEOS** is what is used to build AIEOS; **AIEOS** is the product.
+> Revision 3 — 2026-10-08 (revision 1, 2026-10-07: first version; revision 2, 2026-10-07). Written under decisions of the decision agent (A41; decision files D-078, D-088, D-094 and D-109); not an owner decision. Normative concept: `AIEOS-concept.md` v0.5 with CR-001 and CR-002 (A22, A52). Rows are cited by ID, concept text by line ("concept line N"), CR-002 by part or entry. Names (A53): **gov-AIEOS** is what is used to build AIEOS; **AIEOS** is the product.
 > Revision 2 carries out CR-002 for gov-AIEOS (working record DEF-0020): way 1 in the six articles that require `ai_review` (section 2), with a wider scope for INV-004; a limit-5 sentence in OPS-002; a CR-002 source and a pointer in INV-011; sections 1, 2, 4, 5 and 6 updated; the names of A53.
+> Revision 3 carries the owner's answers of 2026-10-07 (A54) into INV-011, section 4 and section 5 point 3 (working record DEF-0021).
 > Effect: every enforcement named here is a **target**; until that enforcement is measured, its effect is **advisory** (DM label rule "Anything unmeasured defaults to advisory"; A31). For gov-AIEOS, A29 stays a target, unmet by design (A51 item (7)).
 
 ## 1. What this is
@@ -72,9 +73,9 @@ Each article has the fields of concept §6.1: `id`, `category` (architecture, co
 - Check: deterministic; tool: replay, recompute each decision from its cited records with the pinned ruleset and compare.
 - Severity: blocking. Scope: the governor and its records. Applicability: implementation, refactoring. Enforcement: blocking, replay, moderate.
 
-### INV-011 · correctness · No auto-accept in the self-build
-- Rule: the self-build stays at L1, and an approval under A51 is a delegated approval, not an auto-accept. Source: A35; A51 item (2); CR-002 Đ7; see section 5 point 3.
-- Check: deterministic; tool: policy rule, the self-build's policy allows no auto-accept for any risk class.
+### INV-011 · correctness · No auto-accept in the self-build outside the owner's policy
+- Rule: the self-build starts at L1 for every risk class; a low- or medium-risk class is raised to L2 only with metrics and a change request, which the decision agent may approve in the owner's place, and any other raise stays the owner's (A54 point 2); no task is auto-accepted unless its risk class is at L2, within the L2 limits of A35, and an auto-accept policy that is the owner's (A54 point 2) allows it, and none while C13 is not PASS (assurance-model.md §6, proposed); an approval under A51 is a delegated approval, not an auto-accept. Source: A35; A51 item (2); A54 point 2; CR-002 Đ7; see section 5 point 3.
+- Check: deterministic; tool: policy rule, the self-build's policy allows auto-accept only for a risk class raised to L2 by a change request approved as the rule states, within the L2 limits of A35 and an auto-accept policy that is the owner's, and for no class while C13 is not PASS; the C13 status is read from a pinned value, and a missing value counts as not PASS (proposed).
 - Severity: blocking. Scope: the policy. Applicability: all task types. Enforcement: blocking, policy_rule, cheap.
 
 ### GOV-001 · governance · The concept stays byte-identical
@@ -139,17 +140,17 @@ Each article has the fields of concept §6.1: `id`, `category` (architecture, co
 
 ## 4. Approval and change (proposed)
 
-- The constitution is Intent: it changes only through an approved change request, and the agent only proposes (concept lines 200, 409). For gov-AIEOS, while the A41 delegation is in force, the decision agent approves it in the owner's place, its first approval included, within the limits of CR-002 parts 4 and 8 (A51 items (2), (5); CR-002 Đ6). Approving this document is not ratifying a Genesis instance; whether the delegation continues once AIEOS governs its own build, and whether it enters a Genesis instance, are the owner's (CR-002 part 8; assurance-model.md §10 points 6 and 7, proposed). This revision is not approved yet.
+- The constitution is Intent: it changes only through an approved change request, and the agent only proposes (concept lines 200, 409). For gov-AIEOS, while the A41 delegation is in force, the decision agent approves it in the owner's place, its first approval included, within the limits of CR-002 parts 4 and 8 (A51 items (2), (5); CR-002 Đ6). Approving this document is not ratifying a Genesis instance; whether the delegation continues once AIEOS governs its own build, and whether it enters a Genesis instance, are the owner's (CR-002 part 8; A54 point 1; assurance-model.md §10 point 7, proposed). This revision is not approved yet.
 - Once bound by Genesis, an article changes only by a genesis amendment (genesis-model.md §5, proposed).
 - Turning `judgment` articles into `partial` or `deterministic` ones over time is the direction the concept gives (line 369); way 1 does this for the articles that require `ai_review` (section 2).
-- The decision agent never approves by itself a change that weakens evidence requirements; such a change is the owner's (CR-002 part 4 limit 8). Examples from CR-002: removing an `evidence_required` entry or narrowing the scope of the article that requires it; changing an entry to a type its own review can satisfy; letting a kind of review count where it does not count now; lowering the risk of a kind of change. For an unapproved draft, the reference point is the latest version on GitHub.
+- The decision agent never approves by itself a change that weakens evidence requirements; such a change is the owner's (CR-002 part 4 limit 8). Examples from CR-002: removing an `evidence_required` entry or narrowing the scope of the article that requires it; changing an entry to a type its own review can satisfy; letting a kind of review count where it does not count now; lowering the risk of a kind of change. For an unapproved draft, the reference point is the version on GitHub before the change was drafted, and for the documents revised under working record DEF-0020, the version before that drafting (A54 point 4; the dated marker in CR-002 part 4 limit 8).
 - Which records satisfy the entries, for gov-AIEOS, is stated in assurance-model.md §2 and §3 (proposed; A52, which changes A6 and A47 for the way-2 case only). In short: an `ai_review` entry that is not cross-model is satisfied by a way-2 review, a review by a Claude model other than the one that did the work, made under a decision of the decision agent; a `human_review` entry by a human review or by the decision agent's own review, except for a task that carries out or changes an act that A51 item (4) keeps, where the owner reviews and approves (CR-002 part 4); every tool entry, `property_test` included, only by records from external CI. No entry here is cross-model; that entry stays open (CR-001 E10).
 
 ## 5. Open points
 
 1. The `governance` category, a Claude addition to the concept's four.
 2. The paths of every `scope`, once the layout is settled (B7, proposed; CR-001 E4).
-3. Whether a risk class of gov-AIEOS may be raised, and by whom (INV-011; assurance-model.md §10 point 2, proposed).
+3. Partly closed in revision 3: the decision agent approves raising a low- or medium-risk class of gov-AIEOS to L2 with metrics and a change request (A54 point 2; INV-011); the auto-accept policy, "sufficient assurance", any wider bound and whether L2 may be used while P-CRED or C13 is not PASS stay the owner's (assurance-model.md §10 point 2, proposed).
 
 ## 6. Not covered
 

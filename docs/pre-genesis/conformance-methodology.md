@@ -1,7 +1,7 @@
 # AIEOS Conformance Methodology
 
 > **Status: PRE-GENESIS DRAFT — proposed, not ratified.** A14 step 7 (DM A50: "cách thử và bộ bài thử"). Every rule here is a proposal unless it cites a DECIDED row of `decision-matrix.md` (DM, section A), the concept, CR-001 or CR-002 as approved; B-rows and the assurance, Genesis and constitution documents are cited as proposed. Nothing here is a Genesis fact.
-> Revision 2 — 2026-10-07 (revision 1, same day: first version). Revision 2 carries CR-002 (A52) for gov-AIEOS, the self-build (A53 names): scenario approval (sections 1, 5 and 10), the sources a scenario may cite (section 2), and the carry-overs of revision 1 (sections 8 and 11) (working record DEF-0020). Written under decisions of the decision agent (A41; scope set in decision files D-078 and D-098); not an owner decision. Normative concept: `AIEOS-concept.md` v0.5 with CR-001 and CR-002 (A22, A52). Rows are cited by ID, concept text by line ("concept line N"), CR-002 by part, entry or limit.
+> Revision 3 — 2026-10-08 (revision 1, 2026-10-07: first version; revision 2, 2026-10-07). Revision 2 carries CR-002 (A52) for gov-AIEOS, the self-build (A53 names): scenario approval (sections 1, 5 and 10), the sources a scenario may cite (section 2), and the carry-overs of revision 1 (sections 8 and 11) (working record DEF-0020). Revision 3 carries the owner's answers of 2026-10-07 (A54) into sections 5 and 10 (working record DEF-0021). Written under decisions of the decision agent (A41; scope set in decision files D-078, D-098 and D-109); not an owner decision. Normative concept: `AIEOS-concept.md` v0.5 with CR-001 and CR-002 (A22, A52). Rows are cited by ID, concept text by line ("concept line N"), CR-002 by part, entry or limit.
 > Effect: every result of a conformance run is **advisory** until measured (DM label rule "Anything unmeasured defaults to advisory"), and C13 is FAIL by implication (A29; section 9).
 
 ## 1. Principle
@@ -41,7 +41,7 @@
 
 - A19 (1) (DECIDED): the owner approves each scenario. For gov-AIEOS, CR-002 part 6 settles who approves: a scenario's expected result states what AIEOS must do, as an acceptance criterion of a Spec does (concept line 404), and Intent changes only through a change request approved by a human (concept line 409); with CR-002 Đ6, for gov-AIEOS that approver is the decision agent, so it approves each scenario in the owner's place, each approval bound to that scenario's content, within CR-002 parts 4 and 8. A19 (2)-(5) are unchanged (CR-002 part 6). This closes the reading of revision 1 (decision file D-078), under which scenario approval waited for CR-002.
 - Each such approval is a delegated approval: recorded "decided by: decision agent (A41, A51)", with advisory effect, relayed to the owner in plain words, and shown as resting on an AI approval (CR-002 part 1). It is given only while the delegation is in force; after the owner revokes it, approvals already given stay (CR-002 part 1, "Giới hạn").
-- Proposed: removing or re-expecting a scenario (B10) so that a record counts, or a task is accepted, where its approved version does not (for an unapproved draft: where the latest version on GitHub does not), or removing a scenario whose expected result is that a record does not count or a task is not accepted, weakens evidence requirements and is the owner's (CR-002 part 4 limit 8). Whether approving scenarios added to carry out CR-002, such as ACC-14 and ACC-15, falls under this limit is open (section 10, point 5).
+- Proposed: removing or re-expecting a scenario (B10) so that a record counts, or a task is accepted, where its approved version does not (for an unapproved draft: where the version on GitHub before the change was drafted does not, or, for a document revised under working record DEF-0020, the version before that drafting; A54 point 4), or removing a scenario whose expected result is that a record does not count or a task is not accepted, weakens evidence requirements and is the owner's (CR-002 part 4 limit 8). Approving ACC-14 and ACC-15, the two scenarios added in revision 2 to carry out CR-002 (working record DEF-0020), is within the owner's CR-002 yes, not under this limit (A54 point 3; section 10, point 5); any other scenario is judged under this limit, and anything beyond CR-002 and A54 is the owner's.
 - Proposed: each approval is bound to one scenario's content hash, as A42 binds a task approval to its content.
 - Until approved, no acceptance may rest on the set.
 
@@ -72,7 +72,7 @@
 2. Expected results the sources leave open (REJECT or NEEDS_REWORK for a change outside the write-set; the next state after stale evidence); the §18 specs are not scheduled (working record DEF-0011).
 3. The adversarial catalogue and the rest of the B14 minimum tier.
 4. The canonical form's details and the fixture format (step 9).
-5. Whether the decision agent's approval of scenarios added to carry out CR-002 (ACC-14, ACC-15) is within the owner's approval of CR-002 or falls under CR-002 part 4 limit 8; until the owner answers, such approvals are the owner's (fail closed).
+5. Closed in revision 3: the decision agent's approval of the scenarios added to carry out CR-002 (ACC-14, ACC-15) is within the owner's approval of CR-002 (A54 point 3); anything beyond CR-002 and A54 is the owner's (A54 point 3).
 
 ## 11. Not covered
 
