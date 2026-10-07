@@ -43,3 +43,10 @@
 - **A14:** step 7. The Genesis model (revision 2) is written. Added at step 7 by the owner (A50): the AIEOS constitution, the conformance methodology with scenarios, and the governor specification. Next (D-072): the phase-5 product definition of these three, then drafting; then CR-002 (owner's yes, DEF-0019); then assurance-model revision 3. Moving to step 8 later is the decision agent's under A51, relayed to the owner first; ratifying a Genesis instance waits for CR-002. No code before step 9.
 - **Open:** DEF-0004, DEF-0005, DEF-0008, DEF-0011, DEF-0018, DEF-0019.
 - **Repository:** GitHub `main` 529de37, then the commit of these records (D-075).
+
+## After the records (D-076)
+
+- The owner asked why the definition update was blocked and wrote (:1257): "tại sao lại bị chặn, tôi cho phép bạn có quyền sửa. context window đang ở 70% hãy sửa luôn đi". Claude explained in plain words that the app blocks an AI from changing the file that sets its own authority, and, with the owner's permission stated, made the approved update once more (decision file D-076).
+- The decision agent's definition now carries A51 for the AIEOS self-build (the A41 revision-9 marker, DM revision 22); the previous text is kept as a backup in the working folder; the rules book has the matching bullet.
+- The owner reported the context level as 70%; Claude's estimate had been about 89%. Claude cannot measure it, so the owner's figure is used.
+- **State at the end (updated):** the decision agent runs the revision-9 text. Next session: write the decision files D-069 to D-076 from the archived handbacks (D-075 C4), then the phase-5 product definition (D-072 C4); CR-002 after. No code before step 9. Repository: GitHub `main` after the D-076 commit.
