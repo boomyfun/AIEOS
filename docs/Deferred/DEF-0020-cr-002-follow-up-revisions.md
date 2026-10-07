@@ -25,3 +25,4 @@ DM A52; CR-002.
 
 ## Log
 - 2026-10-07: opened (decision files D-086, D-087). The list widens the one moved out of the CR-002 draft (working file `cr002/revision-list-moved.txt`, quoted in this session's History).
+- 2026-10-07 (session df962768): `assurance-model.md` revision 3 and DM rows B3 and B4 (revision 24) written as proposals (CS-28; decision file D-090). One owner point found: for gov-AIEOS, who holds raising a risk class to L2 and ratifying the assurance model, where CR-002 Đ7 and part 8 differ; held by the owner until asked once (D-088 C8). Status stays open.
