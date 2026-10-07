@@ -41,6 +41,9 @@ Two incidents in session 2026-10-07-0921 (../History/2026-10/2026-10-07-0921-cr-
 - **2026-10-07 (:243).** A read-only transcript comparison was run as a Python heredoc in a Bash command. It wrote nothing.
 - **2026-10-07 (D-085 request).** An empty heredoc hung a Bash command until it was moved to the background and stopped with TaskStop. Nothing was written; the edit was then made with the Edit tool.
 
+One incident in session 2026-10-07-1815 (../History/2026-10/2026-10-07-1815-def-0020-assurance-model-and-constitution.md):
+- **2026-10-07 (:184, :185, :200).** An empty heredoc in a read-only Bash command started an interactive Python that looped printing errors; it was moved to the background and stopped with TaskStop. Only the harness's own output files were written, and they were left in place (D-088). From then on no Bash command used `<<` (D-088 C4).
+
 ## Why it happens
 - Git Bash heredocs interpret quotes and backslashes.
 - Python text mode on Windows writes CRLF.

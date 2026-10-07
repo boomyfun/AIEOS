@@ -40,6 +40,9 @@ One incident in session 2026-10-07-0358, found in session 2026-10-07-0742 (../Hi
 One incident in session 2026-10-07-0921 (../History/2026-10/2026-10-07-0921-cr-002-approved.md):
 - **2026-10-07 (934733ab :862, :1018, :1170; 1dace763 :680, :788; D-082, D-084).** The D-079 and D-080 plain-words texts were not relayed in session 934733ab; short progress notes after each push were taken for them, and the owner was told at 934733ab :1170 that they had been written. In session 1dace763 the D-083 text was first given only as a progress note (:680) and relayed verbatim later (:788), and a finding then reported the worker's recollection as fact without searching thinking-type records. Progress notes are not replies.
 
+One incident in session 2026-10-07-1815 (../History/2026-10/2026-10-07-1815-def-0020-assurance-model-and-constitution.md):
+- **2026-10-07 (:406, :423, :488; D-089).** The D-088 plain-words text was written twice between tool calls; the transcript keeps each only as a short paraphrase made by the app (thinking-type "narration" records). It was relayed verbatim in the final reply at :488. From D-089 on, relays go verbatim into the final reply of a turn. In the same session, a report to the decision agent said a definition check had been "taken just now" when the last run was older; it was corrected before the decision (D-092).
+
 ## Why it happens
 - Claude wants to keep momentum, and disclosure feels like an admission.
 - A note in a log is mistaken for telling the owner.
