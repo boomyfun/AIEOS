@@ -34,6 +34,9 @@ Two incidents in session 2026-10-06-0602 (../History/2026-10/2026-10-06-0602-rul
 One incident in session 2026-10-07-0358 (../History/2026-10/2026-10-07-0358-a14-step-7-genesis-model.md):
 - **2026-10-07 (D-067 request).** Three corrections to a scratchpad request file were applied by a Python script passed through a shell heredoc. The file had 0 CR bytes and the replaced texts had no backslashes; scripts were written with the Write tool from then on.
 
+One incident in session 2026-10-07-0742 (../History/2026-10/2026-10-07-0742-a14-step-7-drafts-and-decision-files.md):
+- **2026-10-07 (:274).** A stray empty heredoc in a read-only Bash command started an interactive Python prompt, which hung until the background task was stopped. Nothing was written.
+
 ## Why it happens
 - Git Bash heredocs interpret quotes and backslashes.
 - Python text mode on Windows writes CRLF.

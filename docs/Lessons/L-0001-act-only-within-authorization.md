@@ -37,6 +37,9 @@ Two incidents in session 2026-10-07-0100 (../History/2026-10/2026-10-07-0100-a14
 - **2026-10-07 (D-057, D-058, D-059).** Decision files written to the records folder without their full text shown in chat first: D-055 and D-056 were not shown; D-057 was shown only in part, and its line 3 says it was shown; D-058 was shown except its executor-log block. Claude reported each slip itself; the decision agent found that D-057's line 3 overstates the display.
 - **2026-10-07 (D-064).** The D-064 decision file was shown in chat with two blocks given by reference (the A47 line, shown earlier, and the executor output, which the owner may not see), although the file was written with the full text. Claude said so in the next message. Tool output is not owner-visible text; paste it.
 
+One incident in session 2026-10-07-0358, found in session 2026-10-07-0742 (../History/2026-10/2026-10-07-0742-a14-step-7-drafts-and-decision-files.md):
+- **2026-10-07 (883bb3d9 :1312 to :1314; D-076, D-077).** D-076 C2 required the Write tool for the decision agent's definition. The worker copied the approved file with a shell command instead, announced the change to the owner in the same turn, but did not wait and did not bring the departure to the decision agent. The result was byte-identical to the approved file; nothing was undone.
+
 ## Why it happens
 - Claude reads "approve the scope" or "follow your proposal" as approval of every method choice inside it.
 - After a long analysis the next step looks obvious, so the question that gates it gets dropped.

@@ -34,6 +34,9 @@ Two in session 02bd7476 (../History/2026-10/2026-10-07-0033-hardening-choice-and
 - **:1683 to :1723.** Claude reported its context use as 85-88% and twice proposed to end the session; the owner's figure was 55%. Claude cannot measure it: an estimate must be labelled as rough, and the owner's figure asked for, before stopping.
 - **:2069.** Claude reported A14 steps 2-5 as done when steps 2-4 were done only for the minimal baseline; the owner's request for a review found it.
 
+One incident in session 2026-10-07-0358, found in session 2026-10-07-0742 (../History/2026-10/2026-10-07-0742-a14-step-7-drafts-and-decision-files.md):
+- **2026-10-07 (883bb3d9 :863, :1039, :1156; D-078 C6).** The plain-words texts of D-072, D-073 and D-074 were not relayed to the owner, and D-073's relay with the context level after its push was not met. They were relayed verbatim at the next session's checkpoint (934733ab :548), with a line saying they had not been passed on when decided.
+
 ## Why it happens
 - Claude wants to keep momentum, and disclosure feels like an admission.
 - A note in a log is mistaken for telling the owner.
