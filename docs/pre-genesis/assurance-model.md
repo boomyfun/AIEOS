@@ -2,6 +2,7 @@
 
 > **Status: PRE-GENESIS DRAFT — proposed, not ratified.** A14 step 6. Every rule here is a proposal unless it cites a DECIDED row of `decision-matrix.md` (DM, section A), the concept, or CR-001 as approved. Nothing here is a Genesis fact; whether Genesis binds this model is decided at steps 7-8 (A20, B2).
 > Revision 2 — 2026-10-07 (revision 1, same day: first version). Written under decisions of the decision agent (A41); it is not an owner decision. Normative concept: `AIEOS-concept.md` v0.5 with CR-001 (A22). Rows are cited by ID, concept text by line ("concept line N").
+> **[Note added on 2026-10-07: for the AIEOS self-build, DM A51 changes sections 2 to 6, 8 and 10 (the decision agent approves in the owner's place, with advisory effect); revision 3 follows CR-002, the further errata A51 requires. The product default is unchanged.]**
 > Effect: until the trust-boundary measurements pass, every control described here is **advisory** (DM label rule "anything unmeasured defaults to advisory"; A31; section 9).
 
 ## 1. Principle
