@@ -1,33 +1,35 @@
 # AIEOS Project Constitution
 
-> **Status: PRE-GENESIS DRAFT — proposed, not ratified.** A14 step 7 (DM A50: "thực hiện ngay bộ luật nền riêng của dự án"). Every article is a proposal. Its sources are DECIDED rows and rules of `decision-matrix.md` (DM), the concept, or CR-001; B-rows and the assurance, Genesis and conformance documents are cited as proposed, and working records as non-authoritative. Nothing here is a Genesis fact.
-> Revision 1 — 2026-10-07: first version. Written under decisions of the decision agent (A41; scope set in decision file D-078); not an owner decision. Normative concept: `AIEOS-concept.md` v0.5 with CR-001 (A22). Rows are cited by ID, concept text by line ("concept line N").
-> Effect: every enforcement named here is a **target**; until that enforcement is measured, its effect is **advisory** (DM label rule "Anything unmeasured defaults to advisory"; A31). For the self-build, A29 stays a target, unmet by design (A51 item (7)).
+> **Status: PRE-GENESIS DRAFT — proposed, not ratified.** A14 step 7 (DM A50: "thực hiện ngay bộ luật nền riêng của dự án"). Every article is a proposal. Its sources are DECIDED rows and rules of `decision-matrix.md` (DM), the concept, CR-001 or CR-002; B-rows and the assurance, Genesis and conformance documents are cited as proposed, and working records as non-authoritative. Nothing here is a Genesis fact.
+> Revision 2 — 2026-10-07 (revision 1, same day: first version). Written under decisions of the decision agent (A41; decision files D-078, D-088 and D-094); not an owner decision. Normative concept: `AIEOS-concept.md` v0.5 with CR-001 and CR-002 (A22, A52). Rows are cited by ID, concept text by line ("concept line N"), CR-002 by part or entry. Names (A53): **gov-AIEOS** is what is used to build AIEOS; **AIEOS** is the product.
+> Revision 2 carries out CR-002 for gov-AIEOS (working record DEF-0020): way 1 in the six articles that require `ai_review` (section 2), with a wider scope for INV-004; a limit-5 sentence in OPS-002; a CR-002 source and a pointer in INV-011; sections 1, 2, 4, 5 and 6 updated; the names of A53.
+> Effect: every enforcement named here is a **target**; until that enforcement is measured, its effect is **advisory** (DM label rule "Anything unmeasured defaults to advisory"; A31). For gov-AIEOS, A29 stays a target, unmet by design (A51 item (7)).
 
 ## 1. What this is
 
-- The AIEOS project's own constitution: the articles that AI working on AIEOS must not break. This is Claude's reading of the "constitution" of B2 (proposed) and of genesis-model.md §3.1 (proposed). It is item 2 of the bound set the owner decided (A49), to be bound at step 8.
-- Its form is that of concept §6.1 (lines 327-397): every article declares how it is checked (line 331). The concept's four invariant laws (lines 67-76) are to be bound through the concept hash (A49; genesis-model.md §3 row 1) and are not restated; some articles make them checkable for AIEOS's own code and cite them.
-- It applies to the AIEOS self-build, the work on this repository (genesis-model.md §3.1, proposed).
+- The AIEOS project's own constitution: the articles that AI working on AIEOS must not break. This is Claude's reading of the "constitution" of B2 (proposed) and of genesis-model.md §3.1 (proposed). It is item 2 of the bound set whose contents the owner decided (A49); it is bound when a Genesis instance is ratified (A14 step 8).
+- Its form is that of concept §6.1 (lines 327-397): every article declares how it is checked (line 331). The concept's four invariant laws (lines 67-76) are bound through the concept hash (A49; genesis-model.md §3 row 1) and are not restated; some articles make them checkable for AIEOS's own code and cite them.
+- It applies to gov-AIEOS: the AIEOS self-build, the work on this repository (genesis-model.md §3.1, proposed). It is not the constitution of any AIEOS user's project.
 
 ## 2. Fields
 
 Each article has the fields of concept §6.1: `id`, `category` (architecture, correctness, security, operational; lines 336-357), `rule`, `check` (deterministic, partial or judgment; lines 364-367), `tool` where the check is deterministic or partial (lines 339, 346), `evidence_required` where the check is partial or judgment (lines 347, 360), `severity`, `scope`, `applicability` and `enforcement` (mode, checker, cost; lines 377-386).
 - Added here (Claude's additions): a `source` for each article; and a fifth category, `governance`, for articles about AIEOS's own records and bound artifacts.
-- `tool` and `enforcement.checker` name the kind of checker. Checkers are built from step 9 (A14); none exists now. Paths are named by role, because the layout is open (B7, proposed; CR-001 E4; working record DEF-0018).
+- `tool` and `enforcement.checker` name the kind of checker; `enforcement.checker` names the main one. Checkers are built from step 9 (A14); none exists now. A tool part with no current result from external CI is not a pass (assurance-model.md §7, option 1, proposed). Paths are named by role, because the layout is open (B7, proposed; CR-001 E4; working record DEF-0018).
 - `enforcement.mode` is the target mode; its effect is advisory until measured (header).
 - Check times follow concept lines 389-395. An article whose scope is "all paths" runs at diff-time and at project-time.
+- **Way 1** (CR-002 part 4, "Chỗ hở đã vá"; A52): in an article that requires `ai_review`, what a tool can check is checked by the tool (concept line 369). The review still covers the whole rule except what the tool part decides; the items named after "review" are examples, not a closed list. No `ai_review` entry is removed, no scope is narrowed and no check type changes (CR-002 part 4 limit 8). A pinned list that a tool part uses is kept with the checker, and whether it is complete is a review item.
 
 ## 3. Articles
 
 ### INV-001 · architecture · The core does not write code or run a model
 - Rule: the AIEOS core decides, grants, checks and records; it writes no code, runs no model and owns no sandbox. Source: concept line 162.
-- Check: partial; tool: dependency rule, the core's modules import no model-client library; evidence_required: [ai_review].
+- Check: partial. Tool (way 1): import rule, the core's modules import only the core's own modules, the standard library and a pinned list; none of them is on a pinned list of model-client, sandbox or container libraries; no `exec`, `eval` or `compile`; a process is started only through one wrapper with a pinned list of allowed executables; and the core writes files only to the project-state directory and its logs. Review: the whole rule except what the tool part decides, in particular whether an allowed executable or helper runs a model or manages a sandbox, whether code is produced by a route no rule sees, and whether the pinned lists are complete. evidence_required: [ai_review].
 - Severity: blocking. Scope: the core's source tree. Applicability: implementation, refactoring. Enforcement: blocking, dependency_rule, cheap.
 
 ### INV-002 · architecture · Bootstrap in Python 3, standard library only
 - Rule: the bootstrap implementation uses Python 3 and its standard library only. Source: A9.
-- Check: partial; tool: import rule, every import resolves to the standard library or to the bootstrap's own modules, and no third-party code is copied in; evidence_required: [ai_review].
+- Check: partial. Tool (way 1): import rule, every import resolves to the standard library or to the bootstrap's own modules; a pattern rule, no dynamic import (`__import__`, `importlib`) and no `exec` or `eval`; and a file rule, the bootstrap tree holds only Python source and a pinned list of data file types, with no vendored package directory and no package manifest. Review: the whole rule except what the tool part decides, in particular whether third-party code was copied in under another name. evidence_required: [ai_review].
 - Severity: blocking. Scope: the bootstrap source tree. Applicability: implementation, refactoring. Enforcement: blocking, import_rule, cheap.
 
 ### INV-003 · architecture · The bootstrap stays disposable
@@ -37,8 +39,8 @@ Each article has the fields of concept §6.1: `id`, `category` (architecture, co
 
 ### INV-004 · architecture · Only the core writes the project-state directory
 - Rule: only the AIEOS core writes the project-state directory, through a single writer; agents change it only through the protocol. Records written before AIEOS governs its own build carry their recorder and are not authoritative. Source: concept lines 858, 879; CR-001 E3.
-- Check: partial; tool: path rule, an agent task's diff that touches the directory is rejected; evidence_required: [ai_review].
-- Severity: blocking. Scope: the project-state directory. Applicability: all task types. Enforcement: blocking, path_rule, cheap.
+- Check: partial. Tool (way 1): path rule, an agent task's diff that touches the directory is rejected; a code rule, inside the core only the single writer's module opens files in the directory for writing; and a record-schema rule, every record carries its recorder (B5, proposed). Review: the whole rule except what the tool part decides, in particular whether another core path writes there indirectly, and whether agents write only through the protocol. evidence_required: [ai_review].
+- Severity: blocking. Scope: the project-state directory and the core's source tree. Applicability: all task types. Enforcement: blocking, path_rule, cheap.
 
 ### INV-005 · correctness · One decision vocabulary and one decision contract
 - Rule: execution decisions use exactly the concept §5.3 vocabulary, and bootstrap and native emit the same decision contract. Source: A15.
@@ -71,13 +73,13 @@ Each article has the fields of concept §6.1: `id`, `category` (architecture, co
 - Severity: blocking. Scope: the governor and its records. Applicability: implementation, refactoring. Enforcement: blocking, replay, moderate.
 
 ### INV-011 · correctness · No auto-accept in the self-build
-- Rule: the self-build stays at L1, and an approval under A51 is a delegated approval, not an auto-accept. Source: A35; A51 item (2).
+- Rule: the self-build stays at L1, and an approval under A51 is a delegated approval, not an auto-accept. Source: A35; A51 item (2); CR-002 Đ7; see section 5 point 3.
 - Check: deterministic; tool: policy rule, the self-build's policy allows no auto-accept for any risk class.
 - Severity: blocking. Scope: the policy. Applicability: all task types. Enforcement: blocking, policy_rule, cheap.
 
 ### GOV-001 · governance · The concept stays byte-identical
 - Rule: `AIEOS-concept.md` v0.5 is never edited; corrections go only into separate normative errata documents written in Vietnamese, and an errata takes effect only with the owner's own yes. Source: A22; A41 revision-9 marker ("CR-002 and any other concept errata stay with the owner").
-- Check: deterministic; tool: hash rule, the file's SHA-256 equals the concept hash to be bound at step 8 (A49); until then, the value at this revision, `19cfa266334aa20d1ac1bc15f5cf92d0fc6d3bbbd98c13cfcb42ad6fd5a8357c`.
+- Check: deterministic; tool: hash rule, the file's SHA-256 equals the concept hash bound when a Genesis instance is ratified (A49; A14 step 8); until then, the value at this revision, `19cfa266334aa20d1ac1bc15f5cf92d0fc6d3bbbd98c13cfcb42ad6fd5a8357c`.
 - Severity: blocking. Scope: the concept file. Applicability: all task types. Enforcement: blocking, hash_rule, cheap.
 
 ### GOV-002 · governance · Implementation tasks do not edit scenarios
@@ -86,8 +88,8 @@ Each article has the fields of concept §6.1: `id`, `category` (architecture, co
 - Severity: blocking. Scope: the scenario files. Applicability: implementation, refactoring. Enforcement: blocking, path_rule, cheap.
 
 ### GOV-003 · governance · The evaluator is not taken from the change it judges
-- Rule: the evaluator and its inputs, as A29 lists them, are taken from the base or a pinned ref, never from the change under evaluation. Source: A29, a target for the self-build (A51 item (7)); B17 (1) (proposed; not claimed sufficient, B17).
-- Check: partial; tool: CI rule, evaluator paths are read from the base ref; evidence_required: [ai_review].
+- Rule: the evaluator and its inputs, as A29 lists them, are taken from the base or a pinned ref, never from the change under evaluation. Source: A29, a target for gov-AIEOS (A51 item (7)); B17 (1) (proposed; not claimed sufficient, B17).
+- Check: partial. Tool (way 1): CI rule, the evaluator paths and their inputs are read from the base ref, from a pinned list of paths; the list is itself one of those paths; and a path rule, a change that touches a listed path is marked as an evaluator change, which is judged by the base version and never auto-accepted (governor-spec.md §8, assurance-model.md §6, proposed). Review: the whole rule except what the tool part decides, in particular whether the pinned list covers every input A29 names. evidence_required: [ai_review].
 - Severity: blocking. Scope: the evaluator paths. Applicability: all task types. Enforcement: blocking, ci_rule, cheap.
 
 ### GOV-004 · governance · Bound artifacts change only by amendment
@@ -112,7 +114,7 @@ Each article has the fields of concept §6.1: `id`, `category` (architecture, co
 
 ### SEC-002 · security · New public text stays public-safe
 - Rule: new public text holds no e-mail address and no name of an unrelated project, as the public-safety rules of `docs/WORKING-RECORDS.md` (a non-authoritative working record) say; account names that a DECIDED row records (A24) are not affected. Source: WORKING-RECORDS "Public-safety rules"; A1 (public history is permanent); this article is Claude's addition.
-- Check: partial; tool: pattern rule for e-mail addresses and credentials; evidence_required: [ai_review].
+- Check: partial. Tool (way 1): pattern rule for e-mail addresses in the files of a change, with no exception; pattern rule for credentials; pattern rule for GitHub account names, organization names and repository URLs, with the A24 exemption; and a list rule for the names of projects known to be unrelated, the list kept outside the public repository. Review: the whole rule except what the tool part decides, in particular names not on the list. evidence_required: [ai_review].
 - Severity: blocking. Scope: all paths. Applicability: all task types. Enforcement: blocking, pattern_rule, cheap.
 
 ### SEC-003 · security · `.github/` only with the owner's own yes
@@ -127,31 +129,31 @@ Each article has the fields of concept §6.1: `id`, `category` (architecture, co
 
 ### OPS-002 · operational · The owner's other acts stay the owner's
 - Rule: no act that A51 item (4) keeps with the owner is done without the owner's own yes; among them, any change to the measurement protocol, deleting refs or objects on GitHub, and any change to visibility, settings, tokens or credentials. Source: A51 item (4); A41.
-- Check: partial; tool: path rule (a change to `docs/pre-genesis/measurement-protocol.md` is routed to the owner) and push rule (no ref deletion); evidence_required: [human_review].
+- Check: partial; tool: path rule (a change to `docs/pre-genesis/measurement-protocol.md` is routed to the owner) and push rule (no ref deletion); evidence_required: [human_review]. For a task that carries out or changes such an act, the owner reviews and approves (CR-002 part 4 limit 5).
 - Severity: blocking. Scope: all paths and the repository's refs. Applicability: all task types. Enforcement: blocking, path_rule, cheap.
 
 ### OPS-003 · operational · Unmeasured means advisory
 - Rule: a control or label that has not been measured is shown as advisory, and what is not covered is shown. Source: DM label rule; A31; concept line 65.
-- Check: partial; tool: pattern rule, every label other than advisory cites a MEASURED row; evidence_required: [ai_review].
+- Check: partial. Tool (way 1): pattern rule, every label other than advisory cites a MEASURED row; and a structure rule, every report that AIEOS generates has a section that lists what it does not cover. Review: the whole rule except what the tool part decides, in particular wording that implies a stronger effect without a label, and whether each such section lists what is really not covered. evidence_required: [ai_review].
 - Severity: blocking. Scope: the DM, the pre-genesis documents and AIEOS's own reports. Applicability: all task types. Enforcement: blocking, pattern_rule, cheap.
 
 ## 4. Approval and change (proposed)
 
-- This draft is approved by no one yet. The constitution is Intent: it changes only through a human-approved change request, and the agent only proposes (concept lines 200, 409). It is approved by the owner, or, for the self-build under A51, by the decision agent once the owner approves CR-002 (A51 item (5); working record DEF-0019).
+- The constitution is Intent: it changes only through an approved change request, and the agent only proposes (concept lines 200, 409). For gov-AIEOS, while the A41 delegation is in force, the decision agent approves it in the owner's place, its first approval included, within the limits of CR-002 parts 4 and 8 (A51 items (2), (5); CR-002 Đ6). Approving this document is not ratifying a Genesis instance; whether the delegation continues once AIEOS governs its own build, and whether it enters a Genesis instance, are the owner's (CR-002 part 8; assurance-model.md §10 points 6 and 7, proposed). This revision is not approved yet.
 - Once bound by Genesis, an article changes only by a genesis amendment (genesis-model.md §5, proposed).
-- Turning `judgment` articles into `partial` or `deterministic` ones over time is the direction the concept gives (line 369).
-- For the self-build, no record can now satisfy an `ai_review` entry: a review by another Claude model is a `same_lineage_review` record that never satisfies an entry (A47; B3 and assurance-model.md §2, proposed), and the cross-model entry is open (CR-001 E10). Who produces `human_review` evidence for the self-build is open too (assurance-model.md §2, proposed, says a decision of the decision agent never satisfies an entry; A51; CR-002). Partial and judgment articles therefore cannot reach a complete profile until these are settled.
+- Turning `judgment` articles into `partial` or `deterministic` ones over time is the direction the concept gives (line 369); way 1 does this for the articles that require `ai_review` (section 2).
+- The decision agent never approves by itself a change that weakens evidence requirements; such a change is the owner's (CR-002 part 4 limit 8). Examples from CR-002: removing an `evidence_required` entry or narrowing the scope of the article that requires it; changing an entry to a type its own review can satisfy; letting a kind of review count where it does not count now; lowering the risk of a kind of change. For an unapproved draft, the reference point is the latest version on GitHub.
+- Which records satisfy the entries, for gov-AIEOS, is stated in assurance-model.md §2 and §3 (proposed; A52, which changes A6 and A47 for the way-2 case only). In short: an `ai_review` entry that is not cross-model is satisfied by a way-2 review, a review by a Claude model other than the one that did the work, made under a decision of the decision agent; a `human_review` entry by a human review or by the decision agent's own review, except for a task that carries out or changes an act that A51 item (4) keeps, where the owner reviews and approves (CR-002 part 4); every tool entry, `property_test` included, only by records from external CI. No entry here is cross-model; that entry stays open (CR-001 E10).
 
 ## 5. Open points
 
-1. Approval of this constitution: by the owner, or under A51 after CR-002 (section 4).
-2. The `governance` category, a Claude addition to the concept's four.
-3. The paths of every `scope`, once the layout is settled (B7, proposed; CR-001 E4).
-4. Which records can satisfy `ai_review` and `human_review` entries for the self-build (section 4; CR-001 E10; CR-002).
+1. The `governance` category, a Claude addition to the concept's four.
+2. The paths of every `scope`, once the layout is settled (B7, proposed; CR-001 E4).
+3. Whether a risk class of gov-AIEOS may be raised, and by whom (INV-011; assurance-model.md §10 point 2, proposed).
 
 ## 6. Not covered
 
-- The machine-readable constitution file and every checker (step 9; A14).
+- The machine-readable constitution file, the pinned lists and every checker (step 9; A14).
 - Rules bound to a time or a process step, such as no code before step 9 (A14) and deciding irreversible actions on their own (A32); they are DM rows, not articles.
 - Measurements, hardening and C13 control design (A46; B17, proposed).
-- Any article for projects other than AIEOS itself.
+- Any article for projects other than AIEOS itself, including the constitutions of AIEOS users' projects (CR-002 part 9 concerns those projects; the concept §18 specifications, not scheduled).
