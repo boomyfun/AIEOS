@@ -37,6 +37,9 @@ Two in session 02bd7476 (../History/2026-10/2026-10-07-0033-hardening-choice-and
 One incident in session 2026-10-07-0358, found in session 2026-10-07-0742 (../History/2026-10/2026-10-07-0742-a14-step-7-drafts-and-decision-files.md):
 - **2026-10-07 (883bb3d9 :863, :1039, :1156; D-078 C6).** The plain-words texts of D-072, D-073 and D-074 were not relayed to the owner, and D-073's relay with the context level after its push was not met. They were relayed verbatim at the next session's checkpoint (934733ab :548), with a line saying they had not been passed on when decided.
 
+One incident in session 2026-10-07-0921 (../History/2026-10/2026-10-07-0921-cr-002-approved.md):
+- **2026-10-07 (934733ab :862, :1018, :1170; 1dace763 :680, :788; D-082, D-084).** The D-079 and D-080 plain-words texts were not relayed in session 934733ab; short progress notes after each push were taken for them, and the owner was told at 934733ab :1170 that they had been written. In session 1dace763 the D-083 text was first given only as a progress note (:680) and relayed verbatim later (:788), and a finding then reported the worker's recollection as fact without searching thinking-type records. Progress notes are not replies.
+
 ## Why it happens
 - Claude wants to keep momentum, and disclosure feels like an admission.
 - A note in a log is mistaken for telling the owner.

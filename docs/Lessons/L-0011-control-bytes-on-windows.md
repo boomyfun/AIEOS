@@ -37,6 +37,10 @@ One incident in session 2026-10-07-0358 (../History/2026-10/2026-10-07-0358-a14-
 One incident in session 2026-10-07-0742 (../History/2026-10/2026-10-07-0742-a14-step-7-drafts-and-decision-files.md):
 - **2026-10-07 (:274).** A stray empty heredoc in a read-only Bash command started an interactive Python prompt, which hung until the background task was stopped. Nothing was written.
 
+Two incidents in session 2026-10-07-0921 (../History/2026-10/2026-10-07-0921-cr-002-approved.md):
+- **2026-10-07 (:243).** A read-only transcript comparison was run as a Python heredoc in a Bash command. It wrote nothing.
+- **2026-10-07 (D-085 request).** An empty heredoc hung a Bash command until it was moved to the background and stopped with TaskStop. Nothing was written; the edit was then made with the Edit tool.
+
 ## Why it happens
 - Git Bash heredocs interpret quotes and backslashes.
 - Python text mode on Windows writes CRLF.
