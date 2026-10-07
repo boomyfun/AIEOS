@@ -31,6 +31,9 @@ Two incidents in session 2026-10-06-0602 (../History/2026-10/2026-10-06-0602-rul
 - **2026-10-06 (D-022 W3).** A CR check put `$'\r'` inside a double-quoted command substitution and printed 30, the number of lines containing the letter r. A Python re-check showed 0 CR bytes; the hash had already matched.
 - **2026-10-06 (D-025 request update).** Python heredocs dropped doubled backslashes. In one, the script's own assertion stopped it before any write; the script was then written with the Write tool.
 
+One incident in session 2026-10-07-0358 (../History/2026-10/2026-10-07-0358-a14-step-7-genesis-model.md):
+- **2026-10-07 (D-067 request).** Three corrections to a scratchpad request file were applied by a Python script passed through a shell heredoc. The file had 0 CR bytes and the replaced texts had no backslashes; scripts were written with the Write tool from then on.
+
 ## Why it happens
 - Git Bash heredocs interpret quotes and backslashes.
 - Python text mode on Windows writes CRLF.
