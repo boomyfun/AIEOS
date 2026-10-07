@@ -1,7 +1,7 @@
 # AIEOS Genesis Model
 
 > **Status: PRE-GENESIS DRAFT — proposed, not ratified.** A14 step 7. Every rule here is a proposal unless it cites a DECIDED row of `decision-matrix.md` (DM, section A), the concept, or CR-001 as approved. This document binds nothing: binding is done by the Genesis Charter (A14 step 8). Step 7 follows the owner's yes in A48 ("có, sang bước 7 nhưng để phiên sau.").
-> Revision 2 — 2026-10-07 (revision 1, same day: first version). Revision 2 records the owner's answers A49 (bound set without the signing key), A50 (work added at step 7; not yet step 8) and A51 (for the AIEOS self-build, the decision agent approves in the owner's place). Written under decisions of the decision agent (A41; scope set in decision file D-067; revision 2 under decision files D-072 and D-073); it is not an owner decision. Normative concept: `AIEOS-concept.md` v0.5 with CR-001 (A22). Rows are cited by ID, concept text by line ("concept line N"), the measurement protocol as "MP".
+> Revision 3 — 2026-10-07 (revision 1, same day: first version; revision 2, same day: the owner's answers A49, A50 and A51). Revision 3 points rows 2, 6 and 7 to their drafts and notes that their approval under A51 waits for CR-002. Written under decisions of the decision agent (A41; scope set in decision file D-067; revision 2 under decision files D-072 and D-073; revision 3 under decision files D-078, D-079 and D-080); it is not an owner decision. Normative concept: `AIEOS-concept.md` v0.5 with CR-001 (A22). Rows are cited by ID, concept text by line ("concept line N"), the measurement protocol as "MP".
 > Effect: the only measurement made is the minimal P-CRED baseline, which is FAIL (DM section D); every authority claim described here, owner or delegated, is therefore at most **advisory** (A31, A41; section 8).
 
 ## 1. Principle
@@ -27,12 +27,12 @@ The bound set is the B2 list (proposed), item by item, as the owner decided it: 
 | # | Item (B2, proposed) | Source | State now | Needed before step 8 can bind it |
 |---|---|---|---|---|
 | 1 | Concept hash + errata hash | concept v0.5 (A22); `CR-001-concept-errata.md` | Both exist. CR-001 is approved by the owner with E4 and E10 open (CR-001 line 3; E4: CR-001 line 13, working record DEF-0018; E10: CR-001 line 19, working record DEF-0008). A51 needs a further errata, CR-002 (working record DEF-0019) | Nothing. Binding fixes errata texts that are expected to change; a later change to the errata is bound by a genesis amendment (B1, proposed; section 5) |
-| 2 | Constitution | its form: concept §6.1 (lines 327-397) | To be written at step 7 (A50; section 3.1) | Its articles written, each declaring how it is checked (concept line 331) |
+| 2 | Constitution | its form: concept §6.1 (lines 327-397) | Drafted, proposed: `constitution.md` revision 1 (A50; section 3.1); not approved | Its articles written, each declaring how it is checked (concept line 331) |
 | 3 | Authority model | A21, A27, A28, A31, A36, A49, A51 (DECIDED); A41 | DM rows only | A written statement, which may be a part of the Charter (section 3.2) |
 | 4 | Governance-boundary abstraction + "every label must be measured" | A2, A4, A25, A26, A29 (DECIDED); DM section E; the DM label rule | DM rows only | A written statement; its labels as section 8 states them |
 | 5 | Assurance model | `assurance-model.md` revision 2 (proposed) | Exists, proposed; its §10 owner points are open; for the self-build, A51 changes parts of it | Its ratification (section 7) |
-| 6 | Conformance methodology + initial scenario-set hash | A19 (DECIDED, the primitive); B10, B14 (proposed) | To be written at step 7 (A50); no scenario exists yet | The methodology written; each scenario approved and hashed (A19 conditions 1-2; for the self-build the decision agent approves, A51) |
-| 7 | Bootstrap governor identity + succession rule | A20, B2 (proposed); section 3.3 | A detailed specification is to be written at step 7 (A50); no code before step 9 (A14) | A definition (section 3.3); its identity can exist only once its code exists, from step 9 on |
+| 6 | Conformance methodology + initial scenario-set hash | A19 (DECIDED, the primitive); B10, B14 (proposed) | Drafted, proposed: `conformance-methodology.md` and `conformance-scenarios-initial.md` revision 1 (A50); no scenario approved | The methodology written; each scenario approved and hashed (A19 conditions 1-2; for the self-build, approval under A51 waits for CR-002: `conformance-methodology.md` §5, proposed) |
+| 7 | Bootstrap governor identity + succession rule | A20, B2 (proposed); section 3.3 | Specification drafted, proposed: `governor-spec.md` revision 1 (A50); no code before step 9 (A14) | A definition (section 3.3); its identity can exist only once its code exists, from step 9 on |
 | 8 | Change classes + amendment procedure | B1 (proposed); section 5 (proposed) | DM rows only; no amendment procedure was written before this document | Section 5, ratified |
 | 9a | A27 identities: immutable repository id, immutable owner id | A27 (DECIDED); A21, A24 (DECIDED) | Not recorded in any artifact | Recorded at step 8 |
 | 9b | A27 signing-key fingerprints | A49 (DECIDED) | Dropped by the owner: no owner signing key is created or bound | — |
@@ -58,7 +58,7 @@ The bound set is the B2 list (proposed), item by item, as the owner decided it: 
 ### 3.4 Bound items that did not exist
 
 - Rows 2, 6, 7 and 9b had no artifact, and no A14 step wrote them before step 8. Revision 1 listed three options: (a) write them before step 8; (b) bind what exists and add the rest later; (c) bind placeholders. Claude recommended (b), and question 2 of Claude's message (decision file D-068) asked the owner yes or no on it.
-- The owner chose option (a) without the keys: rows 2, 6 and 7 are written now, at step 7, with the governor as a specification only (A50), approved under A51; row 9b is dropped (A49).
+- The owner chose option (a) without the keys: rows 2, 6 and 7 are written now, at step 7, with the governor as a specification only (A50), approved under A51 once the owner approves CR-002 (A51 item (5)); row 9b is dropped (A49).
 - Consequences: work is added at step 7 (A14, A50); the governor's identity still exists only from step 9 (row 7); with no signing key, the authority signing identity that A27 named is never bound (section 6).
 
 ## 4. Ratified, not bound
@@ -113,7 +113,7 @@ Answered at the end of step 7:
 3. Moving to step 8: not yet (A50); later, for the self-build, the decision agent's under A51.
 
 Open:
-4. The AIEOS constitution's articles and checks: to be written at step 7 (A50); approved under A51 after CR-002 (section 3.1).
+4. The AIEOS constitution's articles and checks: drafted in `constitution.md` (proposed; A50); approved under A51 after CR-002 (section 3.1).
 5. Whether the A41 delegation enters the Genesis authority model, "for the owner to decide then" (A41, Claude's wording in that row; section 3.2).
 6. The active boundary implementation: whether instance 1 records it as unmeasured and does not ratify it as a trust boundary (proposed reading, section 4).
 7. Ratifying this model, including the amendment procedure of section 5 and B1 (proposed), at step 8 (section 7).
@@ -124,7 +124,7 @@ Open:
 ## 10. Not covered
 
 - The Genesis Charter itself, its hashes and its concrete identities (step 8).
-- The texts of the constitution, the conformance methodology, the scenarios and the governor specification (separate documents, A50), and the governor's implementation.
+- The texts of the constitution, the conformance methodology, the scenarios and the governor specification (separate documents, A50: `constitution.md`, `conformance-methodology.md`, `conformance-scenarios-initial.md`, `governor-spec.md`), and the governor's implementation.
 - C11 design; measurements; C13 and B17 (proposed).
 - Changes to other documents (the DM beyond the pointer notes, the MP, the assurance model beyond its header note, CR-001), B3-B5 (proposed) included.
 - Code (A14: none before step 9).
