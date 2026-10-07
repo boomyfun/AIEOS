@@ -1,14 +1,15 @@
 # AIEOS Initial Conformance Scenario Set
 
-> **Status: PRE-GENESIS DRAFT — proposed, not approved.** A14 step 7 (DM A50: "cách thử và bộ bài thử"). Set version 0 (draft). No scenario here is approved; approval waits for CR-002 under the reading in `conformance-methodology.md` §5 (proposed). Nothing here is a Genesis fact.
-> Revision 1 — 2026-10-07: first version. Written under decisions of the decision agent (A41; scope set in decision file D-078); not an owner decision. Normative concept: `AIEOS-concept.md` v0.5 with CR-001 (A22). Concept text is cited by line ("line N"), rows by ID.
+> **Status: PRE-GENESIS DRAFT — proposed, not approved.** A14 step 7 (DM A50: "cách thử và bộ bài thử"). Set version 0 (draft). No scenario here is approved; for gov-AIEOS, the decision agent approves each scenario in the owner's place, bound to its content (CR-002 part 6; `conformance-methodology.md` §5, proposed). Nothing here is a Genesis fact.
+> Revision 2 — 2026-10-07 (revision 1, same day: first version). Revision 2 adds ACC-14 and ACC-15, two scenarios for gov-AIEOS, the self-build (A53 names), under CR-002 (A52), and updates sections 1 and 6 (working record DEF-0020). Written under decisions of the decision agent (A41; scope set in decision files D-078 and D-098); not an owner decision. Normative concept: `AIEOS-concept.md` v0.5 with CR-001 and CR-002 (A22, A52). Concept text is cited by line ("line N"), rows by ID, CR-002 by part, entry or limit.
 > Effect: every run of these scenarios is **advisory** until measured (DM label rule; `conformance-methodology.md` §9).
 
 ## 1. Scope
 
-- Only behaviour that the concept, DECIDED rows or CR-001 fix. The set tests the product rules (A35, the product default A51 item (1) leaves unchanged); the A51 self-build variant of approval is not covered until CR-002.
+- Only behaviour that the concept, DECIDED rows or CR-001 fix (and, for ACC-14 and ACC-15 only, CR-002). The set tests the product rules (A35, the product default A51 item (1) leaves unchanged), except ACC-14 and ACC-15, which test the gov-AIEOS variant that CR-002 sets (A51; A52).
 - Format: `conformance-methodology.md` §2 (proposed). Capability tags (proposed) follow the concept's capability list (lines 39-41): Verification (acceptance decisions), Resume Check, Risk Engine, Capability Boundaries.
 - Acceptance defaults, unless a scenario says otherwise: the task is in VERIFYING; risk low, so the default profile is functional [build, lint] (line 701); the verification plan is G0 scope, G1 build, G2 lint, and all three passed on the evaluated commit; for each type of the profile, a record from external CI exists, bound to the evaluated commit and to the intent versions the task names, which are current (line 728); the risk class is at L1 (A35); approvals are human approval records (A36).
+- gov-AIEOS defaults (ACC-14, ACC-15): the project is gov-AIEOS (A53); the A41 delegation, as widened by A51, is in force; the task carries out or changes no act that A51 item (4) keeps (CR-002 part 4 limit 5), and its change weakens no evidence requirement (CR-002 part 4 limit 8); approvals are the decision agent's delegated approvals (A51 (2); CR-002 Đ5).
 - Resume Check defaults: the task is READY or IN_PROGRESS; HEAD equals `base_commit`; dependencies DONE; intent versions current; the runtime's `max_risk` at or above the task's risk; budget left; no applicable constitution article violated (lines 493-502).
 
 ## 2. Verification: acceptance decisions
@@ -28,6 +29,8 @@
 | ACC-11 | rule: approval is not evidence | as ACC-05, and a human approval record for the task exists | acceptance is evaluated | as ACC-05; the approval does not make the task ACCEPTED | A36 ("human approval is an authority act"); A18; line 299 |
 | ACC-12 | transition IN_REVIEW → ACCEPTED | ACC-01 done; then a human approval record bound to the task's content | the approval is recorded | next state ACCEPTED | A35; A36; A42; lines 523-524, 621 |
 | ACC-13 | rule: batch approval | three tasks in IN_REVIEW, each as ACC-01 | one batch approval by a human | three approval records, each bound to its own task's content; all three tasks ACCEPTED | A35; A42; lines 523-524 |
+| ACC-14 | gov-AIEOS: transition IN_REVIEW → ACCEPTED by a delegated approval | gov-AIEOS defaults; ACC-01 done; then the decision agent's delegated approval, a record separate from any review, bound to the task's content and recorded as "decided by: decision agent (A41, A51)" | the approval is recorded | next state ACCEPTED; the approval is recorded as the decision agent's, not as an owner's or a person's decision, and the acceptance is shown as resting on an AI approval | CR-002 part 1 ("Quyền duyệt", "Hiển thị"), Đ5, Đ7; A41; A42; A51 (2); lines 523-524 |
+| ACC-15 | gov-AIEOS: the decision agent's review satisfies a human review entry | gov-AIEOS defaults; as ACC-06, so the task is in IN_REVIEW; then the decision agent's own review of the task, made under its own decision, stating what it rests on, bound to the evaluated commit and the current intent versions, with its own evidence type, never labelled `human_review` | acceptance is re-evaluated | operational human_review is satisfied, so no type is missing; NEEDS_REVIEW; the task stays IN_REVIEW; the review does not make the task ACCEPTED (a separate approval record is needed, as in ACC-14) | CR-002 part 4 limits 1-5 and 7, Đ5, Đ7; A35; A36; CR-001 E8; lines 300, 524, 728 |
 
 ## 3. Risk Engine
 
@@ -67,6 +70,7 @@ This set is below the B14 minimum tier (proposed). Not covered:
 - check 2's rebase branch, check 5's "chưa DONE" branch, and budgets other than retries;
 - NEEDS_REWORK for the constitution and spec-conformance gates;
 - CONFLICT, DRIFT and reconciliation; unbaselined specs (B9, proposed); the high and critical profiles (CR-001 E10 open);
-- the A51 self-build variant of approval (section 1).
+- for gov-AIEOS, beyond ACC-14 and ACC-15: the other limits of CR-002 part 4 (an act the owner keeps, limit 5; no tool or cross-model entry, limit 6; the implementing session and reviewer agents never produce the decision agent's review, limit 7; changes that weaken evidence requirements, limit 8), an approval that does not stand in for missing evidence (the gov-AIEOS form of ACC-11; Đ5, A36), the way-2 review (CR-002 part 4, "Chỗ hở đã vá"), ESCALATE routing (CR-002 part 1, "Báo lên") and a revocation of the delegation (CR-002 part 1, "Giới hạn");
+- AIEOS projects whose users choose option b (CR-002 part 9): the product scenarios assume a project that has not chosen it.
 
-Raising a risk class to L2, which an ACCEPT scenario would need, is an act A41 keeps with the owner (assurance-model.md §10 point 2). Count: 28 scenarios (13 acceptance, 1 risk, 11 Resume Check, 3 adversarial).
+Raising a risk class to L2, which an ACCEPT scenario would need, is an act A41 keeps with the owner (assurance-model.md §10 point 2). Count: 30 scenarios (15 acceptance, 1 risk, 11 Resume Check, 3 adversarial).
