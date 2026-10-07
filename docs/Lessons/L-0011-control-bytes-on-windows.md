@@ -47,6 +47,9 @@ One incident in session 2026-10-07-1815 (../History/2026-10/2026-10-07-1815-def-
 One incident in session 2026-10-07-2144 (../History/2026-10/2026-10-07-2144-def-0020-steps-3-4-and-owner-answers.md):
 - **2026-10-07 (:286, :287, :295, :304).** A stray empty heredoc (`python - "$AG" <<'X'`) at the end of a read-only Bash command started an interactive Python; it was moved to the background and stopped with TaskStop. Its harness output file, about 270 MB, was left in place (D-098). The eye check alone had failed for the fourth session in a row, so from then on every Bash command that runs Python starts with `timeout 110`, and no Bash command uses `<<` or `python -` (D-098 C2).
 
+One incident in session 2026-10-08-0010 (../History/2026-10/2026-10-08-0010-a51-approvals-and-draft-genesis-charter.md):
+- **2026-10-08 (:1342).** A read-only Bash command piped `grep` output into `python -c` without `timeout 110`; it stopped at once with an encoding error and wrote nothing (D-119). The guard of D-098 C2 stands: every Python run in a Bash command starts with `timeout 110`, and none reads from a pipe without it.
+
 ## Why it happens
 - Git Bash heredocs interpret quotes and backslashes.
 - Python text mode on Windows writes CRLF.
