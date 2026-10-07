@@ -44,6 +44,9 @@ Two incidents in session 2026-10-07-0921 (../History/2026-10/2026-10-07-0921-cr-
 One incident in session 2026-10-07-1815 (../History/2026-10/2026-10-07-1815-def-0020-assurance-model-and-constitution.md):
 - **2026-10-07 (:184, :185, :200).** An empty heredoc in a read-only Bash command started an interactive Python that looped printing errors; it was moved to the background and stopped with TaskStop. Only the harness's own output files were written, and they were left in place (D-088). From then on no Bash command used `<<` (D-088 C4).
 
+One incident in session 2026-10-07-2144 (../History/2026-10/2026-10-07-2144-def-0020-steps-3-4-and-owner-answers.md):
+- **2026-10-07 (:286, :287, :295, :304).** A stray empty heredoc (`python - "$AG" <<'X'`) at the end of a read-only Bash command started an interactive Python; it was moved to the background and stopped with TaskStop. Its harness output file, about 270 MB, was left in place (D-098). The eye check alone had failed for the fourth session in a row, so from then on every Bash command that runs Python starts with `timeout 110`, and no Bash command uses `<<` or `python -` (D-098 C2).
+
 ## Why it happens
 - Git Bash heredocs interpret quotes and backslashes.
 - Python text mode on Windows writes CRLF.
