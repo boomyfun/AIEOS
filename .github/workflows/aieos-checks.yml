@@ -1,0 +1,106 @@
+# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md).
+# Runs on every push to any branch and checks every pushed commit. It reads only: it writes nothing to the repository
+# and uses no secret. Records: this run's log and its step summary. Its results are advisory (DM A29; C7 is TBD).
+name: aieos-checks
+
+on:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Fetch the pushed commit and its history (no third-party action, no token)
+        env:
+          SERVER: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          git init -q work
+          git -C work fetch -q "$SERVER/$REPO.git" "$SHA"
+          git -C work checkout -q --detach FETCH_HEAD
+          test "$(git -C work rev-parse HEAD)" = "$SHA"
+          printf '%s\n' "$BEFORE" > before.txt
+
+      - name: Collect the pushed commits and their changed paths
+        working-directory: work
+        run: |
+          set -euo pipefail
+          BEFORE=$(cat ../before.txt)
+          Z=0000000000000000000000000000000000000000
+          if [ "$BEFORE" != "$Z" ] && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null && git merge-base --is-ancestor "$BEFORE" HEAD; then
+            git rev-list --reverse "$BEFORE..HEAD" > ../commits.txt
+            WHY="range: previous tip to pushed commit"
+          else
+            git rev-parse HEAD > ../commits.txt
+            if [ "$BEFORE" = "$Z" ]; then WHY="range: last commit only (new branch)"; else WHY="range: last commit only (previous tip not found or not an ancestor)"; fi
+          fi
+          EMPTY=$(git hash-object -t tree /dev/null)
+          mkdir -p ../c
+          : > ../changed-paths.txt
+          while read -r C; do
+            if git rev-parse -q --verify "${C}^1" >/dev/null; then P="${C}^1"; else P=$EMPTY; fi
+            git log -1 --format=%B "$C" > "../c/$C.msg"
+            git diff --no-renames --name-only "$P" "$C" > "../c/$C.names"
+            { git diff --no-renames -U0 "$P" "$C" | grep -E '^\+' | grep -vE '^\+\+\+ ' || true; } > "../c/$C.added"
+            git diff --no-renames --name-status "$P" "$C" | sed "s/^/${C:0:12} /" >> ../changed-paths.txt
+          done < ../commits.txt
+          {
+            echo "## AIEOS checks (advisory)"
+            echo "- pushed commit: $(git rev-parse HEAD)"
+            echo "- $WHY"
+            echo "- commits checked: $(wc -l < ../commits.txt)"
+            echo "- changed paths: $(wc -l < ../changed-paths.txt)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat ../changed-paths.txt
+
+      - name: SEC-001 secret scan (tip tree; every commit's message, file names and added lines)
+        working-directory: work
+        run: |
+          set -uo pipefail
+          B='(^|[^A-Za-z0-9_])'
+          D='-----'
+          PAT="${B}ghp_[A-Za-z0-9]{20,}|${B}github_pat_[A-Za-z0-9_]{20,}|${B}gh[ousr]_[A-Za-z0-9]{20,}|${B}sk-[A-Za-z0-9_-]{20,}|${B}AKIA[0-9A-Z]{16}|${D}BEGIN [A-Z ]*PRIVATE KEY${D}|${B}xox[baprs]-[A-Za-z0-9-]{10,}"
+          # Counts, commits and file names only: a match is never printed, so a leaked secret is not copied into the public log.
+          F=$(git grep -cE "$PAT" HEAD -- . || true)
+          T=$(printf '%s\n' "$F" | grep -c . || true)
+          H=0
+          L=""
+          while read -r C; do
+            m=$(grep -cE "$PAT" "../c/$C.msg" || true)
+            n=$(grep -cE "$PAT" "../c/$C.names" || true)
+            a=$(grep -cE "$PAT" "../c/$C.added" || true)
+            if [ $((m + n + a)) -gt 0 ]; then H=$((H + 1)); L="${L}${C:0:12} message lines $m, file names $n, added lines $a"$'\n'; fi
+          done < ../commits.txt
+          echo "SEC-001 tip tree files with a secret pattern: $T; pushed commits with a hit: $H" | tee -a "$GITHUB_STEP_SUMMARY"
+          [ -n "$F" ] && printf '%s\n' "$F" | sed -E 's/^HEAD://' | tee -a "$GITHUB_STEP_SUMMARY"
+          [ -n "$L" ] && printf '%s' "$L" | tee -a "$GITHUB_STEP_SUMMARY"
+          [ "$T" = 0 ] && [ "$H" = 0 ]
+
+      - name: SEC-002 pattern rules (every commit's added lines)
+        working-directory: work
+        run: |
+          set -uo pipefail
+          H=0
+          L=""
+          while read -r C; do
+            e=$(grep -cE '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' "../c/$C.added" || true)
+            u=$(grep -ciE 'github\.com/' "../c/$C.added" || true)
+            if [ $((e + u)) -gt 0 ]; then H=$((H + 1)); L="${L}${C:0:12} e-mail addresses $e, GitHub URLs $u"$'\n'; fi
+          done < ../commits.txt
+          echo "SEC-002 pushed commits whose added lines hold an e-mail address or a GitHub URL: $H" | tee -a "$GITHUB_STEP_SUMMARY"
+          [ -n "$L" ] && printf '%s' "$L" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "SEC-002 not checked here: account names (DM A24 exemption) and the list of unrelated projects; they stay with review" >> "$GITHUB_STEP_SUMMARY"
+          [ "$H" = 0 ]
+
+      - name: SEC-003 record (changes under .github/)
+        run: |
+          set -euo pipefail
+          G=$(grep -cE '^[0-9a-f]{12} [A-Z][0-9]*[[:space:]]+\.github/' changed-paths.txt || true)
+          echo "SEC-003 changed paths under .github/ in the pushed commits: $G (each needs the owner's own yes)" | tee -a "$GITHUB_STEP_SUMMARY"
