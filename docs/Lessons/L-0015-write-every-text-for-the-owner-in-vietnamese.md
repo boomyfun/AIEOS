@@ -15,6 +15,12 @@ Five in session 2026-10-08-1219 (../History/2026-10/2026-10-08-1219-master-plan-
 - **2026-10-08 (:715).** The status part of a turn-final reply in English; the decision agent's relay above it was in Vietnamese. The owner asked (:719): "prompt đã ghi rất rõ trả lời tôi bằng tiếng Việt, tại sao lại trả lời bằng tiếng Anh". Claude answered at :732; the request to the decision agent first named only :715.
 - **2026-10-08 (:961).** One more English progress line, after D-137 had set the rule (a narration-kind record).
 
+One more in that session, found later by the decision agent (decision D-142); that session's History and this lesson first named five:
+- **2026-10-08 (:1384).** A progress line in English ("Now I'm updating the check program…"), after D-137 had set the rule.
+
+One possible occurrence in session 2026-10-08-1512 (decision D-143; that session's History, written at its end, carries the line on :1384 and this one):
+- **2026-10-08 (:274).** Possible: the worker reports an English lead sentence; the transcript record :274 holds only the Vietnamese text; whether the owner saw it is not known.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 
