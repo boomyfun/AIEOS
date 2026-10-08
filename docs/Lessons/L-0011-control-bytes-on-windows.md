@@ -62,6 +62,9 @@ Two incidents in session 2026-10-08-2113 (../History/2026-10/2026-10-08-2113-gen
 - **2026-10-08 (:341).** A read-only comparison ended two pipelines with redirections to `/tmp` and to the parent folder of the last session's scratchpad, and so wrote two small files outside the scratchpad (lists of file names only). Found at :346; not removed; brought to the decision agent (D-168); the owner kept them (DM A60).
 - **2026-10-08 (:1482).** A `sed` edit of a commit executor wrote two literal CR bytes into it; the byte check in the same command found them, and the script was rewritten with the Write tool before any run.
 
+One incident in session 2026-10-09-0514 (../History/2026-10/2026-10-09-0514-fixture-file-kind-and-fixture-drafts.md):
+- **2026-10-09 (scratchpad).** A drafting aid wrote a table through Windows text-mode output, with CR bytes; the composer's byte check stopped on it, and the aid was changed to write in binary mode.
+
 ## Why it happens
 - Git Bash heredocs interpret quotes and backslashes.
 - Python text mode on Windows writes CRLF.

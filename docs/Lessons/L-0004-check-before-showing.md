@@ -69,6 +69,9 @@ Two incidents in session 2026-10-09-0153 (../History/2026-10/2026-10-09-0153-tas
 One incident found in session 2026-10-09-0352 (../History/2026-10/2026-10-09-0352-m2-plan-and-conformance-files.md), from session 7a8f6d22:
 - **2026-10-09 (7a8f6d22 :1931).** A handback was saved by taking the last one in the agent transcript without checking which it was; it was the addendum, not the decision. It was renamed and both were saved under their own names (:1945 there).
 
+Four incidents in session 2026-10-09-0514 (../History/2026-10/2026-10-09-0514-fixture-file-kind-and-fixture-drafts.md):
+- **2026-10-09 (the D-198, D-199, D-200 and D-201 requests).** Each request's first text gave transcript line numbers typed from memory; each time the steps tool gave the right numbers and they were replaced before sending, and the D-201 text also said wrongly that they came from the tool. The fix: run the steps tool before writing a request and paste its numbers.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

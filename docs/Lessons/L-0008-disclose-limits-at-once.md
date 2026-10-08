@@ -50,6 +50,9 @@ Two incidents found in session 2026-10-09-0352 (../History/2026-10/2026-10-09-03
 - **2026-10-09 (7a8f6d22 :1884).** Before the D-193 request, the worker moved an output folder and ran two builders once, one of which stopped; the request did not say so. Found while writing the decision files; recorded in the D-193 file.
 - **2026-10-09 (D-196 request).** The request did not flag that the new document's definition of a fixture task contradicted the approved M2 plan; the decision agent found it (D-196).
 
+One incident in session 2026-10-09-0514 (../History/2026-10/2026-10-09-0514-fixture-file-kind-and-fixture-drafts.md):
+- **2026-10-09 (D-201 request).** The request disclosed a refused removal but not three earlier removals of scratchpad files the worker had just made (:1116, :1147, :1166); the decision agent found two, and the worker's scan at the session end the third.
+
 ## Why it happens
 - Claude wants to keep momentum, and disclosure feels like an admission.
 - A note in a log is mistaken for telling the owner.
