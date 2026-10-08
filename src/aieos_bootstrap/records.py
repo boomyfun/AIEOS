@@ -11,6 +11,8 @@ Limits (TASK-001 AC7):
   checks reason only as a non-empty string.
 - It checks no state transition (specification 1 sections 5 and 6), recomputes no hash, and treats the fencing rule
   of specification 1 section 8 as out of scope beyond the form of the token (AC3).
+- Of the acceptance keys of section 6.4 only decision is required (a reading); task_content_hash, evaluated_commit,
+  next_task_state and profile_used are checked for form when present, the others not at all.
 - It reads only what it is given: it opens no file, writes nothing, starts no process and makes no network call.
 
 Readings of the specifications that the contract marks "(reading)" are noted where they are applied.
@@ -327,6 +329,12 @@ def check_decision(event_type, payload, where='payload'):
     if 'subject' in payload and _is_str(payload['subject']) and not _matches(_TASK, payload['subject']):
         findings.append(Finding('6.4:subject', '%s subject is not a task id (reading: TASK- followed by digits)' % where))
     if acceptance:
+        # Of the acceptance keys only decision is required (reading: section 6.4 does not say which keys a result
+        # with an error carries); these four are checked for form when they are present.
+        if 'task_content_hash' in payload and not _matches(_HASH, payload['task_content_hash']):
+            findings.append(Finding('6.4:task_content_hash', '%s task_content_hash is not 64 lowercase hex digits' % where))
+        if 'evaluated_commit' in payload and not _matches(_COMMIT, payload['evaluated_commit']):
+            findings.append(Finding('6.4:evaluated_commit', '%s evaluated_commit is not a full lowercase hex commit id' % where))
         if 'fact_kind' in payload and payload['fact_kind'] != 'interpretation':
             findings.append(Finding('6.4:fact_kind', '%s fact_kind is not interpretation' % where))
         if 'next_task_state' in payload and not _in(STATE_NAMES, payload['next_task_state']):
@@ -410,7 +418,9 @@ class _LogState:
 
 
 def _without_order(obj):
-    return {k: v for k, v in obj.items() if k not in ('seq', 'appended_at')}
+    """The line's object without seq and appended_at, as canonical JSON text, so that true, 1 and 1.0 stay apart when
+    two lines are compared."""
+    return json.dumps({k: v for k, v in obj.items() if k not in ('seq', 'appended_at')}, sort_keys=True)
 
 
 def _check_seq(obj, number, state):

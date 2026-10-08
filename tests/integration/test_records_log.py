@@ -104,7 +104,7 @@ class WholeLog(unittest.TestCase):
         lines[5] = json.dumps(broken)
         lines[7] = lines[7].replace('"seq": 8', '"seq": 80')
         lines.insert(9, 'garbage')
-        text = '﻿' + '\n'.join(lines) + '\r\n'
+        text = '\ufeff' + '\n'.join(lines) + '\r\n'
         report = records.check_log(text)
         found = {(n, f.rule) for n, f in report.findings()}
         self.assertIn((0, '2:bom'), found)

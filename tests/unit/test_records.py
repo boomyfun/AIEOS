@@ -134,6 +134,14 @@ class OrderTimeDuplicates(unittest.TestCase):
         self.assertIn('6.1:duplicate_event_id', rules(r))
         self.assertIsNone(r.lines[1].duplicate_of)
 
+    def test_repeat_differing_only_in_value_type_is_an_error(self):
+        first = event(1, 'decision.acceptance', decision(blocking=[True]), task_id='TASK-001')
+        again = event(2, 'decision.acceptance', decision(blocking=[1]), task_id='TASK-001')
+        again['event_id'] = 'ev-1'
+        r = records.check_log(log_of(first, again))
+        self.assertIn('6.1:duplicate_event_id', rules(r))
+        self.assertIsNone(r.lines[1].duplicate_of)
+
     def test_duplicate_counts_for_seq(self):
         again = drafted(2, event_id='ev-1')
         third = drafted(3, event_id='ev-3')
@@ -303,6 +311,11 @@ class Decisions(unittest.TestCase):
         self.assertIn('6.4:profile_used', self.check('decision.acceptance', decision(profile_used=[{'dimension': 'x'}])))
         self.assertIn('6.2:unknown_key', self.check('decision.acceptance', decision(verdict='yes')))
         self.assertEqual(self.check('decision.acceptance', decision(task_content_hash=H64, uncovered=[], rests_on_ai=[])), [])
+
+    def test_hash_and_commit_forms(self):
+        self.assertEqual(self.check('decision.acceptance', decision(task_content_hash=H64, evaluated_commit=C40)), [])
+        self.assertIn('6.4:task_content_hash', self.check('decision.acceptance', decision(task_content_hash='abc')))
+        self.assertIn('6.4:evaluated_commit', self.check('decision.acceptance', decision(evaluated_commit=C40.upper())))
 
     def test_null_exactly_with_error(self):
         d = decision()
