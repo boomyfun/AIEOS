@@ -19,3 +19,4 @@ DM B7 and B13.
 
 ## Log
 - 2026-10-07: opened during the audit of A14 steps 1-5 (decision files D-055, D-056). Before this, no deferred item tracked E4 (DEF-0007 is done).
+- 2026-10-08 (session d7637e4e): the Master Plan puts the layout in M1: §18 specification 2 proposes it (DM B7) and a text for CR-001 E4, which stays the owner's; the plan's own path, `docs/plan/`, is interim until then. Status stays open. Decision files D-136, D-137. ../History/2026-10/2026-10-08-1219-master-plan-ratified.md

@@ -53,6 +53,11 @@ One incident in session 2026-10-08-0010 (../History/2026-10/2026-10-08-0010-a51-
 One incident in session 2026-10-08-0211 (../History/2026-10/2026-10-08-0211-ratification-of-genesis-instance-1.md):
 - **2026-10-08 (:225).** A read-only Bash command ended with `timeout 110 python - < /dev/null`, a `python -` run that the D-098 C2 guard bans; with an empty program from `/dev/null` it ran nothing and wrote nothing (D-125). The guard stands; the next slip that it does not contain makes a mechanical block a point for the single owner question (D-125 C4).
 
+One incident group in session 2026-10-08-1219 (../History/2026-10/2026-10-08-1219-master-plan-ratified.md):
+- **2026-10-08 (:173).** A read-only Bash command ran `python -c "print()" < /dev/null` without `timeout 110`; it printed an empty line and wrote nothing. It set off D-125 C4 (D-135).
+- **2026-10-08 (:254).** A placeholder command ran `timeout 110 python - < /dev/null`, the banned `python -` form, contained by the limit and the empty input; nothing ran or was written. From D-135 on, no placeholder or filler commands.
+- **2026-10-08 (:1067).** A read-only check held a leftover `> /tmp_unused`, a write outside the scratchpad; the shell refused it and nothing was created (D-138).
+
 ## Why it happens
 - Git Bash heredocs interpret quotes and backslashes.
 - Python text mode on Windows writes CRLF.
