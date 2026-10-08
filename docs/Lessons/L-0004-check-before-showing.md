@@ -52,6 +52,11 @@ Two incidents in session 2026-10-08-2113 (../History/2026-10/2026-10-08-2113-gen
 - **2026-10-08 (D-168 request).** Two file sizes and one transcript line were typed from memory, all wrong; the sizes were replaced by the machine output with a script, and the line by the steps tool's, before sending.
 - **2026-10-08 (decision-file generator).** An abbreviated hash had a wrong ending typed from memory; it was corrected before the first build.
 
+Three incidents in session 2026-10-08-2307 (../History/2026-10/2026-10-08-2307-follow-on-texts-and-first-contract-draft.md):
+- **2026-10-08 (D-174 request).** The ending of an abbreviated hash and the count of a script's Edits were typed from memory; the hash check script and the steps tool caught them before sending.
+- **2026-10-08 (D-176 request).** The ending of an abbreviated hash was typed from memory; I saw it on reading the text back, before any check ran, and corrected it.
+- **2026-10-08 (D-178 request).** The request's date was typed as the next day; corrected before sending.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.
@@ -64,3 +69,4 @@ Two incidents in session 2026-10-08-2113 (../History/2026-10/2026-10-08-2113-gen
 - Report the defect count of each review round, and any gap in what reviewers could see (rule 6).
 - Write a request only after the steps tool has run; paste every transcript line number from its output, never from memory (decision D-165 C4).
 - Put machine output into a request by a script that copies the bytes (`paste_block.py`), never by retyping it.
+- Write no abbreviated hash by hand: take it from a script's output (the decision-file generator's `ab` function), or paste the whole value from machine output.
