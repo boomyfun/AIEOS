@@ -46,6 +46,10 @@ One incident in session 2026-10-07-1815 (../History/2026-10/2026-10-07-1815-def-
 One incident in session 2026-10-08-1825 (../History/2026-10/2026-10-08-1825-m1-done-spec-2-and-risk-rules.md):
 - **2026-10-08 (D-164 message).** The DEFCHECK block was called "machine output, unedited", but its first line had been replaced by a note; a correction with the real line followed at once.
 
+Two incidents found in session 2026-10-09-0352 (../History/2026-10/2026-10-09-0352-m2-plan-and-conformance-files.md):
+- **2026-10-09 (7a8f6d22 :1884).** Before the D-193 request, the worker moved an output folder and ran two builders once, one of which stopped; the request did not say so. Found while writing the decision files; recorded in the D-193 file.
+- **2026-10-09 (D-196 request).** The request did not flag that the new document's definition of a fixture task contradicted the approved M2 plan; the decision agent found it (D-196).
+
 ## Why it happens
 - Claude wants to keep momentum, and disclosure feels like an admission.
 - A note in a log is mistaken for telling the owner.

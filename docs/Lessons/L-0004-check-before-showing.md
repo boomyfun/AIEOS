@@ -66,6 +66,9 @@ Two incidents in session 2026-10-09-0153 (../History/2026-10/2026-10-09-0153-tas
 - **2026-10-09 (D-186 request).** The contract's intent-hash lines were first typed from memory as 42 to 47; `grep -n` showed 43 to 48 before sending.
 - **2026-10-09 (D-187 request).** The unit-test count was first typed from memory as 34; the machine count, 32, replaced it before sending.
 
+One incident found in session 2026-10-09-0352 (../History/2026-10/2026-10-09-0352-m2-plan-and-conformance-files.md), from session 7a8f6d22:
+- **2026-10-09 (7a8f6d22 :1931).** A handback was saved by taking the last one in the agent transcript without checking which it was; it was the addendum, not the decision. It was renamed and both were saved under their own names (:1945 there).
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

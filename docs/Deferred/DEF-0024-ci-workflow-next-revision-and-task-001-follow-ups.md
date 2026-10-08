@@ -20,3 +20,4 @@ DEF-0023 (done).
 
 ## Log
 - 2026-10-09: opened (decision files D-189 and D-191). ../History/2026-10/2026-10-09-0153-task-001-landed.md
+- 2026-10-09 (session e3ec0fb8): two more points carried (D-196 C5): for TASK-003 and the workflow question, the conformance run-record file is not in the repository and the CI step output needs sign-in, so how a run's results are read must be settled; for TASK-004, its own tests must cover how the governor derives the inputs of governor-spec section 3.2, which the fixtures give as values. Status: open. ../History/2026-10/2026-10-09-0352-m2-plan-and-conformance-files.md
