@@ -43,6 +43,9 @@ One incident in session 2026-10-07-0921 (../History/2026-10/2026-10-07-0921-cr-0
 One incident in session 2026-10-07-1815 (../History/2026-10/2026-10-07-1815-def-0020-assurance-model-and-constitution.md):
 - **2026-10-07 (:406, :423, :488; D-089).** The D-088 plain-words text was written twice between tool calls; the transcript keeps each only as a short paraphrase made by the app (thinking-type "narration" records). It was relayed verbatim in the final reply at :488. From D-089 on, relays go verbatim into the final reply of a turn. In the same session, a report to the decision agent said a definition check had been "taken just now" when the last run was older; it was corrected before the decision (D-092).
 
+One incident in session 2026-10-08-1825 (../History/2026-10/2026-10-08-1825-m1-done-spec-2-and-risk-rules.md):
+- **2026-10-08 (D-164 message).** The DEFCHECK block was called "machine output, unedited", but its first line had been replaced by a note; a correction with the real line followed at once.
+
 ## Why it happens
 - Claude wants to keep momentum, and disclosure feels like an admission.
 - A note in a log is mistaken for telling the owner.

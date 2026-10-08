@@ -24,6 +24,9 @@ One possible occurrence in session 2026-10-08-1512 (decision D-143; that session
 One in session 2026-10-08-1702 (../History/2026-10/2026-10-08-1702-spec-1-approved-spec-2-drafted.md, section "Later in the session"), found by the decision agent (decision D-151):
 - **2026-10-08 (:969).** A progress line began with the English word "I" ("I chỉnh câu lệnh đề xuất cho đúng khuôn lần trước, rồi kiểm và gửi."), a typo for "Tôi"; Claude did not disclose it.
 
+One in session 2026-10-08-1825 (../History/2026-10/2026-10-08-1825-m1-done-spec-2-and-risk-rules.md), disclosed by Claude in the D-157 request:
+- **2026-10-08 (:801).** A progress line was written in English ("Now the three exact changes E1 to E3, word for word as the agent set them.").
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

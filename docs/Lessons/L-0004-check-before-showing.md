@@ -44,6 +44,10 @@ Two incidents in session 2026-10-08-1702 (../History/2026-10/2026-10-08-1702-spe
 - **2026-10-08 (D-148 request).** Two abbreviated hashes were typed from memory and wrong. Claude found them before sending, fixed them from machine output and checked every hash of the request by script.
 - **2026-10-08 (D-148).** The request said that four embedded logs had no CR bytes; two had 9 and 13. The own check had compared only the logs without them. The decision agent found it, and the resubmission corrected it.
 
+Four kinds of incident in session 2026-10-08-1825 (../History/2026-10/2026-10-08-1825-m1-done-spec-2-and-risk-rules.md):
+- **2026-10-08 (D-156 request).** Two abbreviated hashes were typed with wrong endings; the script check found them before sending.
+- **2026-10-08 (D-157, D-158, D-164, D-165 requests).** Four times, the first text of a request gave transcript line numbers from memory, all wrong; each was corrected from the steps tool's output before sending. The fourth came right after the third request had said that line numbers would be pasted from the tool only: the tool was run after the request was written. Rule since D-166: the steps tool runs first, and a request is written only from its output.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.
@@ -54,3 +58,4 @@ Two incidents in session 2026-10-08-1702 (../History/2026-10/2026-10-08-1702-spe
 - Compute counts by script from the final artifact.
 - Run a preflight before acting: list the files, fetch and compare refs, and re-read the full target text.
 - Report the defect count of each review round, and any gap in what reviewers could see (rule 6).
+- Write a request only after the steps tool has run; paste every transcript line number from its output, never from memory (decision D-165 C4).

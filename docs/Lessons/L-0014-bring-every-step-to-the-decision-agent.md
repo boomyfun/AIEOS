@@ -23,3 +23,4 @@ Claude took a step that a decision should have covered without bringing it to th
 - Before ending a turn, changing an approved order or taking any step a decision does not name, ask: which decision covers this exact step? If none, bring it to the decision agent first.
 - Before sending a request, check it against the nine items of the decision agent's definition, and put the definition check (machine output) at its top.
 - Never end a turn only so that the owner decides whether the work goes on; that decision is the decision agent's (:910).
+- The gate before any write or run is the Grep of `"origin":{"kind":"human"}` over the transcript's records of every type: an owner message sent while a turn is running is recorded as an attachment (`queued_command`), not as a user record (decision D-162 C5).
