@@ -58,6 +58,10 @@ One incident group in session 2026-10-08-1219 (../History/2026-10/2026-10-08-121
 - **2026-10-08 (:254).** A placeholder command ran `timeout 110 python - < /dev/null`, the banned `python -` form, contained by the limit and the empty input; nothing ran or was written. From D-135 on, no placeholder or filler commands.
 - **2026-10-08 (:1067).** A read-only check held a leftover `> /tmp_unused`, a write outside the scratchpad; the shell refused it and nothing was created (D-138).
 
+Two incidents in session 2026-10-08-2113 (../History/2026-10/2026-10-08-2113-genesis-instance-2-ratified.md):
+- **2026-10-08 (:341).** A read-only comparison ended two pipelines with redirections to `/tmp` and to the parent folder of the last session's scratchpad, and so wrote two small files outside the scratchpad (lists of file names only). Found at :346; not removed; brought to the decision agent (D-168); the owner kept them (DM A60).
+- **2026-10-08 (:1482).** A `sed` edit of a commit executor wrote two literal CR bytes into it; the byte check in the same command found them, and the script was rewritten with the Write tool before any run.
+
 ## Why it happens
 - Git Bash heredocs interpret quotes and backslashes.
 - Python text mode on Windows writes CRLF.
@@ -67,3 +71,5 @@ One incident group in session 2026-10-08-1219 (../History/2026-10/2026-10-08-121
 - In Python, open files with `newline='\n'` or in binary mode.
 - Before appending, assert that no `\r` byte is present. After writing, hash the file and compare.
 - Consider a `.gitattributes` with `eol=lf` (DEF-0006).
+- Never redirect output to a path outside the scratchpad in a read command; each request's definition check lists every Bash output target outside it (decision D-168 C5, widened by D-169 C2).
+- Edit scripts with the Edit or Write tool, not with a `sed` that holds escape sequences; check the bytes after every edit.

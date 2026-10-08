@@ -48,6 +48,10 @@ Four kinds of incident in session 2026-10-08-1825 (../History/2026-10/2026-10-08
 - **2026-10-08 (D-156 request).** Two abbreviated hashes were typed with wrong endings; the script check found them before sending.
 - **2026-10-08 (D-157, D-158, D-164, D-165 requests).** Four times, the first text of a request gave transcript line numbers from memory, all wrong; each was corrected from the steps tool's output before sending. The fourth came right after the third request had said that line numbers would be pasted from the tool only: the tool was run after the request was written. Rule since D-166: the steps tool runs first, and a request is written only from its output.
 
+Two incidents in session 2026-10-08-2113 (../History/2026-10/2026-10-08-2113-genesis-instance-2-ratified.md):
+- **2026-10-08 (D-168 request).** Two file sizes and one transcript line were typed from memory, all wrong; the sizes were replaced by the machine output with a script, and the line by the steps tool's, before sending.
+- **2026-10-08 (decision-file generator).** An abbreviated hash had a wrong ending typed from memory; it was corrected before the first build.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.
@@ -59,3 +63,4 @@ Four kinds of incident in session 2026-10-08-1825 (../History/2026-10/2026-10-08
 - Run a preflight before acting: list the files, fetch and compare refs, and re-read the full target text.
 - Report the defect count of each review round, and any gap in what reviewers could see (rule 6).
 - Write a request only after the steps tool has run; paste every transcript line number from its output, never from memory (decision D-165 C4).
+- Put machine output into a request by a script that copies the bytes (`paste_block.py`), never by retyping it.
