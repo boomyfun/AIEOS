@@ -27,6 +27,9 @@ One in session 2026-10-08-1702 (../History/2026-10/2026-10-08-1702-spec-1-approv
 One in session 2026-10-08-1825 (../History/2026-10/2026-10-08-1825-m1-done-spec-2-and-risk-rules.md), disclosed by Claude in the D-157 request:
 - **2026-10-08 (:801).** A progress line was written in English ("Now the three exact changes E1 to E3, word for word as the agent set them.").
 
+One group in session 2026-10-09-0153 (../History/2026-10/2026-10-09-0153-task-001-landed.md), found by Claude and disclosed in the D-188 request:
+- **2026-10-09 (:705, :948, :1009, :1024).** Four short progress lines in English ("Now the local test runner." and three like it).
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

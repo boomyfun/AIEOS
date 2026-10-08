@@ -62,6 +62,10 @@ Three incidents in session 2026-10-09-0024 (../History/2026-10/2026-10-09-0024-c
 - **2026-10-09 (D-180 request).** A script's Edit count was first written from memory as seven; the steps tool showed eight before sending.
 - **2026-10-09 (D-184 request).** Ten transcript line numbers were first typed from memory; the steps tool showed them wrong, and each was corrected before sending.
 
+Two incidents in session 2026-10-09-0153 (../History/2026-10/2026-10-09-0153-task-001-landed.md):
+- **2026-10-09 (D-186 request).** The contract's intent-hash lines were first typed from memory as 42 to 47; `grep -n` showed 43 to 48 before sending.
+- **2026-10-09 (D-187 request).** The unit-test count was first typed from memory as 34; the machine count, 32, replaced it before sending.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.
