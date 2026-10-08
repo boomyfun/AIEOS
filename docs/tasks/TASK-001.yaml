@@ -1,0 +1,188 @@
+# Task contract TASK-001, the first code task of gov-AIEOS (Master Plan revision 2, §8; specification 2 §5.1).
+# Revision 5, under decisions D-178 C4, D-181 C1, D-182 C1 and D-183 C1, brought for approval in D-186; whether it is
+# approved is recorded in the decision files, not in this file. No code exists at base_commit. Fields and value forms
+# follow specification 2 §5.1. Readings marked "(reading)" are the worker's, ruled in D-181 P5 or brought in D-182.
+# Change class: critical_cr. Read fail closed as governor code, this task changes the evaluator (governor-spec.md §8
+# point 2; risk rules §4); today the only effect is "never auto-accepted", which L1 already gives.
+# Uncovered (governor-spec.md §6.2): the tool parts of INV-005 to INV-008 (the conformance scenarios; the schema rule
+# on the decision contract; the record schema and source-class rules as governor checks) have no checker yet, and
+# this change has nothing for them to judge: the module emits no decision and no record. AC9 names the form
+# properties its property tests exercise for INV-005, INV-007 and INV-008; INV-006 has none in this module.
+# Not applicable: OPS-001 (scope: the repository's refs). Refs are not changed paths (governor-spec.md §3.2); the task
+# changes no ref and may not push; every push of the evaluation path carries OPS-001's push rule (D-181 P1).
+# Reviews (D-181 P2, P3, reading R-dim): five way-2 reviews (architecture ai_review for INV-001, INV-002, INV-004;
+# security ai_review for SEC-002; governance ai_review for GOV-003; operational ai_review for OPS-003; the cross-model
+# half) and three decision-agent reviews (architecture human_review for INV-003; operational human_review for
+# OPS-002; the cross-model half). Each way-2 review record's basis names every article whose entry it covers and
+# addresses each of their rules, beyond what the tool parts decide (constitution §2, way 1).
+task: TASK-001
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add, under a new source tree, a standard-library Python 3 module that checks the form of event-log lines, records
+  and event payloads of specification 2 sections 6.1 to 6.4, as the first part of the bootstrap governor's input
+  handling (governor-spec.md section 3.3 and section 4 rules 6 and 7: a malformed record is not used; a malformed
+  request gets no decision value), with unit, integration and property tests and a local test runner. It reads only
+  the text it is given, writes nothing, and decides nothing.
+traces_to:
+  - docs/specs/spec-02-aieos-file-format.md#6.1
+  - docs/specs/spec-02-aieos-file-format.md#6.2
+  - docs/specs/spec-02-aieos-file-format.md#6.3
+  - docs/specs/spec-02-aieos-file-format.md#6.4
+  - docs/pre-genesis/governor-spec.md#3.3
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-001.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C (D-181
+  # P9). It holds the CI workflow's revision 2 unchanged from P, 8a21a57e0702b31634aeadf230aaa41e3dfaa964 (D-184).
+  base_commit: 49b791fea199a59a1d93f3f49feba913f7d46289
+  depends_on: []
+  # The interim documents have no id and no vN version (spec 2 §4.2 waits for `.aieos/intent/`), so each is named by
+  # its path and pinned by its SHA-256. How a record binds them (a hash, not AC4's `v` form) is settled with the
+  # record-store details before the first acceptance (D-166 C2; D-181 C1 (i)).
+  intent_versions:
+    docs/specs/spec-02-aieos-file-format.md: 31109a65ee144f3edd271bce108cfeb631c972186c7f44540c8e29a450a7fcbe
+    docs/specs/spec-01-state-and-event-model.md: ae1f1f880c63b27d2d1257d2b7623bd6efc4528667be2657078ffce38f53858b
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+    docs/pre-genesis/constitution.md: 16e78d30214082d1248369b910b051e7e4c48929036fced1488acc2f3efcf836
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: ba1e9f145a9950315663746f0b5944e931bc39008b1b4bcca2d0e622161bfdcc
+write_set:
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/records.py
+    - tests/unit/test_records.py
+    - tests/integration/test_records_log.py
+    - tests/property/test_records_properties.py
+    - tests/run_tests.py
+read_set:
+  paths:
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/decision-matrix.md
+  interfaces: []
+  schemas: [spec-02 event line (6.1), spec-02 record (6.2), spec-02 event types and payloads (6.3), spec-02 decision contract (6.4)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-005, INV-006, INV-007, INV-008, INV-010, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      Line form (section 6.1; section 2). Given the text of an event log, the module returns, for each line, either the
+      parsed event or the list of its errors, each naming the rule broken. The text is malformed if it starts with a
+      byte-order mark or holds a CR byte (section 2: UTF-8 without a BOM, LF line ends). A line is malformed if it is
+      not valid UTF-8 or not one JSON object; if it lacks event_id, type, appended_at, seq or payload; if it has a key
+      other than event_id, type, appended_at, seq, task_id, fencing_token, corrects and payload (section 2, unknown
+      fields); if event_id is not a non-empty string; if type is not one of the event types of section 6.3; or if
+      payload is not an object. A last empty line after the final LF is not a line.
+  - AC2: >-
+      Order, time and duplicates (section 6.1; specification 1 sections 4 and 7 point 4). seq is an integer (not a
+      boolean), 1 on the first line and one more than the previous line's on each next line; every line counts for
+      seq, an ignored duplicate included (reading). appended_at is a UTC time in ISO 8601 form YYYY-MM-DDTHH:MM:SS
+      with an optional fraction and a final Z, and is a real calendar time. A line whose event_id occurs on an earlier
+      line is an ignored duplicate, reported as such and never an error, when its object equals the earlier line's in
+      every key other than seq and appended_at; otherwise it is an error (reading).
+  - AC3: >-
+      Conditional envelope keys (section 6.1; specification 1 section 8). task_id, where present, has the task-id form
+      TASK- followed by digits (section 2) (reading); it is required on every task.* and decision.* event and on every
+      event whose payload is a record whose subject is a task id, and there it equals that subject; it is absent when
+      the payload is a record about an intent entity (reading). fencing_token is an object with exactly epoch and
+      counter: counter is an integer of 0 or more, and epoch is a non-empty string or an integer of 0 or more
+      (specification 1 section 8: "a new random id") (reading); it is required on task.submitted, the one event
+      section 6.1 names, and on other events it is allowed and checked for form only (reading). corrects is a string
+      equal to the event_id of an earlier line (reading).
+  - AC4: >-
+      Records (section 6.2), wherever a record occurs (record.added, violation.detected, decision.*). Keys other than
+      those of section 6.2 are an error. record_id, fact_kind, source_class, recorder and subject are required (B5;
+      governor-spec.md section 3.3) (reading). fact_kind is claim, observation, interpretation or authority;
+      source_class is one of DM B3's classes (agent_declared, same_lineage_review, deterministic_tool_local,
+      deterministic_tool_external_ci, cross_vendor_review, decision_agent, human_authority, delegate_ai); outcome,
+      where present, is pass, fail or blocking, and blocking_kind is present exactly when outcome is blocking and is
+      out_of_scope, forbidden_path, violation, constitution or other; commit is a full lowercase hex commit id;
+      intent_versions maps ids to versions of the form v followed by digits; an authority record has approval_binding
+      with kind contract, acceptance, change_request or baseline and a 64-hex hash; a decision_agent record and an
+      other_model_review record have decision_ref; an other_model_review record has models with reviewer and
+      implementer; a decision_agent_review record has basis and stands_for; gate, where present, is G followed by
+      digits; evidence_type and dimension are open vocabularies (section 6.2) and are checked as non-empty strings only.
+  - AC5: >-
+      Payloads (section 6.3). Each event type's payload has exactly the keys section 6.3 gives it, with these forms:
+      contract_version, and intent.changed's from_version and to_version, v followed by digits; contract_hash and the
+      hash of approval_binding 64 lowercase hex; task.submitted's commit a full lowercase hex commit id;
+      intent.changed's entity a non-empty string; blocked_by, paths, entities, records and tasks lists of strings;
+      compensating a boolean; task.stale cause intent_change or conflict; evidence.stale reason commit or
+      intent_version; conflict.detected has paths or interfaces or both; intent.changed change_request of the form
+      CHG- followed by digits (section 2); violation.detected's payload is one record with fact_kind observation,
+      outcome blocking and blocking_kind violation; record.added's payload is one record (AC4). The forms of reason,
+      approval_record, decision_record and refers_to are non-empty strings only (AC7).
+  - AC6: >-
+      The decision contract (section 6.4), the payload of decision.acceptance and decision.execution: a record (AC4)
+      with decision, which is null exactly when error is present. For decision.acceptance, fact_kind is
+      interpretation, decision is ACCEPT, NEEDS_REVIEW, INSUFFICIENT_EVIDENCE, NEEDS_REWORK or REJECT, next_task_state
+      is a state name of section 2, profile_used is a list of objects with exactly dimension, required, satisfied_by
+      and missing_types, and every other key is one section 6.4 names. For decision.execution, decision is exactly
+      one of the eight strings of A15; its other keys are specification 3's and not yet named, so under the
+      unknown-field rule any key beyond the record keys, decision and error is reported as unknown (a stated limit).
+  - AC7: >-
+      Limits, stated and tested as such: the module checks form only; its results never call a record valid,
+      accepted or approved (they say only "no error found" or list the errors); it never decides whether a record
+      satisfies an evidence entry, counts as an approval, or is current; it does not check that ids named in
+      approval_record, decision_record, refers_to or blocked_by exist, and checks reason only as a non-empty string; it
+      checks no state transition (specification 1 sections 5 and 6); it recomputes no hash; it treats the fencing
+      rule of specification 1 section 8 as out of scope beyond AC3.
+  - AC8: >-
+      Purity (INV-001, INV-002, INV-004). The module and its tests import only the Python 3 standard library and the
+      module itself; they use no exec, eval, compile, __import__ or importlib; they start no process, open no network
+      connection, call no model, and open no file for writing; records.py opens no file at all, and the tests hold
+      their data in the test files. The CI steps at P check this as follows, and each must report no finding: the
+      deterministic_rule step refuses, in src/ and tests/, the names exec, eval, compile, __import__, open, input,
+      breakpoint and __builtins__; the modules importlib, subprocess, multiprocessing, socket, ssl, http, urllib,
+      ftplib, smtplib, poplib, imaplib, telnetlib, xmlrpc, asyncio, ctypes, pty, shutil, tempfile, sqlite3, webbrowser,
+      runpy, pickle, marshal, shelve, dbm, zipimport, pkgutil, code, codeop and builtins; the os calls os.system,
+      popen, fork, forkpty, kill, remove, unlink, rename, renames, replace, mkdir, makedirs, rmdir, removedirs, chmod,
+      chown, write, open, fdopen, truncate, link, symlink, and any os.spawn*, os.exec* or os.posix_spawn*; and a call
+      named .open, .fdopen,
+      .write_text, .write_bytes, .touch, .mkdir, .unlink, .rmdir, .rename, .symlink_to or .hardlink_to on any object
+      (io.open, codecs.open and Path(...).open included); no string in src/, docstrings included, names .aieos; the
+      OPS-003 step finds no string in src/ that is exactly the lowercase word valid, accepted or approved, and a line
+      in src/ or tests/ that uses MEASURED, ENFORCED or GUARANTEED cites a decision-matrix row on that line; and
+      bandit, as the static_security_analysis step runs it (src/ with every bandit test; tests/ with every test but
+      B101 and B311), reports no issue.
+  - AC9: >-
+      Tests. Unit tests cover each rule of AC1 to AC7 with at least one passing and one failing case; one integration
+      test checks, end to end, a log held in the test file with every event type of section 6.3 at least once; the
+      property tests (standard library only, fixed seeds) check that generated well-formed lines give no error, that
+      removing a required key, adding an unknown key or breaking seq gives an error naming it, and that the same input
+      always gives the same output; and these form properties: for INV-005, a decision value outside the five
+      acceptance values or the eight execution strings is always reported, and decision is null exactly when error is
+      present; for INV-007, a malformed commit or intent_versions in a record is always reported; for INV-008, a
+      source_class outside DM B3's list is always reported, and an agent_declared record gets the same form result as
+      any other class. INV-006 has no form property in this module. tests/run_tests.py runs all three groups with the
+      standard library's unittest and exits non-zero if any test fails; it is for local runs only, and the CI channel
+      runs its own discovery from the workflow (GOV-003).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 2h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC9]}
+  - {gate: G3, check: constitution, args: [AC8, INV-001, INV-002, INV-004, INV-010, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
