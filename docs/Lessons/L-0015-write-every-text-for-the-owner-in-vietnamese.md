@@ -21,6 +21,9 @@ One more in that session, found later by the decision agent (decision D-142); th
 One possible occurrence in session 2026-10-08-1512 (decision D-143; that session's History, written at its end, carries the line on :1384 and this one):
 - **2026-10-08 (:274).** Possible: the worker reports an English lead sentence; the transcript record :274 holds only the Vietnamese text; whether the owner saw it is not known.
 
+One in session 2026-10-08-1702 (../History/2026-10/2026-10-08-1702-spec-1-approved-spec-2-drafted.md, section "Later in the session"), found by the decision agent (decision D-151):
+- **2026-10-08 (:969).** A progress line began with the English word "I" ("I chỉnh câu lệnh đề xuất cho đúng khuôn lần trước, rồi kiểm và gửi."), a typo for "Tôi"; Claude did not disclose it.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 
