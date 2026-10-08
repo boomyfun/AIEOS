@@ -40,6 +40,10 @@ Three incidents in session 2026-10-07-0100 (../History/2026-10/2026-10-07-0100-a
 - **2026-10-07 (D-058 log).** In chat, Claude gave the SHA-256 of the D-058 executor log from memory, wrongly, and corrected it in the next message from the machine output.
 - **2026-10-07 (D-061 log).** Again: before writing the D-061 log, Claude gave its request hash in chat without reading the machine output, and it was wrong; it was corrected in the next message, before writing. Since then every hash in chat is pasted from machine output.
 
+Two incidents in session 2026-10-08-1702 (../History/2026-10/2026-10-08-1702-spec-1-approved-spec-2-drafted.md):
+- **2026-10-08 (D-148 request).** Two abbreviated hashes were typed from memory and wrong. Claude found them before sending, fixed them from machine output and checked every hash of the request by script.
+- **2026-10-08 (D-148).** The request said that four embedded logs had no CR bytes; two had 9 and 13. The own check had compared only the logs without them. The decision agent found it, and the resubmission corrected it.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

@@ -20,3 +20,4 @@ DM B7 and B13.
 ## Log
 - 2026-10-07: opened during the audit of A14 steps 1-5 (decision files D-055, D-056). Before this, no deferred item tracked E4 (DEF-0007 is done).
 - 2026-10-08 (session d7637e4e): the Master Plan puts the layout in M1: §18 specification 2 proposes it (DM B7) and a text for CR-001 E4, which stays the owner's; the plan's own path, `docs/plan/`, is interim until then. Status stays open. Decision files D-136, D-137. ../History/2026-10/2026-10-08-1219-master-plan-ratified.md
+- 2026-10-08 (session cafac455): the draft of specification 2 (scratchpad, revision 0) proposes the layout (DM B7, with a folder for change requests and an ignored local store) and a text for CR-001 E4; both stay the owner's and go to the owner once, with that specification's approval request (decision D-150). Status stays open. ../History/2026-10/2026-10-08-1702-spec-1-approved-spec-2-drafted.md
