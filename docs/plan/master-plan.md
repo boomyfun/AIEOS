@@ -1,8 +1,8 @@
 # Master Plan of the AIEOS self-build
 
-> - **Status:** revision 1. Whether it is ratified is recorded in DM section F, not in this file. It plans; it decides nothing that a decision matrix (DM) row or a bound document decides, and it approves no specification, task or owner act.
-> - **Drafted under:** decision agent decisions D-136 (the drafting plan) and D-133 (A14 step 9 started, DM row F9). Decision files are kept outside the repository (`docs/WORKING-RECORDS.md`).
-> - **Path:** `docs/plan/master-plan.md` is interim. The layout (DM row B7, proposed) and CR-001 E4 (working record DEF-0018) are open; when they are settled, the file moves by a later change.
+> - **Status:** revision 2. Whether it is ratified is recorded in DM section F, not in this file. It plans; it decides nothing that a decision matrix (DM) row or a bound document decides, and it approves no specification, task or owner act.
+> - **Drafted under:** decision agent decisions D-136 (the drafting plan) and D-133 (A14 step 9 started, DM row F9); revision 2 under decision D-174 (C5). Decision files are kept outside the repository (`docs/WORKING-RECORDS.md`).
+> - **Path:** `docs/plan/master-plan.md` is interim. The layout is settled (DM B7 with A59; CR-001 E4, closed by Genesis version 2, A60; specification 2's layout part, F16), but the file moves only when a core exists to write `.aieos/` (constitution INV-004; specification 2 §10 point 2), by a later change.
 > - **Sources:** "Concept line N" is a line of `AIEOS-concept.md` (v0.5, byte-identical, A22). "DM A13" is a row of `docs/pre-genesis/decision-matrix.md`. Statuses are those the DM rows record, not a document's own status line (charter §6).
 
 ## 1. Status and authority
@@ -22,9 +22,9 @@
 
 ## 3. Starting state
 
-- Genesis instance 1 is ratified in the owner's place, with advisory effect (DM F7, F8): the concept and its errata CR-001 and CR-002, the constitution, the authority model, the governance-boundary abstraction, the assurance model, the conformance methodology with the initial scenario set (set version 1, 30 scenarios, bound but not frozen as executable fixtures; F4), the bootstrap governor specification and succession rule, and the change classes with the amendment procedure (`docs/genesis/genesis-charter-v1.md` §2).
-- The governor's identity, a content hash of its code, does not exist yet (charter §2, item 7). No checker exists (constitution §2, §6).
-- No code exists. A14 step 9 has started (F9).
+- Genesis instance 2 (Genesis version 2) is in force, with advisory effect: the owner's yes on its changed texts (DM A60) and the decision agent's ratification, in the owner's place, of its unchanged items (DM F14). It binds the concept and its errata CR-001 and CR-002 (CR-001 E4 closed; E10 closed for gov-AIEOS), the constitution, the authority model, the governance-boundary abstraction, the assurance model, the conformance methodology with the initial scenario set (set version 2, 32 scenarios, bound but not frozen as executable fixtures; F4 for the 30 of set version 1), the bootstrap governor specification and succession rule, and the change classes with the amendment procedure (`docs/genesis/genesis-charter-v2.md` §2). Instance 1 stays recorded (DM F7, F8).
+- The governor's identity, a content hash of its code, does not exist yet (charter v2 §2, item 7). No checker exists (constitution §2, §6).
+- No code exists. A14 step 9 has started (F9); M0 and M1 have exited (decisions D-154 and D-163).
 - The minimal P-CRED baseline is FAIL and C13 is FAIL by implication; no hardening is applied (A46). Anything unmeasured is advisory (the DM label rule; A31; `assurance-model.md` §9); so is every governor and CI output (`governor-spec.md` §10).
 
 ## 4. Milestones
@@ -40,17 +40,17 @@ For each milestone, what is known now: goal, inputs, deliverables, exit, the own
 **M1. Foundation specifications and the risk rules.**
 - Goal: §18 specification 1, State & Event Model (line 991), and specification 2, the `.aieos/` File Format (line 992).
 - Deliverables: the two specifications; within them, the field names of the decision contract (`governor-spec.md` §11 point 8; A15), the task contract format (concept §7.1, lines 425-484) and the record formats the governor reads and writes (`governor-spec.md` §3.3). The self-build's risk rules (concept lines 591-601), as an approved, versioned policy (CR-002 Đ2; A35: classification fails closed): without them a change matches no rule and gets no decision (`governor-spec.md` §4 rule 8).
-- Owner act: specification 2 proposes the layout (DM B7, proposed) and a text for CR-001 E4; concept errata are the owner's (A22; CR-002 part 8). The layout part stays proposed until the owner closes E4.
+- Owner act: specification 2 proposes the layout (DM B7, proposed) and a text for CR-001 E4; concept errata are the owner's (A22; CR-002 part 8). The layout part stays proposed until the owner closes E4. Done: the owner said yes (A59), Genesis version 2 carries the E4 text (A60), and the layout part is baselined (DM F16).
 - Exit: the specifications and the policy approved under A51 (DM B9, proposed: "no task is ACCEPTED against an unbaselined spec").
-- Records: DEF-0018.
+- Records: DEF-0018 (done).
 
 **M2. The bootstrap governor and the conformance runner.**
 - Goal: the first code: the acceptance decision of `governor-spec.md`, and the runner of the frozen scenarios (A19; `conformance-methodology.md` §6).
-- Inputs: M0, M1; the 17 scenarios of the Verification capability (ACC-01 to ACC-15, ADV-01, ADV-03; `conformance-scenarios-initial.md`).
+- Inputs: M0, M1; the 19 scenarios of the Verification capability (ACC-01 to ACC-17, ADV-01, ADV-03; `conformance-scenarios-initial.md`).
 - Deliverables: the governor; the runner; the executable fixtures of those scenarios, written in tasks of their own, never by a governor task (constitution GOV-002), each frozen by a fixture-freeze approval on its hash (DM B1, B10); a record store for the governor's records until the event log of M3 exists (open, section 10).
 - Constraints: Python 3, standard library only, disposable (A9; constitution INV-002, INV-003); no model call and no code writing (INV-001).
 - Exit: the Verification scenarios pass in the CI channel, and the other 13 are `NOT_RUN` until their milestone (`conformance-methodology.md` §3); the first version is accepted and pinned (section 5, points 5 and 6).
-- Owner point: the governor is one of AIEOS's security-critical parts (CR-002 Đ9; `assurance-model.md` §5); if the risk rules class its tasks high or critical, they cannot be accepted while `assurance-model.md` §10 point 1 (CR-001 E10) is open (section 6).
+- The governor is one of AIEOS's security-critical parts (CR-002 Đ9; `assurance-model.md` §5); the risk rules class its tasks at least high (R3; risk rules §5), so each needs the high profile, with the pair of reviews for the cross-model entry (section 6). Owner point: the first version's acceptance is the owner's, asked once when that version exists (decision D-166).
 
 **M3. Resume Check and decision engine.**
 - Goal: §18 specification 3 (line 993) and its code: the eight deterministic checks with declared and derived read-sets (line 941), the execution decision kept apart from the acceptance decision (line 943; A15), the event log with idempotent event ids, fencing and recovery between Git and the event log (line 950), and the core's single writer (concept line 858; constitution INV-004).
@@ -80,15 +80,15 @@ For each milestone, what is known now: goal, inputs, deliverables, exit, the own
   2. M0: the CI channel is in place before the first task (`assurance-model.md` §7: "The CI channel is to be in place before the first task at step 9"). Creating it is the owner's act (point 1 of section 9). The first checks come with it (M0), so the first tasks' tool entries can be met; until a checker exists, its entries are not met (constitution §2) and the task stays at INSUFFICIENT_EVIDENCE.
   3. M1: the specifications and the risk rules the first code task needs are approved under A51.
   4. Until the governor exists, each task is accepted by one approval of the decision agent (CR-002 Đ7), with the evidence the assurance model requires, except where CR-002 part 4 limits 5 or 8 make the owner the approver (section 6). A tool entry is met only by records from the CI channel (constitution §4), never by local runs. Records written before AIEOS governs its own build carry their recorder and are not authoritative (CR-001 E3; constitution INV-004).
-  5. The first governor version has no base version to judge it (`governor-spec.md` §8 point 1 assumes one). It is accepted as in point 4, after the Verification scenarios have passed in the CI channel (`governor-spec.md` §8 point 3), and is pinned by its content hash.
+  5. The first governor version has no base version to judge it (`governor-spec.md` §8 point 1 assumes one). It is accepted by the owner (decision D-166: it puts into force the rules on who may approve what), after the Verification scenarios have passed in the CI channel (`governor-spec.md` §8 point 3), and is pinned by its content hash.
   6. Until its identity is bound, a change to the governor is `critical_cr` (`governor-spec.md` §8 point 2). Binding the identity (charter item 7) is a Genesis amendment (`genesis-model.md` §5), decided under A51 unless it touches an owner-kept part. From the pin on, the pinned governor, taken from the base, runs in the CI channel (`governor-spec.md` §7) and judges every change to itself (§8 point 1); its decisions stay advisory (§10).
-- Points 2 (the first checks in M0) and 4 to 6 are readings, not bound text; they are listed as open in section 10 until the decision agent rules on them.
+- Points 2 (the first checks in M0) and 4 to 6 are readings, not bound text. The decision agent ruled points 2 and 4 in decision D-137 and points 5 and 6 in decision D-166.
 
 ## 6. Acceptance of tasks and milestones
 
-- gov-AIEOS starts at L1: no auto-accept, and each task gets one approval, the decision agent's at every risk level, except a task under CR-002 part 4 limit 5 or limit 8, which the owner approves (`assurance-model.md` §6, §8; CR-002 Đ7; `governor-spec.md` §4 rule 5). A raise to L2 is only as A54 point 2 allows.
+- gov-AIEOS starts at L1: no auto-accept, and each task gets one approval, the decision agent's at every risk level, except a task under CR-002 part 4 limit 5 or limit 8 and the first governor version (decision D-166), which the owner approves (`assurance-model.md` §6, §8; CR-002 Đ7; `governor-spec.md` §4 rule 5). A raise to L2 is only as A54 point 2 allows.
 - The approval needs the task's evidence requirement complete (`assurance-model.md` §3); an approval never stands in for evidence (A36).
-- A high or critical task carries the cross-model entry, which no record can meet while CR-001 E10 is open; it stays at INSUFFICIENT_EVIDENCE, and the governor gives it no decision (`assurance-model.md` §5; `governor-spec.md` §3.2). The plan sets no risk class and lowers none (CR-002 part 4 limit 8); which profile applies to such tasks in v0.1 is the owner's (`assurance-model.md` §10 point 1).
+- For gov-AIEOS, a high or critical task has its default profile from v0.1 (Genesis version 2; `assurance-model.md` §5), and its cross-model entry is met only by the pair of reviews: a way-2 review by a Claude model other than the implementer's, and a separate review of the decision agent that stands for that entry (A59, A60; `assurance-model.md` §3). Without the whole profile it stays at INSUFFICIENT_EVIDENCE. The plan sets no risk class and lowers none (CR-002 part 4 limit 8).
 - A milestone with tasks exits when its deliverables' tasks are accepted and the decision agent approves the milestone (CR-002 Đ7, concept line 624; `assurance-model.md` §6). M0 and M1 exit by their own rules (section 4).
 - Nothing here relaxes a constitution article or an evidence requirement (CR-002 part 4 limit 8).
 
@@ -112,7 +112,7 @@ Not complete: A51 item (4), CR-002 parts 4 and 8 and `genesis-model.md` §5 poin
 1. Creating or changing anything under `.github/` (SEC-003; A51 item (4)).
 2. Claude Code settings, hooks, `CLAUDE.md` and the agents folder; any act at a permission prompt (A51 item (4)).
 3. Trust-boundary measurements, the measurement protocol and hardening (A30, A46; A51 item (4)); working records DEF-0004 and DEF-0005 are carried as the owner's and not raised (D-038).
-4. Concept errata: CR-001 E4 and E10, and whether `assurance-model.md` §7's choice needs an entry (A22; CR-002 part 8).
+4. Concept errata (A22; CR-002 part 8): CR-001 E10 for AIEOS projects, any later erratum, and whether `assurance-model.md` §7's choice needs an entry. CR-001 E4, and E10 for gov-AIEOS, are closed by Genesis version 2 (A60).
 5. Autonomy: raising a class beyond what A54 point 2 gives the decision agent, the auto-accept policy, any bound above L2, "sufficient assurance", and L2 while P-CRED or C13 is not PASS (`assurance-model.md` §10 point 2).
 6. Business decisions: historical intelligence and open source (concept lines 905, 960; §17 questions 1 and 2; CR-002 part 8).
 7. Visibility, accounts, tokens and credentials, money, publishing outside the repository, sending messages, history rewrite or force-push, deleting refs or objects on GitHub (A51 item (4)).
@@ -121,14 +121,15 @@ Not complete: A51 item (4), CR-002 parts 4 and 8 and `genesis-model.md` §5 poin
 
 ## 10. Open items
 
-- DEF-0008, CR-001 E10 (cross-model review): carried. Concept line 947 plans default profiles for low and medium risk in v0.1; which profile applies to high and critical tasks in v0.1 stays the owner's (`assurance-model.md` §10 point 1); M2 depends on it if the governor's tasks are high or critical (section 6).
+- DEF-0008, CR-001 E10 (cross-model review): closed for gov-AIEOS by Genesis version 2 (A59, A60): high and critical tasks have their default profiles from v0.1, with the pair of reviews (section 6); open for AIEOS projects, which this plan does not cover (section 2).
 - DEF-0011: the §18 specifications are scheduled by this plan once it is ratified (M1 to M7); open source and historical intelligence stay the owner's (section 9).
-- DEF-0018, the layout: M1.
+- DEF-0018, the layout: done (A59, A60; DM B7 note, F16); the interim documents move only when a core writes `.aieos/` (specification 2 §10 point 2).
 - DEF-0020, the option-b product documents (CR-002 part 9): outside the gov-AIEOS scope of section 2; they wait for the §18 specifications that their rules need (record formats in M1, approval flow in M7, evidence in M4); their placement is open.
-- Readings for the decision agent to rule on: section 5, points 2 and 4 to 6; the M2 record store before M3's event log and single writer; whether Context Compiler v1 belongs to M6 (the §18 table names no specification for it); which milestones after M2 are built as bootstrap (A9), and where the benchmark, the stack ADR and the native stack come (A8, A10, C12; CR-001 E6), which also sets the A11 stages M8 reaches.
+- Readings ruled: section 5, points 2 and 4 (decision D-137) and points 5 and 6 (decision D-166); the M2 record store in direction (decision D-166: a records folder in the repository, written only through a reviewed change, and records re-fetched from the CI channel, each counting only as DM B5 allows), with its details left to the first M2 contract. Still for the decision agent to rule on: whether Context Compiler v1 belongs to M6 (the §18 table names no specification for it); which milestones after M2 are built as bootstrap (A9), and where the benchmark, the stack ADR and the native stack come (A8, A10, C12; CR-001 E6), which also sets the A11 stages M8 reaches.
 
 ## 11. Change control
 
-- A change to this plan is a `master_plan_update` (DM B1, DELEGATED as bound in instance 1, F8), approved by the decision agent in the owner's place under A51, with the limits of section 9.
+- A change to this plan is a `master_plan_update` (DM B1, DELEGATED as bound in instance 2, F14), approved by the decision agent in the owner's place under A51, with the limits of section 9.
 - The plan is not bound, so the Genesis amendment procedure (`genesis-model.md` §5) does not apply to it.
 - Each revision says what changed and why.
+- Revision 2 (decision D-174 C5): carries Genesis instance 2 (A59, A60; F14), the settled layout (B7, F16), the risk rules revision 2 (F15) and the rulings of decisions D-137, D-154, D-163 and D-166 into sections 3 to 6, 9 and 10, and the path note; no milestone, order or owner-kept item is added or removed.
