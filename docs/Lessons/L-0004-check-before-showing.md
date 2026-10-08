@@ -57,6 +57,11 @@ Three incidents in session 2026-10-08-2307 (../History/2026-10/2026-10-08-2307-f
 - **2026-10-08 (D-176 request).** The ending of an abbreviated hash was typed from memory; I saw it on reading the text back, before any check ran, and corrected it.
 - **2026-10-08 (D-178 request).** The request's date was typed as the next day; corrected before sending.
 
+Three incidents in session 2026-10-09-0024 (../History/2026-10/2026-10-09-0024-ci-revision-and-task-branches.md):
+- **2026-10-09 (D-180 request).** The write scan's command count was given as 60 where the machine output said 67; the decision agent found it (D-180).
+- **2026-10-09 (D-180 request).** A script's Edit count was first written from memory as seven; the steps tool showed eight before sending.
+- **2026-10-09 (D-184 request).** Ten transcript line numbers were first typed from memory; the steps tool showed them wrong, and each was corrected before sending.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

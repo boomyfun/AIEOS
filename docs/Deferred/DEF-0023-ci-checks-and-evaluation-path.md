@@ -1,6 +1,6 @@
 # DEF-0023: The CI checks and the evaluation path of the first code task
 
-- Status: waiting-owner
+- Status: open
 - Opened: 2026-10-08 (decision file D-178)
 - Deferred by: decision agent (A41), D-178: the first code task's contract is not approved until these are settled; both points are the owner's and are asked once, together, when their drafts exist.
 - Decision group: B. Any change under `.github/` is the owner's (constitution SEC-003; A51 item (4)); a push of unaccepted task code to a GitHub ref other than a normal fast-forward of `main` is a new kind of ref change that the standing push authorization does not cover.
@@ -20,3 +20,4 @@ DEF-0011 (M2); the Master Plan revision 2 §8.
 
 ## Log
 - 2026-10-08: opened (decision file D-178). ../History/2026-10/2026-10-08-2307-follow-on-texts-and-first-contract-draft.md
+- 2026-10-09 (session c925987e): the owner answered "1 cách 1, 2 có" (:1208) to the one question of decision D-183, recorded as DM A61 (revision 41, commit 8632054): way 1 for the CI channel's revision 2, pushed as commit 8a21a57; and yes to pushing a code task's own commits to a branch of its own, `main` receiving only accepted work. Status: open, until the first code task is evaluated. Remaining: the contract approved with `base_commit` = 8a21a57 (written in full) and committed on `main`; the relay of the start of code; TASK-001's work and its first evaluation. Decision files D-181 to D-184. ../History/2026-10/2026-10-09-0024-ci-revision-and-task-branches.md
