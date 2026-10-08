@@ -10,7 +10,9 @@
 - The owner's first message (:3) is the prompt drafted at the end of session d66c6975, sent unchanged: read the records, check the decision agent, write the decision files from D-109, then the ratification step as the decision agent assigns it, every step to the decision agent first, owner points asked once; no code before step 9.
 - The decision agent ran the revision-9 text, matching DM A41 (D-125). Decision files D-109 to D-124 were written (D-125).
 - The ratification (D-126): after a mechanical re-check of every hash in the charter (63 hashes, none wrong), the decision agent ratified in the owner's place (A51 item (3); A54 point 1; A55), with advisory effect: the assurance model as bound-set item 5 (SHA-256 04a6a815…fe46) and Genesis instance 1, `docs/genesis/genesis-charter-v1.md` (SHA-256 81ccfce8…085d, pin 02b7a5d). The record is DM rows F7 and F8 (DM revision 28) and decision file D-126; pushed as 6ccca54 (D-127, D-128). The relay in plain words is in this session's display reply.
-- DEF-0022 (D-125 C8): `governor-spec.md` revision 4 was drafted in the scratchpad, in two variants: A, owner-kept path rules OK-1 to OK-8 (Claude Code settings, hooks and agents folder, `CLAUDE.md`, `.mcp.json`, `.github/`, the measurement protocol and records, the concept and its errata, the assurance model); B, also OK-9, a line rule on the DM rows of the delegation (A41, A51, A52, A54, A55). One checker round on `claude-sonnet-5-5` (15 findings, one blocking: the text claimed more coverage than the rules give); the findings were applied and two more text fixes made (D-129, D-130). The decision agent ruled the amendment the owner's (it changes who may approve what; `genesis-model.md` §5 point 3) and put one question with two points to the owner, as the last text of this session's final reply (D-130). Status: waiting-owner.
+- DEF-0022 (D-125 C8): `governor-spec.md` revision 4 was drafted in the scratchpad, in two variants: A, owner-kept path rules OK-1 to OK-8 (Claude Code settings, hooks and agents folder, `CLAUDE.md`, `.mcp.json`, `.github/`, the measurement protocol and records, the concept and its errata, the assurance model); B, also OK-9, a line rule on the DM rows of the delegation (A41, A51, A52, A54, A55). One checker round on `claude-sonnet-5-5` (15 findings, one blocking: the text claimed more coverage than the rules give); the findings were applied and two more text fixes made (D-129, D-130). The decision agent ruled the amendment the owner's (it changes who may approve what; `genesis-model.md` §5 point 3) and put one question with two points to the owner, as the last text of the reply at :1248 (D-130).
+- The owner answered "1. không/ 2. không" (:1254): the rules are not added, Genesis instance 1 stays as ratified, and the requirement that such rules exist before step 9 is closed by the answer (D-132); recorded as DM A56 (revision 29), and DEF-0022 is dropped.
+- The decision agent moved the work to A14 step 9, the Master Plan (D-133; DM F9), relayed in plain words before any step-9 work. The first step-9 work, a Master Plan drafting plan, is the next session's. No code.
 
 ## Decisions
 
@@ -23,6 +25,10 @@
 | 2026-10-08 | DEF-0022 draft: MODIFY; the amendment is the owner's | Decision agent (A41), D-129 | `D-129-…` |
 | 2026-10-08 | DEF-0022 variants and the owner question; ESCALATE_TO_OWNER | Decision agent (A41), D-130 | `D-130-…` |
 | 2026-10-08 | This change-set: records, memory, push | Decision agent (A41), D-131 | `D-131-…` |
+| 2026-10-08 | "1. không/ 2. không" (:1254) | Owner (:1254) | DM A56 |
+| 2026-10-08 | The answer is valid; DEF-0022 dropped; D-114 C3 closed; the recording | Decision agent (A41), D-132 | `D-132-…` |
+| 2026-10-08 | The step-9 move | Decision agent (A41, A51), D-133 | `D-133-…`; DM F9 |
+| 2026-10-08 | CS-41: records, memory, push, archive addendum | Decision agent (A41), D-134 | `D-134-…` |
 
 ## Problems and mistakes
 
@@ -32,7 +38,9 @@
 - **A request that left out an edit.** The D-127 request said one edit fixed the CS-39 check script; there were two: :606 before its first run, and :619 after "bad 2" at :613 (D-127 C3, D-128 C4).
 - **An inline edit of a check script.** At :974 an inline `timeout 110 python -c` replacement broke the DEF-0022 check script's quoting; the run gave a SyntaxError and checked nothing; the line was fixed with the Edit tool (D-130).
 - **DEF-0022 grew across rounds.** Round 1 had six rules; D-129 added three rules and a second variant; the checker's findings added wording and disclosure. The worker asked about cost against value (rules book rule 8); the decision agent accepted stopping the growth before the owner answers (D-130 C5). Departures d1 to d3 of the D-130 request (the scope line, one citation, the findings applied before the request) were accepted.
-- **Context estimates.** Rough, from about 25% to about 60%; the early figures were probably low.
+- **Two request texts edited before sending, not disclosed.** Inline `timeout 110 python -c` edits changed the D-126 request (:512) and the D-130 request (:1029) before they were sent; the hashes given were of the final texts, but neither request said so (D-132).
+- **A harness note is not owner words.** With the owner's answer the app attached "Ultracode is on" and the workflow-authoring text (:1258 to :1260). No workflow ran (D-132 (f)).
+- **Context estimates.** Rough, from about 25% to about 72%; the early figures were probably low, and the session's token counter reset when the owner's answer arrived.
 
 ## The ratification record
 
@@ -42,7 +50,7 @@
 
 ## State at the end and next step
 
-- **A14:** step 8. Genesis instance 1 is ratified (delegated, advisory). DEF-0022 waits for the owner's answer to the two-point question (variant A for "1. có / 2. không", variant B for "1. có / 2. có"; each with a version-2 charter checked by script).
-- **Next:** the decision files from D-131, from this session's archive; the owner's answer, if given, goes to the decision agent first (D-130 C4); on a yes, the revision-4 commit, the version-2 charter and its ratification record, each under its own decisions; then step 9 planning, as its own move. No code before step 9.
-- **Open:** DEF-0004, DEF-0005, DEF-0008, DEF-0011, DEF-0018, DEF-0020, DEF-0022 (waiting-owner).
+- **A14:** step 9 (D-133; DM F9). Genesis instance 1 is ratified (delegated, advisory). DEF-0022 is dropped: the owner declined the rules (A56).
+- **Next session:** the decision files from D-131, from this session's archive and its addendum; then the Master Plan drafting plan, as its own request (D-133 C5). No code until that plan, approved, says when.
+- **Open:** DEF-0004, DEF-0005, DEF-0008, DEF-0011, DEF-0018, DEF-0020.
 - **Repository:** GitHub `main` after this change-set's push.
