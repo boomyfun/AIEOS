@@ -1,6 +1,6 @@
 # DEF-0018: CR-001 E4, the "layout" errata point
 
-- Status: open
+- Status: done
 - Opened: 2026-10-07 (../History/2026-10/2026-10-07-0100-a14-steps-1-5-audit.md)
 - Deferred by: owner. The owner approved CR-001 with two points left open: "kết quả: có; đính chính: có" (session 02bd7476, transcript :1927), answering a question that said "Bản đính chính cho ý tưởng ban đầu gồm 8 chỗ sửa nhỏ đã ghi sẵn trong bảng quyết định của dự án, và 2 chỗ để mở cho bước sau."
 - Decision group: B (concept errata are the owner's; DM A22)
@@ -22,3 +22,4 @@ DM B7 and B13.
 - 2026-10-08 (session d7637e4e): the Master Plan puts the layout in M1: §18 specification 2 proposes it (DM B7) and a text for CR-001 E4, which stays the owner's; the plan's own path, `docs/plan/`, is interim until then. Status stays open. Decision files D-136, D-137. ../History/2026-10/2026-10-08-1219-master-plan-ratified.md
 - 2026-10-08 (session cafac455): the draft of specification 2 (scratchpad, revision 0) proposes the layout (DM B7, with a folder for change requests and an ignored local store) and a text for CR-001 E4; both stay the owner's and go to the owner once, with that specification's approval request (decision D-150). Status stays open. ../History/2026-10/2026-10-08-1702-spec-1-approved-spec-2-drafted.md
 - 2026-10-08 (session 48cbdbd4): specification 2 is approved and published (DM F12), with the layout and its E4 text kept proposed. The owner answered "Có" (:1418) to the layout and its CR-001 E4 text, recorded as DM A59 (revision 36). E4 closes when its text is carried into CR-001 by a Genesis amendment, with the owner's short yes on the exact text where `genesis-model.md` §5 point 3 requires it. Status stays open. Decision files D-156, D-158, D-160, D-162, D-164.
+- 2026-10-08 (session 5822a9d1): the owner answered "1 có" (:1433) to the question of decision D-170 on the exact texts of the Genesis amendment to version 2; CR-001 E4 has its text, added by commit 4645125 and ratified as recorded in DM rows A60 and F14. Status: done (2026-10-08). What follows from it (specification 2's layout part, DM B7, and moving the documents at interim paths) is T8 of the drafting plan of decision D-165, not this item. Decision files D-169 to D-172.
