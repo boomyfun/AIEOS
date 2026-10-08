@@ -1,7 +1,7 @@
-# The self-build's risk rules (gov-AIEOS), policy version v1
+# The self-build's risk rules (gov-AIEOS), policy version v2
 
-> - **Status:** revision 2. Whether it is approved is recorded in DM section F, not in this file. It decides nothing that a decision matrix (DM) row or a bound document decides.
-> - **Drafted under:** decision agent decisions D-146 (the M1 drafting plan, item 3) and D-157 (Master Plan §4 M1); revision 2 under decision D-174 (C4). Decision files are kept outside the repository (`docs/WORKING-RECORDS.md`).
+> - **Status:** revision 3. Whether it is approved is recorded in DM section F, not in this file. It decides nothing that a decision matrix (DM) row or a bound document decides.
+> - **Drafted under:** decision agent decisions D-146 (the M1 drafting plan, item 3) and D-157 (Master Plan §4 M1); revision 2 under decision D-174 (C4); revision 3 under decisions D-195 (P3) and D-196. Decision files are kept outside the repository (`docs/WORKING-RECORDS.md`).
 > - **Path:** `docs/specs/risk-rules-gov-aieos.md` is interim, like specifications 1 and 2. In specification 2's layout these rules are the `risk_rules` of `.aieos/project.yaml` (specification 2 §7); that file is written only by a core, which does not exist yet (constitution INV-004).
 > - **Sources:** "concept line N" is a line of `AIEOS-concept.md` (v0.5, unchanged, A22). "Spec 2" is `docs/specs/spec-02-aieos-file-format.md` revision 1 (DM F12). "(proposed)" marks a choice of this policy where the concept is silent or says less; each one is also listed in section 7.
 
@@ -23,7 +23,7 @@
 ## 3. The rules
 
 ```yaml
-policy_version: v1
+policy_version: v2
 risk_rules:
   # R1, low: concept line 597.
   - match: { paths: ["docs/**", "*.md"] }
@@ -55,6 +55,9 @@ risk_rules:
   # R10, critical (proposed): the project-state directory, the policy file included.
   - match: { paths: [".aieos/**"] }
     risk: critical
+  # R11, critical (proposed): the conformance fixtures and the frozen set (`docs/specs/conformance-files.md`).
+  - match: { paths: ["tests/conformance/**"] }
+    risk: critical
 ```
 
 ## 4. Why each rule is where it is
@@ -65,6 +68,7 @@ risk_rules:
 - **R7:** a change to a Genesis-bound document is a Genesis amendment (constitution GOV-004; `genesis-model.md` §5); the decision matrix holds the owner's decisions (constitution GOV-005, GOV-006); and the whole `docs/pre-genesis/` folder is in the scope of GOV-005 and OPS-003. Without R7 they would be low (R1).
 - **R8, R9:** R8 overlaps R7 on purpose, so that the measurement files stay critical if R7 is ever narrowed. R9's files are those of acts that A51 item (4) keeps with the owner (anything under `.github/`, constitution SEC-003; Claude Code's settings, `CLAUDE.md` and the agents folder). Both set only a class (section 1).
 - **R10:** only the core writes `.aieos/` (concept line 879; constitution INV-004), and a change that touches the policy, the risk rules or the default profiles is never auto-accepted (`assurance-model.md` §6).
+- **R11:** a fixture's expected result states what AIEOS must do (`conformance-methodology.md` §5), which is intent, and concept line 601 makes a change that touches intent critical, as the scenario text already is under R7. A29 also counts fixtures and scenarios in the evaluator, and their final place, `.aieos/conformance/`, is critical under R10. Without R11 these paths would be high (R3 read fail closed; R2 alone gives medium); R11 lowers nothing.
 - **Low is not without checks.** The records (`docs/History/`, `docs/Progress/`, `docs/Deferred/`, `docs/Lessons/`) are low, but the constitution articles whose scope meets a changed path still add their `evidence_required` to its profile (`governor-spec.md` §3.2, "applicable articles"), for example GOV-005 for the records.
 - **No rule** covers a new top-level file or folder other than `src/` and `tests/`: such a change gets no class until this policy is changed (section 2, point 2). Concept line 592 also names "loại thay đổi" and "điều khoản Constitution bị chạm" as rule inputs; spec 2 §7 has no key for the kind of change and does not say how `touches` names an article, so v1 uses paths and tags only (section 7).
 
@@ -87,12 +91,13 @@ risk_rules:
 1. Closed for gov-AIEOS in revision 2: high and critical tasks of gov-AIEOS, the governor's own included, are handled as section 5 says (Genesis instance 2; A59, A60; `assurance-model.md` §10 point 1, closed for gov-AIEOS). For AIEOS projects, CR-001 E10 stays open; that is outside this policy (section 1).
 2. For the owner, if it arises: any later rule that classes a change lower than the concept's example rules (lines 595-602) or than this version (CR-002 part 4 limit 8). This version lowers none.
 3. The components, their paths and tags, in an approved architecture entity (spec 2 §4.2), which makes R3 evaluable; no milestone of the Master Plan delivers one yet. Whether `governor-spec.md` §3.2's weakens-evidence input covers a change to component tags (section 6) is for that document's next revision.
-4. The source tree's top-level name (`src/`) and `tests/` with it, to be set by the first code task's contract, whose write-set has new paths only (Master Plan §8); fixture paths get their own rule then.
+4. The source tree's top-level name (`src/`) and `tests/` with it, to be set by the first code task's contract, whose write-set has new paths only (Master Plan §8). Closed for fixtures in revision 3: their paths are `tests/conformance/` (`docs/specs/conformance-files.md`), under rule R11.
 5. Rules by kind of change and by constitution article touched (concept line 592), which spec 2 §7 cannot express yet.
-6. The choices marked "(proposed)": the per-path reading of section 2 point 2; the fail-closed reading of an unevaluable rule and of R3 before an architecture exists; a higher declared risk; renames and deletions; the pattern rules of section 2, point 6; `tests/**` in R2; R3's four tags; R4; R5's any-depth folders; R6's path spelling; R7 to R10; the tag-change rule of section 6.
+6. The choices marked "(proposed)": the per-path reading of section 2 point 2; the fail-closed reading of an unevaluable rule and of R3 before an architecture exists; a higher declared risk; renames and deletions; the pattern rules of section 2, point 6; `tests/**` in R2; R3's four tags; R4; R5's any-depth folders; R6's path spelling; R7 to R11; the tag-change rule of section 6.
 
 ## 8. Revisions
 
 - Revision 0: first draft (D-146, D-157).
 - Revision 1: applies the thirteen findings of one read-only checker round (claude-sonnet-5-5), each verified against its source lines: exact pattern semantics; R3's fail-closed reading over `tests/**` too; tag changes counted as policy changes; the per-path rule marked; `docs/pre-genesis/**` and `docs/WORKING-RECORDS.md` raised; R5 at any depth; R6's `.aieos/` paths left to R10; the first version's reference; status labels; what low still checks.
 - Revision 2: carries Genesis instance 2 (A59, A60; decision D-174 C4): section 5 states how high and critical tasks of gov-AIEOS are handled, section 7 point 1 is closed for gov-AIEOS, and sections 1 and 6 name instance 2 and the settled layout. The rules of section 3, the policy version and every class are unchanged.
+- Revision 3: policy version v2 (decisions D-195 P3 and D-196): adds rule R11, which makes `tests/conformance/**` critical, with its reason in section 4, and closes section 7 point 4 for fixtures. No other rule changes and no class is lowered.
