@@ -1,7 +1,7 @@
 # The self-build's risk rules (gov-AIEOS), policy version v1
 
-> - **Status:** revision 1. Whether it is approved is recorded in DM section F, not in this file. It decides nothing that a decision matrix (DM) row or a bound document decides.
-> - **Drafted under:** decision agent decisions D-146 (the M1 drafting plan, item 3) and D-157 (Master Plan §4 M1). Decision files are kept outside the repository (`docs/WORKING-RECORDS.md`).
+> - **Status:** revision 2. Whether it is approved is recorded in DM section F, not in this file. It decides nothing that a decision matrix (DM) row or a bound document decides.
+> - **Drafted under:** decision agent decisions D-146 (the M1 drafting plan, item 3) and D-157 (Master Plan §4 M1); revision 2 under decision D-174 (C4). Decision files are kept outside the repository (`docs/WORKING-RECORDS.md`).
 > - **Path:** `docs/specs/risk-rules-gov-aieos.md` is interim, like specifications 1 and 2. In specification 2's layout these rules are the `risk_rules` of `.aieos/project.yaml` (specification 2 §7); that file is written only by a core, which does not exist yet (constitution INV-004).
 > - **Sources:** "concept line N" is a line of `AIEOS-concept.md` (v0.5, unchanged, A22). "Spec 2" is `docs/specs/spec-02-aieos-file-format.md` revision 1 (DM F12). "(proposed)" marks a choice of this policy where the concept is silent or says less; each one is also listed in section 7.
 
@@ -9,7 +9,7 @@
 
 - The rule-based risk classification of concept §8.3 for gov-AIEOS (A53), the work on this repository: "Risk = mức cao nhất của các rule khớp" (line 592). The class of a change decides its verification plan, the assurance it needs and whether human approval is needed (lines 580-587); for gov-AIEOS the approver is the decision agent at every class, except for a task under CR-002 part 4 limit 5 or 8, which the owner approves (CR-002 Đ7; `assurance-model.md` §6; Master Plan §6).
 - A deterministic policy approved in advance (concept line 199): for gov-AIEOS the decision agent approves it in the owner's place (CR-002 Đ2), within CR-002 part 1: it never accepts a task by itself, decides no act of A51 item (3) or (4), and is reported to the owner when approved.
-- Not in scope: the evidence profiles of each class (`assurance-model.md` §5, bound in Genesis instance 1, advisory); autonomy levels (every class is at L1, A35; A54 point 2); the acceptance decision (`governor-spec.md`); acts the owner keeps. These rules set only a change's risk class. No rule of this policy is a rule for owner-kept acts: the owner-kept act input is set by the task contract's declaration and the constitution's path rules (A56; `governor-spec.md` §3.2; spec 2 §5.1).
+- Not in scope: the evidence profiles of each class (`assurance-model.md` §5, bound in Genesis instance 2, advisory); autonomy levels (every class is at L1, A35; A54 point 2); the acceptance decision (`governor-spec.md`); acts the owner keeps. These rules set only a change's risk class. No rule of this policy is a rule for owner-kept acts: the owner-kept act input is set by the task contract's declaration and the constitution's path rules (A56; `governor-spec.md` §3.2; spec 2 §5.1).
 
 ## 2. How the rules are applied
 
@@ -70,21 +70,21 @@ risk_rules:
 
 ## 5. What the classes mean now
 
-- v0.1 has default profiles for low and medium only (concept line 947; `assurance-model.md` §5). Until `assurance-model.md` §10 point 1 is settled, a high or critical task gets no decision (`governor-spec.md` §3.2, last point, proposed there). If the high and critical defaults of concept lines 703-704 applied before then, no record could satisfy their cross-model entry while CR-001 E10 is open, so such a task would stay at INSUFFICIENT_EVIDENCE and go to REWORK and, after the retry limit, to ESCALATED (`assurance-model.md` §5). How such tasks are handled meanwhile is open (section 7, point 1).
-- So, until then, no task that touches a path of R3 to R10 can be accepted. This includes every code task of milestone M2: the governor, the conformance runner, their tests and fixtures under `src/**` and `tests/**` count as tagged by R3 (section 2, point 3) until an architecture names the components. It also includes any task that changes the decision matrix, the Master Plan, a specification, `CLAUDE.md` or a file under `.claude/`. The Master Plan foresaw this for M2 (§4 M2, owner point; §6).
+- v0.1 has default profiles for low and medium (concept line 947). For gov-AIEOS, Genesis instance 2 applies the high and critical defaults of concept lines 703-704 from v0.1, cumulative on medium, with the dimensions that `assurance-model.md` §5 sets (CR-001 E10, as marked for Genesis version 2; A59, A60). Their `ai_review (cross-model)` entry is met only by the pair of reviews of `assurance-model.md` §3 and §5: a way-2 review by a Claude model other than the implementer's, and a separate review of the decision agent that stands for that entry; one alone meets nothing (`governor-spec.md` §4 rule 3). For AIEOS projects, CR-001 E10 stays open; that is outside this policy (section 1).
+- So a task that touches a path of R3 to R10 is accepted only with the complete evidence profile of its class, the pair included, and one approval: the decision agent's, or the owner's for a task under CR-002 part 4 limit 5 or 8 and for the first governor version (`assurance-model.md` §6; Master Plan §6; decision D-166). This includes every code task of milestone M2: the governor, the conformance runner, their tests and fixtures under `src/**` and `tests/**` count as tagged by R3 (section 2, point 3) until an architecture names the components, so they are at least high. It also includes any task that changes the decision matrix, the Master Plan, a specification, `CLAUDE.md` or a file under `.claude/`.
 - Changes to the records are low (section 4).
-- Nothing here changes an evidence requirement, a level or who approves what (CR-002 part 4 limit 8; A51 item (4)).
+- Nothing here changes an evidence requirement, a level or who approves what (CR-002 part 4 limit 8; A51 item (4)): the profiles are those of the bound assurance model, not of this policy (section 1).
 
 ## 6. Change control
 
 - This policy is versioned (`policy_version`). A change to it is a change request, approved by the decision agent in the owner's place (CR-002 Đ2), except a change that lowers the class of a kind of change or otherwise weakens an evidence requirement, which is the owner's (CR-002 part 4 limit 8). A change to it is itself critical (R6, and R10 once it lives in `.aieos/`).
 - The reference for this first version (CR-002 part 4 limit 8; A54 point 4) is the repository on GitHub before it was drafted, where the only risk rules were the concept's examples (lines 595-602) and a change that matches no rule is never low (A35). R1 to R10 lower none of the concept's rules, and every path those rules do not cover is, under this version, either without a class (section 2) or high or critical (R3 over `src/**` and `tests/**`, R4, R5, R7 to R10).
 - A change to the component tags or paths of an architecture entity that would lower the class of any change counts as a change to this policy, with the same limits (proposed).
-- When a document named in R4 to R9 moves (spec 2 §10 point 2), the rule moves with it in the same change; when the layout is settled (CR-001 E4), the rules move into `.aieos/project.yaml` (spec 2 §7). Neither move changes a class.
+- When a document named in R4 to R9 moves (spec 2 §10 point 2), the rule moves with it in the same change; the layout is settled (CR-001 E4, Genesis version 2; DM A60), and the rules move into `.aieos/project.yaml` (spec 2 §7) when a core exists to write that file (constitution INV-004). Neither move changes a class.
 
 ## 7. Open points
 
-1. For the owner: how high and critical tasks of gov-AIEOS, the governor's own included, are handled while CR-001 E10 is open (`assurance-model.md` §10 point 1; Master Plan §4 M2 and §6); until then they get no decision (section 5).
+1. Closed for gov-AIEOS in revision 2: high and critical tasks of gov-AIEOS, the governor's own included, are handled as section 5 says (Genesis instance 2; A59, A60; `assurance-model.md` §10 point 1, closed for gov-AIEOS). For AIEOS projects, CR-001 E10 stays open; that is outside this policy (section 1).
 2. For the owner, if it arises: any later rule that classes a change lower than the concept's example rules (lines 595-602) or than this version (CR-002 part 4 limit 8). This version lowers none.
 3. The components, their paths and tags, in an approved architecture entity (spec 2 §4.2), which makes R3 evaluable; no milestone of the Master Plan delivers one yet. Whether `governor-spec.md` §3.2's weakens-evidence input covers a change to component tags (section 6) is for that document's next revision.
 4. The source tree's top-level name (`src/`) and `tests/` with it, to be set by the first code task's contract, whose write-set has new paths only (Master Plan §8); fixture paths get their own rule then.
@@ -95,3 +95,4 @@ risk_rules:
 
 - Revision 0: first draft (D-146, D-157).
 - Revision 1: applies the thirteen findings of one read-only checker round (claude-sonnet-5-5), each verified against its source lines: exact pattern semantics; R3's fail-closed reading over `tests/**` too; tag changes counted as policy changes; the per-path rule marked; `docs/pre-genesis/**` and `docs/WORKING-RECORDS.md` raised; R5 at any depth; R6's `.aieos/` paths left to R10; the first version's reference; status labels; what low still checks.
+- Revision 2: carries Genesis instance 2 (A59, A60; decision D-174 C4): section 5 states how high and critical tasks of gov-AIEOS are handled, section 7 point 1 is closed for gov-AIEOS, and sections 1 and 6 name instance 2 and the settled layout. The rules of section 3, the policy version and every class are unchanged.
