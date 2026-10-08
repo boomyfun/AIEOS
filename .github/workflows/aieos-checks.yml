@@ -1,6 +1,8 @@
-# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md).
-# Runs on every push to any branch and checks every pushed commit. It reads only: it writes nothing to the repository
-# and uses no secret. Records: this run's log and its step summary. Its results are advisory (DM A29; C7 is TBD).
+# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md), revision 2: the checks the first code task needs
+# (decision D-181, option K1). Runs on every push to any branch and checks every pushed commit. It reads only: it writes
+# nothing to the repository and uses no secret. Records: this run's log, its step summary, and each step's conclusion.
+# Its results are advisory (DM A29; C7 is TBD). A code task's commits carry the trailer "AIEOS-Task: <id>"; their
+# contract is the file docs/tasks/<id>.yaml, added on main by its own commit; the task steps judge only such commits.
 name: aieos-checks
 
 on:
@@ -12,9 +14,9 @@ permissions:
 jobs:
   checks:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - name: Fetch the pushed commit and its history (no third-party action, no token)
+      - name: Fetch the pushed commit, its history and main (no third-party action, no token)
         env:
           SERVER: ${{ github.server_url }}
           REPO: ${{ github.repository }}
@@ -24,17 +26,192 @@ jobs:
           set -euo pipefail
           git init -q work
           git -C work fetch -q "$SERVER/$REPO.git" "$SHA"
-          git -C work checkout -q --detach FETCH_HEAD
+          git -C work fetch -q "$SERVER/$REPO.git" "+refs/heads/main:refs/remotes/origin/main"
+          git -C work checkout -q --detach "$SHA"
           test "$(git -C work rev-parse HEAD)" = "$SHA"
           printf '%s\n' "$BEFORE" > before.txt
 
+      - name: G0 task detection (the contract commit on main)
+        if: ${{ !cancelled() }}
+        working-directory: work
+        shell: python3 {0}
+        env:
+          AIEOS_ARGS: detect
+        run: |
+          # AIEOS CI: G0 scope (V0) for a task commit (D-181 P9, C2). Standard library only. Run in the checkout of the pushed
+          # commit. Modes (argument, or the environment variable AIEOS_ARGS):
+          #   detect: find the task named by the "AIEOS-Task:" trailer of the pushed commits that main does not hold; find its
+          #           contract commit C on main (the one
+          #           commit that adds docs/tasks/<id>.yaml, changes nothing else, has one parent equal to the contract's
+          #           base_commit); print the SHA-256 of the contract bytes read at C (the approval check compares it with the
+          #           approved contract_hash); write ../task.json and ../range-base.txt (the task's commits, oldest first, or
+          #           empty when there is no task).
+          #   scope:  for a task, C is an ancestor of HEAD, and every pushed commit that main does not hold has one parent,
+          #           carries the same trailer, and changes only paths that match write_set and no forbidden pattern (patterns
+          #           as the risk rules section 2 point 6 define them).
+          import hashlib
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+
+          TRAILER = re.compile(r'^AIEOS-Task: (TASK-[0-9]+)$', re.M)
+
+
+          def git(*a):
+              r = subprocess.run(['git'] + list(a), capture_output=True)
+              if r.returncode != 0:
+                  raise SystemExit('G0 FAIL: git ' + ' '.join(a) + ': ' + r.stderr.decode('utf-8', 'replace').strip())
+              return r.stdout
+
+
+          def trailer(commit):
+              msg = git('log', '-1', '--format=%B', commit).decode('utf-8', 'replace')
+              ids = sorted(set(TRAILER.findall(msg)))
+              return ids[0] if len(ids) == 1 else (None if not ids else 'MANY')
+
+
+          def parse_contract(text):
+              """The fields G0 needs, from the contract's fixed layout; anything unexpected fails (fail closed)."""
+              out = {'task': None, 'base_commit': None, 'write_set': [], 'forbidden': []}
+              section = sub = None
+              for raw in text.split('\n'):
+                  if not raw.strip() or raw.lstrip().startswith('#'):
+                      continue
+                  indent = len(raw) - len(raw.lstrip(' '))
+                  line = raw.strip()
+                  if indent == 0:
+                      section, sub = line.split(':', 1)[0], None
+                      if section == 'task':
+                          out['task'] = line.split(':', 1)[1].strip()
+                      continue
+                  if section == 'input_state' and indent == 2 and line.startswith('base_commit:'):
+                      out['base_commit'] = line.split(':', 1)[1].strip()
+                  elif section == 'write_set' and indent == 2:
+                      sub = line.split(':', 1)[0]
+                  elif section == 'write_set' and sub == 'paths' and indent == 4 and line.startswith('- '):
+                      out['write_set'].append(line[2:].strip())
+                  elif section == 'forbidden' and indent == 2 and line.startswith('- '):
+                      out['forbidden'].append(line[2:].strip())
+              for k in ('task', 'base_commit'):
+                  if not out[k]:
+                      raise SystemExit('G0 FAIL: contract field missing: ' + k)
+              if not re.fullmatch(r'[0-9a-f]{40}', out['base_commit']):
+                  raise SystemExit('G0 FAIL: base_commit is not a full commit id')
+              if not out['write_set'] or not out['forbidden']:
+                  raise SystemExit('G0 FAIL: contract write_set or forbidden empty or not found')
+              return out
+
+
+          def pattern_re(p):
+              """Risk rules section 2 point 6: '*' within one name, '**' any sequence of names; no '/' means a file name anywhere."""
+              if '/' not in p:
+                  p = '**/' + p
+              parts = p.split('/')
+              rx = ''
+              for i, part in enumerate(parts):
+                  last = i == len(parts) - 1
+                  if part == '**':
+                      rx += '.*' if last else '(?:[^/]+/)*'
+                  else:
+                      rx += re.escape(part).replace(r'\*', '[^/]*') + ('' if last else '/')
+              return re.compile(rx + r'\Z')
+
+
+          def matches(path, pats):
+              return any(pattern_re(p).match(path) for p in pats)
+
+
+          def detect():
+              # every pushed commit that main does not hold; a task is named by the trailer of any of them, so a commit without
+              # the trailer on top of task commits cannot hide them (scope then fails that commit)
+              ahead = git('rev-list', 'HEAD', '--not', 'refs/remotes/origin/main').decode().split()
+              ids = set(trailer(x) for x in ahead) - {None}
+              if not ids:
+                  json.dump({'task': None}, open('../task.json', 'w'))
+                  open('../range-base.txt', 'w').write('')
+                  print('G0 detect: no task (no pushed commit outside main carries an AIEOS-Task trailer; commits outside main: %d)' % len(ahead))
+                  return 0
+              if len(ids) != 1 or 'MANY' in ids:
+                  raise SystemExit('G0 FAIL: the pushed commits name more than one task: ' + ', '.join(sorted(ids)))
+              tid = ids.pop()
+              path = 'docs/tasks/' + tid + '.yaml'
+              adds = git('log', '--format=%H', '--diff-filter=A', 'HEAD', '--', path).decode().split()
+              if len(adds) != 1:
+                  raise SystemExit('G0 FAIL: commits adding %s: %d (expected 1)' % (path, len(adds)))
+              c = adds[0]
+              if subprocess.run(['git', 'merge-base', '--is-ancestor', c, 'refs/remotes/origin/main']).returncode != 0:
+                  raise SystemExit('G0 FAIL: the contract commit is not on main')
+              parents = git('log', '-1', '--format=%P', c).decode().split()
+              changed = git('diff-tree', '--no-commit-id', '--name-only', '-r', '--no-renames', c).decode().split('\n')
+              changed = [x for x in changed if x]
+              if len(parents) != 1 or changed != [path]:
+                  raise SystemExit('G0 FAIL: the contract commit must have one parent and change only ' + path)
+              body = git('show', c + ':' + path)
+              k = parse_contract(body.decode('utf-8'))
+              if k['task'] != tid or k['base_commit'] != parents[0]:
+                  raise SystemExit('G0 FAIL: the contract names task %s and base %s; expected %s and %s' % (k['task'], k['base_commit'], tid, parents[0]))
+              sha = hashlib.sha256(body).hexdigest()
+              json.dump({'task': tid, 'contract_commit': c, 'base_commit': parents[0], 'contract_sha256': sha,
+                         'write_set': k['write_set'], 'forbidden': k['forbidden']}, open('../task.json', 'w'))
+              # the task's commits: the pushed commits that main does not hold (D-182 C2 (1)), oldest first
+              open('../range-base.txt', 'w').write('\n'.join(reversed(ahead)) + '\n')
+              print('G0 detect: task', tid, 'contract commit', c, 'base', parents[0])
+              print('G0 contract sha256', sha)
+              return 0
+
+
+          def scope():
+              t = json.load(open('../task.json'))
+              if t['task'] is None:
+                  print('G0 scope: no task')
+                  return 0
+              c = t['contract_commit']
+              # the task's commits are the pushed commits that main does not hold, so a task rebased onto a later main (for
+              # example after a session-end records push) is judged on its own commits only (D-182 C2 (1))
+              commits = git('rev-list', '--reverse', 'HEAD', '--not', 'refs/remotes/origin/main').decode().split()
+              bad = 0
+              touched = set()
+              if subprocess.run(['git', 'merge-base', '--is-ancestor', c, 'HEAD']).returncode != 0:
+                  print('G0 FAIL: the contract commit is not an ancestor of the pushed commit')
+                  bad += 1
+              for x in commits:
+                  if len(git('log', '-1', '--format=%P', x).decode().split()) != 1:
+                      print('G0 FAIL: commit %s does not have exactly one parent (no merge in a task)' % x[:12])
+                      bad += 1
+                  if trailer(x) != t['task']:
+                      print('G0 FAIL: commit %s does not carry exactly "AIEOS-Task: %s"' % (x[:12], t['task']))
+                      bad += 1
+                  names = git('diff-tree', '--no-commit-id', '--name-only', '-r', '--no-renames', '--root', x).decode().split('\n')
+                  touched.update(n for n in names if n)
+              for p in sorted(touched):
+                  if matches(p, t['forbidden']):
+                      print('G0 FAIL: forbidden path', p)
+                      bad += 1
+                  elif not matches(p, t['write_set']):
+                      print('G0 FAIL: path outside the write-set', p)
+                      bad += 1
+              print('G0 scope: task %s, commits %d, paths %d, failures %d' % (t['task'], len(commits), len(touched), bad))
+              return 1 if bad or not commits else 0
+
+
+          if __name__ == '__main__':
+              args = sys.argv[1:] or os.environ.get('AIEOS_ARGS', '').split()
+              sys.exit({'detect': detect, 'scope': scope}[args[0]]())
+
       - name: Collect the pushed commits and their changed paths
+        if: ${{ !cancelled() }}
         working-directory: work
         run: |
           set -euo pipefail
           BEFORE=$(cat ../before.txt)
+          RB=$(cat ../range-base.txt 2>/dev/null || true)
           Z=0000000000000000000000000000000000000000
-          if [ "$BEFORE" != "$Z" ] && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null && git merge-base --is-ancestor "$BEFORE" HEAD; then
+          if [ -n "$RB" ]; then
+            printf '%s\n' "$RB" > ../commits.txt
+            WHY="range: the task's commits (the pushed commits that main does not hold)"
+          elif [ "$BEFORE" != "$Z" ] && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null && git merge-base --is-ancestor "$BEFORE" HEAD; then
             git rev-list --reverse "$BEFORE..HEAD" > ../commits.txt
             WHY="range: previous tip to pushed commit"
           else
@@ -61,6 +238,7 @@ jobs:
           cat ../changed-paths.txt
 
       - name: SEC-001 secret scan (tip tree; every commit's message, file names and added lines)
+        if: ${{ !cancelled() }}
         working-directory: work
         run: |
           set -uo pipefail
@@ -84,6 +262,7 @@ jobs:
           [ "$T" = 0 ] && [ "$H" = 0 ]
 
       - name: SEC-002 pattern rules (every commit's added lines)
+        if: ${{ !cancelled() }}
         working-directory: work
         run: |
           set -uo pipefail
@@ -100,7 +279,556 @@ jobs:
           [ "$H" = 0 ]
 
       - name: SEC-003 record (changes under .github/)
+        if: ${{ !cancelled() }}
         run: |
           set -euo pipefail
           G=$(grep -cE '^[0-9a-f]{12} [A-Z][0-9]*[[:space:]]+\.github/' changed-paths.txt || true)
           echo "SEC-003 changed paths under .github/ in the pushed commits: $G (each needs the owner's own yes)" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: GOV-003 evaluator paths (reports an evaluator change)
+        if: ${{ !cancelled() }}
+        shell: python3 {0}
+        env:
+          AIEOS_ARGS: gov003
+        run: |
+          # AIEOS CI: two path rules over ../changed-paths.txt (lines "<commit12> <status>\t<path>", written by the collect
+          # step), on every push (D-181 C2). Standard library only. Modes (argument, or the environment variable AIEOS_ARGS):
+          #   gov003: GOV-003's tool part: a change that touches a pinned evaluator path is reported as an evaluator change
+          #           (judged by the base version, never auto-accepted); the step reports and passes. The pinned list is here,
+          #           in the workflow, which is itself one of its paths.
+          #   ops002: OPS-002's path part: a change to the measurement protocol or the measurements is routed to the owner; the
+          #           step fails so that it is seen.
+          import os
+          import re
+          import sys
+
+          EVALUATOR = ['.github/**', 'src/aieos_bootstrap/**']
+          OWNER_PATHS = ['docs/pre-genesis/measurement-protocol.md', 'docs/pre-genesis/measurements/**']
+
+
+          def pattern_re(p):
+              parts = p.split('/')
+              rx = ''
+              for i, part in enumerate(parts):
+                  last = i == len(parts) - 1
+                  if part == '**':
+                      rx += '.*' if last else '(?:[^/]+/)*'
+                  else:
+                      rx += re.escape(part).replace(r'\*', '[^/]*') + ('' if last else '/')
+              return re.compile(rx + r'\Z')
+
+
+          def changed():
+              out = []
+              for line in open('changed-paths.txt', encoding='utf-8').read().split('\n'):
+                  if line.strip():
+                      out.append(line.split('\t')[-1])
+              return sorted(set(out))
+
+
+          def main(mode):
+              paths = changed()
+              pats = EVALUATOR if mode == 'gov003' else OWNER_PATHS
+              hits = [p for p in paths if any(pattern_re(q).match(p) for q in pats)]
+              if mode == 'gov003':
+                  print('GOV-003 evaluator change: %s (%d of %d changed paths)' % ('yes' if hits else 'no', len(hits), len(paths)))
+                  for h in hits:
+                      print('GOV-003 evaluator path:', h)
+                  return 0
+              for h in hits:
+                  print('OPS-002 FAIL: a change to an owner-kept path, routed to the owner:', h)
+              print('OPS-002 paths: %d of %d changed paths are owner-kept' % (len(hits), len(paths)))
+              return 1 if hits else 0
+
+
+          if __name__ == '__main__':
+              args = sys.argv[1:] or os.environ.get('AIEOS_ARGS', '').split()
+              sys.exit(main(args[0]))
+
+      - name: OPS-002 owner-kept paths
+        if: ${{ !cancelled() }}
+        shell: python3 {0}
+        env:
+          AIEOS_ARGS: ops002
+        run: |
+          # AIEOS CI: two path rules over ../changed-paths.txt (lines "<commit12> <status>\t<path>", written by the collect
+          # step), on every push (D-181 C2). Standard library only. Modes (argument, or the environment variable AIEOS_ARGS):
+          #   gov003: GOV-003's tool part: a change that touches a pinned evaluator path is reported as an evaluator change
+          #           (judged by the base version, never auto-accepted); the step reports and passes. The pinned list is here,
+          #           in the workflow, which is itself one of its paths.
+          #   ops002: OPS-002's path part: a change to the measurement protocol or the measurements is routed to the owner; the
+          #           step fails so that it is seen.
+          import os
+          import re
+          import sys
+
+          EVALUATOR = ['.github/**', 'src/aieos_bootstrap/**']
+          OWNER_PATHS = ['docs/pre-genesis/measurement-protocol.md', 'docs/pre-genesis/measurements/**']
+
+
+          def pattern_re(p):
+              parts = p.split('/')
+              rx = ''
+              for i, part in enumerate(parts):
+                  last = i == len(parts) - 1
+                  if part == '**':
+                      rx += '.*' if last else '(?:[^/]+/)*'
+                  else:
+                      rx += re.escape(part).replace(r'\*', '[^/]*') + ('' if last else '/')
+              return re.compile(rx + r'\Z')
+
+
+          def changed():
+              out = []
+              for line in open('changed-paths.txt', encoding='utf-8').read().split('\n'):
+                  if line.strip():
+                      out.append(line.split('\t')[-1])
+              return sorted(set(out))
+
+
+          def main(mode):
+              paths = changed()
+              pats = EVALUATOR if mode == 'gov003' else OWNER_PATHS
+              hits = [p for p in paths if any(pattern_re(q).match(p) for q in pats)]
+              if mode == 'gov003':
+                  print('GOV-003 evaluator change: %s (%d of %d changed paths)' % ('yes' if hits else 'no', len(hits), len(paths)))
+                  for h in hits:
+                      print('GOV-003 evaluator path:', h)
+                  return 0
+              for h in hits:
+                  print('OPS-002 FAIL: a change to an owner-kept path, routed to the owner:', h)
+              print('OPS-002 paths: %d of %d changed paths are owner-kept' % (len(hits), len(paths)))
+              return 1 if hits else 0
+
+
+          if __name__ == '__main__':
+              args = sys.argv[1:] or os.environ.get('AIEOS_ARGS', '').split()
+              sys.exit(main(args[0]))
+
+      - name: INV-010 replay
+        if: ${{ !cancelled() }}
+        working-directory: work
+        shell: python3 {0}
+        run: |
+          # AIEOS CI: replay (INV-010) (D-181 P4). Standard library only. Run in the checkout of the pushed commit, on every push.
+          # Counts the decision records in the tree at HEAD: lines of any file named events.jsonl whose type is
+          # decision.acceptance or decision.execution. While no governor version is pinned (Master Plan section 5 point 6), any
+          # decision record fails, because there is no pinned ruleset to recompute it with; with none, it reports 0 and passes.
+          import json
+          import subprocess
+          import sys
+
+          PINNED_GOVERNOR = None  # set by the workflow revision that pins the first governor version
+
+
+          def main():
+              files = [p for p in subprocess.run(['git', 'ls-files'], capture_output=True, check=True).stdout.decode('utf-8').split('\n')
+                       if p == 'events.jsonl' or p.endswith('/events.jsonl')]
+              n = 0
+              for p in files:
+                  data = subprocess.run(['git', 'show', 'HEAD:' + p], capture_output=True, check=True).stdout.decode('utf-8', 'replace')
+                  for line in data.split('\n'):
+                      try:
+                          if json.loads(line).get('type') in ('decision.acceptance', 'decision.execution'):
+                              n += 1
+                      except (ValueError, AttributeError):
+                          if 'decision.acceptance' in line or 'decision.execution' in line:
+                              n += 1
+              print('replay: event logs %d, decision records: %d, pinned governor: %s' % (len(files), n, PINNED_GOVERNOR or 'none'))
+              if n and PINNED_GOVERNOR is None:
+                  print('replay FAIL: decision records exist and no governor version is pinned to recompute them')
+                  return 1
+              return 0
+
+
+          if __name__ == '__main__':
+              sys.exit(main())
+
+      - name: G0 scope (V0)
+        if: ${{ !cancelled() }}
+        working-directory: work
+        shell: python3 {0}
+        env:
+          AIEOS_ARGS: scope
+        run: |
+          # AIEOS CI: G0 scope (V0) for a task commit (D-181 P9, C2). Standard library only. Run in the checkout of the pushed
+          # commit. Modes (argument, or the environment variable AIEOS_ARGS):
+          #   detect: find the task named by the "AIEOS-Task:" trailer of the pushed commits that main does not hold; find its
+          #           contract commit C on main (the one
+          #           commit that adds docs/tasks/<id>.yaml, changes nothing else, has one parent equal to the contract's
+          #           base_commit); print the SHA-256 of the contract bytes read at C (the approval check compares it with the
+          #           approved contract_hash); write ../task.json and ../range-base.txt (the task's commits, oldest first, or
+          #           empty when there is no task).
+          #   scope:  for a task, C is an ancestor of HEAD, and every pushed commit that main does not hold has one parent,
+          #           carries the same trailer, and changes only paths that match write_set and no forbidden pattern (patterns
+          #           as the risk rules section 2 point 6 define them).
+          import hashlib
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+
+          TRAILER = re.compile(r'^AIEOS-Task: (TASK-[0-9]+)$', re.M)
+
+
+          def git(*a):
+              r = subprocess.run(['git'] + list(a), capture_output=True)
+              if r.returncode != 0:
+                  raise SystemExit('G0 FAIL: git ' + ' '.join(a) + ': ' + r.stderr.decode('utf-8', 'replace').strip())
+              return r.stdout
+
+
+          def trailer(commit):
+              msg = git('log', '-1', '--format=%B', commit).decode('utf-8', 'replace')
+              ids = sorted(set(TRAILER.findall(msg)))
+              return ids[0] if len(ids) == 1 else (None if not ids else 'MANY')
+
+
+          def parse_contract(text):
+              """The fields G0 needs, from the contract's fixed layout; anything unexpected fails (fail closed)."""
+              out = {'task': None, 'base_commit': None, 'write_set': [], 'forbidden': []}
+              section = sub = None
+              for raw in text.split('\n'):
+                  if not raw.strip() or raw.lstrip().startswith('#'):
+                      continue
+                  indent = len(raw) - len(raw.lstrip(' '))
+                  line = raw.strip()
+                  if indent == 0:
+                      section, sub = line.split(':', 1)[0], None
+                      if section == 'task':
+                          out['task'] = line.split(':', 1)[1].strip()
+                      continue
+                  if section == 'input_state' and indent == 2 and line.startswith('base_commit:'):
+                      out['base_commit'] = line.split(':', 1)[1].strip()
+                  elif section == 'write_set' and indent == 2:
+                      sub = line.split(':', 1)[0]
+                  elif section == 'write_set' and sub == 'paths' and indent == 4 and line.startswith('- '):
+                      out['write_set'].append(line[2:].strip())
+                  elif section == 'forbidden' and indent == 2 and line.startswith('- '):
+                      out['forbidden'].append(line[2:].strip())
+              for k in ('task', 'base_commit'):
+                  if not out[k]:
+                      raise SystemExit('G0 FAIL: contract field missing: ' + k)
+              if not re.fullmatch(r'[0-9a-f]{40}', out['base_commit']):
+                  raise SystemExit('G0 FAIL: base_commit is not a full commit id')
+              if not out['write_set'] or not out['forbidden']:
+                  raise SystemExit('G0 FAIL: contract write_set or forbidden empty or not found')
+              return out
+
+
+          def pattern_re(p):
+              """Risk rules section 2 point 6: '*' within one name, '**' any sequence of names; no '/' means a file name anywhere."""
+              if '/' not in p:
+                  p = '**/' + p
+              parts = p.split('/')
+              rx = ''
+              for i, part in enumerate(parts):
+                  last = i == len(parts) - 1
+                  if part == '**':
+                      rx += '.*' if last else '(?:[^/]+/)*'
+                  else:
+                      rx += re.escape(part).replace(r'\*', '[^/]*') + ('' if last else '/')
+              return re.compile(rx + r'\Z')
+
+
+          def matches(path, pats):
+              return any(pattern_re(p).match(path) for p in pats)
+
+
+          def detect():
+              # every pushed commit that main does not hold; a task is named by the trailer of any of them, so a commit without
+              # the trailer on top of task commits cannot hide them (scope then fails that commit)
+              ahead = git('rev-list', 'HEAD', '--not', 'refs/remotes/origin/main').decode().split()
+              ids = set(trailer(x) for x in ahead) - {None}
+              if not ids:
+                  json.dump({'task': None}, open('../task.json', 'w'))
+                  open('../range-base.txt', 'w').write('')
+                  print('G0 detect: no task (no pushed commit outside main carries an AIEOS-Task trailer; commits outside main: %d)' % len(ahead))
+                  return 0
+              if len(ids) != 1 or 'MANY' in ids:
+                  raise SystemExit('G0 FAIL: the pushed commits name more than one task: ' + ', '.join(sorted(ids)))
+              tid = ids.pop()
+              path = 'docs/tasks/' + tid + '.yaml'
+              adds = git('log', '--format=%H', '--diff-filter=A', 'HEAD', '--', path).decode().split()
+              if len(adds) != 1:
+                  raise SystemExit('G0 FAIL: commits adding %s: %d (expected 1)' % (path, len(adds)))
+              c = adds[0]
+              if subprocess.run(['git', 'merge-base', '--is-ancestor', c, 'refs/remotes/origin/main']).returncode != 0:
+                  raise SystemExit('G0 FAIL: the contract commit is not on main')
+              parents = git('log', '-1', '--format=%P', c).decode().split()
+              changed = git('diff-tree', '--no-commit-id', '--name-only', '-r', '--no-renames', c).decode().split('\n')
+              changed = [x for x in changed if x]
+              if len(parents) != 1 or changed != [path]:
+                  raise SystemExit('G0 FAIL: the contract commit must have one parent and change only ' + path)
+              body = git('show', c + ':' + path)
+              k = parse_contract(body.decode('utf-8'))
+              if k['task'] != tid or k['base_commit'] != parents[0]:
+                  raise SystemExit('G0 FAIL: the contract names task %s and base %s; expected %s and %s' % (k['task'], k['base_commit'], tid, parents[0]))
+              sha = hashlib.sha256(body).hexdigest()
+              json.dump({'task': tid, 'contract_commit': c, 'base_commit': parents[0], 'contract_sha256': sha,
+                         'write_set': k['write_set'], 'forbidden': k['forbidden']}, open('../task.json', 'w'))
+              # the task's commits: the pushed commits that main does not hold (D-182 C2 (1)), oldest first
+              open('../range-base.txt', 'w').write('\n'.join(reversed(ahead)) + '\n')
+              print('G0 detect: task', tid, 'contract commit', c, 'base', parents[0])
+              print('G0 contract sha256', sha)
+              return 0
+
+
+          def scope():
+              t = json.load(open('../task.json'))
+              if t['task'] is None:
+                  print('G0 scope: no task')
+                  return 0
+              c = t['contract_commit']
+              # the task's commits are the pushed commits that main does not hold, so a task rebased onto a later main (for
+              # example after a session-end records push) is judged on its own commits only (D-182 C2 (1))
+              commits = git('rev-list', '--reverse', 'HEAD', '--not', 'refs/remotes/origin/main').decode().split()
+              bad = 0
+              touched = set()
+              if subprocess.run(['git', 'merge-base', '--is-ancestor', c, 'HEAD']).returncode != 0:
+                  print('G0 FAIL: the contract commit is not an ancestor of the pushed commit')
+                  bad += 1
+              for x in commits:
+                  if len(git('log', '-1', '--format=%P', x).decode().split()) != 1:
+                      print('G0 FAIL: commit %s does not have exactly one parent (no merge in a task)' % x[:12])
+                      bad += 1
+                  if trailer(x) != t['task']:
+                      print('G0 FAIL: commit %s does not carry exactly "AIEOS-Task: %s"' % (x[:12], t['task']))
+                      bad += 1
+                  names = git('diff-tree', '--no-commit-id', '--name-only', '-r', '--no-renames', '--root', x).decode().split('\n')
+                  touched.update(n for n in names if n)
+              for p in sorted(touched):
+                  if matches(p, t['forbidden']):
+                      print('G0 FAIL: forbidden path', p)
+                      bad += 1
+                  elif not matches(p, t['write_set']):
+                      print('G0 FAIL: path outside the write-set', p)
+                      bad += 1
+              print('G0 scope: task %s, commits %d, paths %d, failures %d' % (t['task'], len(commits), len(touched), bad))
+              return 1 if bad or not commits else 0
+
+
+          if __name__ == '__main__':
+              args = sys.argv[1:] or os.environ.get('AIEOS_ARGS', '').split()
+              sys.exit({'detect': detect, 'scope': scope}[args[0]]())
+
+      - name: G1 build
+        if: ${{ !cancelled() }}
+        working-directory: work
+        run: |
+          set -euo pipefail
+          if grep -q '"task": null' ../task.json; then echo "G1 build: no task"; exit 0; fi
+          python3 --version
+          python3 -m compileall -q src tests
+          echo "G1 build: compiled src and tests"
+
+      - name: unit_test
+        if: ${{ !cancelled() }}
+        working-directory: work
+        run: |
+          set -euo pipefail
+          if grep -q '"task": null' ../task.json; then echo "unit_test: no task"; exit 0; fi
+          PYTHONPATH=src python3 -m unittest discover -s tests/unit -p 'test_*.py' -v
+
+      - name: integration_test
+        if: ${{ !cancelled() }}
+        working-directory: work
+        run: |
+          set -euo pipefail
+          if grep -q '"task": null' ../task.json; then echo "integration_test: no task"; exit 0; fi
+          PYTHONPATH=src python3 -m unittest discover -s tests/integration -p 'test_*.py' -v
+
+      - name: property_test
+        if: ${{ !cancelled() }}
+        working-directory: work
+        run: |
+          set -euo pipefail
+          if grep -q '"task": null' ../task.json; then echo "property_test: no task"; exit 0; fi
+          PYTHONPATH=src python3 -m unittest discover -s tests/property -p 'test_*.py' -v
+
+      - name: deterministic_rule (INV-001, INV-002, INV-004)
+        if: ${{ !cancelled() }}
+        working-directory: work
+        shell: python3 {0}
+        run: |
+          # AIEOS CI: deterministic_rule, the tool parts of INV-001, INV-002 and INV-004 (constitution section 3, way 1), for a
+          # task commit (D-181 C2). Standard library only. Run in the checkout of the pushed commit, after G0 detect.
+          # Checks every file Git tracks under src/ and tests/ at HEAD, and the task's changed paths:
+          # - file rule (INV-002): only .py files; no package manifest and no vendored package anywhere in the change;
+          # - import rule (INV-001, INV-002): every import resolves to the standard library (this Python's own list of its module
+          #   names) or to the package aieos_bootstrap; a pinned deny-list of standard-library modules is refused as well
+          #   (dynamic import, processes, network, files written, foreign code);
+          # - pattern rule (INV-001, INV-002): no exec, eval, compile, __import__, open, input or breakpoint; no __builtins__;
+          #   no call that starts a process or writes, removes or renames a file;
+          # - INV-004: no changed path under .aieos/; no string in src/ that names .aieos (no core writer exists yet).
+          import ast
+          import json
+          import subprocess
+          import sys
+
+          OWN = {'aieos_bootstrap'}
+          DENY_MODULES = {'importlib', 'subprocess', 'multiprocessing', 'socket', 'ssl', 'http', 'urllib', 'ftplib', 'smtplib',
+                          'poplib', 'imaplib', 'telnetlib', 'xmlrpc', 'asyncio', 'ctypes', 'pty', 'shutil', 'tempfile', 'sqlite3',
+                          'webbrowser', 'runpy', 'pickle', 'marshal', 'shelve', 'dbm', 'zipimport', 'pkgutil', 'code', 'codeop',
+                          'builtins'}
+          DENY_NAMES = {'exec', 'eval', 'compile', '__import__', 'open', 'input', 'breakpoint', '__builtins__'}
+          DENY_OS = {'system', 'popen', 'fork', 'forkpty', 'kill', 'remove', 'unlink', 'rename', 'renames', 'replace', 'mkdir',
+                     'makedirs', 'rmdir', 'removedirs', 'chmod', 'chown', 'write', 'open', 'fdopen', 'truncate', 'link', 'symlink'}
+          # (str.replace is common, so `replace` is refused only as os.replace, through DENY_OS); `.open` on any object covers
+          # io.open, codecs.open, gzip.open and Path(...).open (D-182 C2 (5))
+          DENY_ATTR_CALLS = {'write_text', 'write_bytes', 'touch', 'mkdir', 'unlink', 'rmdir', 'rename', 'symlink_to',
+                             'hardlink_to', 'open', 'fdopen'}
+          MANIFESTS = {'setup.py', 'setup.cfg', 'pyproject.toml', 'Pipfile', 'Pipfile.lock', 'poetry.lock', 'MANIFEST.in'}
+          VENDOR_DIRS = {'site-packages', 'vendor', '_vendor', 'node_modules', '__pypackages__'}
+
+
+          def git(*a):
+              return subprocess.run(['git'] + list(a), capture_output=True, check=True).stdout.decode('utf-8')
+
+
+          def check_source(path, text, findings):
+              try:
+                  tree = ast.parse(text, filename=path)
+              except SyntaxError as e:
+                  findings.append('%s: does not parse (%s)' % (path, e.msg))
+                  return
+              std = set(sys.stdlib_module_names)
+              for node in ast.walk(tree):
+                  if isinstance(node, (ast.Import, ast.ImportFrom)):
+                      if isinstance(node, ast.ImportFrom) and node.level:
+                          continue
+                      names = [a.name for a in node.names] if isinstance(node, ast.Import) else [node.module or '']
+                      for n in names:
+                          top = n.split('.')[0]
+                          if top in DENY_MODULES:
+                              findings.append('%s:%d: import of a refused module %s' % (path, node.lineno, n))
+                          elif top not in std and top not in OWN:
+                              findings.append('%s:%d: import outside the standard library and the own package: %s' % (path, node.lineno, n))
+                  elif isinstance(node, ast.Name) and node.id in DENY_NAMES:
+                      findings.append('%s:%d: refused name %s' % (path, node.lineno, node.id))
+                  elif isinstance(node, ast.Attribute):
+                      base = node.value.id if isinstance(node.value, ast.Name) else ''
+                      if base == 'os' and (node.attr in DENY_OS or node.attr.startswith(('spawn', 'exec', 'posix_spawn'))):
+                          findings.append('%s:%d: refused call os.%s' % (path, node.lineno, node.attr))
+                      elif node.attr in DENY_ATTR_CALLS:
+                          findings.append('%s:%d: refused file-changing call .%s' % (path, node.lineno, node.attr))
+                  elif isinstance(node, ast.Constant) and isinstance(node.value, str) and path.startswith('src/') and '.aieos' in node.value:
+                      findings.append('%s:%d: a string names .aieos (INV-004)' % (path, node.lineno))
+
+
+          def main():
+              t = json.load(open('../task.json'))
+              if t['task'] is None:
+                  print('deterministic_rule: no task')
+                  return 0
+              findings = []
+              # the paths the task's own commits change (written by G0 detect), not main's later commits (D-182 C2 (1))
+              changed = set()
+              for x in open('../range-base.txt').read().split():
+                  changed.update(p for p in git('diff-tree', '--no-commit-id', '--name-only', '-r', '--no-renames', '--root', x).split('\n') if p)
+              changed = sorted(changed)
+              for p in changed:
+                  parts = p.split('/')
+                  if p.startswith('.aieos/'):
+                      findings.append('%s: a changed path under .aieos/ (INV-004)' % p)
+                  if parts[-1] in MANIFESTS or parts[-1].startswith('requirements') or parts[-1].endswith('.egg-info'):
+                      findings.append('%s: a package manifest (INV-002)' % p)
+                  if VENDOR_DIRS.intersection(parts[:-1]):
+                      findings.append('%s: a vendored package folder (INV-002)' % p)
+              files = [p for p in git('ls-files', 'src', 'tests').split('\n') if p]
+              for p in files:
+                  if not p.endswith('.py'):
+                      findings.append('%s: not a Python source file (INV-002 file rule)' % p)
+                      continue
+                  check_source(p, git('show', 'HEAD:' + p), findings)
+              for f in findings:
+                  print('deterministic_rule FAIL:', f)
+              print('deterministic_rule: files %d, changed paths %d, findings %d' % (len(files), len(changed), len(findings)))
+              return 1 if findings or not files else 0
+
+
+          if __name__ == '__main__':
+              sys.exit(main())
+
+      - name: OPS-003 pattern rules
+        if: ${{ !cancelled() }}
+        working-directory: work
+        shell: python3 {0}
+        run: |
+          # AIEOS CI: the tool part of OPS-003 ("unmeasured means advisory") for a task commit (D-181 P1, C2). Standard library
+          # only. Run in the checkout of the pushed commit, after G0 detect. Over every file Git tracks under src/ and tests/:
+          # - a line that uses an effect label (MEASURED, ENFORCED, GUARANTEED) must cite a decision-matrix row on that line;
+          # - in src/, no string is exactly "valid", "accepted" or "approved" (lowercase, an exact and case-sensitive match): the
+          #   module's results never call a record valid, accepted or approved (TASK-001 AC7); state names such as ACCEPTED pass.
+          import ast
+          import json
+          import re
+          import subprocess
+          import sys
+
+          LABEL = re.compile(r'\b(MEASURED|ENFORCED|GUARANTEED)\b')
+          ROW = re.compile(r'\b[A-P][0-9]{1,3}\b')
+          WORDS = {'valid', 'accepted', 'approved'}
+
+
+          def git(*a):
+              return subprocess.run(['git'] + list(a), capture_output=True, check=True).stdout.decode('utf-8')
+
+
+          def main():
+              t = json.load(open('../task.json'))
+              if t['task'] is None:
+                  print('OPS-003: no task')
+                  return 0
+              findings = []
+              files = [p for p in git('ls-files', 'src', 'tests').split('\n') if p]
+              for p in files:
+                  text = git('show', 'HEAD:' + p)
+                  for i, line in enumerate(text.split('\n'), 1):
+                      if LABEL.search(line) and not ROW.search(line):
+                          findings.append('%s:%d: an effect label without a decision-matrix row' % (p, i))
+                  if p.startswith('src/') and p.endswith('.py'):
+                      try:
+                          tree = ast.parse(text)
+                      except SyntaxError:
+                          continue
+                      for node in ast.walk(tree):
+                          # exact and case-sensitive: the state names of specification 2 section 2 (ACCEPTED and the others) pass
+                          if isinstance(node, ast.Constant) and isinstance(node.value, str) and node.value in WORDS:
+                              findings.append('%s:%d: a result word "%s" (AC7)' % (p, node.lineno, node.value))
+              for f in findings:
+                  print('OPS-003 FAIL:', f)
+              print('OPS-003: files %d, findings %d' % (len(files), len(findings)))
+              return 1 if findings else 0
+
+
+          if __name__ == '__main__':
+              sys.exit(main())
+
+      - name: static_security_analysis (bandit, every package pinned by version and hash)
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          if grep -q '"task": null' task.json; then echo "static_security_analysis: no task"; exit 0; fi
+          A="$RUNNER_TEMP/aieos-sa"
+          python3 -m venv "$A/venv"
+          cat > "$A/requirements.txt" <<'PINS'
+          bandit==1.9.4 --hash=sha256:f89ffa663767f5a0585ea075f01020207e966a9c0f2b9ef56a57c7963a3f6f8e
+          PyYAML==6.0.3 --hash=sha256:ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc
+          stevedore==5.9.1 --hash=sha256:5c8ff3a9f336cc1a06ac0f597bc79d11a2f950bfd32e290ca56b5a301fafafbf
+          rich==15.0.0 --hash=sha256:33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb
+          markdown-it-py==4.2.0 --hash=sha256:9f7ebbcd14fe59494226453aed97c1070d83f8d24b6fc3a3bcf9a38092641c4a
+          mdurl==0.1.2 --hash=sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8
+          pygments==2.21.0 --hash=sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9
+          PINS
+          "$A/venv/bin/pip" install --quiet --no-deps --require-hashes --only-binary :all: -r "$A/requirements.txt"
+          printf '[bandit]\n' > "$A/empty.bandit"
+          cd "$A"
+          "$A/venv/bin/bandit" --version
+          # src/: every bandit test. tests/: every test but B101 (assert) and B311 (the random module, which seeded
+          # property tests use); both options are written here, never read from the change.
+          S=0
+          "$A/venv/bin/bandit" -r "$GITHUB_WORKSPACE/work/src" --ini "$A/empty.bandit" --ignore-nosec -f txt || S=1
+          "$A/venv/bin/bandit" -r "$GITHUB_WORKSPACE/work/tests" --ini "$A/empty.bandit" --ignore-nosec --skip B101,B311 -f txt || S=1
+          [ "$S" = 0 ]
