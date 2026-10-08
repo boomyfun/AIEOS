@@ -1,6 +1,7 @@
 """Unit tests of aieos_bootstrap.records (TASK-001 AC9): each rule of AC1 to AC7 with a passing and a failing case."""
 
 import json
+import re
 import unittest
 
 from aieos_bootstrap import records
@@ -309,7 +310,7 @@ class Decisions(unittest.TestCase):
         self.assertIn('6.4:fact_kind', self.check('decision.acceptance', decision(fact_kind='observation')))
         self.assertIn('6.4:next_task_state', self.check('decision.acceptance', decision(next_task_state='Accepted')))
         self.assertIn('6.4:profile_used', self.check('decision.acceptance', decision(profile_used=[{'dimension': 'x'}])))
-        self.assertIn('6.2:unknown_key', self.check('decision.acceptance', decision(verdict='yes')))
+        self.assertIn('6.4:unknown_key', self.check('decision.acceptance', decision(verdict='yes')))
         self.assertEqual(self.check('decision.acceptance', decision(task_content_hash=H64, uncovered=[], rests_on_ai=[])), [])
 
     def test_hash_and_commit_forms(self):
@@ -331,7 +332,8 @@ class Decisions(unittest.TestCase):
         for value in records.EXECUTION_DECISIONS:
             self.assertEqual(self.check('decision.execution', decision('execution', decision=value)), [], value)
         self.assertIn('6.4:decision', self.check('decision.execution', decision('execution', decision='STOP')))
-        self.assertIn('6.2:unknown_key', self.check('decision.execution', decision('execution', next_task_state='DONE')))
+        # AC6's stated limit: specification 3's execution keys are not named yet, so they are unknown keys here.
+        self.assertIn('6.4:unknown_key', self.check('decision.execution', decision('execution', next_task_state='DONE')))
 
     def test_subject_and_task_id(self):
         self.assertIn('6.4:subject', self.check('decision.acceptance', decision(subject='SPEC-1')))
@@ -352,6 +354,27 @@ class Limits(unittest.TestCase):
         bad = records.check_log(log_of(drafted(seq=5)))
         self.assertIn('6.1:seq', bad.describe())
 
+    def test_wording_of_findings(self):
+        # A log that breaks many rules; no finding text calls anything right, valid, accepted or approved.
+        broken = [drafted(1, note='x'), drafted(3, event_id=''), event(4, 'record.added', rec(source_class='x', outcome='y')),
+                  event(5, 'decision.acceptance', decision(decision='MAYBE', next_task_state='done'), task_id='T'),
+                  event(6, 'task.submitted', {'commit': 'abc', 'compensating': 0}, task_id='TASK-001')]
+        r = records.check_log('\ufeff' + log_of(*broken) + 'not json\r\n')
+        self.assertGreater(len(r.findings()), 10)
+        words = re.compile(r'\b(valid|accepted|approved|correct|right|verified)\b', re.I)
+        for _, f in r.findings():
+            self.assertIsNone(words.search(str(f)), str(f))
+        self.assertIsNone(words.search(r.describe()))
+
+    def test_a_huge_seq_is_reported_not_raised(self):
+        line1 = '{"event_id": "e1", "type": "task.done", "appended_at": "%s", "seq": %s, "task_id": "TASK-1", ' \
+                '"payload": {"decision_record": "r"}}' % (TIME, '9' * 4300)
+        line2 = json.dumps(event(2, 'task.done', {'decision_record': 'r'}, task_id='TASK-1'))
+        r = records.check_log(line1 + '\n' + line2 + '\n')
+        self.assertIn('6.1:seq', {f.rule for n, f in r.findings() if n == 1})
+        self.assertIn('6.1:seq', {f.rule for n, f in r.findings() if n == 2})
+        self.assertIn('bits', r.describe())
+
     def test_names_are_not_resolved(self):
         done = event(1, 'task.done', {'decision_record': 'rec-that-does-not-exist'}, task_id='TASK-001')
         stale = event(2, 'task.stale', {'cause': 'conflict', 'refers_to': 'ev-404'}, task_id='TASK-001')
@@ -371,6 +394,62 @@ class Limits(unittest.TestCase):
             records.check_decision('decision.execution', value)
         with self.assertRaises(TypeError):
             records.check_log(12)
+
+
+class FailingCasesPerRule(unittest.TestCase):
+    """AC9: a failing case for each rule of AC1 to AC6 that the classes above test only in its passing form."""
+
+    def test_task_id_required_for_a_record_about_a_task(self):
+        for etype, payload in (('record.added', rec()), ('violation.detected', rec(outcome='blocking', blocking_kind='violation'))):
+            with self.subTest(etype=etype):
+                self.assertEqual(rules(records.check_log(log_of(event(1, etype, payload, task_id='TASK-001')))), [])
+                self.assertIn('6.1:task_id', rules(records.check_log(log_of(event(1, etype, payload)))))
+
+    def test_event_id_not_a_string(self):
+        self.assertIn('6.1:event_id', rules(records.check_log(log_of(drafted(event_id=5)))))
+
+    def test_record_strings(self):
+        for key, bad in (('record_id', ''), ('recorder', ''), ('recorder', 5), ('subject', ''), ('subject', ['TASK-1']),
+                         ('decision_ref', 7), ('dimension', ''), ('refers_to', '')):
+            with self.subTest(key=key, bad=bad):
+                self.assertIn('6.2:' + key, {f.rule for f in records.check_record(rec(**{key: bad}))})
+
+    def test_binding_models_and_review_keys(self):
+        auth = dict(fact_kind='authority', source_class='decision_agent', decision_ref='D-186')
+        for b in ({'kind': 'contract', 'hash': 'abc'}, {'kind': 'contract', 'hash': H64.upper()}, {'kind': 'contract'}):
+            self.assertIn('6.2:approval_binding', {f.rule for f in records.check_record(rec(approval_binding=b, **auth))}, b)
+        base = dict(source_class='same_lineage_review', evidence_type='other_model_review', decision_ref='D-188')
+        for m in ({'reviewer': 'a'}, {'reviewer': 'a', 'implementer': ''}, ['a', 'b'], {'reviewer': 'a', 'implementer': 'b', 'x': 1}):
+            self.assertIn('6.2:models', {f.rule for f in records.check_record(rec(models=m, **base))}, m)
+        dar = dict(source_class='decision_agent', evidence_type='decision_agent_review', decision_ref='D-188', basis='read')
+        self.assertIn('6.2:stands_for', {f.rule for f in records.check_record(rec(**dar))})
+        self.assertIn('6.2:stands_for', {f.rule for f in records.check_record(rec(stands_for=3, **dar))})
+
+    def test_payload_forms(self):
+        cases = [
+            ('intent.changed', {'entity': 'SPEC-1', 'from_version': 'x', 'to_version': 'v2', 'change_request': 'CHG-1'}, 'from_version'),
+            ('intent.changed', {'entity': 'SPEC-1', 'from_version': 'v1', 'to_version': '2', 'change_request': 'CHG-1'}, 'to_version'),
+            ('intent.changed', {'entity': '', 'from_version': 'v1', 'to_version': 'v2', 'change_request': 'CHG-1'}, 'entity'),
+            ('drift.detected', {'paths': [''], 'entities': ['ARC-a']}, 'paths'),
+            ('drift.detected', {'paths': ['a.py'], 'entities': 'ARC-a'}, 'entities'),
+            ('evidence.stale', {'records': [1], 'reason': 'commit'}, 'records'),
+            ('conflict.detected', {'tasks': 'TASK-1', 'paths': ['a.py']}, 'tasks'),
+            ('conflict.detected', {'tasks': ['TASK-1'], 'interfaces': [3]}, 'interfaces'),
+            ('task.approved', {'contract_version': 'v1', 'contract_hash': H64, 'approval_record': ''}, 'approval_record'),
+            ('task.done', {'decision_record': 5}, 'decision_record'),
+            ('task.stale', {'cause': 'conflict', 'refers_to': ''}, 'refers_to'),
+            ('task.blocked', {'reason': '', 'blocked_by': []}, 'reason'),
+            ('task.unblocked', {'reason': 3}, 'reason'),
+        ]
+        for etype, payload, key in cases:
+            with self.subTest(etype=etype, key=key):
+                self.assertIn('6.3:' + key, {f.rule for f in records.check_payload(etype, payload)})
+
+    def test_error_form(self):
+        d = decision()
+        d['decision'] = None
+        d['error'] = 5
+        self.assertIn('6.4:error', {f.rule for f in records.check_decision('decision.acceptance', d)})
 
 
 if __name__ == '__main__':

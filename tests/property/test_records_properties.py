@@ -130,7 +130,7 @@ class GeneralProperties(unittest.TestCase):
                     rule = '2:unknown_key'
                 else:
                     events[k]['payload'][key] = 1
-                    rule = {'decision.acceptance': '6.2:unknown_key', 'decision.execution': '6.2:unknown_key',
+                    rule = {'decision.acceptance': '6.4:unknown_key', 'decision.execution': '6.4:unknown_key',
                             'record.added': '6.2:unknown_key',
                             'violation.detected': '6.2:unknown_key'}.get(events[k]['type'], '6.3:unknown_key')
                 report = records.check_log(text_of(events))
@@ -213,6 +213,8 @@ class ArticleFormProperties(unittest.TestCase):
                 self.assertIn('6.2:source_class', {f.rule for f in records.check_record(r)}, (seed, r['source_class']))
 
     def test_inv_008_agent_declared_gets_the_same_form_result(self):
+        # Condition: every generated record carries decision_ref, which AC4 requires of a decision_agent record only;
+        # without it, a decision_agent record gets one finding that the other classes do not.
         for seed in SEEDS:
             rng = random.Random(seed)
             for _ in range(ROUNDS):

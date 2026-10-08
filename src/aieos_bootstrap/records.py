@@ -11,8 +11,16 @@ Limits (TASK-001 AC7):
   checks reason only as a non-empty string.
 - It checks no state transition (specification 1 sections 5 and 6), recomputes no hash, and treats the fencing rule
   of specification 1 section 8 as out of scope beyond the form of the token (AC3).
-- Of the acceptance keys of section 6.4 only decision is required (a reading); task_content_hash, evaluated_commit,
-  next_task_state and profile_used are checked for form when present, the others not at all.
+- Of the acceptance keys of section 6.4 only decision is required (a reading). When present, task_content_hash must
+  be 64 lowercase hex digits, evaluated_commit a commit id, next_task_state a state name of section 2, and
+  profile_used a list of objects with exactly its four keys (the values inside each item are not checked);
+  intent_versions and fact_kind are checked by the record rules (fact_kind must be interpretation). The other
+  acceptance keys are not checked.
+- A decision.execution payload may hold only the record keys, decision and error: its other keys belong to
+  specification 3 and are not named yet, so they are reported as unknown keys (a stated limit of AC6).
+- record_id is checked as a non-empty string; whether it is unique across a log is not checked. evidence_type and
+  dimension are open vocabularies, checked as non-empty strings only.
+- An ignored duplicate is reported as such whether or not the line it repeats has findings of its own.
 - It reads only what it is given: it opens no file, writes nothing, starts no process and makes no network call.
 
 Readings of the specifications that the contract marks "(reading)" are noted where they are applied.
@@ -159,6 +167,7 @@ def _is_str_list(value):
 
 
 def _is_time(value):
+    """A UTC time of section 6.1 that exists on the calendar (reading: a leap second, :60, is refused)."""
     if not isinstance(value, str):
         return False
     m = _TIME.fullmatch(value)
@@ -175,7 +184,7 @@ def _is_time(value):
 _VERSION_FORM = (lambda v: _matches(_VERSION, v), 'v followed by digits')
 _HASH_FORM = (lambda v: _matches(_HASH, v), '64 lowercase hex digits')
 _STR_FORM = (_is_str, 'a non-empty string')
-_LIST_FORM = (_is_str_list, 'a list of non-empty strings')
+_LIST_FORM = (_is_str_list, 'a list of non-empty strings (reading: section 6.3 says lists of strings)')
 _COMMIT_FORM = (lambda v: _matches(_COMMIT, v), 'a full lowercase hex commit id')
 _BOOL_FORM = (lambda v: isinstance(v, bool), 'true or false')
 
@@ -215,13 +224,15 @@ def _keys_and_forms(obj, forms, rule, where):
     return findings
 
 
-def check_record(record, extra_keys=frozenset(), where='record'):
-    """The form of one record of section 6.2 (AC4). ``extra_keys`` are further keys the caller allows (section 6.4)."""
+def check_record(record, extra_keys=frozenset(), where='record', section='6.2'):
+    """The form of one record of section 6.2 (AC4). ``extra_keys`` are further keys the caller allows, and ``section``
+    names the section(s) whose keys are allowed, for the unknown-key finding (``6.4`` for a decision contract)."""
     if not isinstance(record, dict):
         return [Finding('6.2:record', '%s is not a JSON object' % where)]
     findings = []
+    names = 'section 6.2 does not name' if section == '6.2' else 'sections 6.2 and %s do not name' % section
     for key in sorted(k for k in record if k not in RECORD_KEYS and k not in extra_keys):
-        findings.append(Finding('6.2:unknown_key', '%s has the key %r, which section 6.2 does not name' % (where, key)))
+        findings.append(Finding(section + ':unknown_key', '%s has the key %r, which %s' % (where, key, names)))
     for key in RECORD_REQUIRED:
         if key not in record:
             findings.append(Finding('6.2:missing_key', '%s lacks %r (reading: required)' % (where, key)))
@@ -310,7 +321,7 @@ def check_decision(event_type, payload, where='payload'):
         return [Finding('6.4:type', '%r is not decision.acceptance or decision.execution' % (event_type,))]
     acceptance = event_type == 'decision.acceptance'
     extra = frozenset({'decision', 'error'}) | (ACCEPTANCE_KEYS if acceptance else frozenset())
-    findings = check_record(payload, extra, where)
+    findings = check_record(payload, extra, where, '6.4')
     if not isinstance(payload, dict):
         return findings
     if 'decision' not in payload:
@@ -419,8 +430,16 @@ class _LogState:
 
 def _without_order(obj):
     """The line's object without seq and appended_at, as canonical JSON text, so that true, 1 and 1.0 stay apart when
-    two lines are compared."""
-    return json.dumps({k: v for k, v in obj.items() if k not in ('seq', 'appended_at')}, sort_keys=True)
+    two lines are compared; None when the object cannot be written back as text (too deep or too large a number)."""
+    try:
+        return json.dumps({k: v for k, v in obj.items() if k not in ('seq', 'appended_at')}, sort_keys=True)
+    except (ValueError, RecursionError):
+        return None
+
+
+def _int_text(n):
+    """An integer as text for a finding, without converting a very large one, whose decimal text may be refused."""
+    return '%d' % n if n.bit_length() <= 64 else 'an integer of %d bits' % n.bit_length()
 
 
 def _check_seq(obj, number, state):
@@ -432,7 +451,7 @@ def _check_seq(obj, number, state):
     if not _is_int(seq):
         return [Finding('6.1:seq', 'seq is not an integer')]
     if seq != expected:
-        return [Finding('6.1:seq', 'seq is %d; expected %d' % (seq, expected))]
+        return [Finding('6.1:seq', 'seq is %s; expected %s' % (_int_text(seq), _int_text(expected)))]
     return []
 
 
@@ -471,9 +490,12 @@ def _check_line(number, raw, state):
         findings.append(Finding('6.1:appended_at', 'appended_at is not a UTC time YYYY-MM-DDTHH:MM:SS[.fraction]Z '
                                 'that exists on the calendar'))
     duplicate_of = None
+    key = _without_order(obj)
+    if key is None:
+        findings.append(Finding('6.1:json', 'the line cannot be written back as JSON text to compare it with other lines'))
     if _is_str(event_id) and event_id in state.first_line:
         first, earlier = state.first_line[event_id]
-        if _without_order(obj) == earlier:
+        if key is not None and key == earlier:
             duplicate_of = first
         else:
             findings.append(Finding('6.1:duplicate_event_id', 'event_id %r is on line %d with other content '
@@ -490,7 +512,7 @@ def _check_line(number, raw, state):
     if known_type and isinstance(payload, dict):
         findings.extend(check_payload(event_type, payload))
     if _is_str(event_id) and event_id not in state.first_line:
-        state.first_line[event_id] = (number, _without_order(obj))
+        state.first_line[event_id] = (number, key)
     return LineReport(number, obj, findings, duplicate_of)
 
 
