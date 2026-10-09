@@ -1,0 +1,98 @@
+"""Integration test of the Resume Check fixtures of TASK-005 (docs/specs/conformance-files.md revision 4, sections 2, 3,
+7 and 9; docs/tasks/TASK-005.yaml AC6 and AC8): the 11 files end to end against the bound scenario file and the set
+file, and what the task leaves unchanged.
+
+Files are read as bytes with pathlib; no fixture or set module is ever imported or executed.
+"""
+import hashlib
+import json
+import pathlib
+import re
+import unittest
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+SCENARIO_FILE = 'docs/pre-genesis/conformance-scenarios-initial.md'
+SET_FILE = 'tests/conformance/set.py'
+SET_FREEZE_RECORDS = 'docs/records/TASK-002.jsonl'
+FIXTURE_DIR = 'tests/conformance/fixtures_rc'
+M2_FIXTURE_DIR = 'tests/conformance/fixtures'
+FIRST, LAST = b"DATA = r'''", b"'''\n"
+# The three modules of TASK-005, the only ones that may name the folder (AC6).
+OWN = ('tests/unit/test_conformance_rc_files.py', 'tests/integration/test_conformance_rc_set.py',
+       'tests/property/test_conformance_rc_properties.py')
+
+
+def read(path):
+    return (ROOT / path).read_bytes()
+
+
+def sha256(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def unwrap(data):
+    """The JSON value between the two fixed parts (section 2); the unit module checks the canonical form."""
+    if not data.startswith(FIRST) or not data.endswith(LAST):
+        raise ValueError('the file does not start with the first part and end with the last part')
+    return json.loads(data[len(FIRST):len(data) - len(LAST)].decode('utf-8'))
+
+
+def rc_rows():
+    rows = {}
+    for line in read(SCENARIO_FILE).decode('utf-8').split('\n'):
+        m = re.match(r'^\| (RC-[0-9]+) \| ', line)
+        if m:
+            cells = [c.strip() for c in line.strip().strip('|').split('|')]
+            rows[m.group(1)] = (sha256(line.encode('utf-8')), cells[4])
+    return rows
+
+
+def module_path(sid):
+    return FIXTURE_DIR + '/' + sid.lower().replace('-', '_') + '.py'
+
+
+class RcSetTest(unittest.TestCase):
+
+    def test_the_folder_holds_exactly_the_eleven_files(self):
+        rows = rc_rows()
+        self.assertEqual(len(rows), 11)
+        names = sorted(p.name for p in (ROOT / FIXTURE_DIR).iterdir() if p.is_file())
+        self.assertEqual(names, sorted(module_path(s).rsplit('/', 1)[1] for s in rows))
+
+    def test_each_file_names_its_bound_row_and_expects_its_cell(self):
+        for sid, (row_hash, cell) in rc_rows().items():
+            value = unwrap(read(module_path(sid)))
+            self.assertEqual((value['scenario'], value['row_hash']), (sid, row_hash), sid)
+            self.assertEqual(len(value['cases']), 1, sid)
+            self.assertEqual(value['cases'][0]['expected'], {'decision': [cell], 'not_fixed': []}, sid)
+            self.assertEqual(value['cases'][0]['when'], 'resume', sid)
+
+    def test_the_set_file_is_unchanged_and_frozen(self):
+        digest = sha256(read(SET_FILE))
+        bound = []
+        for line in read(SET_FREEZE_RECORDS).decode('utf-8').split('\n'):
+            if line:
+                rec = json.loads(line)
+                if rec.get('fact_kind') == 'authority' and rec.get('approval_binding') == {'kind': 'change_request', 'hash': digest}:
+                    bound.append(rec['record_id'])
+        self.assertEqual(len(bound), 1, 'the set file is bound by exactly one freeze approval of TASK-002')
+
+    def test_the_set_names_no_resume_check_fixture(self):
+        value = unwrap(read(SET_FILE))
+        rc = [e for e in value['scenarios'] if e['capability'] == 'Resume Check']
+        self.assertEqual(sorted(e['id'] for e in rc), sorted(rc_rows()))
+        self.assertTrue(all(e['fixture'] is None for e in rc))
+        self.assertFalse(any(e['fixture'] and e['fixture']['path'].startswith(FIXTURE_DIR + '/') for e in value['scenarios']))
+
+    def test_no_resume_check_file_in_the_m2_folder(self):
+        self.assertEqual([p.name for p in (ROOT / M2_FIXTURE_DIR).iterdir() if p.name.startswith('rc_')], [])
+
+    def test_only_this_task_s_modules_name_the_folder(self):
+        name = FIXTURE_DIR.rsplit('/', 1)[1].encode('ascii')
+        found = sorted(str(p.relative_to(ROOT)).replace('\\', '/') for d in ('src', 'tests') for p in (ROOT / d).rglob('*.py')
+                       if name in p.read_bytes())
+        self.assertEqual(found, sorted(OWN))
+
+
+if __name__ == '__main__':
+    unittest.main()
