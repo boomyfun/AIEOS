@@ -1,0 +1,228 @@
+# Task contract TASK-002, the fixtures of the 19 Verification scenarios of gov-AIEOS (Master Plan revision 2, §4 M2;
+# the M2 work plan of decision D-195; specification 2 §5.1). Revision 0, drafted under decisions D-195 (P1, P2, P6, P7),
+# D-198 (f, C5) and D-199, brought for approval in D-200; whether it is approved is recorded in the decision files, not in
+# this file. Fields and value forms follow specification 2 §5.1 and TASK-001's contract.
+# Task type: fixture (docs/specs/conformance-files.md section 8, revision 2). Every changed path is a file of that
+# document's sections 2 to 4 under tests/conformance/ or a test module test_conformance_*.py directly under tests/unit/,
+# tests/integration/ or tests/property/. GOV-002 does not apply, as the constitution writes its applicability
+# (implementation, refactoring); every other article whose applicability names implementation is applied as to an
+# implementation task, so no evidence requirement narrows (section 8; CR-002 part 4 limit 8).
+# Risk: critical. R11 matches tests/conformance/** (critical); R3 read fail closed matches tests/** (high); the highest
+# wins (risk rules section 2 point 1). Profile (assurance-model.md §5, gov-AIEOS, critical): medium's entries, high's
+# entries and critical's: unit_test, integration_test, property_test, deterministic_rule, static_security_analysis,
+# ai_review (cross-model) and human_review; plus the evidence_required of the applicable articles. Dimensions are named
+# as TASK-001's records name them (decision D-181, reading R-dim).
+# Change class: normal_cr with a fixture-freeze approval on each file's hash (DM B1, B10, with the A51 note); it changes
+# the evaluator (A29 counts fixtures and scenarios), so it is judged by the base version and never auto-accepted
+# (constitution GOV-003; governor-spec.md §8). Freeze approvals: given by the decision agent in the decision that
+# accepts this task, as separate elements before the acceptance itself, one per fixture file and one for the set file,
+# each an authority record with approval_binding {kind: change_request, hash} in docs/records/TASK-002.jsonl, and one
+# DM section F row that lists the set file's hash (conformance-files.md section 7; D-195 P2).
+# Reviews (as TASK-001's, D-181 P2, P3): five way-2 reviews by a Claude model other than the implementer's, each under a
+# decision of the decision agent (architecture ai_review for INV-001, INV-002, INV-004; security ai_review for SEC-002;
+# governance ai_review for GOV-003; operational ai_review for OPS-003; the cross-model half), and three decision-agent
+# reviews (architecture human_review, which is both INV-003's entry and the critical profile's, and which also checks
+# that every fixture is faithful to its scenario and that the property tests cover the related invariants
+# (assurance-model.md §5); operational human_review for OPS-002; the cross-model half). Each way-2 review record's basis
+# names every article whose entry it covers and addresses each of their rules, beyond what the tool parts decide.
+# Evaluation path (A61; as TASK-001's, D-181 P1 and D-182): the approved contract is committed on main as its own commit
+# C, which changes only docs/tasks/TASK-002.yaml and has one parent equal to base_commit, and is pushed normally; the
+# files are drafted and tested in scratchpad clones (push URL disabled, the no-reply identity set first); the task's
+# commits, each carrying the trailer "AIEOS-Task: TASK-002" and no e-mail address in its message, go to the branch
+# task/TASK-002 on GitHub, each push under its own decision of the decision agent after a secret scan, never by force
+# and never deleting; the CI channel runs on each push and its records are re-fetched into docs/records/TASK-002.jsonl;
+# main receives the task only at its acceptance, by a fast-forward under its own decision. Before each task commit, the
+# added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns (AC6).
+# Not applicable: GOV-002 (above); OPS-001 (scope: the repository's refs; the task changes no ref); INV-009, INV-011,
+# GOV-001, GOV-004, GOV-005, GOV-006 and SEC-003 (their scopes, the event log, the policy, the concept file, the bound
+# artifacts, the decision matrix, the records and pre-genesis documents, and .github/, meet no path of the write-set).
+# Uncovered (governor-spec.md §6.2; conformance-files.md section 1): the fixtures give the inputs of governor-spec.md
+# §3.2 as values, so how the governor derives them is not tested by these files; no runner and no governor exist, so
+# every scenario stays NOT_RUN and nothing here shows that any governor meets a fixture; until the CI workflow's next
+# revision (the owner's, A61), GOV-003's pinned list in the CI channel does not name tests/conformance/**, so a fixture
+# change is not reported there as an evaluator change and is caught only by each task's write-set and forbidden set (G0)
+# (D-195 P6); every review is by AI of one vendor.
+task: TASK-002
+contract_version: v1
+task_type: fixture
+objective: >-
+  Add the frozen set file and the executable fixtures of the 19 scenarios of the Verification capability (ACC-01 to
+  ACC-17, ADV-01, ADV-03) of the bound initial scenario set, set version 2, in the formats of
+  docs/specs/conformance-files.md revision 2 (Python modules that wrap canonical JSON text byte-exact), each fixture
+  faithful to its scenario's own Given, When and Expected cells, with unit, integration and property tests that check
+  only those files against that document and the bound scenario file. It adds no runner and no governor, and freezes
+  nothing: the freeze approvals are given at its acceptance.
+traces_to:
+  - docs/specs/conformance-files.md#2
+  - docs/specs/conformance-files.md#3
+  - docs/specs/conformance-files.md#4
+  - docs/specs/conformance-files.md#5
+  - docs/specs/conformance-files.md#7
+  - docs/specs/conformance-files.md#8
+  - docs/pre-genesis/conformance-scenarios-initial.md#2
+  - docs/pre-genesis/conformance-scenarios-initial.md#5
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-002.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5; the D-184/D-185 lesson): the placeholder
+  # and its quotes are replaced by the 40-hex id, unquoted, with nothing after it on the line (G0 reads the line raw).
+  base_commit: 96376a1b387d5e95c84db6f47417834da033235d
+  depends_on: [TASK-001]
+  # The interim documents have no id and no vN version, so each is named by its path and pinned by its SHA-256, as in
+  # TASK-001's contract.
+  intent_versions:
+    docs/specs/conformance-files.md: ad09093391029143bcca54b9235334eaec1bb65007a5b29e6982af3547a4674e
+    docs/pre-genesis/conformance-scenarios-initial.md: 6b5c0666a1f364f5ecec9ad516c9a749969a1963f4e5dbef566adcbc8c80e24d
+    docs/pre-genesis/conformance-methodology.md: a11928199da9b908fad5805b44d341b21f961f0bc925350b0d46ac9adc454c87
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+    docs/specs/spec-02-aieos-file-format.md: 31109a65ee144f3edd271bce108cfeb631c972186c7f44540c8e29a450a7fcbe
+    docs/pre-genesis/constitution.md: 16e78d30214082d1248369b910b051e7e4c48929036fced1488acc2f3efcf836
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+write_set:
+  paths:
+    - tests/conformance/set.py
+    - tests/conformance/fixtures/acc_01.py
+    - tests/conformance/fixtures/acc_02.py
+    - tests/conformance/fixtures/acc_03.py
+    - tests/conformance/fixtures/acc_04.py
+    - tests/conformance/fixtures/acc_05.py
+    - tests/conformance/fixtures/acc_06.py
+    - tests/conformance/fixtures/acc_07.py
+    - tests/conformance/fixtures/acc_08.py
+    - tests/conformance/fixtures/acc_09.py
+    - tests/conformance/fixtures/acc_10.py
+    - tests/conformance/fixtures/acc_11.py
+    - tests/conformance/fixtures/acc_12.py
+    - tests/conformance/fixtures/acc_13.py
+    - tests/conformance/fixtures/acc_14.py
+    - tests/conformance/fixtures/acc_15.py
+    - tests/conformance/fixtures/acc_16.py
+    - tests/conformance/fixtures/acc_17.py
+    - tests/conformance/fixtures/adv_01.py
+    - tests/conformance/fixtures/adv_03.py
+    - tests/unit/test_conformance_files.py
+    - tests/integration/test_conformance_set.py
+    - tests/property/test_conformance_properties.py
+read_set:
+  paths:
+    - docs/specs/conformance-files.md
+    - docs/pre-genesis/conformance-scenarios-initial.md
+    - docs/pre-genesis/conformance-methodology.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/genesis/genesis-charter-v2.md
+    - docs/pre-genesis/decision-matrix.md
+    - src/aieos_bootstrap/records.py
+  interfaces: [aieos_bootstrap.records.check_record]
+  schemas: [conformance-files set file (3), conformance-files fixture file (4), spec-02 record (6.2), spec-02 evaluation request (6.5)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - src/**
+  - tests/run_tests.py
+  - tests/unit/test_records.py
+  - tests/integration/test_records_log.py
+  - tests/property/test_records_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-005, INV-006, INV-007, INV-008, INV-010, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The file kind (conformance-files.md section 2). The set file and every fixture file is, byte for byte, the first
+      part DATA = r''' then a JSON text then the last part ''' and one LF; the JSON text holds no ''' and is in the
+      canonical form of section 2: UTF-8 without a byte-order mark, LF line ends, object keys sorted by code point, an
+      indent of two spaces with one key or list item per line, [] and {} for empty values, integers only, only " and \
+      escaped with a backslash in strings and control characters as \u with four lowercase hex digits, one final LF;
+      re-serialising the parsed JSON text in that form gives the same bytes. The tests read each file's bytes with
+      pathlib's read_bytes and never import or execute a fixture or set module.
+  - AC2: >-
+      The set file (section 3). Its JSON object has exactly scenario_set_version 2, scenario_set_file_hash equal to the
+      SHA-256 of docs/pre-genesis/conformance-scenarios-initial.md (the value Genesis charter version 2 §2 binds),
+      fixture_set_version 1 and scenarios: 32 entries, one per scenario row of the bound file, in the order of its rows,
+      each exactly {id, row_hash, capability, fixture}, with row_hash the SHA-256 of the row line without its line end
+      (recomputed by the tests from the bound file), capability the row's capability (Verification for the 17 rows of
+      section 2 and for ADV-01 and ADV-03; Risk Engine, Resume Check or Capability Boundaries for the others), and
+      fixture either {path, sha256} or null. The 13 entries outside the Verification capability are null. Each non-null
+      path is tests/conformance/fixtures/<module name>.py with the module name of section 2, and its sha256 is the
+      SHA-256 of that file's bytes. Every file in tests/conformance/fixtures/ is named by exactly one entry.
+  - AC3: >-
+      The fixture file (section 4). Its JSON object has exactly scenario and row_hash, equal to its set-file entry, and
+      cases: one case per task the scenario's Given names (three for ACC-13, one otherwise). Each case has exactly
+      request, inputs, records, when and expected. request has exactly the keys of specification 2 §6.5 in their forms
+      (task_id TASK- followed by digits; task_content_hash 64 lowercase hex; evaluated_commit a full lowercase hex
+      commit id; intent_versions a map of ids to v followed by digits; task_state a state name; changed_paths a list of
+      strings; retry_count {used, limit}, integers of 0 or more). when is evaluate exactly when task_state is VERIFYING
+      and re_evaluate exactly when it is IN_REVIEW. inputs has exactly the keys and forms section 4 gives. Every record
+      gives no finding under aieos_bootstrap.records.check_record, and record ids are unique in a case. In expected,
+      every key other than not_fixed is present with a value or named in not_fixed, never both; decision is a list of
+      the five acceptance values, next_state a list of state names, missing a list of {dimension, evidence_type},
+      reverify a list of record ids of the case, approval null or {record_id, source_class} naming a record of the case
+      with that source class, ai_approval_shown true or false.
+  - AC4: >-
+      Faithfulness (section 5). Every value of expected comes from the scenario's own Expected cell read with its Source
+      cell, and every element that cell does not fix is in not_fixed; the Given comes from the scenario's Given cell and
+      the set's section 1 defaults, with the profile of assurance-model.md §5 where the risk is high (ACC-16, ACC-17);
+      placeholder values (ids, hashes, times) fix no expected element. The unit tests hold, for each realised scenario,
+      the expected values together with the text of its Expected cell, and check both that this text equals the cell in
+      the bound file and that the fixture's expected equals those values. A scenario that no fixture can realise
+      faithfully gets null, is listed with its reason in the test module and in the acceptance request, and is never
+      re-expected, narrowed or replaced (section 5; CR-002 part 4 limit 8).
+  - AC5: >-
+      Limits, stated and tested as such: the files are data for a runner that does not exist yet, so nothing here shows
+      that a governor meets them, and every scenario is NOT_RUN until a runner and a governor run in the CI channel; the
+      fixtures give the inputs of governor-spec.md §3.2 as values (section 1); the tests check form, the set's binding to
+      the bound file and the fixtures' expected values against the Expected cells' text, never a governor's behaviour; no
+      file is frozen before the acceptance's freeze approvals; no expected value uses a name that a later specification
+      defines.
+  - AC6: >-
+      Purity and the CI checks (INV-001, INV-002, INV-004; conformance-files.md section 2). The test modules import only
+      the Python 3 standard library and aieos_bootstrap.records; they use no exec, eval, compile, __import__ or
+      importlib, start no process, open no network connection, call no model, write no file, and read files only with
+      pathlib's read_bytes; the fixture and set modules hold one assignment of one string each. The CI steps at the task's
+      commits report no finding: deterministic_rule (its file, import and pattern rules over every file under src/ and
+      tests/), OPS-003 (an effect label MEASURED, ENFORCED or GUARANTEED only with a decision-matrix row on its line),
+      SEC-001 and SEC-002 (no secret pattern, e-mail address or GitHub URL in any added line, file name or message), and
+      bandit as the static_security_analysis step runs it. Before each commit, the fixture and test text is scanned
+      with the workflow's SEC-001, SEC-002 and OPS-003 patterns, and each count is 0.
+  - AC7: >-
+      Tests. Unit tests (tests/unit/test_conformance_files.py) cover each rule of AC1 to AC4 with at least one passing
+      case and one failing case, the failing cases built in memory from altered copies of the files; one integration
+      test (tests/integration/test_conformance_set.py) checks, end to end, the whole set file against the bound scenario
+      file and the fixtures folder; the property tests (tests/property/test_conformance_properties.py; standard library
+      only, fixed seeds) check that re-serialising any fixture is idempotent, that any one-byte change of a fixture
+      changes its hash and is caught by the set check, that any reordering of keys is not canonical, that the same input
+      always gives the same result, and these properties of the invariants the task relates to: for INV-005, every
+      expected decision is one of the five acceptance values, never an execution string; for INV-006, no fixture
+      expects ACCEPT unless its inputs set auto_accept, and a case with a failed gate never expects NEEDS_REVIEW; for
+      INV-007, every evidence record of a case is bound to a commit and intent versions, and every reverify id names a
+      record bound to another commit or to another intent version than the request's; for INV-008, no agent_declared
+      record is named as an approval, and a profile type whose only record in a case is agent_declared is in that case's
+      expected missing list unless missing is in not_fixed. tests/run_tests.py, unchanged, runs all three groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: critical
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC7]}
+  - {gate: G3, check: constitution, args: [AC6, INV-001, INV-002, INV-004, INV-010, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts AND every fixture file and the set file have their freeze approvals
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act, scenario_not_realisable]
+owner_kept_act: false
