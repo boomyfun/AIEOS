@@ -109,6 +109,11 @@ Occurrences in session 2026-10-10-0235 (../History/2026-10/2026-10-10-0235-resum
 - **2026-10-10 (D-279, D-280).** The decision agent's own record lines: one non-ASCII character, then a dropped key; check_record found the second before any commit.
 - **2026-10-10 (several requests).** Typed hash endings, each caught by the abbreviation check before sending.
 
+Occurrences in session 2026-10-10-0348 (../History/2026-10/2026-10-10-0348-runner-entry-contract-and-reader-test-split.md):
+- **2026-10-10 (D-287).** My contract check for TASK-006 listed which files name the Resume Check fixture folder, but not which tests assert that list; the decision agent's reading at D-285 did not ask either. TASK-005's test forbids any other module to name the folder, and the draft runner's local run failed on it.
+- **2026-10-10 (:1430).** A count to the owner was wrong: "three contracts" for two, in a status line that named the two; corrected in the next replies.
+- **2026-10-10 (several requests).** Typed hash endings, each caught by the abbreviation check before sending.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.
