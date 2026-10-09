@@ -30,6 +30,9 @@ One in session 2026-10-08-1825 (../History/2026-10/2026-10-08-1825-m1-done-spec-
 One group in session 2026-10-09-0153 (../History/2026-10/2026-10-09-0153-task-001-landed.md), found by Claude and disclosed in the D-188 request:
 - **2026-10-09 (:705, :948, :1009, :1024).** Four short progress lines in English ("Now the local test runner." and three like it).
 
+One group in session 2026-10-09-0856 (../History/2026-10/2026-10-09-0856-runner-contract-and-drafts.md), found by Claude and disclosed in the D-208 request:
+- **2026-10-09 (:194, :336).** Two progress lines shown to the owner in English ("Now the results of the D-203 condition steps." and a line on the guard's refusal).
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

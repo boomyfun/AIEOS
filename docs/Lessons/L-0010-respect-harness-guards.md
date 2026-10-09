@@ -30,6 +30,9 @@ Three refusals in session 2026-10-09-0514 (../History/2026-10/2026-10-09-0514-fi
 Two refusals in session 2026-10-09-0637 (../History/2026-10/2026-10-09-0637-fixtures-accepted-and-landed.md), none retried in the refused form:
 - **2026-10-09 (:164, :792).** The owner's command guard refused a one-line program given to the Python launcher on the command line, and a needless `timeout 110 python -c ""` (Python's name followed by a dash); both were read-only, and each was rewritten in the form the guard's message gives.
 
+One refusal in session 2026-10-09-0856 (../History/2026-10/2026-10-09-0856-runner-contract-and-drafts.md), not retried in any form:
+- **2026-10-09 (:332).** The owner's command guard refused a read-only search whose command held Python's name followed by a dash as a search string; the read was redone without that search.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

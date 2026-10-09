@@ -75,6 +75,9 @@ Four incidents in session 2026-10-09-0514 (../History/2026-10/2026-10-09-0514-fi
 One incident in session 2026-10-09-0637 (../History/2026-10/2026-10-09-0637-fixtures-accepted-and-landed.md):
 - **2026-10-09 (D-204, D-205).** TASK-002's AC7, a coverage criterion ("each rule of AC1 to AC4 with a passing and a failing case"), was not checked rule by rule before the first review round, neither by the worker nor by the decision agent; two AC4 rules and then one AC1 rule were found without a failing case only in review rounds 1 and 2, which cost two fix commits and two more rounds. The fix: check a coverage criterion rule by rule before the first review round.
 
+One incident in session 2026-10-09-0856 (../History/2026-10/2026-10-09-0856-runner-contract-and-drafts.md), found by Claude at that session's start and confirmed by the decision agent (D-208):
+- **2026-10-09 (D-208 (c)).** Three items that decisions D-203 C8 and D-204 (e) sent to the last History were not in it, and neither the worker nor the decision agent (D-207 (a)) matched the decisions' "the History records" items against the History before the session-end request. The fix: before the session-end request, match every such item of the session's decisions line by line to the History, the worker and the decision agent both, and carry the match as a table in the request.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.
