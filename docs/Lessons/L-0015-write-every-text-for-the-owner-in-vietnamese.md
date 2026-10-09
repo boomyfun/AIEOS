@@ -55,6 +55,9 @@ Four in session 2026-10-10-0043 (../History/2026-10/2026-10-10-0043-bootstrap-sc
 Eight in session 2026-10-10-0138 (../History/2026-10/2026-10-10-0138-conformance-files-r4-and-task-005-contract.md), found by the machine scan and disclosed in the next request each time:
 - **2026-10-10 (:88, :167, :366, :631, :653, :1040, :1438, :1523).** Short progress lines in English before tool calls ("Now the archive of session 8f790446." and seven like it); the scan ran before each request, not before each progress line.
 
+Four in session 2026-10-10-0235 (../History/2026-10/2026-10-10-0235-resume-check-fixtures-accepted.md), found by the machine scan and disclosed in the next request each time:
+- **2026-10-10 (:191, :582, :690, :1340).** Short progress lines in English before tool calls.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

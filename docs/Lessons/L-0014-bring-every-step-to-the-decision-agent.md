@@ -19,6 +19,9 @@ Claude took a step that a decision should have covered without bringing it to th
 One occurrence in session 2026-10-10-0138 (../History/2026-10/2026-10-10-0138-conformance-files-r4-and-task-005-contract.md):
 - **2026-10-10 (D-261).** In session 8f790446, a condition of the decision agent (D-259 C4: relay its text in the next turn-final reply) was met one reply late (8f79 :1569 instead of :1548); found by machine at this session's start and recorded in D-259's execution record.
 
+One occurrence in session 2026-10-10-0235 (../History/2026-10/2026-10-10-0235-resume-check-fixtures-accepted.md):
+- **2026-10-10 (D-272).** In session 5d4884ef, D-269 C5 asked the next turn-final reply to relay D-268's and D-269's texts; D-268's had already been relayed at 5d48 :1220 and was not repeated at :1361. The condition itself asked for a repeat; found by machine at this session's start and recorded in D-269's execution record.
+
 ## Why it happens
 - Claude treats a step as mechanical (a display, a change of order, a turn end) and does not see it as a decision.
 - The request checklist of the decision agent's definition was not applied before sending.

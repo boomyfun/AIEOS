@@ -34,6 +34,9 @@ One incident in session 2026-10-06-0602 (../History/2026-10/2026-10-06-0602-rule
 One occurrence in session 2026-10-10-0043 (../History/2026-10/2026-10-10-0043-bootstrap-scope-and-m3-documents.md):
 - **2026-10-10 (D-257 request).** A line of my own check script ("placeholder") asserted nothing; it was disclosed and not counted as a check.
 
+One occurrence in session 2026-10-10-0235 (../History/2026-10/2026-10-10-0235-resume-check-fixtures-accepted.md):
+- **2026-10-10 (CS-90).** Two of my generator scripts first held an assertion ending in "or True", which asserts nothing; both were removed before the scripts ran.
+
 ## Why it happens
 - Proxies are cheaper than the real check.
 - The same model picks the evidence and judges it.

@@ -19,6 +19,9 @@ Four in session 2026-10-09-1248 (../History/2026-10/2026-10-09-1248-ci-revision-
 One occurrence in session 2026-10-09-1918 (../History/2026-10/2026-10-09-1918-governor-accepted-and-landed.md):
 - **2026-10-09 (round 1).** Each reviewer's prompt said "Read SP/rev/brief-common.md next" without saying what SP is, so all five listed folders of the repository, the drive and the scratchpad to find it, and two read one public repository document each; no note, request or handback was read. Neither the worker nor the decision agent, which approved the prompt shape, checked that the prompt alone reaches the inputs. Round 2 put the filled common part, with SP's path, first: no slip. A prompt is checked for that before any reviewer starts.
 
+One occurrence in session 2026-10-10-0235 (../History/2026-10/2026-10-10-0235-resume-check-fixtures-accepted.md):
+- **2026-10-10 (D-277).** With SP undefined in their prompts, the five reviewers of round 1 searched file names outside their copies (Glob only, and one failed Read); no content outside the copies was read and nothing was written. Their slips went to the decision agent first, and no reviewer was rerun before its ruling.
+
 ## Why it happens
 A brief's tool rule competes with the reviewer's habit of checking things by shell, and a path into the working tree makes a read-only command able to touch it.
 

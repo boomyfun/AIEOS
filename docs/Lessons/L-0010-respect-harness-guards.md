@@ -57,6 +57,9 @@ Occurrences in session 2026-10-10-0138 (../History/2026-10/2026-10-10-0138-confo
 - **2026-10-10 (:324).** Two less-than signs inside a search pattern.
 - **2026-10-10 (:1300).** Python's name followed by a dash, to run one test module.
 
+One occurrence in session 2026-10-10-0235 (../History/2026-10/2026-10-10-0235-resume-check-fixtures-accepted.md), my incorrect command, refused before it ran and rewritten as the rule requires:
+- **2026-10-10 (:1341).** A filler fragment with Python's name followed by a dash, left in a command meant only to copy a file.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

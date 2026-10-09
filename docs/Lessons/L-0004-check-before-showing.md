@@ -102,6 +102,13 @@ Occurrences in session 2026-10-10-0138 (../History/2026-10/2026-10-10-0138-confo
 - **2026-10-10 (TASK-005's contract, D-267 and D-269).** A list of acceptance values typed from memory into AC8 named a value no source defines and left one out; neither my rule-to-contract check, which did not cover enumerated lists, nor the decision agent's reading caught it before commit C. Every enumerated list in a contract or specification is to be checked against its source line by script before it is shown.
 - **2026-10-10 (D-265 request).** One hash ending typed by hand; the abbreviation check found it before sending.
 
+Occurrences in session 2026-10-10-0235 (../History/2026-10/2026-10-10-0235-resume-check-fixtures-accepted.md):
+- **2026-10-10 (D-277).** The per-brief review prompts named SP only through the common brief, which a reviewer could not find without SP's absolute path; my coverage check did not test that each prompt is self-sufficient. All five reviewers stopped without reviewing.
+- **2026-10-10 (D-274).** A dry run built from TASK-004's first dry-run script, not its second, repeated D-229's known stop.
+- **2026-10-10 (D-282).** A new file name held "sk-" followed by 21 name characters, which the records executor's unanchored secret pattern reads as a key; my pre-scan used the CI's anchored pattern over contents only. The executor stopped before the push.
+- **2026-10-10 (D-279, D-280).** The decision agent's own record lines: one non-ASCII character, then a dropped key; check_record found the second before any commit.
+- **2026-10-10 (several requests).** Typed hash endings, each caught by the abbreviation check before sending.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.
