@@ -1,0 +1,276 @@
+# Task contract TASK-004, the bootstrap governor of gov-AIEOS, its first version (Master Plan revision 2, §4 M2 and §5
+# points 5 and 6; the M2 work plan of decision D-195, P4 to P6; governor-spec.md). Revision 0, drafted under decisions
+# D-218 C4 and D-219 C2, brought for approval as a template; whether it is approved is recorded in the decision files,
+# not in this file. Fields and value forms follow specification 2 §5.1 and the contracts of TASK-001 to TASK-003.
+# Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# Task type: implementation. Constitution GOV-002 applies: tests/conformance/** is in the forbidden set.
+# Risk: high. R3 matches the governor (component tag governor; risk rules §5: "at least high" for the governor), R2
+# matches src/** and tests/**; the highest wins. Profile (assurance-model.md §5, gov-AIEOS, high): functional
+# [unit_test], architecture [deterministic_rule], functional [integration_test], security [static_security_analysis] and
+# architecture [ai_review (cross-model)], plus the evidence_required of the applicable articles.
+# Change class: critical_cr (governor-spec.md §8 point 2; D-195 P4): judged by the base version (which has no governor),
+# never auto-accepted.
+# Owner-kept act: true. This first version puts into force governor-spec.md §4 rule 5, "Leaving IN_REVIEW" point 4, the
+# rules that set the owner-kept act input and the definitions of the owner-kept act, weakens-evidence and
+# delegation-in-force inputs, which §3.2 names as "a change to who may approve what in this governor"; so its
+# acceptance is the owner's (decision D-166 (ii) and C1; CR-002 part 4 limit 5; Master Plan §5 point 5), asked once
+# when this version exists (O2, D-195 P6), in plain words: what the governor decides, that its decisions stay advisory,
+# and that A29 cannot be met. The decision agent's reviews and the way-2 reviews are evidence; they do not approve.
+# Reviews (as TASK-003's): five way-2 reviews by a Claude model other than the implementer's, each under a decision of
+# the decision agent, and three decision-agent reviews, the cross-model entry met only by the pair (A59).
+# Evaluation path (A61; A62, A63; as TASK-003's): the approved contract is committed on main as its own commit C,
+# changing only docs/tasks/TASK-004.yaml, with one parent equal to base_commit; the task's commits, each with the
+# trailer "AIEOS-Task: TASK-004", go to the branch task/TASK-004, each push under its own decision after a secret scan;
+# the CI channel (workflow revision 3) runs on each push: its conformance base run reports the base (no governor), and
+# its candidate run runs this governor file with every other input from the base, advisory (A29; governor-spec §10);
+# main receives the task only after the owner's acceptance, by a fast-forward whose head commit carries the trailer, so
+# that the base run on main runs over the landed governor (D-219 C2, review F5 (b)).
+# The pin: after the landing, the job's AIEOS_PINNED_GOVERNOR is set to the SHA-256 computed from the bytes of the
+# accepted src/aieos_bootstrap/governor.py, never taken from a run's annotation (D-219 C2, review F7), by a later
+# workflow revision, the owner's (A61); until then the base run on main reports and does not fail (review C-F10:
+# landing first, then the pin revision).
+# Not applicable: OPS-001, INV-009, INV-011, GOV-001, GOV-004, GOV-005, GOV-006 and SEC-003 (their scopes meet no path
+# of the write-set).
+# Uncovered and stated limits (AC12): the decision records are advisory (DM label rule; governor-spec §10); the inputs of
+# governor-spec §3.2 are derived only from values passed in (AC9), not from the repository's documents; the candidate
+# run in the CI channel runs this governor inside the runner's process, so a candidate could forge its own result
+# there, and the acceptance therefore rests also on the review pair and a local run in a clean clone (advisory), never
+# on CI step conclusions alone (D-219 C2, review F1); every review is by AI of one vendor.
+task: TASK-004
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add the first version of the bootstrap governor of governor-spec.md revision 5: one standard-library Python 3 module,
+  src/aieos_bootstrap/governor.py, whose function evaluate takes an evaluation request (specification 2 §6.5), the
+  inputs of governor-spec §3.2 as values (conformance-files.md section 4) and the records it reads (specification 2
+  §6.2), and returns one acceptance decision record (specification 2 §6.4) by the rules of governor-spec §4 and the
+  table of §5, with the derivation of the §3.2 inputs from values, and unit, integration and property tests. It
+  writes, reads and runs nothing outside its arguments, emits no execution decision, changes no fixture, runner or
+  workflow, and sets no pin.
+traces_to:
+  - docs/pre-genesis/governor-spec.md#3
+  - docs/pre-genesis/governor-spec.md#4
+  - docs/pre-genesis/governor-spec.md#5
+  - docs/pre-genesis/governor-spec.md#6
+  - docs/pre-genesis/governor-spec.md#8
+  - docs/specs/conformance-files.md#4
+  - docs/specs/conformance-files.md#6
+  - docs/pre-genesis/conformance-methodology.md#3
+  - docs/specs/spec-02-aieos-file-format.md#6.2
+  - docs/specs/spec-02-aieos-file-format.md#6.4
+  - docs/specs/spec-02-aieos-file-format.md#6.5
+  - docs/pre-genesis/assurance-model.md#3
+  - docs/pre-genesis/assurance-model.md#5
+  - docs/specs/risk-rules-gov-aieos.md#2
+input_state:
+  # base_commit is filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its
+  # quotes are replaced by the 40-hex id, unquoted, with nothing after it on the line (G0 reads the line raw).
+  base_commit: 05a935435a002a88917ae7e335ae247ef515f12f
+  depends_on: [TASK-001, TASK-002, TASK-003]
+  intent_versions:
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+    docs/specs/conformance-files.md: ad09093391029143bcca54b9235334eaec1bb65007a5b29e6982af3547a4674e
+    docs/pre-genesis/conformance-scenarios-initial.md: 6b5c0666a1f364f5ecec9ad516c9a749969a1963f4e5dbef566adcbc8c80e24d
+    docs/pre-genesis/conformance-methodology.md: a11928199da9b908fad5805b44d341b21f961f0bc925350b0d46ac9adc454c87
+    docs/specs/spec-02-aieos-file-format.md: 31109a65ee144f3edd271bce108cfeb631c972186c7f44540c8e29a450a7fcbe
+    docs/pre-genesis/constitution.md: 16e78d30214082d1248369b910b051e7e4c48929036fced1488acc2f3efcf836
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+write_set:
+  # Four modified paths: the package docstring and __all__ name the new module (as TASK-003); the three runner test
+  # files change only as AC14 allows (decision D-224). Every other path is new.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/governor.py
+    - tests/unit/test_governor.py
+    - tests/integration/test_governor_conformance.py
+    - tests/property/test_governor_properties.py
+    - tests/unit/test_runner.py
+    - tests/integration/test_runner_run.py
+    - tests/property/test_runner_properties.py
+read_set:
+  paths:
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/conformance-files.md
+    - docs/pre-genesis/conformance-scenarios-initial.md
+    - docs/pre-genesis/conformance-methodology.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/pre-genesis/decision-matrix.md
+    - tests/conformance/set.py
+    - tests/conformance/fixtures/
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/conformance.py
+  interfaces: [aieos_bootstrap.records.check_record, aieos_bootstrap.records.check_decision, aieos_bootstrap.conformance.run (tests only)]
+  schemas: [spec-02 record (6.2), spec-02 decision contract (6.4), spec-02 evaluation request (6.5), conformance-files fixture inputs (4), conformance-files comparison (6)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/conformance.py
+  - tests/run_tests.py
+  - tests/unit/test_records.py
+  - tests/integration/test_records_log.py
+  - tests/property/test_records_properties.py
+  - tests/unit/test_conformance_files.py
+  - tests/integration/test_conformance_set.py
+  - tests/property/test_conformance_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-005, INV-006, INV-007, INV-008, INV-010, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The entry point and purity (conformance-files.md section 6; governor-spec §6.3, §9). The module
+      aieos_bootstrap.governor is one file (the CI channel's GOVERNOR_FILES; D-219 C2), imports only the Python 3
+      standard library and aieos_bootstrap.records, and defines evaluate(request, inputs, records). evaluate reads
+      nothing but its arguments: no file, environment variable, clock, random source, network or process; it does not
+      change its arguments; the same arguments always give the same record (INV-010). It emits no execution decision.
+  - AC2: >-
+      Input checks (governor-spec §4 rules 6 and 7). A request that is not an object, or has no task id of the form
+      TASK-<digits>, makes evaluate raise ValueError, because no record can name its subject (reading; decision D-221
+      E2). Otherwise, a request that is not exactly the keys of specification 2 §6.5 in their forms, inputs that are
+      not exactly the keys and forms of conformance-files.md section 4, or a records value that is not a list, give a
+      decision record with decision null, the error, next_task_state equal to the request's task_state when it is a
+      state name, no table_row, and the keys of AC8's record (reading). A record that gives a finding under
+      aieos_bootstrap.records.check_record, or an evidence record without its commit binding, is not used and is
+      listed in uncovered; a record id used twice makes the request malformed (reading).
+  - AC3: >-
+      Binding (rule 2). An evidence record or gate result counts only if its commit equals the evaluated commit and its
+      intent_versions equal the request's for every entity it names; otherwise it is stale, satisfies nothing, and its
+      id is in reverify. Rule 2 does not apply to approval records (rule 5).
+  - AC4: >-
+      Satisfaction (rule 3 and its table). A record satisfies an entry only if its outcome is pass, its dimension
+      matches and the table lets its source class and evidence type satisfy the entry's type; no type stands in for
+      another; agent_declared never satisfies; the implementer's model never counts for review, except the decision
+      agent's review where the table lets it; a decision_agent_review counts only from recorder decision agent with a
+      basis, stands for exactly one entry, satisfies a human review type only while delegation_in_force is true and
+      owner_kept_act is false, never an ai_review that is not cross-model or a tool type, and the cross-model entry only
+      as one half of the pair with a qualifying other_model_review (two models that differ, a decision_ref), both
+      bound, for a high or critical task only; an other_model_review counted in the pair is not counted for another
+      ai_review entry of the task.
+  - AC5: >-
+      Blocking and approvals (rules 4 and 5). Any record of any class may block, also an unused or stale one (rule 4).
+      An approval record never satisfies an evidence entry; it counts only if fact_kind authority, approval_binding
+      {kind acceptance, hash equal to the request's task_content_hash}, never an auto-accept, and from human_authority,
+      or from decision_agent only while delegation_in_force is true and neither owner_kept_act nor weakens_evidence is
+      true (reading of "recorded decided by: decision agent (A41, A51)": the record's decision_ref names a decision).
+  - AC6: >-
+      Risk and profiles (rule 8; §3.2; risk rules §2). The derived risk (AC9) is the highest a rule gives; a lower risk
+      declared in the contract is not used; a change with a path that no rule matches gets no decision value; for a
+      high or critical task the profile is the one given (assurance-model.md §5 for gov-AIEOS).
+  - AC7: >-
+      The table (§5), in the A36 order, the first row that applies deciding: row 1 REJECT and REJECTED for a blocking
+      record of kind out_of_scope, forbidden_path or violation; row 2 NEEDS_REWORK, REWORK or, at the retry limit,
+      ESCALATED, for another blocking record, a failed gate or a failed record of a required type; row 3
+      INSUFFICIENT_EVIDENCE naming each missing gate, dimension and type, with the routing table (only human-only types
+      missing: IN_REVIEW; otherwise REWORK, or ESCALATED at the retry limit); row 4 ACCEPT only when auto_accept is
+      true for the risk class (never for gov-AIEOS now: AC12); row 5 NEEDS_REVIEW and IN_REVIEW. For when re_evaluate
+      (task_state IN_REVIEW): rows 1 to 3 at the evaluated commit; otherwise NEEDS_REVIEW, and ACCEPTED as next state
+      exactly when an approval record counts (AC5), which the record cites; a batch needs one approval per task (A42).
+  - AC8: >-
+      The decision record (specification 2 §6.4; governor-spec §6.1, §6.2). One dict giving no finding under
+      check_decision for decision.acceptance, with fact_kind interpretation, decision, next_task_state, table_row,
+      profile_used (a list of {dimension, required, satisfied_by, missing_types}), missing_gates, blocking,
+      failed_gates, reverify, approval_record, the request's task id, task_content_hash, evaluated_commit and
+      intent_versions, policy_version, level_version and ruleset_version from the inputs, governor_identity,
+      scenario_set_hash, uncovered and rests_on_ai {entries, approval} (conformance-files.md section 6): entries the
+      {dimension, evidence_type} pairs whose satisfying records are all decision_agent_review or other_model_review,
+      approval true exactly when the cited approval record is from decision_agent. The record also carries the keys
+      every record of specification 2 §6.2 needs, so that check_decision gives no finding (records.py
+      RECORD_REQUIRED; decision D-221 E1): subject the request's task id; record_id "decision-" followed by the SHA-256
+      of the canonical form (conformance-files.md section 2) of the record without record_id; source_class
+      deterministic_tool_local and recorder src/aieos_bootstrap/governor.py (reading: evaluate reads no file and knows
+      neither where it runs nor its own content hash, AC1; a run in the CI channel is shown by the runner's run
+      record, whose source class and governor_identity are the CI's); governor_identity and scenario_set_hash null,
+      given by the caller (reading).
+  - AC9: >-
+      Deriving the §3.2 inputs from values (DEF-0024, decision D-196 C5; D-218 C4). A function derive_inputs takes
+      values only (the contract's declared fields, the changed paths, the policy's rules as a list of {id, match,
+      class}, the owner-kept path rules, the applicable articles' scopes and evidence_required, the traced
+      requirements' declared profile differences, the pinned delegation value) and returns the inputs object of
+      conformance-files.md section 4, with these rules tested one by one: risk the highest matched, never the lower
+      declared, a path no rule matches gives no value (rule 8); a rule that cannot be evaluated matches (fail closed);
+      owner_kept_act set when a rule matches or the contract declares it, and when a rule cannot be evaluated;
+      weakens_evidence set when the comparison is not given (fail closed); delegation_in_force from the pinned value,
+      a missing value giving no decision (rule 7); the evidence profile the risk default with each traced
+      requirement's differences and the union of several; the applicable articles' evidence_required joining the
+      profile. Reading the repository's documents into these values is not part of this task (AC12).
+  - AC10: >-
+      Purity and the CI checks (INV-001, INV-002, INV-004; as TASK-003 AC10). The module and its tests import only the
+      standard library, aieos_bootstrap.records, and in the tests aieos_bootstrap.governor and
+      aieos_bootstrap.conformance; no exec, eval, compile, __import__ or importlib; no process, network, model, file
+      write, environment or clock; the tests read files only with pathlib's read_bytes and glob, and build malformed
+      inputs in memory. The CI steps at the task's commits report no finding (deterministic_rule, OPS-003, SEC-001,
+      SEC-002, bandit). Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003
+      patterns, and each count is 0.
+  - AC11: >-
+      Conformance (Master Plan §4 M2 exit; governor-spec §8 point 3). The runner run over the repository's tree at the
+      task's last commit, with this governor loaded from that tree (not as a stand-in), gives counts true, the 19
+      Verification fixtures (ACC-01 to ACC-17, ADV-01, ADV-03) PASS, the other 13 NOT_RUN and outcome pass, in the
+      integration test and in a local run in a clean clone (advisory; cited by the SHA-256 of its run-record text and by its results, labelled local; its record, whose source_class is the runner's fixed deterministic_tool_external_ci, is never filed in a records file; decision D-225 E5); the CI channel's candidate run on the task
+      branch shows the same in its annotation (advisory), read through the public check-runs page; if that page needs
+      sign-in, it is reported to the decision agent as not read, never assumed (decision D-221 E3). No scenario is
+      FAIL. A fixture is never changed to make a
+      scenario pass (CM §5; CR-002 part 4 limit 8).
+  - AC12: >-
+      Limits, stated in the module's docstring and the acceptance record: decisions are advisory (governor-spec §10;
+      A29 cannot hold); row 4 cannot apply to gov-AIEOS now (L1; A54 point 2); evaluate takes the §3.2 inputs as values
+      and derive_inputs takes values, so reading the policy, the constitution and the contracts from the repository is
+      not covered (conformance-files.md section 1; GS §6.2); governor_identity and scenario_set_hash come from the
+      caller, and the decision record's source_class and recorder are the defaults of AC8, not the channel or the
+      identity that specification 2 §6.4 names (AC8); the candidate run in the CI channel can be forged from inside the runner's process, so no
+      acceptance rests on it alone; the pin is a later workflow revision, the owner's, computed from the accepted file's
+      bytes; the open points of governor-spec §11 stay open (points 1, 4, 5, 6, 7 and 9 as the module applies their
+      proposed readings).
+  - AC13: >-
+      Tests, with a rule-to-test list, each rule with at least one passing and one failing case, the failing cases built
+      in memory: R1 purity and determinism (AC1); R2 each input check (AC2), both the ValueError cases and the error record with AC8's keys; R3 binding and staleness (AC3); R4 each row
+      of the satisfaction table and each decision_agent_review condition (AC4); R5 blocking and each approval condition
+      (AC5); R6 risk and rule 8 (AC6); R7 each table row, each routing row and the re-evaluation path (AC7); R8 the
+      record's keys and rests_on_ai both ways (AC8); R9 each derivation rule (AC9). Unit tests in
+      tests/unit/test_governor.py; tests/integration/test_governor_conformance.py runs the runner over the repository's
+      tree (AC11); property tests (tests/property/test_governor_properties.py; standard library only, fixed seeds): the
+      same arguments give the same record; an agent_declared record never changes a missing entry into a satisfied one;
+      a stale record never satisfies; a decision outside the five values never appears; with delegation_in_force false
+      no decision_agent record ever counts. tests/run_tests.py, unchanged, runs all three groups.
+  - AC14: >-
+      The runner's existing tests once a governor file exists (reading; decision D-224). tests/run_tests.py puts src
+      on the import path, so the runner's load_governor imports src/aieos_bootstrap/governor.py in
+      tests/unit/test_runner.py, tests/integration/test_runner_run.py and tests/property/test_runner_properties.py,
+      and their tests that assume no governor, or that install a fake one, fail. These three files change only to
+      isolate the governor's import state: a test that runs the runner without the evaluate seam makes the governor
+      absent with a meta-path finder that raises ModuleNotFoundError naming aieos_bootstrap.governor, and a test that
+      installs a fake governor first removes any loaded aieos_bootstrap.governor from sys.modules and from the
+      package's attributes; sys.modules, sys.meta_path and the package's attributes are restored after each test, as
+      RestoreImports does; only the helper, its standard-library imports, the base classes, the setUp methods and the
+      docstrings and comments that say so may change. No test, case or assertion is removed, weakened or added, and
+      no expected value changes; AC10 applies to these files. Every test of the three files passes both with and
+      without a governor file. The runner over the repository's tree with the real governor is AC11's integration
+      test.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1200k, wall_time: 4h, retries: 2, human_attention: 10m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9, AC11, AC13, AC14]}
+  - {gate: G3, check: constitution, args: [AC10, INV-001, INV-002, INV-004, INV-010, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND the owner's own approval record counts (owner_kept_act true)
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: true
