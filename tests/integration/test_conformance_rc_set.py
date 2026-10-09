@@ -17,9 +17,13 @@ SET_FREEZE_RECORDS = 'docs/records/TASK-002.jsonl'
 FIXTURE_DIR = 'tests/conformance/fixtures_rc'
 M2_FIXTURE_DIR = 'tests/conformance/fixtures'
 FIRST, LAST = b"DATA = r'''", b"'''\n"
-# The three modules of TASK-005, the only ones that may name the folder (AC6).
+# TASK-005's own three test modules (its AC6); each reads the fixtures, so each has to name their folder.
 OWN = ('tests/unit/test_conformance_rc_files.py', 'tests/integration/test_conformance_rc_set.py',
        'tests/property/test_conformance_rc_properties.py')
+# TASK-010: the other modules that may name the folder, each by name: under src/ only the conformance runner, which
+# section 9 of the conformance files document names; under tests/ the three new test modules of TASK-006.
+OTHERS = ('src/aieos_bootstrap/conformance.py', 'tests/unit/test_runner_rc.py',
+          'tests/integration/test_runner_rc_run.py', 'tests/property/test_runner_rc_properties.py')
 
 
 def read(path):
@@ -49,6 +53,11 @@ def rc_rows():
 
 def module_path(sid):
     return FIXTURE_DIR + '/' + sid.lower().replace('-', '_') + '.py'
+
+
+def not_allowed(paths):
+    """The given repository paths that are not allowed to name the folder (OWN and OTHERS, by name), sorted."""
+    return sorted(p for p in paths if p not in OWN + OTHERS)
 
 
 class RcSetTest(unittest.TestCase):
@@ -91,7 +100,17 @@ class RcSetTest(unittest.TestCase):
         name = FIXTURE_DIR.rsplit('/', 1)[1].encode('ascii')
         found = sorted(str(p.relative_to(ROOT)).replace('\\', '/') for d in ('src', 'tests') for p in (ROOT / d).rglob('*.py')
                        if name in p.read_bytes())
-        self.assertEqual(found, sorted(OWN))
+        self.assertEqual(not_allowed(found), [])
+        self.assertTrue(set(OWN) <= set(found))
+
+    def test_a_module_that_is_not_allowed_is_named(self):
+        other_src = 'src/aieos_bootstrap/resume_check.py'
+        unnamed_test = 'tests/unit/test_not_named_in_the_contract.py'
+        self.assertEqual(not_allowed(list(OWN + OTHERS) + [other_src]), [other_src])
+        self.assertEqual(not_allowed(list(OWN + OTHERS) + [unnamed_test]), [unnamed_test])
+
+    def test_the_allowed_modules_are_all_allowed(self):
+        self.assertEqual(not_allowed(OWN + OTHERS), [])
 
 
 if __name__ == '__main__':
