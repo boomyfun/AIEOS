@@ -519,6 +519,9 @@ class FileKindTest(unittest.TestCase):
             'trailing space': FIRST + b'{\n  "a": 1 \n}\n' + LAST,
             'an empty list on two lines': FIRST + b'{\n  "a": [\n  ]\n}\n' + LAST,
             'an uppercase hex escape': FIRST + b'{\n  "a": "\\u001F"\n}\n' + LAST,
+            'no final LF in the JSON text': FIRST + text[:-1] + LAST,
+            'a doubled final LF': FIRST + text + b'\n' + LAST,
+            'a raw control character': FIRST + b'{\n  "a": "\x01"\n}\n' + LAST,
             'empty': b'',
         }
         for name, data in bad.items():
