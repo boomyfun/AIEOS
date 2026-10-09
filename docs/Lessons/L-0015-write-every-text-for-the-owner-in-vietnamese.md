@@ -48,6 +48,10 @@ Five in session 2026-10-09-2339 (../History/2026-10/2026-10-09-2339-spec-3-appro
 - **2026-10-09 (before :477).** A progress line in English about the guard refusal, reported by Claude; the transcript holds it as no text record.
 - **2026-10-10 (:718, :833, :913).** Three short progress lines in English before Edit calls ("Now I apply the corrections to the draft." and two like it). From then on the English-line scan ran by machine before every reply and request (D-244 C5).
 
+Four in session 2026-10-10-0043 (../History/2026-10/2026-10-10-0043-bootstrap-scope-and-m3-documents.md), found by the machine scan and disclosed in the D-250 and D-255 requests:
+- **2026-10-10 (:147, :252, :301).** Three short progress lines in English before tool calls ("Now I'll do the same for this session: …" and two like it).
+- **2026-10-10 (:890).** One more, "Now the edits in the builder.", after the scan had run before each reply; the scan caught it before the next request.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

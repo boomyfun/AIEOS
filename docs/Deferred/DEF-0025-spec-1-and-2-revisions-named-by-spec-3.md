@@ -1,6 +1,6 @@
 # DEF-0025: The next revisions of specifications 1 and 2 that specification 3 names
 
-- Status: open
+- Status: done
 - Opened: 2026-10-10 (decision files D-244 C4 and D-245)
 - Deferred by: decision agent (A41), D-244 C4: specification 3 settles points of specifications 1 and 2 and uses specification 2 beyond its current text without changing either file (D-243 (P3)); their next revisions record it.
 - Decision group: A (specification revisions under A51, B9).
@@ -20,3 +20,4 @@ Specification 3 (DM F23).
 
 ## Log
 - 2026-10-10: opened (decision files D-244 and D-245). ../History/2026-10/2026-10-09-2339-spec-3-approved-and-on-main.md
+- 2026-10-10: done: specifications 1 and 2 revision 2 record every point of "What" (DM F25, F26; decision D-255), commit 236e546; the one point found outside it is DEF-0026. ../History/2026-10/2026-10-10-0043-bootstrap-scope-and-m3-documents.md

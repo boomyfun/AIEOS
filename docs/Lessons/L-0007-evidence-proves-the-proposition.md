@@ -31,6 +31,9 @@ One incident in session 2026-10-06-0306 (../History/2026-10/2026-10-06-0306-real
 One incident in session 2026-10-06-0602 (../History/2026-10/2026-10-06-0602-rules-book-definition-and-log-split.md):
 - **2026-10-06 (D-025, D-026).** Claude used the definition file's SHA-256 as if it showed which definition the running decision agent had been loaded with, and the D-025 request assumed the agent could go on deciding after the change. The harness did not reload the definition until the session was resumed (:1068). D-026 compared its loaded text with the files itself and escalated; the owner then allowed the earlier text to decide the session's remaining steps ("có cho cả hai câu", :1062).
 
+One occurrence in session 2026-10-10-0043 (../History/2026-10/2026-10-10-0043-bootstrap-scope-and-m3-documents.md):
+- **2026-10-10 (D-257 request).** A line of my own check script ("placeholder") asserted nothing; it was disclosed and not counted as a check.
+
 ## Why it happens
 - Proxies are cheaper than the real check.
 - The same model picks the evidence and judges it.

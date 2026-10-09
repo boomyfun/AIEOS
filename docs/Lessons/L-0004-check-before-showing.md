@@ -94,6 +94,10 @@ Occurrences in session 2026-10-09-2339 (../History/2026-10/2026-10-09-2339-spec-
 - **2026-10-10 (D-244 request).** Seven transcript line numbers typed from memory; the steps tool's listing replaced them before sending.
 - **2026-10-10 (D-246 request).** Two hash endings typed by hand ("…1b71", "…cf9"); the abbreviation check found them before sending.
 
+Occurrences in session 2026-10-10-0043 (../History/2026-10/2026-10-10-0043-bootstrap-scope-and-m3-documents.md):
+- **2026-10-10 (D-252 and D-255 requests).** Three hash endings typed by hand ("…4c3a"; "…e4c9", then "…c1c9"); the abbreviation check found each before sending.
+- **2026-10-10 (D-258).** Two defects in the conformance files draft that the reviewer could not see, because it did not read specification 2: the contract's fields given at the top level, against specification 2 §5.1's nesting, and a placeholder list missing check 4. A form cited from another specification is to be checked against that specification's lines before review.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.
