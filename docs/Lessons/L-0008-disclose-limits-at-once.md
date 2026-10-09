@@ -53,6 +53,9 @@ Two incidents found in session 2026-10-09-0352 (../History/2026-10/2026-10-09-03
 One incident in session 2026-10-09-0514 (../History/2026-10/2026-10-09-0514-fixture-file-kind-and-fixture-drafts.md):
 - **2026-10-09 (D-201 request).** The request disclosed a refused removal but not three earlier removals of scratchpad files the worker had just made (:1116, :1147, :1166); the decision agent found two, and the worker's scan at the session end the third.
 
+One incident in session 2026-10-09-0637 (../History/2026-10/2026-10-09-0637-fixtures-accepted-and-landed.md):
+- **2026-10-09 (:562; before D-205).** Scratchpad work done while a request was open and before its decision: copies of the review briefs after the D-203 request was sent, and the TB-3 draft before D-205. Both were in the scratchpad only and were disclosed in the next request, not before.
+
 ## Why it happens
 - Claude wants to keep momentum, and disclosure feels like an admission.
 - A note in a log is mistaken for telling the owner.

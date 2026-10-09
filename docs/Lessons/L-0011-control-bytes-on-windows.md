@@ -65,6 +65,10 @@ Two incidents in session 2026-10-08-2113 (../History/2026-10/2026-10-08-2113-gen
 One incident in session 2026-10-09-0514 (../History/2026-10/2026-10-09-0514-fixture-file-kind-and-fixture-drafts.md):
 - **2026-10-09 (scratchpad).** A drafting aid wrote a table through Windows text-mode output, with CR bytes; the composer's byte check stopped on it, and the aid was changed to write in binary mode.
 
+Two incidents in session 2026-10-09-0637 (../History/2026-10/2026-10-09-0637-fixtures-accepted-and-landed.md):
+- **2026-10-09 (:697, :792).** Filler commands against D-135 C3: a `cmp` of a file that does not exist, which ran and changed nothing, and the refused `python -c ""`.
+- **2026-10-09 (the D-206 request).** One line number filled with `sed -i.bak` instead of the Edit tool; disclosed in the request, the copy before it kept.
+
 ## Why it happens
 - Git Bash heredocs interpret quotes and backslashes.
 - Python text mode on Windows writes CRLF.

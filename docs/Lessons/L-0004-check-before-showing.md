@@ -72,6 +72,9 @@ One incident found in session 2026-10-09-0352 (../History/2026-10/2026-10-09-035
 Four incidents in session 2026-10-09-0514 (../History/2026-10/2026-10-09-0514-fixture-file-kind-and-fixture-drafts.md):
 - **2026-10-09 (the D-198, D-199, D-200 and D-201 requests).** Each request's first text gave transcript line numbers typed from memory; each time the steps tool gave the right numbers and they were replaced before sending, and the D-201 text also said wrongly that they came from the tool. The fix: run the steps tool before writing a request and paste its numbers.
 
+One incident in session 2026-10-09-0637 (../History/2026-10/2026-10-09-0637-fixtures-accepted-and-landed.md):
+- **2026-10-09 (D-204, D-205).** TASK-002's AC7, a coverage criterion ("each rule of AC1 to AC4 with a passing and a failing case"), was not checked rule by rule before the first review round, neither by the worker nor by the decision agent; two AC4 rules and then one AC1 rule were found without a failing case only in review rounds 1 and 2, which cost two fix commits and two more rounds. The fix: check a coverage criterion rule by rule before the first review round.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.
