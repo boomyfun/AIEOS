@@ -3,6 +3,8 @@
 Every malformed input is built in memory from the repository's own files and given to the runner through its byte
 reader and records listing (AC1); no file is written. Stand-in governors are test seams (AC6). The governor's loading
 cases use sys.modules and sys.meta_path, restored after each test; no governor file and no importlib are used.
+Each test starts with the governor absent, whether or not a governor file exists, unless it installs a fake one
+(TASK-004 AC14): see isolate_governor.
 """
 import contextlib
 import copy
@@ -127,12 +129,14 @@ def stand_in(files=None, change=None):
 
 
 class RestoreImports(unittest.TestCase):
-    """Restores sys.modules and sys.meta_path after each test."""
+    """Restores sys.modules and sys.meta_path after each test, and starts each test with the governor absent
+    (TASK-004 AC14)."""
 
     def setUp(self):
         self._modules = dict(sys.modules)
         self._meta = list(sys.meta_path)
         self.addCleanup(self._restore)
+        isolate_governor(self)
 
     def _restore(self):
         sys.meta_path[:] = self._meta
@@ -165,7 +169,37 @@ class Failing:
         return None
 
 
-class R1ReaderAndRoot(unittest.TestCase):
+class Absent:
+    """A meta-path finder that makes the governor absent, as when no governor file exists (TASK-004 AC14)."""
+
+    def find_spec(self, name, path=None, target=None):
+        if name == conformance.GOVERNOR_MODULE:
+            raise ModuleNotFoundError('No module named %r' % name, name=name)
+        return None
+
+
+def isolate_governor(test):
+    """Removes any loaded governor from sys.modules and from the package's attributes and puts Absent first on
+    sys.meta_path, so that the test sees the governor absent unless it installs a fake one (TASK-004 AC14). The
+    package's attribute is restored after the test; RestoreImports restores sys.modules and sys.meta_path."""
+    package = sys.modules.get('aieos_bootstrap')
+    saved = getattr(package, 'governor', None) if package is not None else None
+    sys.modules.pop(conformance.GOVERNOR_MODULE, None)
+    if package is not None and hasattr(package, 'governor'):
+        delattr(package, 'governor')
+    sys.meta_path.insert(0, Absent())
+
+    def restore():
+        if package is None:
+            return
+        if saved is not None:
+            package.governor = saved
+        elif hasattr(package, 'governor'):
+            delattr(package, 'governor')
+    test.addCleanup(restore)
+
+
+class R1ReaderAndRoot(RestoreImports):
     def test_inputs_come_only_through_the_reader(self):
         files = real_files()
         r = go(files)
@@ -193,7 +227,7 @@ class R1ReaderAndRoot(unittest.TestCase):
                 go(files, commit=commit, task=task)
 
 
-class R2CanonicalForm(unittest.TestCase):
+class R2CanonicalForm(RestoreImports):
     def test_a_wrapped_canonical_file_is_read(self):
         value = {'b': [1, 'x', None, True], 'a': {}, 'c': [], 'd': 'quote " backslash \\ tab \t'}
         self.assertEqual(conformance.unwrap(wrap(value)), value)
@@ -238,7 +272,7 @@ class R2CanonicalForm(unittest.TestCase):
             conformance.canonical_text({'a': 1.5})
 
 
-class R3DoesNotCount(unittest.TestCase):
+class R3DoesNotCount(RestoreImports):
     def test_the_real_set_counts(self):
         r = go(real_files())
         self.assertTrue(r.value['counts'])
@@ -319,7 +353,7 @@ class R3DoesNotCount(unittest.TestCase):
         self.assertEqual(r.record['outcome'], 'fail')
 
 
-class R4FreezeApproval(unittest.TestCase):
+class R4FreezeApproval(RestoreImports):
     def without_the_set_freeze(self):
         files = real_files()
         path = conformance.RECORDS_DIR + '/TASK-002.jsonl'
@@ -371,7 +405,7 @@ class R4FreezeApproval(unittest.TestCase):
         self.assertIn('the records file %s is unreadable' % TEST_RECORDS, r.problems)
 
 
-class R5FixtureConditions(unittest.TestCase):
+class R5FixtureConditions(RestoreImports):
     def result(self, files, sid, evaluate=None):
         r = go(files, evaluate=evaluate or stand_in(real_files()))
         return r.results[sid], r.reasons[sid], r
@@ -600,7 +634,7 @@ class R6EntryPoint(RestoreImports):
         self.assertIsNone(r.value['governor_identity'])
 
 
-class R7Comparison(unittest.TestCase):
+class R7Comparison(RestoreImports):
     def one(self, sid, change):
         files = real_files()
         r = go(files, evaluate=stand_in(files, lambda s, n, out: change(out) if s == sid else out))

@@ -3,10 +3,12 @@
 The helpers below repeat those of tests/unit/test_runner.py, because each CI test folder is discovered on its own.
 Every changed input is built in memory and given to the runner through its byte reader and records listing (AC1);
 no file is written. Stand-in governors are test seams (AC6).
+Each test starts with the governor absent, whether or not a governor file exists (TASK-004 AC14).
 """
 import json
 import pathlib
 import random
+import sys
 import unittest
 
 from aieos_bootstrap import conformance
@@ -108,7 +110,46 @@ def text_in_order(value, rng):
     return json.dumps(value, ensure_ascii=False)
 
 
+class Absent:
+    """A meta-path finder that makes the governor absent, as when no governor file exists (TASK-004 AC14)."""
+
+    def find_spec(self, name, path=None, target=None):
+        if name == conformance.GOVERNOR_MODULE:
+            raise ModuleNotFoundError('No module named %r' % name, name=name)
+        return None
+
+
+def isolate_governor(test):
+    """Removes any loaded governor from sys.modules and from the package's attributes and puts Absent first on
+    sys.meta_path, so that the test sees the governor absent (TASK-004 AC14). sys.modules, sys.meta_path and the
+    package's attribute are restored after the test."""
+    modules, meta = dict(sys.modules), list(sys.meta_path)
+    package = sys.modules.get('aieos_bootstrap')
+    saved = getattr(package, 'governor', None) if package is not None else None
+    sys.modules.pop(conformance.GOVERNOR_MODULE, None)
+    if package is not None and hasattr(package, 'governor'):
+        delattr(package, 'governor')
+    sys.meta_path.insert(0, Absent())
+
+    def restore():
+        sys.meta_path[:] = meta
+        for name in list(sys.modules):
+            if name not in modules:
+                del sys.modules[name]
+        sys.modules.update(modules)
+        if package is None:
+            return
+        if saved is not None:
+            package.governor = saved
+        elif hasattr(package, 'governor'):
+            delattr(package, 'governor')
+    test.addCleanup(restore)
+
+
 class RunnerProperties(unittest.TestCase):
+    def setUp(self):
+        isolate_governor(self)
+
     def test_the_same_inputs_give_the_same_run_record(self):
         files = real_files()
         self.assertEqual(go(files).text, go(real_files()).text)

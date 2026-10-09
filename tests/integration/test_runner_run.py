@@ -1,10 +1,12 @@
 """Integration test of the conformance runner of TASK-003 (AC12): runs over the repository's own tree end to end,
 with the runner's default byte reader and records listing. Stand-in governors are test seams (AC6); no file is
 written.
+Each test starts with the governor absent, whether or not a governor file exists (TASK-004 AC14).
 """
 import collections
 import json
 import pathlib
+import sys
 import unittest
 
 from aieos_bootstrap import conformance
@@ -44,8 +46,45 @@ def answer(request, expected):
     }
 
 
+class Absent:
+    """A meta-path finder that makes the governor absent, as when no governor file exists (TASK-004 AC14)."""
+
+    def find_spec(self, name, path=None, target=None):
+        if name == conformance.GOVERNOR_MODULE:
+            raise ModuleNotFoundError('No module named %r' % name, name=name)
+        return None
+
+
+def isolate_governor(test):
+    """Removes any loaded governor from sys.modules and from the package's attributes and puts Absent first on
+    sys.meta_path, so that the test sees the governor absent (TASK-004 AC14). sys.modules, sys.meta_path and the
+    package's attribute are restored after the test."""
+    modules, meta = dict(sys.modules), list(sys.meta_path)
+    package = sys.modules.get('aieos_bootstrap')
+    saved = getattr(package, 'governor', None) if package is not None else None
+    sys.modules.pop(conformance.GOVERNOR_MODULE, None)
+    if package is not None and hasattr(package, 'governor'):
+        delattr(package, 'governor')
+    sys.meta_path.insert(0, Absent())
+
+    def restore():
+        sys.meta_path[:] = meta
+        for name in list(sys.modules):
+            if name not in modules:
+                del sys.modules[name]
+        sys.modules.update(modules)
+        if package is None:
+            return
+        if saved is not None:
+            package.governor = saved
+        elif hasattr(package, 'governor'):
+            delattr(package, 'governor')
+    test.addCleanup(restore)
+
+
 class RunnerEndToEndTest(unittest.TestCase):
     def setUp(self):
+        isolate_governor(self)
         self.cases = cases_by_request()
         self.set_value = conformance.unwrap((ROOT / conformance.SET_FILE).read_bytes())
         self.with_fixture = [e['id'] for e in self.set_value['scenarios'] if e['fixture'] is not None]
