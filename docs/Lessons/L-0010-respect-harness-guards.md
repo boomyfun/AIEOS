@@ -39,6 +39,10 @@ One refusal in session 2026-10-09-1056 (../History/2026-10/2026-10-09-1056-runne
 One refusal in session 2026-10-09-1801 (../History/2026-10/2026-10-09-1801-governor-drafts-and-runner-test-isolation.md), not retried in that form:
 - **2026-10-09 (:253).** The owner's command guard refused a read-only scan whose search pattern held the two "less than" signs of a here-string; it was rewritten as a script whose patterns are built from character codes, as the guard's message says (D-223 Q4).
 
+Two occurrences in session 2026-10-09-1918 (../History/2026-10/2026-10-09-1918-governor-accepted-and-landed.md):
+- **2026-10-09 (:976).** A filler command (a script called with "--help", output discarded) ran; it wrote nothing. Disclosed in the next request.
+- **2026-10-09 (:1843).** A removal command word ran: `rmdir` on a scratchpad folder that did not exist, after a `cd` inside a brace group had changed the working folder unnoticed; nothing was removed. Disclosed in the next request.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

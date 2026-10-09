@@ -16,6 +16,9 @@ Four in session 2026-10-09-1248 (../History/2026-10/2026-10-09-1248-ci-revision-
 - **2026-10-09 (D-218 request).** Both reviews used to fix the draft before the slips were brought; accepted as disclosed (D-218 Q2).
 - **2026-10-09 (re-check).** One no-op call ("echo skip"), brought before the owner question as D-218 C2 required.
 
+One occurrence in session 2026-10-09-1918 (../History/2026-10/2026-10-09-1918-governor-accepted-and-landed.md):
+- **2026-10-09 (round 1).** Each reviewer's prompt said "Read SP/rev/brief-common.md next" without saying what SP is, so all five listed folders of the repository, the drive and the scratchpad to find it, and two read one public repository document each; no note, request or handback was read. Neither the worker nor the decision agent, which approved the prompt shape, checked that the prompt alone reaches the inputs. Round 2 put the filled common part, with SP's path, first: no slip. A prompt is checked for that before any reviewer starts.
+
 ## Why it happens
 A brief's tool rule competes with the reviewer's habit of checking things by shell, and a path into the working tree makes a read-only command able to touch it.
 
