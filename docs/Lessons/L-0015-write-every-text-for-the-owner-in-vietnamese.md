@@ -43,6 +43,11 @@ Three in session 2026-10-09-1248 (../History/2026-10/2026-10-09-1248-ci-revision
 Three lines of session 2026-10-09-1248, found in session 2026-10-09-1801 (../History/2026-10/2026-10-09-1801-governor-drafts-and-runner-test-isolation.md) and left out of that session's History:
 - **2026-10-09 (cb45 :1123, :1505, :1685).** Three short progress lines in English, each written just before an Edit or a script in the scratchpad ("Now C1, …", "Now E2 …", "Now the executor's …").
 
+Five in session 2026-10-09-2339 (../History/2026-10/2026-10-09-2339-spec-3-approved-and-on-main.md), found by Claude and disclosed in the D-243 and D-244 requests:
+- **2026-10-09 (:351).** A progress line in English ("Now I fix the builder so the "OK" lines are cited …").
+- **2026-10-09 (before :477).** A progress line in English about the guard refusal, reported by Claude; the transcript holds it as no text record.
+- **2026-10-10 (:718, :833, :913).** Three short progress lines in English before Edit calls ("Now I apply the corrections to the draft." and two like it). From then on the English-line scan ran by machine before every reply and request (D-244 C5).
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

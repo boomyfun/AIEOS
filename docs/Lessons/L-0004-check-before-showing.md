@@ -89,6 +89,11 @@ Two incidents in session 2026-10-09-1248 (../History/2026-10/2026-10-09-1248-ci-
 One incident in session 2026-10-09-1918 (../History/2026-10/2026-10-09-1918-governor-accepted-and-landed.md):
 - **2026-10-09 (TB-1).** The archived task-branch executor template still carried two counts of the task it was copied from (5 manifest lines, 1 non-added path); found while preparing the push, before any run, and corrected under a decision. A copied template's every count is checked against the new task's write set.
 
+Occurrences in session 2026-10-09-2339 (../History/2026-10/2026-10-09-2339-spec-3-approved-and-on-main.md):
+- **2026-10-09 (D-243 request).** A hash ending typed by hand ("…2a52" for "…7a52"); the abbreviation check found it before sending.
+- **2026-10-10 (D-244 request).** Seven transcript line numbers typed from memory; the steps tool's listing replaced them before sending.
+- **2026-10-10 (D-246 request).** Two hash endings typed by hand ("…1b71", "…cf9"); the abbreviation check found them before sending.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.
