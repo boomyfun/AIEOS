@@ -33,6 +33,10 @@ One group in session 2026-10-09-0153 (../History/2026-10/2026-10-09-0153-task-00
 One group in session 2026-10-09-0856 (../History/2026-10/2026-10-09-0856-runner-contract-and-drafts.md), found by Claude and disclosed in the D-208 request:
 - **2026-10-09 (:194, :336).** Two progress lines shown to the owner in English ("Now the results of the D-203 condition steps." and a line on the guard's refusal).
 
+Three lines, found by Claude and disclosed to the decision agent (D-211, D-213):
+- **2026-10-09 (a266 :722).** A progress line in English in session 2026-10-09-0856, which that session's History left out (a correction, ../History/2026-10/2026-10-09-1056-runner-accepted-and-landed.md).
+- **2026-10-09 (:433, :960).** Two progress lines in English in session 2026-10-09-1056, each a short line before an Edit; the second after a decision's reminder to read every line before sending it.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

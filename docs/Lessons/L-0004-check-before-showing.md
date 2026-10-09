@@ -78,6 +78,10 @@ One incident in session 2026-10-09-0637 (../History/2026-10/2026-10-09-0637-fixt
 One incident in session 2026-10-09-0856 (../History/2026-10/2026-10-09-0856-runner-contract-and-drafts.md), found by Claude at that session's start and confirmed by the decision agent (D-208):
 - **2026-10-09 (D-208 (c)).** Three items that decisions D-203 C8 and D-204 (e) sent to the last History were not in it, and neither the worker nor the decision agent (D-207 (a)) matched the decisions' "the History records" items against the History before the session-end request. The fix: before the session-end request, match every such item of the session's decisions line by line to the History, the worker and the decision agent both, and carry the match as a table in the request.
 
+Two incidents in session 2026-10-09-1056 (../History/2026-10/2026-10-09-1056-runner-accepted-and-landed.md):
+- **2026-10-09 (D-211 (c)).** A contract sentence about what a CI step covers was drafted and approved twice without reading the step's list; the decision agent found it false before the contract was committed. The fix: check every statement a contract makes about a tool against the tool's own source before it is approved.
+- **2026-10-09 (D-212 (a)).** After a contract amendment added a condition, the rule-to-test table was not checked again; the condition had no test, and a review round blocked on it. The fix: after any amendment of a contract, check the rule-to-test table against it rule by rule again before the first review round.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.
