@@ -1,0 +1,298 @@
+# Task contract TASK-006, the conformance runner's Resume Check entry (Master Plan revision 3, §4 M3; the M3 work order
+# of decision D-254, as amended by decisions D-262 and D-263; specification 2 §5.1). Revision 0, drafted under decision
+# D-284 (C5), brought for approval in D-285; whether it is approved is recorded in the decision files, not in this
+# file. Fields and value forms follow specification 2 §5.1 and TASK-003's contract, whose runner this task changes.
+# Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# Task type: implementation. Constitution GOV-002 applies: tests/conformance/** (the fixtures, the Resume Check
+# fixtures and the set file, scenario files in the sense of conformance-files.md section 8) is in the forbidden set, so
+# the task can read them but never change them.
+# What it changes (conformance-files.md revision 4, section 9): the runner chooses each scenario's entry by the
+# capability of its set entry, which must equal the capability the bound scenario file gives that id; it expects a
+# Verification fixture under tests/conformance/fixtures/ (unchanged) and a Resume Check fixture under
+# tests/conformance/fixtures_rc/ (D-262, D-263: the path check made capability-aware); it checks a Resume Check fixture's
+# form, calls the Resume Check entry (the function check of the module aieos_bootstrap.resume_check, from the base) per
+# case, and compares the observed execution decision; any other capability is NOT_RUN. No Resume Check exists, and the
+# set file names no Resume Check fixture (its entries RC-01 to RC-11 are null until TASK-005b, after TASK-008), so over
+# the repository's own tree every run record is unchanged by this task: the same keys, counts, outcome and results.
+# Readers of the changed path (D-263 C3's practice): src/aieos_bootstrap/conformance.py is read by the CI workflow's
+# conformance base run (from the base; a push that changes it must name exactly one task, revision 4, F5 (b)) and
+# candidate run (from the base too; only GOVERNOR_FILES come from the head), and imported by the test modules
+# test_runner.py, test_runner_run.py, test_runner_properties.py and test_governor_conformance.py, which this task does
+# not change (forbidden): their assertions must keep passing (AC10). The run record gains its resume_check key only
+# when a Resume Check scenario has a fixture (AC7), so the workflow's check of the run record (valid(), revision 4)
+# reads the same keys as now.
+# Risk: high. R2 matches src/** and tests/** (medium); R3 read fail closed matches them too, the runner falling under
+# its tag verification (risk rules section 2 point 3); no path of the write set meets R11 (tests/conformance/**); the
+# highest wins. Profile (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture
+# [deterministic_rule], functional [integration_test], security [static_security_analysis] and architecture [ai_review
+# (cross-model)], plus the evidence_required of the applicable articles. Dimensions are named as TASK-003's records name
+# them (decision D-181, reading R-dim).
+# Change class: critical_cr (D-254 P4, as TASK-003): an evaluator part that enforces acceptance and is not bound (DM
+# B1; A29: the evaluator includes the runner), so it is judged by the base version and never auto-accepted (constitution
+# GOV-003; governor-spec.md §8); stricter than required, since the bound identity is governor.py's hash alone (charter
+# version 3), and lowering nothing.
+# Reviews (as TASK-003's, D-181 P2, P3): five way-2 reviews by a Claude model other than the implementer's, each under a
+# decision of the decision agent (architecture ai_review for INV-001, INV-002, INV-004; security ai_review for SEC-002;
+# governance ai_review for GOV-003; operational ai_review for OPS-003; the cross-model half), and three
+# decision-agent reviews (architecture human_review for INV-003, which also checks that the property tests cover the
+# related invariants; operational human_review for OPS-002; the cross-model half). Each way-2 review record's basis
+# names every article whose entry it covers and addresses each of their rules, beyond what the tool parts decide. Each
+# reviewer's prompt is self-sufficient, with the scratchpad's absolute path in its first line (D-277).
+# Evaluation path (A61; as TASK-003's and TASK-005's, D-181 P1, D-182 and D-273): the approved contract is committed on
+# main as its own commit C, which changes only docs/tasks/TASK-006.yaml and has one parent equal to base_commit, and is
+# pushed normally; the files are drafted and tested in scratchpad clones (push URL disabled, the no-reply identity set
+# first); the task's commits, each carrying the trailer "AIEOS-Task: TASK-006" and no e-mail address in its message,
+# go to the branch task/TASK-006 on GitHub, each push under its own decision of the decision agent after a secret scan
+# and a dry run against a bare single-branch copy (D-229, D-274), never by force and never deleting; the CI channel
+# runs on each push and its records are re-fetched into docs/records/TASK-006.jsonl; main receives the task only at
+# its acceptance, by a fast-forward under its own decision. Before each task commit, the added text is scanned with
+# the workflow's SEC-001, SEC-002 and OPS-003 patterns (AC11).
+# Not applicable: OPS-001 (scope: the repository's refs; the task changes no ref); INV-009, INV-011, GOV-001, GOV-004,
+# GOV-005, GOV-006 and SEC-003 (their scopes, the event log, the policy, the concept file, the bound artifacts, the
+# decision matrix, the records and pre-genesis documents, and .github/, meet no path of the write-set).
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting, no push of its own (CR-002 part 4 limit 5 does not apply). O1, the CI workflow revision 5 that
+# runs the Resume Check scenarios through the pinned runner with this entry, stays the owner's (A61; SEC-003), asked
+# once after this task is accepted (D-254).
+# Uncovered and stated limits (AC12): no Resume Check exists and the set file names no Resume Check fixture, so every
+# RC scenario stays NOT_RUN in every run over the repository's tree, and nothing here shows that any Resume Check meets
+# a fixture; in the CI channel the base run takes the runner from the base, so this runner first runs there after it
+# lands on main; the runner checks a Resume Check fixture's form only as far as AC5 says, and the fixtures give the
+# inputs of specification 3 §1 as values (conformance-files.md section 9, "Not covered"); every review is by AI of one
+# vendor.
+task: TASK-006
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add to the conformance runner (src/aieos_bootstrap/conformance.py, TASK-003) the Resume Check entry of
+  docs/specs/conformance-files.md revision 4, section 9: the choice of entry and of the expected fixture path by each
+  scenario's capability, checked against the bound scenario file; the form check of a Resume Check fixture; the call
+  of the Resume Check entry point per case and the comparison of the observed execution decision; and the run
+  record's resume_check key, with unit, integration and property tests in new test modules. It adds no Resume Check,
+  changes no fixture, set file or existing test module, changes nothing a run over the repository's own tree reports,
+  and does not wire the CI channel.
+traces_to:
+  - docs/specs/conformance-files.md#2
+  - docs/specs/conformance-files.md#6
+  - docs/specs/conformance-files.md#9
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#7
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#9
+  - docs/specs/spec-02-aieos-file-format.md#6.4
+  - docs/pre-genesis/conformance-methodology.md#3
+  - docs/pre-genesis/conformance-scenarios-initial.md#1
+  - docs/pre-genesis/conformance-scenarios-initial.md#4
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-006.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id, unquoted, with nothing after it on the line (G0 reads the line raw).
+  base_commit: 59b0ad8726f4b9551bbb3ce0a0007d4c0e3c7e9f
+  depends_on: [TASK-003, TASK-005]
+  # The interim documents have no id and no vN version, so each is named by its path and pinned by its SHA-256, as in
+  # the contracts of TASK-003 and TASK-005.
+  intent_versions:
+    docs/specs/conformance-files.md: 31e2853d78ecad81b27eea2e9738fc45787c22dc751fe5bc0f846e337cf8a114
+    docs/pre-genesis/conformance-scenarios-initial.md: 6b5c0666a1f364f5ecec9ad516c9a749969a1963f4e5dbef566adcbc8c80e24d
+    docs/pre-genesis/conformance-methodology.md: a11928199da9b908fad5805b44d341b21f961f0bc925350b0d46ac9adc454c87
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 05c53318cd756a3acfc13e5adaffbfaede8f05be3d00289e9fd45fef08c63c73
+    docs/specs/spec-02-aieos-file-format.md: 529b56d831d208594685aad3954fd3e8fc42cadc663e315b65bdfe615e3b09f7
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+    docs/pre-genesis/constitution.md: 16e78d30214082d1248369b910b051e7e4c48929036fced1488acc2f3efcf836
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+write_set:
+  # Two modified paths: the runner, and the package docstring, which describes the runner (reading: TASK-003 changed it
+  # for the same reason; __all__ does not change, since no module is added). Every other path is new.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/conformance.py
+    - tests/unit/test_runner_rc.py
+    - tests/integration/test_runner_rc_run.py
+    - tests/property/test_runner_rc_properties.py
+read_set:
+  paths:
+    - docs/specs/conformance-files.md
+    - docs/pre-genesis/conformance-scenarios-initial.md
+    - docs/pre-genesis/conformance-methodology.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/pre-genesis/decision-matrix.md
+    - docs/records/TASK-003.jsonl
+    - docs/records/TASK-005.jsonl
+    - tests/conformance/set.py
+    - tests/conformance/fixtures/
+    - tests/conformance/fixtures_rc/
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/governor.py
+    - tests/unit/test_runner.py
+    - tests/integration/test_runner_run.py
+    - tests/property/test_runner_properties.py
+  interfaces: [aieos_bootstrap.records.check_record, aieos_bootstrap.records.check_decision, aieos_bootstrap.governor.evaluate, aieos_bootstrap.resume_check.check (absent at base_commit)]
+  schemas: [conformance-files set file (3), conformance-files fixture file (4), conformance-files Resume Check fixture file (9), conformance-files run record (6, 9), spec-02 decision contract (6.4), spec-03 execution decision record (9)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/governor.py
+  - tests/run_tests.py
+  - tests/unit/test_records.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-005, INV-006, INV-007, INV-008, INV-010, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      Unchanged where the task does not reach (TASK-003's AC1 to AC9, AC11). The run's inputs, the reader and listing,
+      the wrapped-file and canonical-form rules, the set file's form, its freeze approval, the governor entry point,
+      the acceptance comparison, the run record's existing keys and its record, and the command-line entry stay as
+      TASK-003's contract says, apart from the changes AC2 to AC7 name. Every result of a Verification scenario is
+      the same as before this task for the same tree, governor and stand-in.
+  - AC2: >-
+      The capability the bound scenario file gives an id (conformance-files.md section 9, "Where the files are")
+      (reading). It is read from the bound scenario file at the root, from the same lines whose hashes the run already
+      takes: for a row of a table whose header line names a column Capability, that row's cell in that column; for any
+      other row, the heading of the numbered section (a line beginning "## " and a number) that holds the row, its text
+      after the number up to the first colon or the line end. An id whose row holds no such capability, or a
+      capability that is not one of section 3's four, gives no capability.
+  - AC3: >-
+      The entry and the expected path by capability (section 9; D-262, D-263). For each set entry with a fixture: when
+      the entry's capability differs from the capability AC2 gives its id, or AC2 gives none, the scenario is NOT_RUN;
+      Verification expects the path tests/conformance/fixtures/<module name>.py (unchanged), Resume Check expects
+      tests/conformance/fixtures_rc/<module name>.py, the module name formed as section 2 says; any other capability
+      is NOT_RUN, the entry point being absent until its milestone. A path other than the one expected is NOT_RUN. All
+      these are decided before the fixture file is read, after the row-hash check of TASK-003's AC5, so that only a
+      path built from an id of the bound file is read.
+  - AC4: >-
+      The Resume Check entry point (section 9, "The entry and the comparison"). The entry is the function check of the
+      module aieos_bootstrap.resume_check, loaded by a plain import statement (no importlib) only when at least one
+      Resume Check entry of the set file has a fixture (reading), with the rules of TASK-003's AC6 applied to it: absent
+      when the import raises ModuleNotFoundError naming that module (each Resume Check scenario NOT_RUN for "the entry
+      point is absent", and the run can still count); any other failure to load it, a module whose file is not the
+      root's src/aieos_bootstrap/resume_check.py, or no callable check, makes every Resume Check scenario NOT_RUN and
+      the run not count (reading). The run function also takes a check function as a test seam (reading): a run with a
+      stand-in never counts; the command-line entry never takes one.
+  - AC5: >-
+      A Resume Check fixture's form (section 9). After the conditions of TASK-003's AC5 that read the set entry, the
+      row and the file's bytes and hash, and the wrapped-file and canonical-form rules, a Resume Check fixture is
+      malformed, and its scenario NOT_RUN with none of its cases run, unless: its object is exactly scenario, row_hash
+      and cases, those two equal to the set entry; cases is a non-empty list; each case is exactly inputs, when and
+      expected; when is resume; inputs is an object with exactly the keys section 9 names (task_id, log_seq,
+      task_state, contract, contract_hash, approved_contract_hash, head_commit, base_is_ancestor, commits, components,
+      interfaces, symbols, schemas, derived_read_set, observed_read_set, intent_current, dependencies, articles,
+      runtime, risk_rules, policy_version, budget_use), task_id a task id, task_state one of READY, REWORK and
+      IN_PROGRESS, contract an object, contract_hash and approved_contract_hash 64 lowercase hex, head_commit a full
+      lowercase hex commit id and base_is_ancestor true or false (reading: the runner checks these forms only; the
+      others are the Resume Check's to read, specification 3 section 7's error); and expected is exactly decision and
+      not_fixed, decision a list of exactly one of the eight A15 values and not_fixed the empty list.
+  - AC6: >-
+      The call and the comparison (section 9). For each case, check is called with a copy of the case's inputs. A call
+      that raises, or returns a value that is not a dict, or that gives a finding under check_decision for
+      decision.execution, or that carries error (its decision then null), makes the scenario NOT_RUN unless another
+      case fails. A case passes only if the observed decision is in expected.decision; the comparison is on that value
+      only, never on wording. A scenario with a failed case is FAIL, before any NOT_RUN condition of AC5 or this point;
+      otherwise NOT_RUN as AC3, AC4, AC5 and this point say; otherwise PASS.
+  - AC7: >-
+      The run record (sections 6 and 9). When at least one Resume Check entry of the set file has a fixture, the run
+      record gains one key, resume_check: {path, sha256} of src/aieos_bootstrap/resume_check.py at the root, sha256
+      null when the file is absent or a stand-in check is used (reading); otherwise the run record has exactly
+      TASK-003's keys, so that a run over a set with no Resume Check fixture gives the same bytes as before this task.
+      The record of specification 2 §6.2 keeps TASK-003's keys and rules: outcome pass exactly when the run counts, at
+      least one scenario has a fixture and every scenario with a fixture is PASS, a Resume Check scenario included.
+  - AC8: >-
+      Unchanged results over the repository's own tree. At base_commit's tree the set file names no Resume Check
+      fixture (RC-01 to RC-11 null), so a run there, with no stand-in and the root's governor, gives what TASK-003's
+      runner gives at base_commit (CI run 61's notice: outcome pass, counts true, 19 PASS, 13 NOT_RUN): the run
+      record has exactly TASK-003's keys and no resume_check key, counts true, ACC-01 to ACC-17, ADV-01 and ADV-03
+      PASS, the 13 others NOT_RUN (RC-01 to RC-11 for "no fixture"), and the record's outcome pass. The Resume Check
+      module is not loaded in that run (AC4).
+  - AC9: >-
+      Purity and the CI checks (INV-001, INV-002, INV-004). The module and its tests import only the Python 3 standard
+      library, aieos_bootstrap.records, the tests also aieos_bootstrap.conformance, and, in the module only,
+      aieos_bootstrap.governor and aieos_bootstrap.resume_check by the guarded imports of TASK-003's AC6 and AC4 here;
+      they use no exec, eval, compile, __import__ or importlib, start no process, open no network connection, call no
+      model, and write no file; they read files only with pathlib's read_bytes and list them only with pathlib's glob;
+      the tests build malformed inputs in memory and pass them through the byte reader and listing, never through
+      files, and read the frozen fixtures under tests/conformance/fixtures_rc/ only as bytes. The CI steps at the
+      task's commits report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit, as TASK-003's AC10
+      lists them.
+  - AC10: >-
+      The existing test modules unchanged and passing. test_runner.py, test_runner_run.py, test_runner_properties.py
+      and test_governor_conformance.py are not changed (forbidden) and pass at the task's commits. If one of them can
+      pass only by a change, the task escalates (needs_out_of_scope_change) instead of changing it.
+  - AC11: >-
+      The added text. Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003
+      patterns, and each count is 0; the file names are scanned with the same patterns and the records executors'
+      pre-push pattern (D-282).
+  - AC12: >-
+      Limits, stated and tested as such: no Resume Check exists and the set file names no Resume Check fixture, so a run
+      over the repository's tree gives every RC scenario NOT_RUN and its run record is unchanged (AC8); the runner
+      checks its inputs and compares values, and never decides an execution or an acceptance; it does not check how a
+      Resume Check derives the inputs of specification 3 §1, which the fixtures give as values; the runner and the
+      Resume Check are taken from the base only when the CI channel runs the runner from a base checkout, and this
+      runner first runs in the CI's base run after it lands on main; running the RC scenarios in the CI channel needs
+      the set file's RC entries (TASK-005b) and the workflow's revision 5 (O1, the owner's); the capability reading of
+      AC2 depends on the bound scenario file's table and heading layout, and a later revision of that file that
+      changes the layout makes its scenarios NOT_RUN, never PASS.
+  - AC13: >-
+      Tests, with this rule-to-test list, each rule with at least one passing case and one failing case, the failing
+      cases built in memory: R1 the capability reading of AC2 (a Capability column, a section heading, a heading with a
+      colon, no capability, an unknown one); R2 each condition of AC3 (a capability that differs from the bound file's,
+      a Verification fixture under fixtures_rc/, a Resume Check fixture under fixtures/, an unrouted capability); R3 the
+      entry-point conditions of AC4 (absent, a failing import, a module from elsewhere, no callable, a stand-in that
+      never counts, no load when no Resume Check entry has a fixture); R4 each malformed condition of AC5, one failing
+      case per rule; R5 each call and comparison rule of AC6 (a decision in the list, one outside it, a raise, a
+      non-dict, a check_decision finding, an error record, FAIL before NOT_RUN); R6 the run record's resume_check key
+      present and absent, and the outcome with a Resume Check scenario PASS and NOT_RUN (AC7); R7 AC8 over the
+      repository's own tree. Unit tests in tests/unit/test_runner_rc.py; integration tests in
+      tests/integration/test_runner_rc_run.py run over the repository's own tree end to end: AC8 with no stand-in;
+      with an in-memory set file that names the 11 frozen fixtures under fixtures_rc/ and a stand-in check that answers
+      each case from its own expected value, RC-01 to RC-11 PASS and the run does not count; with a stand-in that
+      answers one decision outside a list, that scenario FAIL. Property tests (tests/property/test_runner_rc_properties.py;
+      standard library only, fixed seeds): the same inputs always give the same run record; any one-byte change of a
+      Resume Check fixture never gives that scenario PASS; any capability other than the bound file's never gives
+      PASS; and these properties of the invariants the task relates to: for INV-005, every Resume Check result is PASS,
+      FAIL or NOT_RUN and a returned string is never an execution decision record; for INV-006, with no Resume Check no
+      RC scenario is PASS; for INV-007, a Resume Check fixture whose bytes differ from its set entry's hash is never
+      run; for INV-008, a stand-in check never makes a run count. tests/run_tests.py, unchanged, runs all three groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC10, AC12, AC13]}
+  - {gate: G3, check: constitution, args: [AC9, AC11, INV-001, INV-002, INV-004, INV-010, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
