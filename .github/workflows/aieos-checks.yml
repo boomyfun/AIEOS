@@ -1,8 +1,15 @@
-# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md), revision 2: the checks the first code task needs
-# (decision D-181, option K1). Runs on every push to any branch and checks every pushed commit. It reads only: it writes
-# nothing to the repository and uses no secret. Records: this run's log, its step summary, and each step's conclusion.
-# Its results are advisory (DM A29; C7 is TBD). A code task's commits carry the trailer "AIEOS-Task: <id>"; their
-# contract is the file docs/tasks/<id>.yaml, added on main by its own commit; the task steps judge only such commits.
+# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md), revision 3: the checks the first code task needs
+# (decision D-181, option K1), with the conformance runs of M2 (DM A62; decisions D-217 C5 and D-218). Runs on every push
+# to any branch and checks every pushed commit. It reads only: it writes nothing to the repository and uses no secret.
+# Records: this run's log, its step summary, its annotations and each step's conclusion. Its results are advisory (DM
+# A29; C7 is TBD): the job runs code that the pushed commits change, and that code can write to the log, the
+# annotations and the conclusions of the steps after it. A code task's commits carry the trailer "AIEOS-Task: <id>";
+# their contract is the file docs/tasks/<id>.yaml, added on main by its own commit; the task steps judge only such
+# commits. Revision 3 adds: the conformance base run (the runner, the frozen set, the fixtures, the bound scenario file
+# and the records, all from the base) and, right after it, the candidate run (the same base inputs with only the head's
+# governor files), each written as one annotation; the conformance inputs and the records on GOV-003's list; the pinned
+# governor in one place, the job's AIEOS_PINNED_GOVERNOR; and deterministic_rule for module aliases, `from os import`,
+# `.replace(...)` with one argument or only the keyword target (Path.replace) and `.chmod`/`.lchmod`.
 name: aieos-checks
 
 on:
@@ -15,6 +22,11 @@ jobs:
   checks:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      # The first governor version's content hash (SHA-256 of src/aieos_bootstrap/governor.py), set only by the workflow
+      # revision that pins it (Master Plan section 5 points 5 and 6). Empty: no version is pinned, so the replay step fails
+      # on any decision record and the conformance base run reports and does not fail on its outcome. The one place.
+      AIEOS_PINNED_GOVERNOR: ''
     steps:
       - name: Fetch the pushed commit, its history and main (no third-party action, no token)
         env:
@@ -302,7 +314,8 @@ jobs:
           import re
           import sys
 
-          EVALUATOR = ['.github/**', 'src/aieos_bootstrap/**']
+          EVALUATOR = ['.github/**', 'src/aieos_bootstrap/**', 'tests/conformance/**',
+                       'docs/pre-genesis/conformance-scenarios-initial.md', 'docs/records/**']
           OWNER_PATHS = ['docs/pre-genesis/measurement-protocol.md', 'docs/pre-genesis/measurements/**']
 
 
@@ -362,7 +375,8 @@ jobs:
           import re
           import sys
 
-          EVALUATOR = ['.github/**', 'src/aieos_bootstrap/**']
+          EVALUATOR = ['.github/**', 'src/aieos_bootstrap/**', 'tests/conformance/**',
+                       'docs/pre-genesis/conformance-scenarios-initial.md', 'docs/records/**']
           OWNER_PATHS = ['docs/pre-genesis/measurement-protocol.md', 'docs/pre-genesis/measurements/**']
 
 
@@ -415,10 +429,11 @@ jobs:
           # decision.acceptance or decision.execution. While no governor version is pinned (Master Plan section 5 point 6), any
           # decision record fails, because there is no pinned ruleset to recompute it with; with none, it reports 0 and passes.
           import json
+          import os
           import subprocess
           import sys
 
-          PINNED_GOVERNOR = None  # set by the workflow revision that pins the first governor version
+          PINNED_GOVERNOR = os.environ.get('AIEOS_PINNED_GOVERNOR') or None  # the job's env, the one place (revision 3)
 
 
           def main():
@@ -613,6 +628,476 @@ jobs:
               args = sys.argv[1:] or os.environ.get('AIEOS_ARGS', '').split()
               sys.exit({'detect': detect, 'scope': scope}[args[0]]())
 
+      - name: conformance base run (V1; the runner, its inputs and any governor from the base)
+        if: ${{ !cancelled() }}
+        working-directory: work
+        shell: python3 {0}
+        env:
+          AIEOS_ARGS: base
+        run: |
+          # AIEOS CI: the conformance runs (V1) of revision 3 (DM A62; decisions D-217 C5 and D-218). Standard library only. Run in
+          # the checkout of the pushed commit, after G0 detect, which wrote ../task.json. Modes (argument, or the environment
+          # variable AIEOS_ARGS):
+          #   base:      the runner of TASK-003 runs from the base over the base, extracted from Git into ../conformance-base. The
+          #              base and the run's task: for a push to main, the pushed commit (GITHUB_SHA, which main holds; only
+          #              accepted work enters main) and the task named by its own AIEOS-Task trailer, with no run when it has
+          #              none; for any other branch, main as the first step fetched it (refs/remotes/origin/main) and the task
+          #              that G0 detect found, with no run when there is none. The runner, the frozen set, the fixtures, the bound
+          #              scenario file, the records and the records module, and the governor if one exists, all come from the
+          #              base. Whether a governor exists is decided from the base tree. With no governor version pinned (the job's
+          #              AIEOS_PINNED_GOVERNOR is empty) the step reports and does not fail on the run's outcome; with one pinned,
+          #              the base's governor file and the run's governor identity must have that SHA-256 and the outcome must be
+          #              pass. This step runs before any step that runs code from the pushed commits.
+          #   candidate: on a branch other than main, for a task whose commits change a file of GOVERNOR_FILES, the same base
+          #              inputs with only the head's governor files put in their place (../conformance-candidate). It is a
+          #              candidate run, advisory (DM A29; governor-spec section 10), never the pinned governor's run; it reports
+          #              and does not fail on its outcome. It runs right after the base run, so that its inputs are read before
+          #              any other step runs code from the pushed commits. Limits: the candidate governor runs in the runner's
+          #              process and as the same user as the step, so it can change what the runner prints, write to the step's
+          #              log directly, and decide whether this step passes or fails; a governor that prints to standard output or
+          #              exits early gives no run record and fails this step; a governor that imports a module that only the head
+          #              has fails to load (the runner's FAILED), because only GOVERNOR_FILES come from the head; the record line
+          #              names the head commit, and only the annotation says it is a candidate run. Its run counts only together
+          #              with the reviews and the deterministic rules (which refuse the forms they list; an accident filter, not a
+          #              containment), never alone. The later steps also run code from the pushed commits and can change what
+          #              any later step prints, including annotations (DM A29).
+          #   Both modes fail the step when the runner gives no run record: exit 2, a crash, a timeout, or output that is not one
+          #   record with its text and checked values (outcome, counts, governor identity, commit, task, scenario ids and results).
+          #   The result is one annotation (a notice) per run, built only from checked values; the runner's raw output is printed
+          #   only between stop-commands markers with a random token, opened before the runner starts and closed in every case;
+          #   every annotation value is escaped (%, CR, LF).
+          import hashlib
+          import json
+          import os
+          import re
+          import secrets
+          import subprocess
+          import sys
+
+          RUNNER = 'src/aieos_bootstrap/conformance.py'
+          GOVERNOR_FILES = ['src/aieos_bootstrap/governor.py']
+          PINNED = os.environ.get('AIEOS_PINNED_GOVERNOR', '')
+          HEX = re.compile(r'[0-9a-f]{64}')
+          TRAILER = re.compile(r'^AIEOS-Task: (TASK-[0-9]+)$', re.M)
+          SCENARIO = re.compile(r'[A-Z]{2,5}-[0-9]{2,3}')
+          RESULTS = ('PASS', 'FAIL', 'NOT_RUN')
+          MAX_RESULTS = 64
+          MAX_OUT = 4 * 1024 * 1024
+          SHOW = 256 * 1024
+
+
+          def git(*a):
+              return subprocess.run(['git'] + list(a), capture_output=True, check=True).stdout
+
+
+          def blob(commit, path):
+              p = subprocess.run(['git', 'show', commit + ':' + path], capture_output=True)
+              return p.stdout if p.returncode == 0 else None
+
+
+          def esc(s):
+              return s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+
+
+          def extract(commit, dest):
+              os.makedirs(dest)
+              subprocess.run(['tar', '-x', '-f', '-', '-C', dest], input=git('archive', '--format=tar', commit), check=True)
+
+
+          def run_runner(root, commit, task):
+              # The stop-commands block opens before the runner starts, so a child that never learns the token cannot end it, and
+              # it is closed in every case. The output shown is cut at SHOW bytes per stream; a timeout gives no run record.
+              env = {'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'PYTHONPATH': os.path.join(root, 'src'),
+                     'PYTHONDONTWRITEBYTECODE': '1', 'PYTHONIOENCODING': 'utf-8', 'LANG': 'C.UTF-8'}
+              token = secrets.token_hex(16)
+              print('::stop-commands::' + token)
+              sys.stdout.flush()
+              rc, out = None, b''
+              try:
+                  try:
+                      p = subprocess.run([sys.executable, os.path.join(root, RUNNER), root, commit, task], capture_output=True,
+                                         env=env, cwd=root, timeout=300)
+                  except subprocess.TimeoutExpired:
+                      print('runner timed out after 300 seconds')
+                  else:
+                      rc, out = p.returncode, p.stdout
+                      print('runner exit %d' % rc)
+                      for data in (p.stdout, p.stderr):
+                          sys.stdout.write(data[:SHOW].decode('utf-8', 'replace'))
+                          if len(data) > SHOW:
+                              print('\n[%d more bytes not shown]' % (len(data) - SHOW))
+                      print('')
+              finally:
+                  print('::' + token + '::')
+                  sys.stdout.flush()
+              return rc, out
+
+
+          def valid(value, record, commit, task):
+              # Every value that is printed or compared is checked here first: a candidate governor runs in the runner's process
+              # and can print a record of its own, so nothing from the output is trusted by its form alone (way-2 review, F1).
+              results = value.get('results')
+              gid = value.get('governor_identity')
+              return (record.get('outcome') in ('pass', 'fail') and isinstance(value.get('counts'), bool)
+                      and (gid is None or (isinstance(gid, str) and HEX.fullmatch(gid) is not None))
+                      and value.get('commit') == commit and record.get('commit') == commit and record.get('subject') == task
+                      and isinstance(results, list) and 0 < len(results) <= MAX_RESULTS
+                      and all(isinstance(r, dict) and isinstance(r.get('id'), str) and SCENARIO.fullmatch(r['id']) is not None
+                              and r.get('result') in RESULTS for r in results))
+
+
+          def parse(out, commit, task):
+              # The runner prints the run record's text (canonical JSON, ending with LF) and then its record (one JSON line). A
+              # CRLF from a Windows dry run is read as LF; the JSON text holds no raw CR.
+              if len(out) > MAX_OUT:
+                  return None
+              out = out.replace(b'\r\n', b'\n')
+              if not out.endswith(b'\n'):
+                  return None
+              body = out[:-1]
+              i = body.rfind(b'\n')
+              if i < 0:
+                  return None
+              text, last = body[:i + 1], body[i + 1:]
+              try:
+                  value = json.loads(text.decode('utf-8'))
+                  record = json.loads(last.decode('utf-8'))
+              except ValueError:
+                  return None
+              if not (isinstance(value, dict) and isinstance(record, dict) and isinstance(value.get('results'), list)):
+                  return None
+              digest = hashlib.sha256(text).hexdigest()
+              if record.get('refers_to') != digest or record.get('record_id') != 'conformance-run-' + digest:
+                  return None
+              if not valid(value, record, commit, task):
+                  return None
+              return value, record
+
+
+          def annotate(kind, title, msg):
+              print('::%s title=%s::%s' % (kind, title, esc(msg)))
+
+
+          def fail(title, msg):
+              annotate('error', title, msg)
+              print(title + ' FAIL: ' + msg)
+              return 1
+
+
+          def main(mode):
+              title = 'conformance %s run' % mode
+              head = git('rev-parse', 'HEAD').decode().strip()
+              on_main = os.environ.get('GITHUB_REF') == 'refs/heads/main'
+              if on_main:
+                  if mode == 'candidate':
+                      print('conformance candidate run: a push to main; no candidate run')
+                      return 0
+                  if os.environ.get('GITHUB_SHA') != head:
+                      return fail(title, 'the checkout is not the pushed commit')
+                  named = TRAILER.findall(git('log', '-1', '--format=%B', head).decode('utf-8', 'replace'))
+                  if len(named) != 1:
+                      print('conformance base run: a push to main whose head commit names %d tasks; no run' % len(named))
+                      return 0
+                  task, base = named[0], head
+              else:
+                  task = json.load(open('../task.json'))['task']
+                  if task is None:
+                      print('conformance %s run: no task' % mode)
+                      return 0
+                  base = git('rev-parse', 'refs/remotes/origin/main').decode().strip()
+              gov = blob(base, GOVERNOR_FILES[0])
+              runner_blob = blob(base, RUNNER)
+              runner_sha = hashlib.sha256(runner_blob).hexdigest() if runner_blob is not None else None
+              gov_sha = hashlib.sha256(gov).hexdigest() if gov is not None else 'absent'
+              if mode == 'base':
+                  root, commit, note = os.path.abspath('../conformance-base'), base, 'base %s' % base
+                  extract(base, root)
+              else:
+                  changed = [f for f in GOVERNOR_FILES if blob('HEAD', f) != blob(base, f)]
+                  if not changed:
+                      print('conformance candidate run: no governor file changed by the pushed commits; no candidate run')
+                      return 0
+                  root, commit = os.path.abspath('../conformance-candidate'), head
+                  extract(base, root)
+                  for f in GOVERNOR_FILES:
+                      data, target = blob('HEAD', f), os.path.join(root, f)
+                      inside = os.path.realpath(os.path.dirname(target)).startswith(os.path.realpath(root) + os.sep)
+                      if os.path.islink(target) or not inside:
+                          return fail(title, 'the place of a governor file in the base is a link or outside the tree: %s' % f)
+                      if data is None:
+                          if os.path.exists(target):
+                              os.remove(target)
+                      else:
+                          with open(target, 'wb') as w:
+                              w.write(data)
+                  note = 'candidate: the inputs of base %s with the governor files of %s (%s); advisory' % (base, head, ', '.join(changed))
+              rc, out = run_runner(root, commit, task)
+              parsed = parse(out, commit, task)
+              if rc not in (0, 1) or parsed is None:
+                  return fail(title, 'no run record (runner exit %s); %s' % (rc, note))
+              value, record = parsed
+              if (rc == 0) != (record['outcome'] == 'pass'):
+                  return fail(title, 'runner exit %d and outcome %s disagree; %s' % (rc, record['outcome'], note))
+              if not (isinstance(value.get('runner'), dict) and value['runner'].get('sha256') == runner_sha):
+                  return fail(title, 'the run record does not name the base runner; %s' % note)
+              results = ', '.join('%s %s' % (r['id'], r['result']) for r in value['results'])
+              report_only = mode == 'candidate' or not PINNED
+              msg = 'outcome %s; counts %s; record %s; commit %s; task %s; governor %s; base governor file %s; %s; %s; results: %s' % (
+                  record['outcome'], value['counts'], record['record_id'], commit, task, value['governor_identity'],
+                  gov_sha, note, 'report only' if report_only else 'pinned governor %s' % PINNED, results)
+              annotate('notice', title, msg)
+              print('%s: outcome %s, record %s' % (title, record['outcome'], record['record_id']))
+              if mode == 'base' and gov is None and any(r['result'] == 'PASS' for r in value['results']):
+                  return fail(title, 'a PASS with no governor in the base')
+              if report_only:
+                  return 0
+              if gov_sha != PINNED or value['governor_identity'] != PINNED:
+                  return fail(title, 'the base governor (file %s, run %s) is not the pinned version %s' % (
+                      gov_sha, value['governor_identity'], PINNED))
+              if record['outcome'] != 'pass':
+                  return fail(title, 'outcome %s with the pinned governor' % record['outcome'])
+              return 0
+
+
+          if __name__ == '__main__':
+              args = sys.argv[1:] or os.environ.get('AIEOS_ARGS', '').split()
+              sys.exit(main(args[0]))
+
+      - name: conformance candidate run (advisory; the base inputs with the head's governor files)
+        if: ${{ !cancelled() }}
+        working-directory: work
+        shell: python3 {0}
+        env:
+          AIEOS_ARGS: candidate
+        run: |
+          # AIEOS CI: the conformance runs (V1) of revision 3 (DM A62; decisions D-217 C5 and D-218). Standard library only. Run in
+          # the checkout of the pushed commit, after G0 detect, which wrote ../task.json. Modes (argument, or the environment
+          # variable AIEOS_ARGS):
+          #   base:      the runner of TASK-003 runs from the base over the base, extracted from Git into ../conformance-base. The
+          #              base and the run's task: for a push to main, the pushed commit (GITHUB_SHA, which main holds; only
+          #              accepted work enters main) and the task named by its own AIEOS-Task trailer, with no run when it has
+          #              none; for any other branch, main as the first step fetched it (refs/remotes/origin/main) and the task
+          #              that G0 detect found, with no run when there is none. The runner, the frozen set, the fixtures, the bound
+          #              scenario file, the records and the records module, and the governor if one exists, all come from the
+          #              base. Whether a governor exists is decided from the base tree. With no governor version pinned (the job's
+          #              AIEOS_PINNED_GOVERNOR is empty) the step reports and does not fail on the run's outcome; with one pinned,
+          #              the base's governor file and the run's governor identity must have that SHA-256 and the outcome must be
+          #              pass. This step runs before any step that runs code from the pushed commits.
+          #   candidate: on a branch other than main, for a task whose commits change a file of GOVERNOR_FILES, the same base
+          #              inputs with only the head's governor files put in their place (../conformance-candidate). It is a
+          #              candidate run, advisory (DM A29; governor-spec section 10), never the pinned governor's run; it reports
+          #              and does not fail on its outcome. It runs right after the base run, so that its inputs are read before
+          #              any other step runs code from the pushed commits. Limits: the candidate governor runs in the runner's
+          #              process and as the same user as the step, so it can change what the runner prints, write to the step's
+          #              log directly, and decide whether this step passes or fails; a governor that prints to standard output or
+          #              exits early gives no run record and fails this step; a governor that imports a module that only the head
+          #              has fails to load (the runner's FAILED), because only GOVERNOR_FILES come from the head; the record line
+          #              names the head commit, and only the annotation says it is a candidate run. Its run counts only together
+          #              with the reviews and the deterministic rules (which refuse the forms they list; an accident filter, not a
+          #              containment), never alone. The later steps also run code from the pushed commits and can change what
+          #              any later step prints, including annotations (DM A29).
+          #   Both modes fail the step when the runner gives no run record: exit 2, a crash, a timeout, or output that is not one
+          #   record with its text and checked values (outcome, counts, governor identity, commit, task, scenario ids and results).
+          #   The result is one annotation (a notice) per run, built only from checked values; the runner's raw output is printed
+          #   only between stop-commands markers with a random token, opened before the runner starts and closed in every case;
+          #   every annotation value is escaped (%, CR, LF).
+          import hashlib
+          import json
+          import os
+          import re
+          import secrets
+          import subprocess
+          import sys
+
+          RUNNER = 'src/aieos_bootstrap/conformance.py'
+          GOVERNOR_FILES = ['src/aieos_bootstrap/governor.py']
+          PINNED = os.environ.get('AIEOS_PINNED_GOVERNOR', '')
+          HEX = re.compile(r'[0-9a-f]{64}')
+          TRAILER = re.compile(r'^AIEOS-Task: (TASK-[0-9]+)$', re.M)
+          SCENARIO = re.compile(r'[A-Z]{2,5}-[0-9]{2,3}')
+          RESULTS = ('PASS', 'FAIL', 'NOT_RUN')
+          MAX_RESULTS = 64
+          MAX_OUT = 4 * 1024 * 1024
+          SHOW = 256 * 1024
+
+
+          def git(*a):
+              return subprocess.run(['git'] + list(a), capture_output=True, check=True).stdout
+
+
+          def blob(commit, path):
+              p = subprocess.run(['git', 'show', commit + ':' + path], capture_output=True)
+              return p.stdout if p.returncode == 0 else None
+
+
+          def esc(s):
+              return s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+
+
+          def extract(commit, dest):
+              os.makedirs(dest)
+              subprocess.run(['tar', '-x', '-f', '-', '-C', dest], input=git('archive', '--format=tar', commit), check=True)
+
+
+          def run_runner(root, commit, task):
+              # The stop-commands block opens before the runner starts, so a child that never learns the token cannot end it, and
+              # it is closed in every case. The output shown is cut at SHOW bytes per stream; a timeout gives no run record.
+              env = {'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'PYTHONPATH': os.path.join(root, 'src'),
+                     'PYTHONDONTWRITEBYTECODE': '1', 'PYTHONIOENCODING': 'utf-8', 'LANG': 'C.UTF-8'}
+              token = secrets.token_hex(16)
+              print('::stop-commands::' + token)
+              sys.stdout.flush()
+              rc, out = None, b''
+              try:
+                  try:
+                      p = subprocess.run([sys.executable, os.path.join(root, RUNNER), root, commit, task], capture_output=True,
+                                         env=env, cwd=root, timeout=300)
+                  except subprocess.TimeoutExpired:
+                      print('runner timed out after 300 seconds')
+                  else:
+                      rc, out = p.returncode, p.stdout
+                      print('runner exit %d' % rc)
+                      for data in (p.stdout, p.stderr):
+                          sys.stdout.write(data[:SHOW].decode('utf-8', 'replace'))
+                          if len(data) > SHOW:
+                              print('\n[%d more bytes not shown]' % (len(data) - SHOW))
+                      print('')
+              finally:
+                  print('::' + token + '::')
+                  sys.stdout.flush()
+              return rc, out
+
+
+          def valid(value, record, commit, task):
+              # Every value that is printed or compared is checked here first: a candidate governor runs in the runner's process
+              # and can print a record of its own, so nothing from the output is trusted by its form alone (way-2 review, F1).
+              results = value.get('results')
+              gid = value.get('governor_identity')
+              return (record.get('outcome') in ('pass', 'fail') and isinstance(value.get('counts'), bool)
+                      and (gid is None or (isinstance(gid, str) and HEX.fullmatch(gid) is not None))
+                      and value.get('commit') == commit and record.get('commit') == commit and record.get('subject') == task
+                      and isinstance(results, list) and 0 < len(results) <= MAX_RESULTS
+                      and all(isinstance(r, dict) and isinstance(r.get('id'), str) and SCENARIO.fullmatch(r['id']) is not None
+                              and r.get('result') in RESULTS for r in results))
+
+
+          def parse(out, commit, task):
+              # The runner prints the run record's text (canonical JSON, ending with LF) and then its record (one JSON line). A
+              # CRLF from a Windows dry run is read as LF; the JSON text holds no raw CR.
+              if len(out) > MAX_OUT:
+                  return None
+              out = out.replace(b'\r\n', b'\n')
+              if not out.endswith(b'\n'):
+                  return None
+              body = out[:-1]
+              i = body.rfind(b'\n')
+              if i < 0:
+                  return None
+              text, last = body[:i + 1], body[i + 1:]
+              try:
+                  value = json.loads(text.decode('utf-8'))
+                  record = json.loads(last.decode('utf-8'))
+              except ValueError:
+                  return None
+              if not (isinstance(value, dict) and isinstance(record, dict) and isinstance(value.get('results'), list)):
+                  return None
+              digest = hashlib.sha256(text).hexdigest()
+              if record.get('refers_to') != digest or record.get('record_id') != 'conformance-run-' + digest:
+                  return None
+              if not valid(value, record, commit, task):
+                  return None
+              return value, record
+
+
+          def annotate(kind, title, msg):
+              print('::%s title=%s::%s' % (kind, title, esc(msg)))
+
+
+          def fail(title, msg):
+              annotate('error', title, msg)
+              print(title + ' FAIL: ' + msg)
+              return 1
+
+
+          def main(mode):
+              title = 'conformance %s run' % mode
+              head = git('rev-parse', 'HEAD').decode().strip()
+              on_main = os.environ.get('GITHUB_REF') == 'refs/heads/main'
+              if on_main:
+                  if mode == 'candidate':
+                      print('conformance candidate run: a push to main; no candidate run')
+                      return 0
+                  if os.environ.get('GITHUB_SHA') != head:
+                      return fail(title, 'the checkout is not the pushed commit')
+                  named = TRAILER.findall(git('log', '-1', '--format=%B', head).decode('utf-8', 'replace'))
+                  if len(named) != 1:
+                      print('conformance base run: a push to main whose head commit names %d tasks; no run' % len(named))
+                      return 0
+                  task, base = named[0], head
+              else:
+                  task = json.load(open('../task.json'))['task']
+                  if task is None:
+                      print('conformance %s run: no task' % mode)
+                      return 0
+                  base = git('rev-parse', 'refs/remotes/origin/main').decode().strip()
+              gov = blob(base, GOVERNOR_FILES[0])
+              runner_blob = blob(base, RUNNER)
+              runner_sha = hashlib.sha256(runner_blob).hexdigest() if runner_blob is not None else None
+              gov_sha = hashlib.sha256(gov).hexdigest() if gov is not None else 'absent'
+              if mode == 'base':
+                  root, commit, note = os.path.abspath('../conformance-base'), base, 'base %s' % base
+                  extract(base, root)
+              else:
+                  changed = [f for f in GOVERNOR_FILES if blob('HEAD', f) != blob(base, f)]
+                  if not changed:
+                      print('conformance candidate run: no governor file changed by the pushed commits; no candidate run')
+                      return 0
+                  root, commit = os.path.abspath('../conformance-candidate'), head
+                  extract(base, root)
+                  for f in GOVERNOR_FILES:
+                      data, target = blob('HEAD', f), os.path.join(root, f)
+                      inside = os.path.realpath(os.path.dirname(target)).startswith(os.path.realpath(root) + os.sep)
+                      if os.path.islink(target) or not inside:
+                          return fail(title, 'the place of a governor file in the base is a link or outside the tree: %s' % f)
+                      if data is None:
+                          if os.path.exists(target):
+                              os.remove(target)
+                      else:
+                          with open(target, 'wb') as w:
+                              w.write(data)
+                  note = 'candidate: the inputs of base %s with the governor files of %s (%s); advisory' % (base, head, ', '.join(changed))
+              rc, out = run_runner(root, commit, task)
+              parsed = parse(out, commit, task)
+              if rc not in (0, 1) or parsed is None:
+                  return fail(title, 'no run record (runner exit %s); %s' % (rc, note))
+              value, record = parsed
+              if (rc == 0) != (record['outcome'] == 'pass'):
+                  return fail(title, 'runner exit %d and outcome %s disagree; %s' % (rc, record['outcome'], note))
+              if not (isinstance(value.get('runner'), dict) and value['runner'].get('sha256') == runner_sha):
+                  return fail(title, 'the run record does not name the base runner; %s' % note)
+              results = ', '.join('%s %s' % (r['id'], r['result']) for r in value['results'])
+              report_only = mode == 'candidate' or not PINNED
+              msg = 'outcome %s; counts %s; record %s; commit %s; task %s; governor %s; base governor file %s; %s; %s; results: %s' % (
+                  record['outcome'], value['counts'], record['record_id'], commit, task, value['governor_identity'],
+                  gov_sha, note, 'report only' if report_only else 'pinned governor %s' % PINNED, results)
+              annotate('notice', title, msg)
+              print('%s: outcome %s, record %s' % (title, record['outcome'], record['record_id']))
+              if mode == 'base' and gov is None and any(r['result'] == 'PASS' for r in value['results']):
+                  return fail(title, 'a PASS with no governor in the base')
+              if report_only:
+                  return 0
+              if gov_sha != PINNED or value['governor_identity'] != PINNED:
+                  return fail(title, 'the base governor (file %s, run %s) is not the pinned version %s' % (
+                      gov_sha, value['governor_identity'], PINNED))
+              if record['outcome'] != 'pass':
+                  return fail(title, 'outcome %s with the pinned governor' % record['outcome'])
+              return 0
+
+
+          if __name__ == '__main__':
+              args = sys.argv[1:] or os.environ.get('AIEOS_ARGS', '').split()
+              sys.exit(main(args[0]))
+
       - name: G1 build
         if: ${{ !cancelled() }}
         working-directory: work
@@ -660,7 +1145,14 @@ jobs:
           #   names) or to the package aieos_bootstrap; a pinned deny-list of standard-library modules is refused as well
           #   (dynamic import, processes, network, files written, foreign code);
           # - pattern rule (INV-001, INV-002): no exec, eval, compile, __import__, open, input or breakpoint; no __builtins__;
-          #   no call that starts a process or writes, removes or renames a file;
+          #   no call that starts a process or writes, removes or renames a file; os is also followed through `import os as
+          #   <name>` and `from os import <name>` (a refused name, or *, is refused); a `.replace(...)` call with exactly one
+          #   argument that is not `*args`, or with only the keyword target, is refused (Path.replace; str and bytes replace
+          #   take two or more; dataclasses.replace(obj) is refused too); .chmod and .lchmod are refused (revision 3).
+          #   These rules refuse the forms they list; they are an accident filter, not a containment. Not followed, among
+          #   others: a module bound by assignment, reached through an attribute chain, sys.modules, vars() or a computed
+          #   name (getattr); the posix and nt modules and other low-level modules; standard-library routes not on the
+          #   deny-lists; these stay with review;
           # - INV-004: no changed path under .aieos/; no string in src/ that names .aieos (no core writer exists yet).
           import ast
           import json
@@ -678,7 +1170,7 @@ jobs:
           # (str.replace is common, so `replace` is refused only as os.replace, through DENY_OS); `.open` on any object covers
           # io.open, codecs.open, gzip.open and Path(...).open (D-182 C2 (5))
           DENY_ATTR_CALLS = {'write_text', 'write_bytes', 'touch', 'mkdir', 'unlink', 'rmdir', 'rename', 'symlink_to',
-                             'hardlink_to', 'open', 'fdopen'}
+                             'hardlink_to', 'open', 'fdopen', 'chmod', 'lchmod'}
           MANIFESTS = {'setup.py', 'setup.cfg', 'pyproject.toml', 'Pipfile', 'Pipfile.lock', 'poetry.lock', 'MANIFEST.in'}
           VENDOR_DIRS = {'site-packages', 'vendor', '_vendor', 'node_modules', '__pypackages__'}
 
@@ -694,6 +1186,9 @@ jobs:
                   findings.append('%s: does not parse (%s)' % (path, e.msg))
                   return
               std = set(sys.stdlib_module_names)
+              # the names bound to the os module: os itself and every `import os as <name>` in the file (revision 3)
+              os_names = {'os'} | {a.asname for n in ast.walk(tree) if isinstance(n, ast.Import)
+                                   for a in n.names if a.name == 'os' and a.asname}
               for node in ast.walk(tree):
                   if isinstance(node, (ast.Import, ast.ImportFrom)):
                       if isinstance(node, ast.ImportFrom) and node.level:
@@ -705,11 +1200,19 @@ jobs:
                               findings.append('%s:%d: import of a refused module %s' % (path, node.lineno, n))
                           elif top not in std and top not in OWN:
                               findings.append('%s:%d: import outside the standard library and the own package: %s' % (path, node.lineno, n))
+                      if isinstance(node, ast.ImportFrom) and node.module == 'os':
+                          for a in node.names:
+                              if a.name == '*' or a.name in DENY_OS or a.name.startswith(('spawn', 'exec', 'posix_spawn')):
+                                  findings.append('%s:%d: refused import from os: %s' % (path, node.lineno, a.name))
                   elif isinstance(node, ast.Name) and node.id in DENY_NAMES:
                       findings.append('%s:%d: refused name %s' % (path, node.lineno, node.id))
+                  elif (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == 'replace'
+                        and ((len(node.args) == 1 and not isinstance(node.args[0], ast.Starred) and not node.keywords)
+                             or (not node.args and [k.arg for k in node.keywords] == ['target']))):
+                      findings.append('%s:%d: refused one-argument call .replace (Path.replace)' % (path, node.lineno))
                   elif isinstance(node, ast.Attribute):
                       base = node.value.id if isinstance(node.value, ast.Name) else ''
-                      if base == 'os' and (node.attr in DENY_OS or node.attr.startswith(('spawn', 'exec', 'posix_spawn'))):
+                      if base in os_names and (node.attr in DENY_OS or node.attr.startswith(('spawn', 'exec', 'posix_spawn'))):
                           findings.append('%s:%d: refused call os.%s' % (path, node.lineno, node.attr))
                       elif node.attr in DENY_ATTR_CALLS:
                           findings.append('%s:%d: refused file-changing call .%s' % (path, node.lineno, node.attr))
