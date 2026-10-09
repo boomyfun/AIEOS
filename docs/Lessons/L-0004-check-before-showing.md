@@ -98,6 +98,10 @@ Occurrences in session 2026-10-10-0043 (../History/2026-10/2026-10-10-0043-boots
 - **2026-10-10 (D-252 and D-255 requests).** Three hash endings typed by hand ("…4c3a"; "…e4c9", then "…c1c9"); the abbreviation check found each before sending.
 - **2026-10-10 (D-258).** Two defects in the conformance files draft that the reviewer could not see, because it did not read specification 2: the contract's fields given at the top level, against specification 2 §5.1's nesting, and a placeholder list missing check 4. A form cited from another specification is to be checked against that specification's lines before review.
 
+Occurrences in session 2026-10-10-0138 (../History/2026-10/2026-10-10-0138-conformance-files-r4-and-task-005-contract.md):
+- **2026-10-10 (TASK-005's contract, D-267 and D-269).** A list of acceptance values typed from memory into AC8 named a value no source defines and left one out; neither my rule-to-contract check, which did not cover enumerated lists, nor the decision agent's reading caught it before commit C. Every enumerated list in a contract or specification is to be checked against its source line by script before it is shown.
+- **2026-10-10 (D-265 request).** One hash ending typed by hand; the abbreviation check found it before sending.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

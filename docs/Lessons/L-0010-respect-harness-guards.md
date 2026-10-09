@@ -52,6 +52,11 @@ Four occurrences in session 2026-10-09-2141 (../History/2026-10/2026-10-09-2141-
 One occurrence in session 2026-10-09-2339 (../History/2026-10/2026-10-09-2339-spec-3-approved-and-on-main.md):
 - **2026-10-09 (:471).** The command guard refused a transcript line piped into Python's name followed by a dash, without `timeout 110`; the command broke the rule, so the program was written to a file and run in the allowed form (:477, :479), as the guard asks for an incorrect command (D-243, D-244 C5).
 
+Occurrences in session 2026-10-10-0138 (../History/2026-10/2026-10-10-0138-conformance-files-r4-and-task-005-contract.md), each my incorrect command, refused before it ran and rewritten as the rule requires:
+- **2026-10-10 (:148).** A heredoc to create an empty helper file.
+- **2026-10-10 (:324).** Two less-than signs inside a search pattern.
+- **2026-10-10 (:1300).** Python's name followed by a dash, to run one test module.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

@@ -16,6 +16,9 @@ Claude took a step that a decision should have covered without bringing it to th
 - **2026-10-08 (../History/2026-10/2026-10-08-1219-master-plan-ratified.md, transcript :1754, :1758, :1767).** After decision D-142 had said to end the session, the owner wrote "Kết thúc phiên tại đây." with questions (:1754). Claude did not bring the message to the decision agent first (D-135 C2, D-141 C7), ran a read-only check (:1758), and ended its reply with an owner question about continuing that it had not brought first (:1767). Nothing was written. Found and recorded under decision D-143, which treated the question as superseded; the History of session 2026-10-08-1512, written at its end, carries the line.
 - **2026-10-09 (../History/2026-10/2026-10-09-0024-ci-revision-and-task-branches.md; session 0b380044, transcript :1493, :1506).** After session 0b380044 had ended, the owner asked twice about the cost of the CI runs. Claude answered directly (0b380044 :1502, :1520), reading the owner's screenshots and one workflow line, without bringing the messages to the decision agent first (D-179 C7, D-174 C9). Nothing was changed. The decision agent found the answers correct (D-180).
 
+One occurrence in session 2026-10-10-0138 (../History/2026-10/2026-10-10-0138-conformance-files-r4-and-task-005-contract.md):
+- **2026-10-10 (D-261).** In session 8f790446, a condition of the decision agent (D-259 C4: relay its text in the next turn-final reply) was met one reply late (8f79 :1569 instead of :1548); found by machine at this session's start and recorded in D-259's execution record.
+
 ## Why it happens
 - Claude treats a step as mechanical (a display, a change of order, a turn end) and does not see it as a decision.
 - The request checklist of the decision agent's definition was not applied before sending.
