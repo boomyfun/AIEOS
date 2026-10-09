@@ -36,6 +36,9 @@ One refusal in session 2026-10-09-0856 (../History/2026-10/2026-10-09-0856-runne
 One refusal in session 2026-10-09-1056 (../History/2026-10/2026-10-09-1056-runner-accepted-and-landed.md), not retried in that form:
 - **2026-10-09 (:568).** The owner's command guard refused a command that took a value with a here-string (`<<<`); it was rewritten without that form, as the guard's message says.
 
+One refusal in session 2026-10-09-1801 (../History/2026-10/2026-10-09-1801-governor-drafts-and-runner-test-isolation.md), not retried in that form:
+- **2026-10-09 (:253).** The owner's command guard refused a read-only scan whose search pattern held the two "less than" signs of a here-string; it was rewritten as a script whose patterns are built from character codes, as the guard's message says (D-223 Q4).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

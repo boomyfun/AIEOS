@@ -40,6 +40,9 @@ Three lines, found by Claude and disclosed to the decision agent (D-211, D-213):
 Three in session 2026-10-09-1248 (../History/2026-10/2026-10-09-1248-ci-revision-3-and-governor-contract.md):
 - **2026-10-09 (:691, :881, :943).** Three short progress lines in English, each written just before an Edit in the scratchpad.
 
+Three lines of session 2026-10-09-1248, found in session 2026-10-09-1801 (../History/2026-10/2026-10-09-1801-governor-drafts-and-runner-test-isolation.md) and left out of that session's History:
+- **2026-10-09 (cb45 :1123, :1505, :1685).** Three short progress lines in English, each written just before an Edit or a script in the scratchpad ("Now C1, …", "Now E2 …", "Now the executor's …").
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 
