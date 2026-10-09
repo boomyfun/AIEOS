@@ -1,0 +1,194 @@
+# Task contract TASK-010, the folder-reader assertion of TASK-005's integration test, widened for the runner's Resume
+# Check entry (Master Plan revision 3, §4 M3; the M3 work order of decision D-254, as amended by decisions D-262, D-263
+# and D-287; specification 2 §5.1). Revision 0, drafted under decision D-287 (C2), brought for approval in D-288;
+# whether it is approved is recorded in the decision files, not in this file. Fields and value forms follow
+# specification 2 §5.1 and TASK-005's contract. Readings marked "(reading)" are the worker's, for the decision agent's
+# ruling.
+# Why (D-287, option e1): TASK-005's test test_only_this_task_s_modules_name_the_folder
+# (tests/integration/test_conformance_rc_set.py:90-94) asserts that exactly TASK-005's three test modules name the
+# folder tests/conformance/fixtures_rc, a snapshot of TASK-005's own result (TASK-005.yaml AC6). TASK-006's runner must
+# name that folder (conformance-files.md revision 4, section 9; TASK-006 AC3), and TASK-006's contract forbids that
+# module and escalates instead of changing it (TASK-006 AC10). This task changes only that assertion, and keeps what it
+# protects: no implementation module other than the runner, which section 9 names, may name the folder, so the
+# implementation (the Resume Check and anything else under src/) does not read the fixtures' expected values.
+# The id: digits only, as G0's trailer pattern requires (g0.py: ^AIEOS-Task: (TASK-[0-9]+)$); TASK-007 to TASK-009 are
+# assigned by D-254, so this is TASK-010 (checked by script against docs/tasks/, the M3 work plan and the decision
+# files). TASK-006's code waits for this task's acceptance and landing (D-287 C3); TASK-006's contract does not change.
+# Task type: fixture (docs/specs/conformance-files.md section 8, revision 4): its one changed path is a test module
+# test_conformance_*.py directly under tests/integration/ that checks only the conformance files against that document
+# and the bound scenario file. GOV-002 does not apply, as the constitution writes its applicability (implementation,
+# refactoring); every other article whose applicability names implementation is applied as to an implementation task,
+# so no evidence requirement narrows (section 8; CR-002 part 4 limit 8).
+# Readers of the changed path: the CI workflow's integration_test step runs every test_*.py of tests/integration/;
+# tests/run_tests.py discovers it locally; no other file imports or reads it (checked by script for this contract).
+# Risk: high. R2 matches tests/** (medium); R3 read fail closed matches tests/** (high; risk rules section 2 point 3);
+# no path of the write set meets R11 (tests/conformance/**); the highest wins. Profile (assurance-model.md §5,
+# gov-AIEOS, high): functional [unit_test], architecture [deterministic_rule], functional [integration_test], security
+# [static_security_analysis] and architecture [ai_review (cross-model)], plus the evidence_required of the applicable
+# articles. Dimensions are named as TASK-003's records name them (decision D-181, reading R-dim).
+# Change class: normal_cr (reading, as TASK-005's: a fixture task; it changes no fixture, no set file and no frozen
+# file, so no freeze approval is needed); it changes the evaluator in the sense of A29 (conformance-files.md section
+# 8: a fixture task changes the evaluator), so it is judged by the base version and never auto-accepted (constitution
+# GOV-003; governor-spec.md §8).
+# Evidence: the task changes no evidence requirement. It widens a test's list of modules that may name a folder by the
+# runner, which section 9 names, and by TASK-006's three test modules; it removes no check of a fixture, of the set
+# file or of a record, and no assertion of the module other than this one changes (AC3) (CR-002 part 4 limit 8 does not
+# apply; reading).
+# Reviews (as TASK-005's): five way-2 reviews by a Claude model other than the implementer's, each under a decision of
+# the decision agent (architecture ai_review for INV-001, INV-002, INV-004; security ai_review for SEC-002; governance
+# ai_review for GOV-003; operational ai_review for OPS-003; the cross-model half), and three decision-agent reviews
+# (architecture human_review for INV-003, which also checks that the property of AC2 holds; operational human_review
+# for OPS-002; the cross-model half). Each way-2 review record's basis names every article whose entry it covers and
+# addresses each of their rules, beyond what the tool parts decide. Each reviewer's prompt is self-sufficient, with the
+# scratchpad's absolute path in its first line (D-277).
+# Evaluation path (A61; as TASK-005's, D-181 P1, D-182 and D-273): the approved contract is committed on main as its own
+# commit C, which changes only docs/tasks/TASK-010.yaml and has one parent equal to base_commit, and is pushed
+# normally; the file is drafted and tested in scratchpad clones (push URL disabled, the no-reply identity set first);
+# the task's commit, carrying the trailer "AIEOS-Task: TASK-010" and no e-mail address in its message, goes to the
+# branch task/TASK-010 on GitHub under its own decision of the decision agent after a secret scan and a dry run against
+# a bare single-branch copy (D-229, D-274), never by force and never deleting; the CI channel runs on the push and its
+# records are re-fetched into docs/records/TASK-010.jsonl; main receives the task only at its acceptance, by a
+# fast-forward under its own decision. Before the task commit, the added text and the file name are scanned with the
+# workflow's SEC-001, SEC-002 and OPS-003 patterns and the records executors' pre-push pattern (AC5).
+# Not applicable: GOV-002 (above); OPS-001 (scope: the repository's refs; the task changes no ref); INV-009, INV-011,
+# GOV-001, GOV-004, GOV-005, GOV-006 and SEC-003 (their scopes, the event log, the policy, the concept file, the bound
+# artifacts, the decision matrix, the records and pre-genesis documents, and .github/, meet no path of the write-set).
+# Owner-kept acts: none. Nothing under .github/, no workflow change, no Claude Code setting (CR-002 part 4 limit 5 does
+# not apply).
+# Uncovered and stated limits (AC4): the test reads file names and bytes, so it finds a module that names the folder by
+# its literal text only; a module that builds the name from parts is not found (the same limit as TASK-005's); the list
+# of allowed modules is a snapshot again, so a later task whose module needs the folder (TASK-005b, TASK-008's tests if
+# they read the fixtures) changes it under its own contract; every review is by AI of one vendor.
+task: TASK-010
+contract_version: v1
+task_type: fixture
+objective: >-
+  Change only the assertion test_only_this_task_s_modules_name_the_folder of tests/integration/test_conformance_rc_set.py
+  (TASK-005) so that the modules allowed to name the folder tests/conformance/fixtures_rc are, under src/, exactly the
+  conformance runner src/aieos_bootstrap/conformance.py and, under tests/, exactly TASK-005's three test modules and
+  TASK-006's three new test modules, each by name; every other module that names the folder stays an assertion
+  failure; with a case pair that shows a module under src/ other than the runner still fails. No other assertion, file,
+  fixture or set file changes.
+traces_to:
+  - docs/specs/conformance-files.md#8
+  - docs/specs/conformance-files.md#9
+  - docs/pre-genesis/conformance-methodology.md#2
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-010.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id, unquoted, with nothing after it on the line (G0 reads the line raw).
+  base_commit: 70ea0fbfe6975fd8396872b5f34e96a5a969c021
+  depends_on: [TASK-005]
+  # The interim documents have no id and no vN version, so each is named by its path and pinned by its SHA-256, as in
+  # TASK-005's contract.
+  intent_versions:
+    docs/specs/conformance-files.md: 31e2853d78ecad81b27eea2e9738fc45787c22dc751fe5bc0f846e337cf8a114
+    docs/pre-genesis/conformance-scenarios-initial.md: 6b5c0666a1f364f5ecec9ad516c9a749969a1963f4e5dbef566adcbc8c80e24d
+    docs/pre-genesis/conformance-methodology.md: a11928199da9b908fad5805b44d341b21f961f0bc925350b0d46ac9adc454c87
+    docs/pre-genesis/constitution.md: 16e78d30214082d1248369b910b051e7e4c48929036fced1488acc2f3efcf836
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+write_set:
+  # One modified path; nothing is added.
+  paths:
+    - tests/integration/test_conformance_rc_set.py
+read_set:
+  paths:
+    - docs/specs/conformance-files.md
+    - docs/pre-genesis/conformance-scenarios-initial.md
+    - docs/pre-genesis/conformance-methodology.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/TASK-005.yaml
+    - docs/tasks/TASK-006.yaml
+    - docs/records/TASK-005.jsonl
+    - tests/conformance/fixtures_rc/
+    - src/
+    - tests/
+  interfaces: []
+  schemas: []
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - src/**
+  - tests/conformance/**
+  - tests/run_tests.py
+  - tests/unit/test_records.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_conformance_set.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-005, INV-006, INV-007, INV-008, INV-010, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The new assertion. The module holds, by name, the allowed readers of the folder: under src/ exactly
+      src/aieos_bootstrap/conformance.py; under tests/ exactly TASK-005's three modules (tests/unit/test_conformance_rc_files.py,
+      tests/integration/test_conformance_rc_set.py, tests/property/test_conformance_rc_properties.py) and TASK-006's three
+      new modules (tests/unit/test_runner_rc.py, tests/integration/test_runner_rc_run.py,
+      tests/property/test_runner_rc_properties.py), as TASK-006's write set names them. One function of the module
+      returns, for a list of repository paths, those not allowed, sorted. The test lists every .py file under src/ and
+      tests/ whose bytes hold the folder's name, as the test does now, and asserts that the function returns [] for
+      that list and that TASK-005's three modules are in it (reading: an allowed module that does not exist yet, such
+      as the runner before TASK-006 lands, is allowed but not required).
+  - AC2: >-
+      The case pair (D-287 C2). Two more tests in the module call the function of AC1 on lists given in memory: a list
+      that adds src/aieos_bootstrap/resume_check.py (a module under src/ other than the runner) returns that path; a
+      list that adds a test module not named in AC1 returns that path; the list of the allowed modules returns [].
+  - AC3: >-
+      Nothing else changes. The diff of the module touches only the comment and the constant that name the allowed
+      modules, the one new function, the changed test method and the two new test methods; every other test method,
+      constant and import of the module is byte-equal; the module's docstring may name this task. The other tests of
+      the module pass unchanged at the task's commit, and so does every other test that tests/run_tests.py runs at
+      base_commit.
+  - AC4: >-
+      Limits, stated and tested as such: the test finds a module that names the folder by its literal text only; the
+      allowed list is a snapshot, which a later task needing the folder changes under its own contract; the change
+      weakens no evidence requirement: no fixture, set-file, record or bound-file check changes.
+  - AC5: >-
+      Purity and the CI checks (INV-001, INV-002, INV-004). The module imports only the Python 3 standard library, as
+      now; it uses no exec, eval, compile, __import__ or importlib, starts no process, opens no network connection,
+      calls no model and writes no file; it reads files only with pathlib's read_bytes and lists them only with
+      pathlib's rglob, iterdir or glob. The CI steps at the task's commit report no finding: deterministic_rule,
+      OPS-003, SEC-001, SEC-002 and bandit, as TASK-005's contract lists them. Before the commit, the added text and the
+      file name are scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns and the records executors'
+      pre-push pattern (D-282), and each count is 0.
+  - AC6: >-
+      Tests, with this rule-to-test list: R1 AC1 over the repository's own tree (passes at the task's commit, before
+      and after TASK-006's runner exists); R2 AC2's three in-memory cases. tests/run_tests.py, unchanged, runs them.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC6]}
+  - {gate: G3, check: constitution, args: [AC5, INV-001, INV-002, INV-004, INV-010, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
