@@ -43,6 +43,12 @@ Two occurrences in session 2026-10-09-1918 (../History/2026-10/2026-10-09-1918-g
 - **2026-10-09 (:976).** A filler command (a script called with "--help", output discarded) ran; it wrote nothing. Disclosed in the next request.
 - **2026-10-09 (:1843).** A removal command word ran: `rmdir` on a scratchpad folder that did not exist, after a `cd` inside a brace group had changed the working folder unnoticed; nothing was removed. Disclosed in the next request.
 
+Four occurrences in session 2026-10-09-2141 (../History/2026-10/2026-10-09-2141-governor-pinned-genesis-v3-m2-exit.md):
+- **2026-10-09 (:268).** A filler fragment ran: a shell function defined and never called; it wrote nothing. Disclosed in the next request.
+- **2026-10-09 (:727).** A filler fragment ran: a loop whose body does nothing; it wrote nothing. Disclosed in the next request.
+- **2026-10-09 (:866).** A filler fragment ran: a search whose output was discarded; it wrote nothing. Disclosed in the next request.
+- **2026-10-09 (:934).** The command guard refused a correct, read-only search (its quoted pattern held a pipe character and the interpreter's name); the pattern was rewritten and run at :939 instead of stopping. The decision agent accepted it once and ruled that a refused correct command is brought to it, with no rewrite and no retry (D-237 Q4).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
