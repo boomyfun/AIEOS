@@ -517,6 +517,8 @@ class FileKindTest(unittest.TestCase):
             'a constant JSON lacks': FIRST + b'{\n  "a": NaN\n}\n' + LAST,
             'not UTF-8': FIRST + b'{\n  "a": "\xff"\n}\n' + LAST,
             'trailing space': FIRST + b'{\n  "a": 1 \n}\n' + LAST,
+            'an empty list on two lines': FIRST + b'{\n  "a": [\n  ]\n}\n' + LAST,
+            'an uppercase hex escape': FIRST + b'{\n  "a": "\\u001F"\n}\n' + LAST,
             'empty': b'',
         }
         for name, data in bad.items():
@@ -666,29 +668,51 @@ class FixtureTest(unittest.TestCase):
         self.assertNotEqual(changed(shown, 'ACC-14'), [])
 
 
+def cell_mismatches(data=None):
+    """AC4: the ids whose Expected cell in the bound file (or in the given bytes) differs from the table's text."""
+    cells = {sid: cell for sid, _h, _c, cell in scenario_rows(data)}
+    return sorted(sid for sid, (cell, _expected) in EXPECTED_CELLS.items() if cells.get(sid) != cell)
+
+
+def expected_mismatches(realised):
+    """AC4: the ids whose fixture's expected values differ from the table's values, or that only one side names."""
+    both = set(realised) & set(EXPECTED_CELLS)
+    wrong = [sid for sid in both if [c['expected'] for c in realised[sid]['cases']] != EXPECTED_CELLS[sid][1]]
+    return sorted(set(realised) ^ set(EXPECTED_CELLS)) + sorted(wrong)
+
+
+def realised_fixtures():
+    """The parsed fixture of every realised scenario, by id, as the set file names them."""
+    value, files, _rows = load_tree()
+    return {e['id']: unwrap(files[e['fixture']['path']]) for e in value['scenarios'] if e['fixture']}
+
+
 class FaithfulnessTest(unittest.TestCase):
     """AC4: each fixture's expected values against its scenario's Expected cell (section 5)."""
 
     def test_cells_equal_the_bound_file(self):
-        cells = {sid: cell for sid, _h, _c, cell in scenario_rows()}
-        for sid, (cell, _expected) in EXPECTED_CELLS.items():
-            with self.subTest(scenario=sid):
-                self.assertEqual(cells[sid], cell)
+        self.assertEqual(cell_mismatches(), [])
+
+    def test_a_changed_cell_is_caught(self):
+        lines = read(SCENARIO_FILE).split(b'\n')
+        i = next(k for k, line in enumerate(lines) if line.startswith(b'| ACC-05 | '))
+        cell = b' | ' + EXPECTED_CELLS['ACC-05'][0].encode('utf-8') + b' | '
+        self.assertEqual(lines[i].count(cell), 1)
+        lines[i] = lines[i].replace(cell, cell[:-3] + b'; changed | ')
+        self.assertEqual(cell_mismatches(b'\n'.join(lines)), ['ACC-05'])
 
     def test_fixtures_hold_the_table_values(self):
-        value, files, _rows = load_tree()
-        realised = {e['id']: unwrap(files[e['fixture']['path']]) for e in value['scenarios'] if e['fixture']}
-        self.assertEqual(sorted(realised), sorted(EXPECTED_CELLS))
-        for sid, (_cell, expected) in EXPECTED_CELLS.items():
-            with self.subTest(scenario=sid):
-                self.assertEqual([c['expected'] for c in realised[sid]['cases']], expected)
+        self.assertEqual(expected_mismatches(realised_fixtures()), [])
 
     def test_a_changed_expected_value_is_caught(self):
-        value, files, _rows = load_tree()
-        entry = next(e for e in value['scenarios'] if e['id'] == 'ACC-05')
-        v = unwrap(files[entry['fixture']['path']])
-        v['cases'][0]['expected']['next_state'] = ['IN_REVIEW']
-        self.assertNotEqual([c['expected'] for c in v['cases']], EXPECTED_CELLS['ACC-05'][1])
+        realised = realised_fixtures()
+        realised['ACC-05']['cases'][0]['expected']['next_state'] = ['IN_REVIEW']
+        self.assertEqual(expected_mismatches(realised), ['ACC-05'])
+
+    def test_a_missing_or_extra_fixture_is_caught(self):
+        realised = realised_fixtures()
+        realised['RC-01'] = realised.pop('ACC-05')
+        self.assertEqual(expected_mismatches(realised), ['ACC-05', 'RC-01'])
 
 
 if __name__ == '__main__':
