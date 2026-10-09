@@ -82,6 +82,10 @@ Two incidents in session 2026-10-09-1056 (../History/2026-10/2026-10-09-1056-run
 - **2026-10-09 (D-211 (c)).** A contract sentence about what a CI step covers was drafted and approved twice without reading the step's list; the decision agent found it false before the contract was committed. The fix: check every statement a contract makes about a tool against the tool's own source before it is approved.
 - **2026-10-09 (D-212 (a)).** After a contract amendment added a condition, the rule-to-test table was not checked again; the condition had no test, and a review round blocked on it. The fix: after any amendment of a contract, check the rule-to-test table against it rule by rule again before the first review round.
 
+Two incidents in session 2026-10-09-1248 (../History/2026-10/2026-10-09-1248-ci-revision-3-and-governor-contract.md):
+- **2026-10-09 (D-218 request).** Three short hashes were typed by hand with wrong tails; the abbreviation check found them before the request was sent, and a script replaced them with values computed from the files.
+- **2026-10-09 (D-221 E1).** A drafted contract gave the governor's decision record null keys that the records checker requires; every scenario would have been NOT_RUN. The decision agent found it by reading the checker. The fix: check a contract's output forms against the checker that will read them before the contract is brought.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.
