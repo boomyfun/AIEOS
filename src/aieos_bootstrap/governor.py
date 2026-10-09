@@ -175,7 +175,8 @@ def _inputs_errors(inp):
     if not _texts(inp['traces_to']):
         errors.append('traces_to')
     if inp['risk'] not in RISKS:
-        # A change that matches no risk rule gets no decision value (governor-spec.md section 4 rule 8).
+        # A change that matches no risk rule gets no decision value (governor-spec.md section 4 rule 8; reading:
+        # section 11 point 4).
         errors.append('risk')
     for key in ('owner_kept_act', 'weakens_evidence', 'delegation_in_force', 'auto_accept'):
         if not isinstance(inp[key], bool):
@@ -237,7 +238,7 @@ def _error_record(task, request, inputs, error):
         rec['evaluated_commit'] = request['evaluated_commit']
     if _intent_versions(request.get('intent_versions')):
         rec['intent_versions'] = dict(request['intent_versions'])
-    if request.get('task_state') in record_forms.STATE_NAMES:
+    if isinstance(request.get('task_state'), str) and request['task_state'] in record_forms.STATE_NAMES:
         rec['next_task_state'] = request['task_state']
     rec['record_id'] = _record_id(rec)
     return rec
@@ -336,7 +337,7 @@ def _sort_records(task, request, recs):
         findings = record_forms.check_record(r)
         if isinstance(r, dict) and r.get('outcome') == 'blocking':
             kind = r.get('blocking_kind')
-            blocking.append((label, kind if kind in record_forms.BLOCKING_KINDS else 'other'))
+            blocking.append((label, kind if isinstance(kind, str) and kind in record_forms.BLOCKING_KINDS else 'other'))
             if findings:
                 notes.append('%s: blocking, and not otherwise used: %s' % (label, findings[0].rule))
             continue
@@ -373,12 +374,16 @@ def _approval(task, request, inputs, approvals, notes):
     """The approval record that counts (rule 5), or None: an authority record bound to the task's current content
     hash, from human_authority, or from decision_agent with a decision_ref while the delegation is in force and neither
     the owner-kept act nor weakens-evidence is set (reading of "recorded decided by: decision agent (A41, A51)").
-    The owner's own approval is cited before the decision agent's."""
+    The owner's own approval is cited before the decision agent's (reading)."""
     counted = []
     for r in approvals:
         b = r.get('approval_binding')
         if not (isinstance(b, dict) and b.get('kind') == 'acceptance' and b.get('hash') == request['task_content_hash']):
             notes.append('%s: an approval not bound to this task\'s content hash' % r['record_id'])
+            continue
+        if 'outcome' in r and r['outcome'] != 'pass':
+            # (reading; spec 2: a rejection is an authority record too)
+            notes.append('%s: an authority record whose outcome is not pass is not an approval' % r['record_id'])
             continue
         if r['source_class'] == 'human_authority':
             counted.append((0, r['record_id']))
@@ -456,13 +461,15 @@ def evaluate(request, inputs, records):
 
     approval_record, ai_approval = None, False
     if row_1:
-        decision, state, row = 'REJECT', 'REJECTED', 1
+        decision, state, row = 'REJECT', 'REJECTED', 1  # (reading: governor-spec.md section 11 point 5)
     elif other_blocking or failed_gates or failed_records:
         decision, state, row = 'NEEDS_REWORK', _next_after_rework(request), 2
     elif missing_gates or missing_any:
         decision, row = 'INSUFFICIENT_EVIDENCE', 3
         missing_kinds = [k for item in profile_used for k in item['missing_types']]
         human_only = not missing_gates and all(k in HUMAN_TYPES for k in missing_kinds)
+        # (reading: governor-spec.md section 11 point 6, stale or missing evidence goes back to REWORK unless only
+        # human types are missing)
         state = 'IN_REVIEW' if human_only else _next_after_rework(request)
     elif inputs['auto_accept'] and LEVEL_AT_LEAST_L2 and not re_evaluating:
         decision, state, row = 'ACCEPT', 'ACCEPTED', 4  # never reached now (AC12)
@@ -542,7 +549,8 @@ def derive_inputs(values):
     """The inputs object of conformance-files.md section 4, derived from values only (AC9). Raises ValueError when
     ``values`` is not exactly its keys or the contract's fields or the changed paths are not in their forms. A value
     that cannot be derived is None, so that evaluate gives no decision (rules 7 and 8): the risk when a changed path
-    matches no rule, the delegation when its pinned value is missing, and the profile when the risk has no default."""
+    matches no rule, the delegation when its pinned value is missing, and the profile when the risk has no default
+    or when the articles or the requirement profiles are not a list."""
     if not isinstance(values, dict) or set(values) != VALUE_KEYS:
         raise ValueError('the values are not exactly the keys of derive_inputs')
     contract, paths = values['contract'], values['changed_paths']
@@ -599,7 +607,8 @@ def derive_inputs(values):
     # The evidence profile: the risk's default, with each traced requirement's added entries; the articles join it.
     profile = None
     defaults = values['default_profiles'] if isinstance(values['default_profiles'], dict) else {}
-    if risk is not None and _profile_form(defaults.get(risk)):
+    lists = isinstance(values['articles'], list) and isinstance(values['requirement_profiles'], list)
+    if risk is not None and lists and _profile_form(defaults.get(risk)):
         entries = [dict(e, evidence_types=list(e['evidence_types'])) for e in defaults[risk]]
         reqs = values['requirement_profiles'] if isinstance(values['requirement_profiles'], list) else []
         for req in reqs:

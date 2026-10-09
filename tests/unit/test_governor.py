@@ -128,6 +128,10 @@ class R2InputChecks(unittest.TestCase):
         for key in ('record_id', 'fact_kind', 'source_class', 'recorder', 'subject', 'uncovered', 'rests_on_ai'):
             self.assertIn(key, out)
 
+    def test_an_unhashable_task_state_gives_the_error_record(self):
+        for bad in (['IN_REVIEW'], {'state': 'VERIFYING'}):
+            self.assertError(run(req=request(task_state=bad)), state=None)
+
     def test_each_malformed_request_field(self):
         for key, bad in (('task_content_hash', 'x'), ('evaluated_commit', 'abc'), ('intent_versions', {'S': '2'}),
                          ('changed_paths', [1]), ('retry_count', {'used': -1, 'limit': 2}),
@@ -324,6 +328,18 @@ class R5BlockingAndApprovals(unittest.TestCase):
         self.assertEqual(out['approval_record'], 'a2')
         self.assertFalse(out['rests_on_ai']['approval'])
 
+    def test_a_blocking_record_with_an_unhashable_kind_still_blocks(self):
+        out = run(rs=gates() + [rec('v', outcome='blocking', blocking_kind=['violation'])])
+        self.assertEqual((out['decision'], out['table_row'], out['blocking']), ('NEEDS_REWORK', 2, ['v']))
+
+    def test_an_authority_record_whose_outcome_is_not_pass_is_no_approval(self):
+        req = request(task_state='IN_REVIEW')
+        out = run(req=req, rs=gates() + [dict(approval(), outcome='fail')])
+        self.assertEqual((out['decision'], out['next_task_state'], out['approval_record']), ('NEEDS_REVIEW', 'IN_REVIEW', None))
+        self.assertTrue(any('outcome is not pass' in note for note in out['uncovered']))
+        for ap in (dict(approval(), outcome='pass'), approval()):
+            self.assertEqual(run(req=req, rs=gates() + [ap])['approval_record'], 'ap')
+
     def test_an_approval_never_satisfies_evidence(self):
         prof = [{'dimension': 'operational', 'evidence_types': ['human_review']}]
         ap = dict(approval(), evidence_type='human_review', dimension='operational')
@@ -515,6 +531,13 @@ class R9Derivation(unittest.TestCase):
         inp = governor.derive_inputs(derive_values(changed_paths=['docs/a.md']))
         self.assertIsNone(inp['evidence_profile'])
         self.assertIsNone(run(inp=inp)['decision'])
+
+    def test_non_list_articles_or_requirement_profiles_give_no_profile(self):
+        for key in ('articles', 'requirement_profiles'):
+            for bad in (None, {}, 'x'):
+                inp = governor.derive_inputs(derive_values(**{key: bad}))
+                self.assertIsNone(inp['evidence_profile'], (key, bad))
+                self.assertIsNone(run(inp=inp)['decision'])
 
     def test_the_plan_and_auto_accept(self):
         contract = dict(derive_values()['contract'], verification_plan=['G2', 'G0'])
