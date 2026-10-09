@@ -37,6 +37,9 @@ One occurrence in session 2026-10-10-0043 (../History/2026-10/2026-10-10-0043-bo
 One occurrence in session 2026-10-10-0235 (../History/2026-10/2026-10-10-0235-resume-check-fixtures-accepted.md):
 - **2026-10-10 (CS-90).** Two of my generator scripts first held an assertion ending in "or True", which asserts nothing; both were removed before the scripts ran.
 
+One occurrence in session 2026-10-10-0451 (../History/2026-10/2026-10-10-0451-decision-files-d284-d292-and-task-010-landed.md):
+- **2026-10-10 (D-295).** A check that the new module's whole-file hash differs from the old draft's cannot show that two lines were reused; the decision agent found the two byte-identical lines by reading, and the rework added a phrase check.
+
 ## Why it happens
 - Proxies are cheaper than the real check.
 - The same model picks the evidence and judges it.

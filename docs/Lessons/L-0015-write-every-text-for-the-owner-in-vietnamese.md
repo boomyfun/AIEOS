@@ -61,6 +61,10 @@ Four in session 2026-10-10-0235 (../History/2026-10/2026-10-10-0235-resume-check
 Five in session 2026-10-10-0348 (../History/2026-10/2026-10-10-0348-runner-entry-contract-and-reader-test-split.md), found by the machine scan and disclosed in the next request each time:
 - **2026-10-10 (:403, :620, :870, :889, :1341).** Short progress lines in English before tool calls; the last three came after the decision agent asked for a scan before each line (D-284 C3).
 
+Occurrences in session 2026-10-10-0451 (../History/2026-10/2026-10-10-0451-decision-files-d284-d292-and-task-010-landed.md):
+- **2026-10-10 (:551).** One short progress line in English before a tool call in this session.
+- **2026-10-10 (session 3d249e7e, found now by machine).** That session had seven English lines (:403, :620, :870, :889, :1230, :1341, :1630), not five; :1230 had been missed and the reply at :1407 had said five.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

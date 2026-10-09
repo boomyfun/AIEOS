@@ -63,6 +63,11 @@ One occurrence in session 2026-10-10-0235 (../History/2026-10/2026-10-10-0235-re
 One occurrence in session 2026-10-10-0348 (../History/2026-10/2026-10-10-0348-runner-entry-contract-and-reader-test-split.md), my incorrect command, refused before it ran and rewritten as the rule requires:
 - **2026-10-10 (:367).** Python's name followed by a dash, with no timeout, to parse a script.
 
+Seven commands with no effect in session 2026-10-10-0451 (../History/2026-10/2026-10-10-0451-decision-files-d284-d292-and-task-010-landed.md), all mine, found by `tools/filler_count2.py`; five were refused by the guard before they ran:
+- **2026-10-10 (:199, :301, :671, :1475).** A heredoc with Python's name and a dash; a pipe into Python's name with a dash; `python -c print(1)`; `python3 --version`.
+- **2026-10-10 (:916).** A real check whose search pattern held the forbidden strings; the guard reads a search pattern as a command.
+- **2026-10-10 (:541, :984).** `cat > /dev/null` and `sed -n 109p /dev/null` ran and did nothing.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

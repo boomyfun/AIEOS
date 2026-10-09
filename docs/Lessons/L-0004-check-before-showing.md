@@ -114,6 +114,9 @@ Occurrences in session 2026-10-10-0348 (../History/2026-10/2026-10-10-0348-runne
 - **2026-10-10 (:1430).** A count to the owner was wrong: "three contracts" for two, in a status line that named the two; corrected in the next replies.
 - **2026-10-10 (several requests).** Typed hash endings, each caught by the abbreviation check before sending.
 
+Occurrences in session 2026-10-10-0451 (../History/2026-10/2026-10-10-0451-decision-files-d284-d292-and-task-010-landed.md):
+- **2026-10-10 (the requests for D-295 and D-298).** Hash endings typed by hand were wrong or left as placeholders; each was caught by the abbreviation check or by reading before sending.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

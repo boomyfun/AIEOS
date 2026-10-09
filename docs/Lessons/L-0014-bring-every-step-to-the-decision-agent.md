@@ -22,6 +22,9 @@ One occurrence in session 2026-10-10-0138 (../History/2026-10/2026-10-10-0138-co
 One occurrence in session 2026-10-10-0235 (../History/2026-10/2026-10-10-0235-resume-check-fixtures-accepted.md):
 - **2026-10-10 (D-272).** In session 5d4884ef, D-269 C5 asked the next turn-final reply to relay D-268's and D-269's texts; D-268's had already been relayed at 5d48 :1220 and was not repeated at :1361. The condition itself asked for a repeat; found by machine at this session's start and recorded in D-269's execution record.
 
+One occurrence in session 2026-10-10-0451 (../History/2026-10/2026-10-10-0451-decision-files-d284-d292-and-task-010-landed.md):
+- **2026-10-10 (D-294 C1).** The generated writer differed from the allowed set in one line (its own name in a print line); I wrote anyway although the condition said any other difference stops everything.
+
 ## Why it happens
 - Claude treats a step as mechanical (a display, a change of order, a turn end) and does not see it as a decision.
 - The request checklist of the decision agent's definition was not applied before sending.
