@@ -1,4 +1,4 @@
-# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md), revision 3: the checks the first code task needs
+# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md), revision 4: the checks the first code task needs
 # (decision D-181, option K1), with the conformance runs of M2 (DM A62; decisions D-217 C5 and D-218). Runs on every push
 # to any branch and checks every pushed commit. It reads only: it writes nothing to the repository and uses no secret.
 # Records: this run's log, its step summary, its annotations and each step's conclusion. Its results are advisory (DM
@@ -10,6 +10,18 @@
 # governor files), each written as one annotation; the conformance inputs and the records on GOV-003's list; the pinned
 # governor in one place, the job's AIEOS_PINNED_GOVERNOR; and deterministic_rule for module aliases, `from os import`,
 # `.replace(...)` with one argument or only the keyword target (Path.replace) and `.chmod`/`.lchmod`.
+# Revision 4 (decision D-236 C2; written only on the owner's own yes, DM A61) sets AIEOS_PINNED_GOVERNOR to the first
+# governor version, which the owner accepted (DM A64), with what the re-check of revision 3 carried for the pin: the
+# conformance runs fail when what later steps read changes while the runner runs (F1); on main they take the runner
+# and its inputs from the tip main held before the push, and fail when a push changes the runner or a governor file
+# without naming exactly one task, or leaves a governor file other than the pinned version (F5); they fail when the
+# run names a governor identity other than the governor file put in place (F7); and the replay step fails on any
+# decision record whether or not a version is pinned (F13). Limits: on main the pushed governor file is compared
+# with the pin by its hash and not run; the pinned identity is governor.py's hash alone, although the governor's
+# decisions also depend on src/aieos_bootstrap/records.py; the deterministic_rule lists and GOV-003's list keep their
+# known gaps
+# (docs/Deferred/DEF-0024); a push to main whose head commit names no task gets no conformance run, so the pinned
+# check first runs at the next push of a task's commits.
 name: aieos-checks
 
 on:
@@ -23,10 +35,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
-      # The first governor version's content hash (SHA-256 of src/aieos_bootstrap/governor.py), set only by the workflow
-      # revision that pins it (Master Plan section 5 points 5 and 6). Empty: no version is pinned, so the replay step fails
-      # on any decision record and the conformance base run reports and does not fail on its outcome. The one place.
-      AIEOS_PINNED_GOVERNOR: ''
+      # The pinned governor version's content hash (SHA-256 of src/aieos_bootstrap/governor.py; Master Plan section 5
+      # points 5 and 6), set by revision 4 to the first version, which the owner accepted (DM A64; the file at commit
+      # aa14ae8d). Pinned: the conformance base run fails unless the base's governor file and the run's governor
+      # identity have this SHA-256 and the outcome is pass. Empty: no version is pinned, and the base run reports and
+      # does not fail on its outcome. The replay step fails on any decision record either way (revision 4). The one
+      # place; changing it is the owner's (DM A61, A63).
+      AIEOS_PINNED_GOVERNOR: '2f2dcd7525bcc39dcb3539ada93daff428a624cf2c47876c2d17599cf7ec022f'
     steps:
       - name: Fetch the pushed commit, its history and main (no third-party action, no token)
         env:
@@ -426,8 +441,9 @@ jobs:
         run: |
           # AIEOS CI: replay (INV-010) (D-181 P4). Standard library only. Run in the checkout of the pushed commit, on every push.
           # Counts the decision records in the tree at HEAD: lines of any file named events.jsonl whose type is
-          # decision.acceptance or decision.execution. While no governor version is pinned (Master Plan section 5 point 6), any
-          # decision record fails, because there is no pinned ruleset to recompute it with; with none, it reports 0 and passes.
+          # decision.acceptance or decision.execution. No replay that recomputes a decision record with the pinned governor exists
+          # yet, so any decision record fails, whether or not a governor version is pinned (revision 4, decision D-236 C2: the
+          # re-check's F13; setting the pin does not open this step); with none, it reports 0 and passes.
           import json
           import os
           import subprocess
@@ -450,8 +466,8 @@ jobs:
                           if 'decision.acceptance' in line or 'decision.execution' in line:
                               n += 1
               print('replay: event logs %d, decision records: %d, pinned governor: %s' % (len(files), n, PINNED_GOVERNOR or 'none'))
-              if n and PINNED_GOVERNOR is None:
-                  print('replay FAIL: decision records exist and no governor version is pinned to recompute them')
+              if n:
+                  print('replay FAIL: decision records exist and no replay recomputes them yet (pinned or not)')
                   return 1
               return 0
 
@@ -635,16 +651,28 @@ jobs:
         env:
           AIEOS_ARGS: base
         run: |
-          # AIEOS CI: the conformance runs (V1) of revision 3 (DM A62; decisions D-217 C5 and D-218). Standard library only. Run in
-          # the checkout of the pushed commit, after G0 detect, which wrote ../task.json. Modes (argument, or the environment
-          # variable AIEOS_ARGS):
+          # AIEOS CI: the conformance runs (V1) of revision 3 (DM A62; decisions D-217 C5 and D-218), with the changes of
+          # revision 4 (decision D-236 C2: the re-check's F1, F5 (b), F5 (c) and F7). Standard library only. Run in the checkout
+          # of the pushed commit, after G0 detect, which wrote ../task.json. Modes (argument, or the environment variable
+          # AIEOS_ARGS):
           #   base:      the runner of TASK-003 runs from the base over the base, extracted from Git into ../conformance-base. The
-          #              base and the run's task: for a push to main, the pushed commit (GITHUB_SHA, which main holds; only
-          #              accepted work enters main) and the task named by its own AIEOS-Task trailer, with no run when it has
-          #              none; for any other branch, main as the first step fetched it (refs/remotes/origin/main) and the task
-          #              that G0 detect found, with no run when there is none. The runner, the frozen set, the fixtures, the bound
-          #              scenario file, the records and the records module, and the governor if one exists, all come from the
-          #              base. Whether a governor exists is decided from the base tree. With no governor version pinned (the job's
+          #              base and the run's task: for a push to main, the tip that main held before the push (../before.txt, the
+          #              first step's record of the push; revision 4, F5 (c): as governor-spec section 7 takes the pinned
+          #              governor from the base, the runner and its inputs never come from the pushed commits on main), which
+          #              must be a commit id, not all zeros, and an ancestor of the pushed commit (GITHUB_SHA), else the step
+          #              fails, on every push to main, with a task or not, because F5 (b) needs that tip; and the task named by
+          #              the one AIEOS-Task trailer line of the pushed head commit, with no run when it has none or more than
+          #              one, except that a push whose commits change the runner or a file of GOVERNOR_FILES must have exactly
+          #              one such line, else the step fails (revision 4, F5 (b)), and, with a version pinned, must leave the
+          #              governor file with the pinned SHA-256, else the step fails (as revision 3's run on the pushed commit
+          #              did); for any other branch, main as the first step fetched it (refs/remotes/origin/main) and the task
+          #              that G0 detect found, with no run when there is none. On main the run is therefore the base's, and the
+          #              pushed governor file is not run there: only its hash is compared with the pin; when it came through a
+          #              task branch it was run there as a candidate. Limits: the trailer is read from the head commit only, so
+          #              an earlier commit of the push may belong to another task; the notice names the base and the pushed
+          #              head. The runner, the frozen set, the fixtures, the bound scenario file, the records and the records
+          #              module, and the governor if one exists, all come from the base. Whether a governor exists is decided
+          #              from the base tree. With no governor version pinned (the job's
           #              AIEOS_PINNED_GOVERNOR is empty) the step reports and does not fail on the run's outcome; with one pinned,
           #              the base's governor file and the run's governor identity must have that SHA-256 and the outcome must be
           #              pass. This step runs before any step that runs code from the pushed commits.
@@ -663,6 +691,17 @@ jobs:
           #              any later step prints, including annotations (DM A29).
           #   Both modes fail the step when the runner gives no run record: exit 2, a crash, a timeout, or output that is not one
           #   record with its text and checked values (outcome, counts, governor identity, commit, task, scenario ids and results).
+          #   Both modes also fail it (revision 4, F7) when the run names a governor identity that is neither none nor the SHA-256
+          #   of the governor file the step put in place (the base's in base mode, the head's in candidate mode); the runner names
+          #   none when the governor is absent or fails to load, which stays report-only as in revision 3, and a pinned base run
+          #   then still fails at the pin comparison. And (revision 4, F1) when, after the runner has ended, any of these differs
+          #   from what it was just before the runner started: the files ../task.json, ../range-base.txt, ../commits.txt,
+          #   ../changed-paths.txt and ../before.txt, the files named by GITHUB_ENV and GITHUB_PATH (through which a step can set
+          #   the environment and the search path of the steps after it), and the commits of HEAD and refs/remotes/origin/main.
+          #   Limits: only these are watched (not, for example, the git directory of the checkout, its configuration or replace
+          #   refs, the working tree, or GITHUB_OUTPUT, GITHUB_STATE and GITHUB_STEP_SUMMARY); the check detects and does not undo,
+          #   so a changed file stays in place and the later steps run on it, and only this step's failure shows it; a detached
+          #   grandchild of the runner that writes after the runner has ended escapes the check.
           #   The result is one annotation (a notice) per run, built only from checked values; the runner's raw output is printed
           #   only between stop-commands markers with a random token, opened before the runner starts and closed in every case;
           #   every annotation value is escaped (%, CR, LF).
@@ -678,6 +717,8 @@ jobs:
           GOVERNOR_FILES = ['src/aieos_bootstrap/governor.py']
           PINNED = os.environ.get('AIEOS_PINNED_GOVERNOR', '')
           HEX = re.compile(r'[0-9a-f]{64}')
+          COMMIT_ID = re.compile(r'[0-9a-f]{40}')
+          WATCHED = ['../task.json', '../range-base.txt', '../commits.txt', '../changed-paths.txt', '../before.txt']
           TRAILER = re.compile(r'^AIEOS-Task: (TASK-[0-9]+)$', re.M)
           SCENARIO = re.compile(r'[A-Z]{2,5}-[0-9]{2,3}')
           RESULTS = ('PASS', 'FAIL', 'NOT_RUN')
@@ -702,6 +743,20 @@ jobs:
           def extract(commit, dest):
               os.makedirs(dest)
               subprocess.run(['tar', '-x', '-f', '-', '-C', dest], input=git('archive', '--format=tar', commit), check=True)
+
+
+          def snapshot():
+              # Revision 4 (the re-check's F1): only these files and refs, taken just before the runner starts and compared after
+              # it ends; a file that cannot be read is recorded as absent. It detects; it does not undo.
+              seen = {}
+              for p in WATCHED + [os.environ[k] for k in ('GITHUB_ENV', 'GITHUB_PATH') if os.environ.get(k)]:
+                  try:
+                      with open(p, 'rb') as f:
+                          seen[p] = hashlib.sha256(f.read()).hexdigest()
+                  except OSError:
+                      seen[p] = 'absent'
+              seen['HEAD refs/remotes/origin/main'] = git('rev-parse', 'HEAD', 'refs/remotes/origin/main').decode().split()
+              return seen
 
 
           def run_runner(root, commit, task):
@@ -795,10 +850,30 @@ jobs:
                   if os.environ.get('GITHUB_SHA') != head:
                       return fail(title, 'the checkout is not the pushed commit')
                   named = TRAILER.findall(git('log', '-1', '--format=%B', head).decode('utf-8', 'replace'))
+                  try:
+                      with open('../before.txt', encoding='utf-8') as f:
+                          before = f.read().strip()
+                  except OSError:
+                      before = ''
+                  ancestor = COMMIT_ID.fullmatch(before) is not None and before != '0' * 40 and subprocess.run(
+                      ['git', 'merge-base', '--is-ancestor', before, head], capture_output=True).returncode == 0
+                  if not ancestor:
+                      shown = before if COMMIT_ID.fullmatch(before) else 'unreadable or not a commit id'
+                      return fail(title, 'the tip main held before the push (%s) is not a commit id that is an ancestor of the '
+                                         'pushed commit' % shown)
+                  touched = git('diff', '--name-only', before, head, '--', RUNNER, *GOVERNOR_FILES).decode('utf-8', 'replace')
+                  touched = touched.split()
+                  if touched and len(named) != 1:
+                      return fail(title, 'the push changes %s and its head commit has %d trailer lines' % (
+                          ', '.join(touched), len(named)))
+                  pushed_gov = blob(head, GOVERNOR_FILES[0])
+                  pushed_sha = hashlib.sha256(pushed_gov).hexdigest() if pushed_gov is not None else 'absent'
+                  if PINNED and GOVERNOR_FILES[0] in touched and pushed_sha != PINNED:
+                      return fail(title, 'the push leaves the governor file %s, not the pinned version %s' % (pushed_sha, PINNED))
                   if len(named) != 1:
-                      print('conformance base run: a push to main whose head commit names %d tasks; no run' % len(named))
+                      print('conformance base run: a push to main whose head commit has %d trailer lines; no run' % len(named))
                       return 0
-                  task, base = named[0], head
+                  task, base = named[0], before
               else:
                   task = json.load(open('../task.json'))['task']
                   if task is None:
@@ -811,6 +886,8 @@ jobs:
               gov_sha = hashlib.sha256(gov).hexdigest() if gov is not None else 'absent'
               if mode == 'base':
                   root, commit, note = os.path.abspath('../conformance-base'), base, 'base %s' % base
+                  if on_main:
+                      note = 'base %s (the tip main held before the push of %s)' % (base, head)
                   extract(base, root)
               else:
                   changed = [f for f in GOVERNOR_FILES if blob('HEAD', f) != blob(base, f)]
@@ -831,7 +908,16 @@ jobs:
                           with open(target, 'wb') as w:
                               w.write(data)
                   note = 'candidate: the inputs of base %s with the governor files of %s (%s); advisory' % (base, head, ', '.join(changed))
+              if mode == 'base':
+                  placed = gov_sha if gov is not None else None
+              else:
+                  head_gov = blob('HEAD', GOVERNOR_FILES[0])
+                  placed = hashlib.sha256(head_gov).hexdigest() if head_gov is not None else None
+              watched = snapshot()
               rc, out = run_runner(root, commit, task)
+              moved = sorted(k for k, v in snapshot().items() if watched.get(k) != v)
+              if moved:
+                  return fail(title, 'changed while the runner ran: %s; %s' % (', '.join(moved), note))
               parsed = parse(out, commit, task)
               if rc not in (0, 1) or parsed is None:
                   return fail(title, 'no run record (runner exit %s); %s' % (rc, note))
@@ -840,6 +926,9 @@ jobs:
                   return fail(title, 'runner exit %d and outcome %s disagree; %s' % (rc, record['outcome'], note))
               if not (isinstance(value.get('runner'), dict) and value['runner'].get('sha256') == runner_sha):
                   return fail(title, 'the run record does not name the base runner; %s' % note)
+              if value.get('governor_identity') not in (placed, None):
+                  return fail(title, 'the run names governor %s, not the governor file put in place (%s); %s' % (
+                      value['governor_identity'], placed or 'none', note))
               results = ', '.join('%s %s' % (r['id'], r['result']) for r in value['results'])
               report_only = mode == 'candidate' or not PINNED
               msg = 'outcome %s; counts %s; record %s; commit %s; task %s; governor %s; base governor file %s; %s; %s; results: %s' % (
@@ -870,16 +959,28 @@ jobs:
         env:
           AIEOS_ARGS: candidate
         run: |
-          # AIEOS CI: the conformance runs (V1) of revision 3 (DM A62; decisions D-217 C5 and D-218). Standard library only. Run in
-          # the checkout of the pushed commit, after G0 detect, which wrote ../task.json. Modes (argument, or the environment
-          # variable AIEOS_ARGS):
+          # AIEOS CI: the conformance runs (V1) of revision 3 (DM A62; decisions D-217 C5 and D-218), with the changes of
+          # revision 4 (decision D-236 C2: the re-check's F1, F5 (b), F5 (c) and F7). Standard library only. Run in the checkout
+          # of the pushed commit, after G0 detect, which wrote ../task.json. Modes (argument, or the environment variable
+          # AIEOS_ARGS):
           #   base:      the runner of TASK-003 runs from the base over the base, extracted from Git into ../conformance-base. The
-          #              base and the run's task: for a push to main, the pushed commit (GITHUB_SHA, which main holds; only
-          #              accepted work enters main) and the task named by its own AIEOS-Task trailer, with no run when it has
-          #              none; for any other branch, main as the first step fetched it (refs/remotes/origin/main) and the task
-          #              that G0 detect found, with no run when there is none. The runner, the frozen set, the fixtures, the bound
-          #              scenario file, the records and the records module, and the governor if one exists, all come from the
-          #              base. Whether a governor exists is decided from the base tree. With no governor version pinned (the job's
+          #              base and the run's task: for a push to main, the tip that main held before the push (../before.txt, the
+          #              first step's record of the push; revision 4, F5 (c): as governor-spec section 7 takes the pinned
+          #              governor from the base, the runner and its inputs never come from the pushed commits on main), which
+          #              must be a commit id, not all zeros, and an ancestor of the pushed commit (GITHUB_SHA), else the step
+          #              fails, on every push to main, with a task or not, because F5 (b) needs that tip; and the task named by
+          #              the one AIEOS-Task trailer line of the pushed head commit, with no run when it has none or more than
+          #              one, except that a push whose commits change the runner or a file of GOVERNOR_FILES must have exactly
+          #              one such line, else the step fails (revision 4, F5 (b)), and, with a version pinned, must leave the
+          #              governor file with the pinned SHA-256, else the step fails (as revision 3's run on the pushed commit
+          #              did); for any other branch, main as the first step fetched it (refs/remotes/origin/main) and the task
+          #              that G0 detect found, with no run when there is none. On main the run is therefore the base's, and the
+          #              pushed governor file is not run there: only its hash is compared with the pin; when it came through a
+          #              task branch it was run there as a candidate. Limits: the trailer is read from the head commit only, so
+          #              an earlier commit of the push may belong to another task; the notice names the base and the pushed
+          #              head. The runner, the frozen set, the fixtures, the bound scenario file, the records and the records
+          #              module, and the governor if one exists, all come from the base. Whether a governor exists is decided
+          #              from the base tree. With no governor version pinned (the job's
           #              AIEOS_PINNED_GOVERNOR is empty) the step reports and does not fail on the run's outcome; with one pinned,
           #              the base's governor file and the run's governor identity must have that SHA-256 and the outcome must be
           #              pass. This step runs before any step that runs code from the pushed commits.
@@ -898,6 +999,17 @@ jobs:
           #              any later step prints, including annotations (DM A29).
           #   Both modes fail the step when the runner gives no run record: exit 2, a crash, a timeout, or output that is not one
           #   record with its text and checked values (outcome, counts, governor identity, commit, task, scenario ids and results).
+          #   Both modes also fail it (revision 4, F7) when the run names a governor identity that is neither none nor the SHA-256
+          #   of the governor file the step put in place (the base's in base mode, the head's in candidate mode); the runner names
+          #   none when the governor is absent or fails to load, which stays report-only as in revision 3, and a pinned base run
+          #   then still fails at the pin comparison. And (revision 4, F1) when, after the runner has ended, any of these differs
+          #   from what it was just before the runner started: the files ../task.json, ../range-base.txt, ../commits.txt,
+          #   ../changed-paths.txt and ../before.txt, the files named by GITHUB_ENV and GITHUB_PATH (through which a step can set
+          #   the environment and the search path of the steps after it), and the commits of HEAD and refs/remotes/origin/main.
+          #   Limits: only these are watched (not, for example, the git directory of the checkout, its configuration or replace
+          #   refs, the working tree, or GITHUB_OUTPUT, GITHUB_STATE and GITHUB_STEP_SUMMARY); the check detects and does not undo,
+          #   so a changed file stays in place and the later steps run on it, and only this step's failure shows it; a detached
+          #   grandchild of the runner that writes after the runner has ended escapes the check.
           #   The result is one annotation (a notice) per run, built only from checked values; the runner's raw output is printed
           #   only between stop-commands markers with a random token, opened before the runner starts and closed in every case;
           #   every annotation value is escaped (%, CR, LF).
@@ -913,6 +1025,8 @@ jobs:
           GOVERNOR_FILES = ['src/aieos_bootstrap/governor.py']
           PINNED = os.environ.get('AIEOS_PINNED_GOVERNOR', '')
           HEX = re.compile(r'[0-9a-f]{64}')
+          COMMIT_ID = re.compile(r'[0-9a-f]{40}')
+          WATCHED = ['../task.json', '../range-base.txt', '../commits.txt', '../changed-paths.txt', '../before.txt']
           TRAILER = re.compile(r'^AIEOS-Task: (TASK-[0-9]+)$', re.M)
           SCENARIO = re.compile(r'[A-Z]{2,5}-[0-9]{2,3}')
           RESULTS = ('PASS', 'FAIL', 'NOT_RUN')
@@ -937,6 +1051,20 @@ jobs:
           def extract(commit, dest):
               os.makedirs(dest)
               subprocess.run(['tar', '-x', '-f', '-', '-C', dest], input=git('archive', '--format=tar', commit), check=True)
+
+
+          def snapshot():
+              # Revision 4 (the re-check's F1): only these files and refs, taken just before the runner starts and compared after
+              # it ends; a file that cannot be read is recorded as absent. It detects; it does not undo.
+              seen = {}
+              for p in WATCHED + [os.environ[k] for k in ('GITHUB_ENV', 'GITHUB_PATH') if os.environ.get(k)]:
+                  try:
+                      with open(p, 'rb') as f:
+                          seen[p] = hashlib.sha256(f.read()).hexdigest()
+                  except OSError:
+                      seen[p] = 'absent'
+              seen['HEAD refs/remotes/origin/main'] = git('rev-parse', 'HEAD', 'refs/remotes/origin/main').decode().split()
+              return seen
 
 
           def run_runner(root, commit, task):
@@ -1030,10 +1158,30 @@ jobs:
                   if os.environ.get('GITHUB_SHA') != head:
                       return fail(title, 'the checkout is not the pushed commit')
                   named = TRAILER.findall(git('log', '-1', '--format=%B', head).decode('utf-8', 'replace'))
+                  try:
+                      with open('../before.txt', encoding='utf-8') as f:
+                          before = f.read().strip()
+                  except OSError:
+                      before = ''
+                  ancestor = COMMIT_ID.fullmatch(before) is not None and before != '0' * 40 and subprocess.run(
+                      ['git', 'merge-base', '--is-ancestor', before, head], capture_output=True).returncode == 0
+                  if not ancestor:
+                      shown = before if COMMIT_ID.fullmatch(before) else 'unreadable or not a commit id'
+                      return fail(title, 'the tip main held before the push (%s) is not a commit id that is an ancestor of the '
+                                         'pushed commit' % shown)
+                  touched = git('diff', '--name-only', before, head, '--', RUNNER, *GOVERNOR_FILES).decode('utf-8', 'replace')
+                  touched = touched.split()
+                  if touched and len(named) != 1:
+                      return fail(title, 'the push changes %s and its head commit has %d trailer lines' % (
+                          ', '.join(touched), len(named)))
+                  pushed_gov = blob(head, GOVERNOR_FILES[0])
+                  pushed_sha = hashlib.sha256(pushed_gov).hexdigest() if pushed_gov is not None else 'absent'
+                  if PINNED and GOVERNOR_FILES[0] in touched and pushed_sha != PINNED:
+                      return fail(title, 'the push leaves the governor file %s, not the pinned version %s' % (pushed_sha, PINNED))
                   if len(named) != 1:
-                      print('conformance base run: a push to main whose head commit names %d tasks; no run' % len(named))
+                      print('conformance base run: a push to main whose head commit has %d trailer lines; no run' % len(named))
                       return 0
-                  task, base = named[0], head
+                  task, base = named[0], before
               else:
                   task = json.load(open('../task.json'))['task']
                   if task is None:
@@ -1046,6 +1194,8 @@ jobs:
               gov_sha = hashlib.sha256(gov).hexdigest() if gov is not None else 'absent'
               if mode == 'base':
                   root, commit, note = os.path.abspath('../conformance-base'), base, 'base %s' % base
+                  if on_main:
+                      note = 'base %s (the tip main held before the push of %s)' % (base, head)
                   extract(base, root)
               else:
                   changed = [f for f in GOVERNOR_FILES if blob('HEAD', f) != blob(base, f)]
@@ -1066,7 +1216,16 @@ jobs:
                           with open(target, 'wb') as w:
                               w.write(data)
                   note = 'candidate: the inputs of base %s with the governor files of %s (%s); advisory' % (base, head, ', '.join(changed))
+              if mode == 'base':
+                  placed = gov_sha if gov is not None else None
+              else:
+                  head_gov = blob('HEAD', GOVERNOR_FILES[0])
+                  placed = hashlib.sha256(head_gov).hexdigest() if head_gov is not None else None
+              watched = snapshot()
               rc, out = run_runner(root, commit, task)
+              moved = sorted(k for k, v in snapshot().items() if watched.get(k) != v)
+              if moved:
+                  return fail(title, 'changed while the runner ran: %s; %s' % (', '.join(moved), note))
               parsed = parse(out, commit, task)
               if rc not in (0, 1) or parsed is None:
                   return fail(title, 'no run record (runner exit %s); %s' % (rc, note))
@@ -1075,6 +1234,9 @@ jobs:
                   return fail(title, 'runner exit %d and outcome %s disagree; %s' % (rc, record['outcome'], note))
               if not (isinstance(value.get('runner'), dict) and value['runner'].get('sha256') == runner_sha):
                   return fail(title, 'the run record does not name the base runner; %s' % note)
+              if value.get('governor_identity') not in (placed, None):
+                  return fail(title, 'the run names governor %s, not the governor file put in place (%s); %s' % (
+                      value['governor_identity'], placed or 'none', note))
               results = ', '.join('%s %s' % (r['id'], r['result']) for r in value['results'])
               report_only = mode == 'candidate' or not PINNED
               msg = 'outcome %s; counts %s; record %s; commit %s; task %s; governor %s; base governor file %s; %s; %s; results: %s' % (
