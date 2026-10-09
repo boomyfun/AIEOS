@@ -1,0 +1,279 @@
+# Task contract TASK-003, the conformance runner of gov-AIEOS (Master Plan revision 2, §4 M2; the M2 work plan of
+# decision D-195, P4 and P5; specification 2 §5.1). Revision 0, drafted under decision D-208 (C4, C5), brought for
+# approval in D-209 as a template; whether it is approved is recorded in the decision files, not in this file. Fields
+# and value forms follow specification 2 §5.1 and the contracts of TASK-001 and TASK-002. Readings marked "(reading)"
+# are the worker's, for the decision agent's ruling.
+# Task type: implementation. Constitution GOV-002 applies: tests/conformance/** (the fixtures and the set file, scenario
+# files in the sense of conformance-files.md section 8) is in the forbidden set, so the task can read them but never
+# change them.
+# Risk: high. R2 matches src/** and tests/** (medium); R3 read fail closed matches them too, the runner falling under
+# its tag verification (risk rules section 2 point 3: R3 cannot be evaluated until an architecture entity exists); the
+# highest wins. Profile (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture
+# [deterministic_rule], functional [integration_test], security [static_security_analysis] and architecture [ai_review
+# (cross-model)], plus the evidence_required of the applicable articles. Dimensions are named as TASK-001's records name
+# them (decision D-181, reading R-dim).
+# Change class: critical_cr (D-195 P4): an evaluator part that enforces acceptance and is not bound (DM B1; A29: the
+# evaluator includes the runner), so it is judged by the base version and never auto-accepted (constitution GOV-003;
+# governor-spec.md §8). critical_cr adds no profile entry; it adds that rule.
+# Reviews (as TASK-001's, D-181 P2, P3): five way-2 reviews by a Claude model other than the implementer's, each under a
+# decision of the decision agent (architecture ai_review for INV-001, INV-002, INV-004; security ai_review for SEC-002;
+# governance ai_review for GOV-003; operational ai_review for OPS-003; the cross-model half), and three
+# decision-agent reviews (architecture human_review for INV-003, which also checks that the property tests cover the
+# related invariants; operational human_review for OPS-002; the cross-model half). Each way-2 review record's basis
+# names every article whose entry it covers and addresses each of their rules, beyond what the tool parts decide.
+# Evaluation path (A61; as TASK-002's, D-181 P1 and D-182): the approved contract is committed on main as its own commit
+# C, which changes only docs/tasks/TASK-003.yaml and has one parent equal to base_commit, and is pushed normally; the
+# files are drafted and tested in scratchpad clones (push URL disabled, the no-reply identity set first); the task's
+# commits, each carrying the trailer "AIEOS-Task: TASK-003" and no e-mail address in its message, go to the branch
+# task/TASK-003 on GitHub, each push under its own decision of the decision agent after a secret scan, never by force
+# and never deleting; the CI channel runs on each push and its records are re-fetched into docs/records/TASK-003.jsonl;
+# main receives the task only at its acceptance, by a fast-forward under its own decision. Before each task commit, the
+# added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns (AC10).
+# Not applicable: OPS-001 (scope: the repository's refs; the task changes no ref); INV-009, INV-011, GOV-001, GOV-004,
+# GOV-005, GOV-006 and SEC-003 (their scopes, the event log, the policy, the concept file, the bound artifacts, the
+# decision matrix, the records and pre-genesis documents, and .github/, meet no path of the write-set).
+# Uncovered (governor-spec.md §6.2) and stated limits (AC11): no governor exists, so a run over the frozen set gives 32
+# NOT_RUN and outcome fail, and nothing here shows that any governor meets a fixture; the runner and the governor are
+# "taken from the base" only when the CI channel checks out the base and runs the runner from it, which is the CI
+# workflow's next revision (the owner's, A61; D-195 P6, O1), not this task; until then GOV-003's pinned list in the CI
+# channel covers the runner and the governor (src/aieos_bootstrap/**) but not tests/conformance/**, so a change to the fixtures or the set file is not reported there as an evaluator
+# change and is caught only by each task's write-set and forbidden set (G0); how a run's results are read without a
+# run-record file in the repository and with step output behind sign-in (DEF-0024; D-196 C5) is left to that revision
+# (AC9); the fixtures give the inputs of governor-spec.md §3.2 as values (conformance-files.md section 1); every review
+# is by AI of one vendor.
+task: TASK-003
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add the conformance runner of docs/specs/conformance-files.md revision 2 section 6, a standard-library Python 3
+  module of the bootstrap source tree: it reads the frozen set file, its freeze approval, the fixtures and the bound
+  scenario file from the tree it is given (the base), calls the governor's entry point for each case when one exists,
+  compares the observed decision records with the expected values, and returns the run record and its record of
+  specification 2 §6.2, with unit, integration and property tests. It writes nothing, adds no governor, changes no
+  fixture or set file, and does not wire the CI channel.
+traces_to:
+  - docs/specs/conformance-files.md#2
+  - docs/specs/conformance-files.md#3
+  - docs/specs/conformance-files.md#4
+  - docs/specs/conformance-files.md#6
+  - docs/specs/conformance-files.md#7
+  - docs/pre-genesis/conformance-methodology.md#3
+  - docs/pre-genesis/conformance-methodology.md#4
+  - docs/pre-genesis/conformance-methodology.md#6
+  - docs/pre-genesis/governor-spec.md#2
+  - docs/pre-genesis/governor-spec.md#4
+  - docs/specs/spec-02-aieos-file-format.md#6.2
+  - docs/specs/spec-02-aieos-file-format.md#6.4
+  - docs/specs/spec-02-aieos-file-format.md#6.5
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-003.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5; the D-184/D-185 lesson): the placeholder
+  # and its quotes are replaced by the 40-hex id, unquoted, with nothing after it on the line (G0 reads the line raw).
+  base_commit: 3541ccc02d8f25d8594f2960161bccf15a52d81e
+  depends_on: [TASK-001, TASK-002]
+  # The interim documents have no id and no vN version, so each is named by its path and pinned by its SHA-256, as in
+  # the contracts of TASK-001 and TASK-002.
+  intent_versions:
+    docs/specs/conformance-files.md: ad09093391029143bcca54b9235334eaec1bb65007a5b29e6982af3547a4674e
+    docs/pre-genesis/conformance-scenarios-initial.md: 6b5c0666a1f364f5ecec9ad516c9a749969a1963f4e5dbef566adcbc8c80e24d
+    docs/pre-genesis/conformance-methodology.md: a11928199da9b908fad5805b44d341b21f961f0bc925350b0d46ac9adc454c87
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+    docs/specs/spec-02-aieos-file-format.md: 31109a65ee144f3edd271bce108cfeb631c972186c7f44540c8e29a450a7fcbe
+    docs/pre-genesis/constitution.md: 16e78d30214082d1248369b910b051e7e4c48929036fced1488acc2f3efcf836
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+write_set:
+  # One modified path: the package docstring and __all__ name the new module (reading: TASK-001's docstring says the
+  # package holds one module). Every other path is new.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/conformance.py
+    - tests/unit/test_runner.py
+    - tests/integration/test_runner_run.py
+    - tests/property/test_runner_properties.py
+read_set:
+  paths:
+    - docs/specs/conformance-files.md
+    - docs/pre-genesis/conformance-scenarios-initial.md
+    - docs/pre-genesis/conformance-methodology.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/pre-genesis/decision-matrix.md
+    - docs/records/TASK-001.jsonl
+    - docs/records/TASK-002.jsonl
+    - tests/conformance/set.py
+    - tests/conformance/fixtures/
+    - src/aieos_bootstrap/records.py
+  interfaces: [aieos_bootstrap.records.check_record, aieos_bootstrap.records.check_decision, aieos_bootstrap.governor.evaluate (absent at base_commit)]
+  schemas: [conformance-files set file (3), conformance-files fixture file (4), conformance-files run record (6), spec-02 record (6.2), spec-02 decision contract (6.4), spec-02 evaluation request (6.5)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/governor.py
+  - tests/run_tests.py
+  - tests/unit/test_records.py
+  - tests/integration/test_records_log.py
+  - tests/property/test_records_properties.py
+  - tests/unit/test_conformance_files.py
+  - tests/integration/test_conformance_set.py
+  - tests/property/test_conformance_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-005, INV-006, INV-007, INV-008, INV-010, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      Inputs from the base (governor-spec.md §4 rule 1). The module's run function takes the root of a tree, the
+      evaluated commit and the evaluated task's id, and reads every input through one byte reader of paths relative to
+      that root (by default pathlib's read_bytes under the root) and one listing of docs/records/*.jsonl (by default a
+      sorted glob under the root). The root is the base tree: a checkout of the base commit or of a pinned ref; the run
+      reads tests/conformance/set.py, the fixtures it names, docs/pre-genesis/conformance-scenarios-initial.md and
+      docs/records/*.jsonl only from there, and never from the change under evaluation. The commit and the task id are
+      only recorded, never read from. The governor is the module aieos_bootstrap.governor, loaded by a plain import
+      statement (no importlib); it counts as the base's only when the loaded module's file is the root's
+      src/aieos_bootstrap/governor.py (reading). The run checks that the bytes of the running runner module equal the
+      root's src/aieos_bootstrap/conformance.py (reading); otherwise the run does not count.
+  - AC2: >-
+      Wrapped files and the canonical form (conformance-files.md section 2). A set or fixture file is read as bytes and
+      is malformed unless it is exactly the first part DATA = r''' then a JSON text then the last part ''' and one LF,
+      the JSON text holding no ''', no CR byte and no byte-order mark, and re-serialising its parsed value in the
+      canonical form (keys sorted by code point, an indent of two spaces, [] and {} for empty values, integers only,
+      only " and \ escaped and control characters as \u with four lowercase hex digits, one final LF) gives the same
+      bytes. The runner never imports or executes these modules. The run record is produced in that canonical form.
+  - AC3: >-
+      The set file and when a run does not count (sections 3 and 6). The run does not count, and every scenario is
+      NOT_RUN, when: the set file is missing or malformed; its JSON object does not have exactly scenario_set_version,
+      scenario_set_file_hash, fixture_set_version and scenarios with their forms (integers; 64 lowercase hex; a non-empty list of
+      exactly {id, row_hash, capability, fixture} with distinct ids (reading), capability one of section 3's four, fixture null or exactly {path, sha256}); its SHA-256 is not bound by
+      a freeze approval (AC4); its scenario_set_file_hash differs from the SHA-256 of the bound scenario file read from
+      the root; or the runner is not the root's (AC1). A run with a stand-in governor (AC6) does not count either, but its scenarios' results are still computed as AC5 and AC7 say (reading). When the set file cannot give
+      the scenario list, the results list the bound scenario file's rows in their order (reading).
+  - AC4: >-
+      The set file's freeze approval (section 7; decision D-206). The approval is found among the lines of every file
+      docs/records/*.jsonl at the root: a record that gives no finding under aieos_bootstrap.records.check_record, with
+      fact_kind authority, source_class decision_agent or human_authority, and approval_binding exactly {kind:
+      change_request, hash} where hash equals the set file's SHA-256 (reading). An approval of another hash, such as an
+      older set's, never makes a run count; several records binding the same hash are not a conflict. Fail closed: no
+      records file, a records file that is not UTF-8 or holds a CR byte or a byte-order mark, or any line that is not
+      one JSON object giving no check_record finding, makes the run not count (reading). A record of any other source
+      class, agent_declared included, never counts as the approval.
+  - AC5: >-
+      A scenario's fixture (sections 4 and 6). A scenario is NOT_RUN, and none of its cases is run (reading), when its set
+      entry's fixture is null; the fixture path is not tests/conformance/fixtures/<module name>.py for its id (section
+      2); the fixture file is missing; its SHA-256 differs from its set entry; its row_hash differs from the SHA-256 of
+      its row line, without the line end, in the bound scenario file, or no row or more than one has its id (reading), the row being checked before the fixture file is read, so that only a path built from an id of the bound file is read (reading); or the fixture is malformed:
+      not wrapped or not canonical (AC2); its object not exactly scenario, row_hash and cases, or those two differing
+      from the set entry; cases empty or a case not exactly request, inputs, records, when and expected; request not
+      exactly the keys of specification 2 §6.5 in their forms; inputs not exactly the keys and forms of section 4; a
+      record with a check_record finding or a record id repeated in a case; when not agreeing with request.task_state;
+      or expected not having each of its keys either with a value of its form or named in not_fixed, never both.
+  - AC6: >-
+      The governor entry point (section 6). When the module aieos_bootstrap.governor is absent (the import raises
+      ModuleNotFoundError naming it), every scenario is NOT_RUN for "the entry point is absent", and the run can still
+      count. Any other failure to load it, an ImportError raised inside an existing module included, a module that is
+      not the root's (AC1), or a module without a callable evaluate, makes every scenario NOT_RUN and the run not count
+      (reading). The run function also takes an evaluate function as a test seam (reading): the tests use stand-in
+      governors through it; a run with a stand-in never counts and its governor_identity is null, so it is never
+      presented as a governor's run; the command-line entry never takes one. With the base's governor, governor_identity
+      is the SHA-256 of the root's src/aieos_bootstrap/governor.py (governor-spec.md §2: the content hash of its pinned
+      version) (reading).
+  - AC7: >-
+      The call and the comparison (section 6; conformance-methodology.md §3). For each case, evaluate is called with
+      copies of the case's request, inputs and records. A call that raises, or returns a value that is not a dict, or
+      that gives a finding under check_decision for decision.acceptance, or whose decision is not null and whose rests_on_ai is not exactly {entries,
+      approval} with approval true or false, makes the scenario NOT_RUN unless another case fails. A case passes only
+      if, for every key of expected not in not_fixed: decision is in its list; next_task_state is in next_state's list;
+      the {dimension, evidence_type} pairs read from each profile_used entry's missing_types equal missing as a set;
+      every reverify id is in the observed reverify; approval_record is null or absent when approval is null (reading),
+      or equals its record_id with that record's source_class in the case equal to its source_class; and rests_on_ai.approval equals
+      ai_approval_shown. A scenario with a failed case is FAIL, before any NOT_RUN condition of AC5 or this point;
+      otherwise NOT_RUN as AC3, AC5, AC6 and this point say; otherwise PASS. The comparison is on these values only; a key it reads that is absent from the record, profile_used included, fails its comparison, except approval_record, read as null (reading).
+  - AC8: >-
+      The run record and its record (section 6; specification 2 §6.2). The run returns the run record's canonical JSON
+      text with exactly set_file_sha256, scenario_set_version, fixture_set_version, runner ({path, sha256} of
+      src/aieos_bootstrap/conformance.py at the root), governor_identity (AC6; null when there is none), commit,
+      counts and results (one {id, result} per scenario, in the set file's order, result PASS, FAIL or NOT_RUN), the
+      values the set file cannot give being null (reading); and one record of specification 2 §6.2 with only that
+      section's keys: record_id (the run record's SHA-256 after a fixed prefix, reading), fact_kind observation,
+      source_class deterministic_tool_external_ci, recorder the runner's path and SHA-256, subject the evaluated task,
+      evidence_type conformance_run, dimension functional, outcome pass exactly when the run counts, at least one scenario has a fixture (reading) and every scenario
+      with a fixture is PASS, and otherwise fail, commit, and refers_to the run record's SHA-256. The record gives no
+      check_record finding. Only a run in the CI channel can count (conformance-methodology.md §6); a local run's
+      output is never recorded.
+  - AC9: >-
+      The command-line entry. A main function, called with the root, the commit and the task id, prints the run
+      record's text and then the record as one JSON line with its keys sorted, and returns 0 when the outcome is pass, 1 when it
+      is fail and 2 for wrong arguments; it never takes an evaluate function. How a run's results are read in the CI
+      channel, with no run-record file in the repository and step output behind sign-in (DEF-0024; D-196 C5), is left
+      to the CI workflow's next revision, the owner's (A61; D-195 P6), and stated as a limit (AC11).
+  - AC10: >-
+      Purity and the CI checks (INV-001, INV-002, INV-004). The module and its tests import only the Python 3 standard
+      library, aieos_bootstrap.records, the tests also aieos_bootstrap.conformance, and, in the module only, aieos_bootstrap.governor by the guarded import of AC6;
+      they use no exec, eval, compile, __import__ or importlib, start no process, open no network connection, call no
+      model, and write no file; they read files only with pathlib's read_bytes and list them only with pathlib's glob;
+      the tests build malformed inputs in memory and pass them through the byte reader and listing of AC1, never
+      through files. The CI steps at the task's commits report no finding: deterministic_rule (its file, import, name,
+      call and pattern rules over every file under src/ and tests/, the name open and the .open calls included; no
+      string in src/ names the folder .aieos), OPS-003 (no string in src/ that is exactly the lowercase word valid,
+      accepted or approved; an effect label MEASURED, ENFORCED or GUARANTEED only with a decision-matrix row on its
+      line), SEC-001 and SEC-002 (no secret pattern, e-mail address or GitHub URL in any added line, file name or
+      message), and bandit as the static_security_analysis step runs it. Before each commit, the added text is scanned
+      with the workflow's SEC-001, SEC-002 and OPS-003 patterns, and each count is 0.
+  - AC11: >-
+      Limits, stated and tested as such: no governor exists, so a run over the frozen set at the root gives counts
+      true, 32 NOT_RUN and outcome fail; the runner checks its inputs and compares values, and never decides an
+      acceptance; it does not check how the governor derives the inputs of governor-spec.md §3.2, which the fixtures
+      give as values; the runner and the governor are taken from the base only when the CI channel runs the runner
+      from a base checkout (O1); the CI's pinned evaluator list covers them (src/aieos_bootstrap/**) but not tests/conformance/**; the record's source_class
+      holds only for a run in the CI channel; how a run's results are read there is open (AC9); the runner checks that the set file's hash has a freeze approval, not that it is the latest one, so which set is current rests on the base's tree, which only an accepted task changes (GOV-002; risk rule R11); the check that the governor is the root's (AC1) reads the loaded module's file name, so it guards against a governor found elsewhere on the import path, not against code that runs in the same process before the runner.
+  - AC12: >-
+      Tests, with this rule-to-test list, each rule with at least one passing case and one failing case, the failing
+      cases built in memory: R1 the reader and the root (AC1: inputs only through the reader; the runner-bytes check);
+      R2 the wrapped-file and canonical-form rules, one failing case per rule of AC2; R3 each does-not-count condition
+      of AC3; R4 the freeze approval rules of AC4 (no record, another hash, a wrong kind, an agent_declared source, a
+      malformed line, an unreadable file); R5 each NOT_RUN condition of AC5; R6 the entry-point conditions of AC6
+      (absent, a failing import, no callable, a stand-in that never counts); R7 each comparison rule of AC7 (decision
+      and next state in their lists, missing as a set, reverify as a subset, approval with its source class,
+      ai_approval_shown both ways, a decision outside the list), the not-a-decision-record conditions, and FAIL before
+      NOT_RUN; R8 the run record's keys and order and its record's keys, outcome pass and outcome fail (AC8); R9 main's
+      output and return values (AC9). Unit tests in tests/unit/test_runner.py; one integration test
+      (tests/integration/test_runner_run.py) runs over the repository's own tree end to end: with no governor, counts
+      true, 32 NOT_RUN and outcome fail; with a stand-in that answers each case from its own expected values, the 19
+      fixtures PASS, the 13 others NOT_RUN and the run does not count; with a stand-in that answers one decision
+      outside a list, that scenario FAIL. Property tests (tests/property/test_runner_properties.py; standard library
+      only, fixed seeds): the same inputs always give the same run record; any one-byte change of a fixture never gives
+      that scenario PASS; any one-byte change of the set file makes the run not count; any reordering of a canonical
+      text's keys is malformed; and these properties of the invariants the task relates to: for INV-005, every result
+      is PASS, FAIL or NOT_RUN and a returned execution string is never a decision record; for INV-006, with no
+      governor no scenario is PASS; for INV-007, a fixture whose bytes differ from its frozen hash is never run; for
+      INV-008, an approval record of source class agent_declared never makes a run count. tests/run_tests.py,
+      unchanged, runs all three groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9, AC11, AC12]}
+  - {gate: G3, check: constitution, args: [AC10, INV-001, INV-002, INV-004, INV-010, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
