@@ -291,6 +291,17 @@ class R3DoesNotCount(unittest.TestCase):
         put_set(files, value)
         self.assert_blocked(files, 'scenario_set_file_hash differs')
 
+    def test_a_missing_or_changed_scenario_file(self):
+        # The bound file itself is absent or differs, not the set's hash (way-2 review R5, finding 1).
+        for name in ('missing', 'changed'):
+            with self.subTest(name):
+                files = real_files()
+                if name == 'missing':
+                    del files[conformance.SCENARIO_FILE]
+                else:
+                    files[conformance.SCENARIO_FILE] += b'\n'
+                self.assert_blocked(files, 'scenario_set_file_hash differs')
+
     def test_a_set_without_its_freeze_approval(self):
         files = real_files()
         value = set_value(files)
@@ -414,6 +425,35 @@ class R5FixtureConditions(unittest.TestCase):
         put_set(files, value)
         r = go(files, evaluate=stand_in(real_files()))
         self.assertEqual(r.reasons['ACC-99'], 'the row hash differs from the bound scenario file')
+
+    def test_an_id_on_two_rows(self):
+        # D-210 P4: an id on more than one row of the bound file binds no row, so its fixture is never run. The set's
+        # scenario_set_file_hash follows the changed file (and is frozen), so that only this condition differs.
+        files = real_files()
+        data = files[conformance.SCENARIO_FILE]
+        row = next(x for x in data.decode('utf-8').split('\n') if x.startswith('| ACC-01 | '))
+        files[conformance.SCENARIO_FILE] = data + row.encode('utf-8') + b'\n'
+        self.assertIsNotNone(conformance.scenario_rows(data)[1]['ACC-01'])
+        order, rows = conformance.scenario_rows(files[conformance.SCENARIO_FILE])
+        self.assertIsNone(rows['ACC-01'])
+        self.assertEqual(order.count('ACC-01'), 1)
+        value = set_value(files)
+        value['scenario_set_file_hash'] = conformance.sha256(files[conformance.SCENARIO_FILE])
+        put_set(files, value)
+        calls = []
+        evaluate = stand_in()
+
+        def counting(request, inputs, case_records):
+            calls.append(request['task_id'])
+            return evaluate(request, inputs, case_records)
+        r = go(files, evaluate=counting)
+        self.assertEqual(r.problems, ['a stand-in governor (reading)'])
+        self.assertEqual((r.results['ACC-01'], r.reasons['ACC-01']),
+                         (conformance.NOT_RUN, 'the row hash differs from the bound scenario file'))
+        self.assertEqual(r.results['ACC-02'], conformance.PASS)
+        cases = sum(len(conformance.unwrap(d)['cases']) for p, d in real_files().items()
+                    if p.startswith(conformance.FIXTURE_DIR + '/'))
+        self.assertEqual(len(calls), cases - len(fixture(files, 'ACC-01')['cases']))
 
     def test_a_path_outside_the_fixtures_is_never_read(self):
         files = real_files()
