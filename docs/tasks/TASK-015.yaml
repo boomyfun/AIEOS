@@ -1,0 +1,279 @@
+# Task contract TASK-015, the event log's append rules: departures F-a and F-b of TASK-007 resolved (Master Plan
+# revision 3, §4 M3; DEF-0030 and DEF-0032; specification 2 §5.1). Revision 0, drafted under decisions D-399 and D-401
+# (C1), brought for approval in its own request; whether it is approved is recorded in the decision files, not in this
+# file. Fields and value forms follow specification 2 §5.1 and the contracts of TASK-007 to TASK-009. Readings marked
+# "(reading)" are the worker's, for the decision agent's ruling.
+# Task type: implementation. What it changes: src/aieos_bootstrap/eventlog.py's function append, so that the two
+# departures of TASK-007's code from its contract's text, recorded at TASK-007's acceptance (decision D-328; DEF-0032
+# F-a and F-b), are resolved before the event log's writer (DEF-0030, TASK-016), append's first caller, is contracted;
+# and tests/unit/test_eventlog.py, with the test changes F-d names. Shape (P) of decision D-313 is kept: the module
+# stays pure; it opens no file, reads no clock and starts no process.
+# TASK-007's text, as accepted (docs/tasks/TASK-007.yaml), and how this task meets it:
+# - AC1 lists append's parameters as "the log …, the event's type, its payload, its event_id …, the append time …, and,
+#   when they apply, task_id, fencing_token, corrects and lease", and its results as "appended", "duplicate" or
+#   "refused" with one of the reasons log, conflict, event, log_after and fence. The code also takes recorder and
+#   record_id and raises ValueError, before anything is decided, when an event that needs a lease lacks them (F-a).
+#   After this task append raises no ValueError for them: every call with arguments of the forms AC1 names gives one of
+#   AC1's results. recorder and record_id stay keyword parameters, used only for AC7's record (AC1 here).
+# - AC2: "When a line of the given log has the same event_id, the result is "duplicate" … if the line's type,
+#   payload, task_id, fencing_token and corrects equal the new event's …; otherwise "refused" with reason
+#   "conflict"". Today a retried submission already on the log raises when recorder or record_id is absent, instead
+#   of "duplicate" (F-a). After this task the duplicate and conflict decisions come before anything that looks at
+#   recorder or record_id, so AC2 holds for every call (AC2 here).
+# - AC6: an event that needs a lease "is appended only when the lease given is a lease on the event's task_id whose
+#   token equals the event's token and whose expiry is after the append time. No lease, another task, another token,
+#   or an expiry at or before the append time gives the result "refused" with reason "fence" … A task.submitted
+#   event without a fencing_token gives the result "refused" with reason "fence"." Today a lease-needing event that
+#   names no task_id gives reason "event" (F-b), and one without recorder or record_id raises (F-a). After this task
+#   both give "refused" with reason "fence": with no task_id no lease can be "a lease on the event's task_id"
+#   (reading), and the absence of recorder or record_id does not change the fence's answer (AC3 here).
+# - AC7: "A "fence" refusal also carries the payload of the record.added event that records it: an observation record
+#   … subject the task id, refers_to the refused event's event_id, and a recorder and record_id the caller gives
+#   (reading)". The record can be built only when the event names a task (its subject) and the caller gives recorder
+#   and record_id. Choice argued against AC6 and AC7 (decision D-401 C1): (r1, chosen) a "fence" refusal whose record
+#   cannot be built carries no record and a finding that says why; AC6's result is then met for every call, AC7's
+#   record is carried whenever its inputs exist, and nothing is appended either way (fail closed). (r2, not chosen)
+#   keep raising for a missing recorder, after the duplicate check: AC2 would hold, but AC6's "refused" would still
+#   not be met for such a call, and the writer would have to catch an exception for a submission that is merely
+#   refused (decision D-401, against S1-alt). (r3, not chosen) build the record with a placeholder recorder: a record
+#   with a recorder no caller gave would break B5's rule that every record carries its real recorder. Under (r1) the
+#   caller that must record every refusal (specification 1 §8: "The refusal is recorded as an observation") gives
+#   recorder and record_id; TASK-016's contract will require its writer to give them always (stated, not tested here).
+# F-d (DEF-0032): the test named test_true_and_one_are_not_the_same tests an extra payload key, not True against 1;
+# it is renamed, and the cases DEF-0032 lists as untested are added (AC4 here). F-e (AC11's limits asserted "as
+# such") is not taken: it is a test of TASK-007's limits text, not needed for the writer; it stays in DEF-0032. F-c,
+# F-f, F-h and F-i stay in DEF-0032 as they are.
+# Readers of the changed paths (D-263 C3's practice): eventlog.append is called by recovery.py (TASK-009), which always
+# gives task_id, recorder and record_id on lease-needing events and builds observations itself (its AC3), and by the
+# tests of eventlog and recovery; recovery's tests must pass unchanged (AC5 here). records.py is not changed. The
+# deterministic_rule step and the GOV-003 step read every file under src/ and tests/.
+# Risk: high. R2 matches src/** and tests/** (medium); R3 read fail closed matches them too, the append rules being
+# the fence that limits authority (spec 1 §8; risk rules section 2 point 3); no path of the write set meets R10
+# (.aieos/) or R11 (tests/conformance/**); the highest wins. Profile (assurance-model.md §5, gov-AIEOS, high):
+# functional [unit_test], architecture [deterministic_rule], functional [integration_test], security
+# [static_security_analysis] and architecture [ai_review (cross-model)], plus the evidence_required of the applicable
+# articles. Dimensions are named as TASK-006's records name them (decision D-181, reading R-dim).
+# Change class: critical_cr (computed, not asserted: GOV-003's tool part over the base, run by script, marks both
+# paths as evaluator paths, src/aieos_bootstrap/** and tests/unit/** on the workflow's pinned list; decisions D-383 and
+# D-391 ruled the same reading). The module is not an evaluator part named by DM A29 (no validator, fixture, scenario,
+# runner or governor); the change is judged by the base version of every evaluator part.
+# Reviews (as TASK-009's): five way-2 reviews by a Claude model other than the implementer's, each under a decision of
+# the decision agent (architecture ai_review for INV-001, INV-002, INV-004; security ai_review for SEC-002; governance
+# ai_review for GOV-003; operational ai_review for OPS-003; the cross-model half, which also covers INV-009's rule),
+# and three decision-agent reviews (architecture human_review for INV-003, which also checks that the tests cover
+# INV-009's rule; operational human_review for OPS-002; the cross-model half). Each way-2 review record's basis names
+# every article whose entry it covers and addresses each of their rules, beyond what the tool parts decide. Each
+# reviewer's prompt is self-sufficient, with the scratchpad's absolute path in its first line (D-277), and names for
+# testing: the choice (r1) and its finding text; that no existing expectation is loosened except the two changed
+# expectations and the one rename AC4 lists; that no assert stands in src (bandit B101, D-325).
+# Evaluation path (A61; as TASK-007 to TASK-009): the approved contract is committed on main as its own commit C, which
+# changes only docs/tasks/TASK-015.yaml and has one parent equal to base_commit, and is pushed normally; the files are
+# drafted and tested in scratchpad clones (push URL disabled, the no-reply identity set first); the task's commits,
+# each carrying the trailer "AIEOS-Task: TASK-015" and no e-mail address in its message, go to the branch
+# task/TASK-015 on GitHub, each push under its own decision of the decision agent after a secret scan and a dry run
+# against a bare single-branch copy (D-229, D-274), never by force and never deleting; the CI channel runs on each push
+# and its records are re-fetched into docs/records/TASK-015.jsonl; main receives the task only at its acceptance, by a
+# fast-forward under its own decision. Before each task commit, the added text is scanned with the workflow's SEC-001,
+# SEC-002 and OPS-003 patterns (AC8).
+# Not applicable: OPS-001 (scope: the repository's refs; the task changes no ref); INV-005 to INV-008, INV-010 and
+# INV-011 (their scopes, the decision engine, the governor, evidence records and the policy, meet no path of the
+# write-set; the module emits no decision and judges no evidence); GOV-001, GOV-004 to GOV-006 and SEC-003 (their
+# scopes, the concept file, the bound artifacts, the decision matrix, the records and pre-genesis documents, and
+# .github/, meet no path of the write-set). INV-009 (scope: the event log) is applied as a reading, as in TASK-007: no
+# path of the write-set is an event log, but this module is where its rule is made, so its tests carry the rule.
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting, no push of its own (CR-002 part 4 limit 5 does not apply).
+# Uncovered and stated limits (AC7): no code writes the bytes append returns; no local store holds leases; whether a
+# caller records every refusal is the caller's (TASK-016); F-c, F-e, F-f, F-h and F-i stay open in DEF-0032; every
+# review is by AI of one vendor.
+task: TASK-015
+contract_version: v1
+task_type: implementation
+objective: >-
+  Change src/aieos_bootstrap/eventlog.py's function append so that the two departures of TASK-007's code from its
+  contract's text (DEF-0032 F-a and F-b) are resolved: append raises no ValueError for a missing recorder or record_id,
+  decides duplicate and conflict before anything that uses them, and gives "refused" with reason "fence" for an event
+  that needs a lease and names no task_id or lacks them, carrying the refusal's record whenever the event names a task
+  and the caller gives recorder and record_id, and a finding that says why when it does not; with the test changes and
+  additions DEF-0032's F-d names, in tests/unit/test_eventlog.py. Every other rule of TASK-007 is unchanged, records.py
+  is unchanged, and the module stays pure.
+traces_to:
+  - docs/specs/spec-01-state-and-event-model.md#4
+  - docs/specs/spec-01-state-and-event-model.md#8
+  - docs/specs/spec-02-aieos-file-format.md#6.1
+  - docs/specs/spec-02-aieos-file-format.md#6.2
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-015.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id, unquoted, with nothing after it on the line (G0 reads the line raw).
+  base_commit: 23ade5b36ce7532e4231a393ae7640c6bef403b5
+  depends_on: [TASK-001, TASK-007, TASK-009]
+  # The interim documents have no id and no vN version, so each is named by its path and pinned by its SHA-256, as in
+  # the contracts of TASK-003 to TASK-009.
+  intent_versions:
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 529b56d831d208594685aad3954fd3e8fc42cadc663e315b65bdfe615e3b09f7
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+write_set:
+  # Two modified paths; no new path.
+  paths:
+    - src/aieos_bootstrap/eventlog.py
+    - tests/unit/test_eventlog.py
+read_set:
+  paths:
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/pre-genesis/decision-matrix.md
+    - docs/tasks/TASK-007.yaml
+    - docs/records/TASK-007.jsonl
+    - docs/Deferred/DEF-0032-task-007-review-findings.md
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/recovery.py
+    - tests/integration/test_eventlog_log.py
+    - tests/property/test_eventlog_properties.py
+    - tests/unit/test_recovery.py
+    - tests/integration/test_recovery_log.py
+    - tests/property/test_recovery_properties.py
+  interfaces: [aieos_bootstrap.eventlog.append, aieos_bootstrap.eventlog.refusal_record, aieos_bootstrap.records.check_log, aieos_bootstrap.records.check_payload, aieos_bootstrap.records.check_record]
+  schemas: [spec-02 event line (6.1), spec-02 record (6.2), spec-01 fencing token (8)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/recovery.py
+  - tests/run_tests.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The parameters and results (TASK-007 AC1; F-a). append keeps its signature: log, event_type, payload, event_id,
+      appended_at, and the keyword parameters task_id, fencing_token, corrects, lease, recorder and record_id, each
+      None by default; recorder and record_id are used only to build AC7's refusal record. For arguments of the forms
+      TASK-007's AC1 names, append returns one of "appended", "duplicate" or "refused" (reasons log, conflict, event,
+      log_after, fence) and raises no ValueError for an absent, empty or non-string recorder or record_id; the TypeError
+      for a log that is not bytes, and the RuntimeError of TASK-007's AC5, are unchanged.
+  - AC2: >-
+      Duplicate and conflict first (TASK-007 AC2; F-a). The log check of TASK-007's AC1 and then the event_id check of
+      its AC2 come before anything that looks at recorder or record_id: a retried event already on the log gives
+      "duplicate" (or "conflict") whether or not recorder and record_id are given, a retried task.submitted among
+      them.
+  - AC3: >-
+      The fence and its record (TASK-007 AC6 and AC7; F-a, F-b; choice (r1) of the header). An event that needs a lease
+      (it carries a fencing_token, or it is a task.submitted) and passes TASK-007's AC3 is refused with reason "fence"
+      when it names no task_id (a finding "fence: the event names no task_id, so no lease can be on its task"), or when
+      the lease findings of TASK-007's AC6 are not empty; nothing of the event is appended. The refusal carries the
+      record of TASK-007's AC7, unchanged in its keys and values, when the event names a task_id and recorder and
+      record_id are non-empty strings; otherwise it carries no record, and its findings hold one more line saying
+      which input is missing: "fence: no refusal record, the event names no task_id" or "fence: no refusal record,
+      recorder and record_id are not both non-empty strings". A lease-needing event that passes the fence is appended
+      whether or not recorder and record_id are given. Every other reason and every other rule of TASK-007's AC1 to
+      AC12 is unchanged.
+  - AC4: >-
+      The tests of F-d (DEF-0032), in tests/unit/test_eventlog.py. The test test_true_and_one_are_not_the_same is
+      renamed test_an_extra_payload_key_is_a_conflict, its body unchanged. New tests: a retried task.submitted whose
+      payload has compensating 0 where the logged one has false gives "conflict" (false against 0 kept apart by the
+      sameness text, as True against 1 is); a lease whose token counter is True against an event's 1, and one whose counter is 1.0 against
+      1, each give "fence"; a payload that is not an object gives "event"; a lease whose expires_at has a non-zero UTC
+      offset gives "fence" (TASK-007's AC6: a timezone-aware UTC datetime); a retried task.submitted already on the log
+      whose lease has since expired gives "duplicate". Changed expectations, listed as such (none appends more than
+      before): test_recorder_and_record_id_are_required_for_a_lease_event (it expected ValueError) becomes a test that
+      a fence-refused submission without them gives "fence" with no record and the finding of AC3, and that a
+      lease-holding submission without them is appended; test_a_lease_event_naming_no_task_is_an_event_refusal (it
+      expected "event") becomes test_a_lease_event_naming_no_task_is_a_fence_refusal, expecting "fence", no record and
+      AC3's finding. A new test shows AC2: a retried logged task.submitted without recorder and record_id gives
+      "duplicate". No other existing test line changes.
+  - AC5: >-
+      Every other test as on main passes unchanged: tests/integration/test_eventlog_log.py,
+      tests/property/test_eventlog_properties.py, and the tests of records, governor, conformance, the runner, the
+      Resume Check and recovery (all forbidden). A change that only a change to a forbidden file would make pass is a
+      spec_conflict and the task escalates.
+  - AC6: >-
+      Purity and the CI checks (INV-001, INV-002, INV-003, INV-004). The module and its tests use no exec, eval,
+      compile, __import__ or importlib, start no process, open no network connection, call no model, open, write or
+      remove no file, read the clock nowhere, hold no assert in src (bandit B101), and name no project-state directory
+      in src/; the tests build every input in memory. The module's imports are unchanged. The CI steps at the task's
+      commits report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit, as TASK-006's AC9 lists them.
+  - AC7: >-
+      Limits, stated as such: no code writes the bytes append returns; no local store holds leases; whether a caller
+      records every refusal is the caller's (the writer task); a "fence" refusal whose record cannot be built (no
+      task_id, or recorder and record_id not both non-empty strings) carries no record: a narrowing of TASK-007's
+      AC7, chosen as (r1); F-c, F-e, F-f, F-h and F-i stay open in DEF-0032; every
+      existing module and test not in the write set is unchanged, and if one can pass only by a change the task
+      escalates (needs_out_of_scope_change).
+  - AC8: >-
+      The added text. Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003
+      patterns, and each count is 0; the file names are scanned with the same patterns and the records executors'
+      pre-push pattern (D-282).
+  - AC9: >-
+      Tests, with this rule-to-test list, each rule with at least one passing and one failing case, all in memory: R1
+      AC1 (no ValueError for an absent, empty or non-string recorder or record_id; the TypeError for a log that is not
+      bytes); R2 AC2 (a retried logged submission without recorder and record_id gives duplicate; with another payload,
+      conflict); R3 AC3 (no task_id gives fence with no record; no lease, another task, another token and an expired
+      lease, each with recorder and record_id given, give fence with the record, and each without them give fence with
+      no record and the finding; a valid lease without them appends); R4 AC4 (the F-d cases); and the property of
+      INV-009 unchanged in tests/property/test_eventlog_properties.py (forbidden, run as is). tests/run_tests.py,
+      unchanged, runs all groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC7, AC9]}
+  - {gate: G3, check: constitution, args: [AC6, AC8, INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
