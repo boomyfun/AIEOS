@@ -16,8 +16,20 @@ Limits (TASK-001 AC7):
   profile_used a list of objects with exactly its four keys (the values inside each item are not checked);
   intent_versions and fact_kind are checked by the record rules (fact_kind must be interpretation). The other
   acceptance keys are not checked.
-- A decision.execution payload may hold only the record keys, decision and error: its other keys belong to
-  specification 3 and are not named yet, so they are reported as unknown keys (a stated limit of AC6).
+- A decision.execution payload may hold, besides the record keys, decision and error, the keys of specification 3
+  section 9's execution decision record (TASK-011): contract_hash, contract_version, base_commit, head_commit,
+  log_seq, delta, checks, outcomes_fired, read_set, signatures, intent_versions, dependencies, constitution, runtime,
+  budgets, policy_version, engine_identity, uncovered and state_effect; any other key is an unknown key. None of them
+  is required (a reading). When present, base_commit and head_commit must be commit ids, log_seq an integer at least
+  0, contract_hash 64 lowercase hex digits, contract_version v followed by digits, engine_identity an object with
+  exactly code_sha256 (null or 64 lowercase hex digits) and python ("X.Y.Z"), checks eight objects with exactly
+  check (1 to 8, each once), status, outcome and detail, outcomes_fired execution values without repeats in the order
+  of specification 3 section 7 whose first value is the decision (CONTINUE when it is empty), policy_version a
+  non-empty string or null, and intent_versions, for this payload type only, either in the record form or an object
+  mapping each entry to exactly {contract, current}, any other value refused (a reading, decision D-337's erratum of
+  AC3, carried to the next revision of specifications 2 and 3). Of delta, read_set,
+  signatures, dependencies, constitution, runtime, budgets, uncovered and state_effect only the JSON type (a list or
+  an object) is checked, not the forms inside.
 - record_id is checked as a non-empty string; whether it is unique across a log is not checked. evidence_type and
   dimension are open vocabularies, checked as non-empty strings only.
 - An ignored duplicate is reported as such whether or not the line it repeats has findings of its own.
@@ -60,6 +72,16 @@ ACCEPTANCE_KEYS = frozenset({
     'missing_gates', 'blocking', 'failed_gates', 'reverify', 'approval_record', 'policy_version', 'level_version',
     'governor_identity', 'ruleset_version', 'scenario_set_hash', 'uncovered', 'rests_on_ai'})
 PROFILE_KEYS = frozenset({'dimension', 'required', 'satisfied_by', 'missing_types'})
+# The keys of specification 3 section 9's execution decision record besides the record keys, decision and error
+# (TASK-011 AC1), and the order of section 7 in which fired outcomes are listed (TASK-011 AC2).
+EXECUTION_KEYS = frozenset({
+    'contract_hash', 'contract_version', 'base_commit', 'head_commit', 'log_seq', 'delta', 'checks',
+    'outcomes_fired', 'read_set', 'signatures', 'intent_versions', 'dependencies', 'constitution', 'runtime',
+    'budgets', 'policy_version', 'engine_identity', 'uncovered', 'state_effect'})
+EXECUTION_ORDER = ('STOP: violation', 'STOP: scope invalid', 'STOP: runtime insufficient', 'ESCALATE', 'BLOCKED',
+                   'REPLAN', 'CONTINUE_WITH')
+CHECK_KEYS = frozenset({'check', 'status', 'outcome', 'detail'})
+CHECK_STATUSES = frozenset({'passed', 'fired', 'skipped', 'not_run'})
 RECORD_PAYLOAD_TYPES = frozenset({'record.added', 'violation.detected', 'decision.acceptance', 'decision.execution'})
 DECISION_TYPES = frozenset({'decision.acceptance', 'decision.execution'})
 
@@ -320,10 +342,17 @@ def check_decision(event_type, payload, where='payload'):
     if event_type not in DECISION_TYPES:
         return [Finding('6.4:type', '%r is not decision.acceptance or decision.execution' % (event_type,))]
     acceptance = event_type == 'decision.acceptance'
-    extra = frozenset({'decision', 'error'}) | (ACCEPTANCE_KEYS if acceptance else frozenset())
-    findings = check_record(payload, extra, where, '6.4')
+    extra = frozenset({'decision', 'error'}) | (ACCEPTANCE_KEYS if acceptance else EXECUTION_KEYS)
+    viewed = payload
+    if not acceptance and isinstance(payload, dict) and 'intent_versions' in payload:
+        # TASK-011 AC3 (reading; decision D-337's erratum): for this payload type intent_versions may have section 9's
+        # form or the record form, both checked below, so the record rules see the payload without it.
+        viewed = {k: v for k, v in payload.items() if k != 'intent_versions'}
+    findings = check_record(viewed, extra, where, '6.4')
     if not isinstance(payload, dict):
         return findings
+    if not acceptance:
+        findings.extend(_check_execution_keys(payload, where))
     if 'decision' not in payload:
         findings.append(Finding('6.4:decision', '%s lacks decision' % where))
         return findings
@@ -358,6 +387,86 @@ def check_decision(event_type, payload, where='payload'):
 
 def _is_profile(value):
     return isinstance(value, list) and all(isinstance(item, dict) and set(item) == PROFILE_KEYS for item in value)
+
+
+_PYTHON = re.compile(r'[0-9]+\.[0-9]+\.[0-9]+')
+# TASK-011 AC2: the keys checked by JSON type only.
+_EXECUTION_LISTS = ('delta', 'signatures', 'uncovered', 'state_effect')
+_EXECUTION_OBJECTS = ('read_set', 'dependencies', 'constitution', 'runtime', 'budgets')
+
+
+def _is_checks(value):
+    """Eight objects with exactly check, status, outcome and detail; check 1 to 8 each once; outcome an execution
+    value exactly when status is fired, else null; detail a string (TASK-011 AC2)."""
+    if not (isinstance(value, list) and len(value) == 8):
+        return False
+    seen = []
+    for item in value:
+        if not (isinstance(item, dict) and set(item) == CHECK_KEYS):
+            return False
+        if not _is_int(item['check'], 1) or item['check'] > 8 or not _in(CHECK_STATUSES, item['status']):
+            return False
+        if item['status'] == 'fired':
+            if not _in(EXECUTION_DECISIONS, item['outcome']):
+                return False
+        elif item['outcome'] is not None:
+            return False
+        if not isinstance(item['detail'], str):
+            return False
+        seen.append(item['check'])
+    return sorted(seen) == list(range(1, 9))
+
+
+def _check_execution_keys(payload, where):
+    """The forms of specification 3 section 9's keys in a decision.execution payload, each checked only when present
+    (TASK-011 AC2, AC3)."""
+    findings = []
+
+    def bad(key, text):
+        findings.append(Finding('6.4:' + key, '%s %s is not %s' % (where, key, text)))
+
+    for key in ('base_commit', 'head_commit'):
+        if key in payload and not _matches(_COMMIT, payload[key]):
+            bad(key, 'a full lowercase hex commit id')
+    if 'log_seq' in payload and not _is_int(payload['log_seq'], 0):
+        bad('log_seq', 'an integer at least 0')
+    if 'contract_hash' in payload and not _matches(_HASH, payload['contract_hash']):
+        bad('contract_hash', '64 lowercase hex digits')
+    if 'contract_version' in payload and not _matches(_VERSION, payload['contract_version']):
+        bad('contract_version', 'v followed by digits')
+    if 'engine_identity' in payload:
+        ident = payload['engine_identity']
+        if not (isinstance(ident, dict) and set(ident) == {'code_sha256', 'python'}
+                and (ident['code_sha256'] is None or _matches(_HASH, ident['code_sha256']))
+                and _matches(_PYTHON, ident['python'])):
+            bad('engine_identity', 'an object with exactly code_sha256 (null or 64 lowercase hex digits) and python '
+                '(X.Y.Z)')
+    if 'checks' in payload and not _is_checks(payload['checks']):
+        bad('checks', 'eight objects with exactly check (1 to 8, each once), status, outcome and detail')
+    if 'outcomes_fired' in payload:
+        fired = payload['outcomes_fired']
+        if not (isinstance(fired, list) and all(_in(frozenset(EXECUTION_ORDER), v) for v in fired)
+                and len(set(fired)) == len(fired)
+                and fired == sorted(fired, key=EXECUTION_ORDER.index)):
+            bad('outcomes_fired', 'a list of fired execution values without repeats in the order of section 7')
+        elif payload.get('decision') is not None and payload.get('decision') != (fired[0] if fired else 'CONTINUE'):
+            bad('outcomes_fired', 'a list whose first value is the decision (CONTINUE when it is empty)')
+    if 'policy_version' in payload and not (payload['policy_version'] is None or _is_str(payload['policy_version'])):
+        bad('policy_version', 'a non-empty string or null')
+    if 'intent_versions' in payload:
+        iv = payload['intent_versions']
+        if not (_is_intent_versions(iv) or (isinstance(iv, dict) and all(
+                _is_str(k) and isinstance(v, dict) and set(v) == {'contract', 'current'}
+                and all(x is None or _is_str(x) for x in v.values()) for k, v in iv.items()))):
+            bad('intent_versions', 'in the record form or an object mapping each entry to exactly {contract, current} '
+                '(reading)')
+    for key in _EXECUTION_LISTS:
+        if key in payload and not isinstance(payload[key], list):
+            bad(key, 'a list')
+    for key in _EXECUTION_OBJECTS:
+        if key in payload and not isinstance(payload[key], dict):
+            bad(key, 'an object')
+    return findings
 
 
 def check_payload(event_type, payload, where='payload'):
