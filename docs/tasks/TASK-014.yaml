@@ -1,0 +1,273 @@
+# Task contract TASK-014, the Resume Check entries of the set file and the conformance-file tests that check them, the
+# Master Plan's "TASK-005b" (Master Plan revision 3, §4 M3; the M3 work order of decision D-254, as amended by decisions
+# D-262, D-263, D-333, D-337, D-364, D-365 and D-380; specification 2 §5.1). Revision 1, drafted under decisions D-380
+# (C4) and D-382 (C4); brought for approval in its own request; whether it is approved is recorded in the decision
+# files, not in this file. Fields and value forms follow specification 2 §5.1 and TASK-005's contract. Readings marked
+# "(reading)" are the worker's, for the decision agent's ruling.
+# Why: TASK-005 froze the 11 Resume Check fixtures (DM F29) and left the set file's RC-01 to RC-11 entries null;
+# TASK-008 added the Resume Check; TASK-013 made the runner tests hold in both states of those entries. This task gives
+# the set file the 11 entries and fixture_set_version 2, and changes the four test_conformance_* modules whose tables
+# and pins of the set file and its freeze fail in that state: the 25 class (c) ids of decision D-369
+# (test_conformance_files 15, test_conformance_properties 5, test_conformance_rc_set 3, test_conformance_set 2).
+# The set file's freeze is already given (conformance-files.md section 7, revision 5, DM F30): the approval of the set
+# file's bytes, SHA-256 f1c01c75f3e018ee2d1430337a848535a1fb97742ded45602316c7bce9bcfbc9, is the record
+# TASK-014-freeze-set of docs/records/TASK-014.jsonl, on main since commit 72edd972 with DM row F31 (decision D-382);
+# so the set file at the task's commit must be exactly those bytes (AC1), and the acceptance cites that freeze and gives
+# no other (section 7 (c)). The CI channel's unit, integration and property steps run at the task's commits over a
+# tree that holds that record, so TASK-013's present-state branches run over the tree for the first time (AC6).
+# The id: digits only, as G0's trailer pattern requires; TASK-013 is the highest contract id used, and TASK-014 is the id
+# decision D-364 gave this task and the freeze record names (checked by script against docs/tasks/ and docs/records/).
+# Task type: fixture (docs/specs/conformance-files.md section 8, revision 5). Every changed path is the set file of
+# section 3 under tests/conformance/ or a test module test_conformance_*.py directly under tests/unit/,
+# tests/integration/ or tests/property/ that checks only the conformance files against that document and the bound
+# scenario file. GOV-002 does not apply, as the constitution writes its applicability (implementation, refactoring);
+# every other article whose applicability names implementation is applied as to an implementation task, so no evidence
+# requirement narrows (section 8; CR-002 part 4 limit 8).
+# Readers of the changed paths: the CI workflow's conformance base and candidate runs read the set file from the base,
+# so this task's own pushes run the base's set file (null RC entries) and the first conformance run over the new set
+# file is the base run of the next task push after this task lands; tests/run_tests.py and the CI workflow's unit_test,
+# integration_test and property_test steps run the changed modules; the runner tests of TASK-013
+# (test_runner.py, test_runner_rc.py, test_runner_properties.py, test_runner_run.py, test_governor_conformance.py,
+# test_runner_rc_run.py) read the set file's state from the tree; tests/integration/test_conformance_rc_set.py reads
+# every .py file under src/ and tests/ for the Resume Check fixture folder's last path part and allows it only in the
+# modules it lists (AC5 changes that list).
+# Risk: critical. R11 matches tests/conformance/** (critical); R3 read fail closed matches tests/** (high); the highest
+# wins (risk rules section 2 point 1). Profile (assurance-model.md §5, gov-AIEOS, critical): unit_test,
+# integration_test, property_test, deterministic_rule, static_security_analysis, ai_review (cross-model) and
+# human_review; plus the evidence_required of the applicable articles. Dimensions are named as TASK-005's records name
+# them (decision D-181, reading R-dim).
+# Change class: critical_cr (reading, fail closed, as D-380 C4 asks: computed, not asserted). GOV-003's tool part over
+# the base (c014/gov003_class.py: the workflow's EVALUATOR list at the base and its pattern rule) marks all five paths
+# as evaluator paths, all five modified, none added; four of them are existing evaluator tests whose assertions change,
+# which TASK-012 and TASK-013 read as critical_cr; the set file's change is adding entries under a freeze that is
+# already given (DM B10: normal_cr with a freeze), which alone would be normal_cr. The stricter class is taken. Either
+# way the change is judged by the base version and never auto-accepted (constitution GOV-003; governor-spec.md §8).
+# Freeze: no freeze approval is given in this task's acceptance (section 7, revision 5, (c)): the acceptance cites
+# TASK-014-freeze-set; if the set file at the acceptance had other bytes, that decision would need a new freeze at
+# fixture_set_version 2. No fixture changes (the 11 files of fixtures_rc/ and the 19 of fixtures/ are forbidden).
+# Reviews (as TASK-005's): five way-2 reviews by a Claude model other than the implementer's, each under a decision of
+# the decision agent (architecture ai_review for INV-001, INV-002, INV-004; security ai_review for SEC-002; governance
+# ai_review for GOV-003, which also checks that no test is weakened; operational ai_review for OPS-003; the cross-model
+# half), and three decision-agent reviews (architecture human_review, which is both INV-003's entry and the critical
+# profile's, and which also checks that the set file names each fixture faithfully and that the property tests still
+# cover the related invariants (assurance-model.md §5); operational human_review for OPS-002; the cross-model half).
+# Each way-2 review record's basis names every article whose entry it covers and addresses each of their rules. Each
+# reviewer's brief is given verbatim as its prompt, with the scratchpad's absolute path first and every input a copy
+# under the scratchpad's review folders (D-277, D-373, D-374).
+# Evaluation path (A61; as TASK-013's): the approved contract is committed on main as its own commit C, which changes
+# only docs/tasks/TASK-014.yaml and has one parent equal to base_commit, and is pushed normally; the files are drafted
+# and tested in scratchpad clones (push URL disabled, the no-reply identity set first); the task's commits, each carrying
+# the trailer "AIEOS-Task: TASK-014" and no e-mail address in its message, go to the branch task/TASK-014 on GitHub, each
+# push under its own decision of the decision agent after a secret scan and a dry run against a bare single-branch copy
+# (D-229, D-274), never by force and never deleting; the CI channel runs on each push and its records are re-fetched
+# into docs/records/TASK-014.jsonl, after the freeze record, which stays its first line; main receives the task only at
+# its acceptance, by a fast-forward under its own decision. Before each task commit, the added text and the file names
+# are scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns and the records executors' pre-push pattern (AC8).
+# Not applicable: GOV-002 (above); OPS-001 (scope: the repository's refs; the task changes no ref); INV-009, INV-011,
+# GOV-001, GOV-004, GOV-005, GOV-006 and SEC-003 (their scopes, the event log, the policy, the concept file, the bound
+# artifacts, the decision matrix, the records and pre-genesis documents, and .github/, meet no path of the write-set).
+# Owner-kept acts: none. Nothing under .github/, no workflow change, no Claude Code setting (CR-002 part 4 limit 5 does
+# not apply). Pinning the Resume Check's hash in the CI workflow (AIEOS_PINNED_RESUME_CHECK) is not part of this task:
+# it is a later .github/ change of its own under DM A66, after this task lands and a base run on main shows RC-01 to
+# RC-11 PASS (decision D-380, pin option (p2)).
+# Uncovered and stated limits (AC9): this task's own conformance runs take the set file from the base, so no CI
+# conformance run over the new set file exists before the task lands; the RC results over the tree are shown at the
+# task's commits only by the integration tests of TASK-013 that run the runner over the tree (test_runner_rc_run.py's
+# R7 test among them), and by the first base run after landing, which is reported, not part of this acceptance; the
+# set file names the fixtures, so how the Resume Check reads its inputs from Git, the event log and the runtime is not
+# tested here (conformance-files.md section 9, "Not covered"); every review is by AI of one vendor.
+task: TASK-014
+contract_version: v1
+task_type: fixture
+objective: >-
+  Give the set file tests/conformance/set.py the entries of the 11 Resume Check scenarios RC-01 to RC-11, each naming
+  its frozen fixture file under tests/conformance/fixtures_rc/ with its SHA-256, and fixture_set_version 2, so that the
+  file is byte for byte the set file whose freeze is already approved (SHA-256
+  f1c01c75f3e018ee2d1430337a848535a1fb97742ded45602316c7bce9bcfbc9, record TASK-014-freeze-set, DM F31); and change only
+  the four test_conformance_* modules whose checks of the set file and its freeze fail in that state
+  (tests/unit/test_conformance_files.py, tests/property/test_conformance_properties.py,
+  tests/integration/test_conformance_set.py and tests/integration/test_conformance_rc_set.py), so that they check the
+  new set file exactly, with no assertion weakened. No fixture, runner, governor, Resume Check or other test changes.
+traces_to:
+  - docs/specs/conformance-files.md#3
+  - docs/specs/conformance-files.md#7
+  - docs/specs/conformance-files.md#8
+  - docs/specs/conformance-files.md#9
+  - docs/pre-genesis/conformance-scenarios-initial.md#4
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-014.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id, unquoted, with nothing after it on the line (G0 reads the line raw). It must be 72edd972 or a
+  # later main commit, so that the freeze record is on main before the task's first commit (section 7 (b); D-382 C4).
+  base_commit: 72edd972a23ea0e9c8d8b8da013b5a37d05540e2
+  depends_on: [TASK-005, TASK-008, TASK-013]
+  # The interim documents have no id and no vN version, so each is named by its path and pinned by its SHA-256, as in
+  # TASK-005's contract.
+  intent_versions:
+    docs/specs/conformance-files.md: c5d685c9588c04007c739f8af48edbbde6558eb52a08e8607145622b03036da8
+    docs/pre-genesis/conformance-scenarios-initial.md: 6b5c0666a1f364f5ecec9ad516c9a749969a1963f4e5dbef566adcbc8c80e24d
+    docs/pre-genesis/conformance-methodology.md: a11928199da9b908fad5805b44d341b21f961f0bc925350b0d46ac9adc454c87
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 05c53318cd756a3acfc13e5adaffbfaede8f05be3d00289e9fd45fef08c63c73
+    docs/specs/spec-02-aieos-file-format.md: 529b56d831d208594685aad3954fd3e8fc42cadc663e315b65bdfe615e3b09f7
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+write_set:
+  # Five modified paths; nothing is added.
+  paths:
+    - tests/conformance/set.py
+    - tests/unit/test_conformance_files.py
+    - tests/property/test_conformance_properties.py
+    - tests/integration/test_conformance_set.py
+    - tests/integration/test_conformance_rc_set.py
+read_set:
+  paths:
+    - docs/specs/conformance-files.md
+    - docs/pre-genesis/conformance-scenarios-initial.md
+    - docs/pre-genesis/conformance-methodology.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/pre-genesis/decision-matrix.md
+    - docs/records/
+    - docs/tasks/TASK-005.yaml
+    - docs/tasks/TASK-013.yaml
+    - tests/conformance/fixtures/
+    - tests/conformance/fixtures_rc/
+    - tests/unit/test_conformance_rc_files.py
+    - tests/property/test_conformance_rc_properties.py
+    - src/aieos_bootstrap/conformance.py
+  interfaces: [aieos_bootstrap.conformance.expected_path, aieos_bootstrap.conformance.freeze_approval]
+  schemas: [conformance-files set file (3), conformance-files Resume Check fixture file (9)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - src/**
+  - tests/conformance/fixtures/**
+  - tests/conformance/fixtures_rc/**
+  - tests/run_tests.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-005, INV-006, INV-007, INV-008, INV-010, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The set file, byte for byte. At the task's commit, tests/conformance/set.py has the SHA-256
+      f1c01c75f3e018ee2d1430337a848535a1fb97742ded45602316c7bce9bcfbc9 (10320 bytes), the bytes the freeze record
+      TASK-014-freeze-set binds, checked by script; a script also shows again that it differs from the set file at the
+      base (158323324f2803bceee870403bc6c0e297c407fbe50902d60bec90624cc95208) only in fixture_set_version (1 to 2) and in
+      the fixture of the entries RC-01 to RC-11, each now the path conformance.expected_path gives for its id and
+      capability and the SHA-256 of that frozen file, bound by its TASK-005 freeze record; and that the bytes are the
+      canonical form of section 2.
+  - AC2: >-
+      The set checks (tests/unit/test_conformance_files.py, tests/property/test_conformance_properties.py,
+      tests/integration/test_conformance_set.py; the helpers repeated in each, as today). check_set accepts a fixture
+      for exactly the Verification and the Resume Check capabilities, each at the path its capability gives (the
+      Verification folder or tests/conformance/fixtures_rc/, sections 2 and 9), and requires fixture_set_version 2; the
+      tree load reads the fixture files of both folders; every other condition of check_set is kept. The set file test
+      and the end-to-end test assert exactly: 32 entries in the bound file's order; 30 with a fixture, the 19
+      Verification and the 11 Resume Check ones, by id; exactly RISK-01 and ADV-02 without a fixture; each named file's
+      SHA-256 equal to its entry's; scenario_set_version 2, the bound file's hash and fixture_set_version 2. The
+      altered-set cases keep every case and each still gives an error (the fixture set version case uses a value other
+      than 2; a fixture outside the two capabilities still errs), and a new case gives an error for a Resume Check
+      fixture at the Verification folder's path and for a Verification fixture at the Resume Check folder's path.
+  - AC3: >-
+      The fixture checks keep to their kind. The Verification fixture checks (check_fixture, the fixture tests and the
+      faithfulness tests of tests/unit/test_conformance_files.py, and the tree loads of
+      tests/property/test_conformance_properties.py) run over exactly the 19 Verification fixtures, as they did at the
+      base, with every assertion and every altered-fixture case kept; they do not apply the Verification form to a
+      Resume Check fixture, which the Resume Check modules of TASK-005 (test_conformance_rc_files.py,
+      test_conformance_rc_properties.py, unchanged) check. A test asserts that the Verification fixtures they run over
+      are exactly the 19 entries with capability Verification, so none is skipped.
+  - AC4: >-
+      The Resume Check set test (tests/integration/test_conformance_rc_set.py). test_the_set_file_is_unchanged_and_frozen
+      becomes a test that the set file is bound by exactly one freeze approval of TASK-014 (docs/records/TASK-014.jsonl,
+      an authority record with approval_binding {kind: change_request, hash} equal to the set file's SHA-256), and that
+      TASK-002's freeze record of the earlier set file still exists unchanged; test_the_set_names_no_resume_check_fixture
+      becomes a test that each of the 11 Resume Check entries names exactly its frozen file
+      (tests/conformance/fixtures_rc/<module name>.py) with that file's SHA-256, and that no other entry names a file of
+      that folder; every other test of the module is kept, with its assertions.
+  - AC5: >-
+      The folder check. tests/integration/test_conformance_rc_set.py's list of the modules allowed to name the Resume
+      Check fixture folder adds, each by name, exactly the paths that name it after this task: tests/conformance/set.py
+      (the entries name the folder as data) and those of tests/unit/test_conformance_files.py,
+      tests/property/test_conformance_properties.py and tests/integration/test_conformance_set.py that name it for AC2;
+      test_a_module_that_is_not_allowed_is_named still catches an unnamed source module and an unnamed test module.
+  - AC6: >-
+      Nothing else changes, and the runner tests run over the tree. Every other test that tests/run_tests.py runs passes
+      unchanged at the task's commit, with the freeze record of docs/records/TASK-014.jsonl in the tree; in particular the
+      present-state branches of TASK-013's tree-run tests (test_runner_rc_run.py's R7 test, test_governor_conformance.py,
+      test_runner_run.py) now run over the tree and pass with their exact values (RC-01 to RC-11 PASS, the run counts,
+      the outcome pass), and TASK-013's fixed-value pin (its AC2, 158323324f…) still holds.
+  - AC7: >-
+      The 25. At the base, with only the set file of AC1 put in place in a scratch clone, the failing tests are exactly
+      the 25 class (c) ids of decision D-369; at the task's commit the whole suite passes over the tree; both runs and
+      the id comparison are in the request that brings the first push.
+  - AC8: >-
+      Purity and the CI checks (INV-001, INV-002, INV-004). The modules import only what they import at the base and
+      the standard library; they use no exec, eval, compile, __import__ or importlib, start no process, open no
+      network connection, call no model and write no file; they name no project-state directory; no fixture or set
+      module is imported or executed (files are read as bytes). The CI steps at the task's commits report no finding:
+      deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit, as TASK-005's contract lists them. Before each commit,
+      the added text and the file names are scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns and the
+      records executors' pre-push pattern (D-282), and each count is 0.
+  - AC9: >-
+      Does not loosen (GOV-003), and the limits. A script over the base and the task's commit shows, for the four
+      modules: no test removed or skipped; every assertion line of the base either byte-equal in the changed module or
+      listed with its replacement, each replacement comparing with one exact value (no assertion that a value may be
+      either of two results); every altered-set and altered-fixture case of the base kept; the count of assertion
+      calls in each module does not fall. Limits: as the header states (no CI conformance run over the new set file
+      before the task lands; the first base run after landing is reported, not part of this acceptance).
+  - AC10: >-
+      Tests, with this rule-to-test list: R1 AC1 (the pin of the set file's SHA-256, by script and by the end-to-end
+      test); R2 AC2 (the set tests and the altered-set cases, including the new wrong-folder case); R3 AC3 (the 19
+      Verification fixtures, exactly, by id); R4 AC4 (the freeze and naming tests); R5 AC5 (the folder test); R6 AC6
+      and AC7 (both suite runs). tests/run_tests.py, unchanged, runs them.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: critical
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC10]}
+  - {gate: G3, check: constitution, args: [AC8, AC9, INV-001, INV-002, INV-004, INV-010, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts AND the set file at the task's commit is the one TASK-014-freeze-set binds
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
