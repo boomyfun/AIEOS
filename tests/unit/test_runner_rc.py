@@ -36,6 +36,24 @@ def real_files():
     return files
 
 
+FIXED_SET_SHA256 = '158323324f2803bceee870403bc6c0e297c407fbe50902d60bec90624cc95208'
+
+
+def fixed_files():
+    """real_files() with the set file replaced by the fixed set value of TASK-013 (contract AC2): the tree's set value
+    with every Resume Check entry's fixture null and fixture_set_version 1, written as the runner writes a set file.
+    It is the set file at 1659a8cb, whose hash TASK-002's freeze record approves, so no freeze line is added; in the
+    null state it equals real_files() byte for byte."""
+    files = real_files()
+    value = conformance.unwrap(files[conformance.SET_FILE])
+    for entry in value['scenarios']:
+        if entry['capability'] == 'Resume Check':
+            entry['fixture'] = None
+    value['fixture_set_version'] = 1
+    files[conformance.SET_FILE] = FIRST + conformance.canonical_text(value) + LAST
+    return files
+
+
 def go(files, check=None, evaluate=None, commit=COMMIT, task=TASK, asked=None):
     """A run over an in-memory tree, through the runner's reader and listing; ``asked`` collects the paths read."""
     def read(path):
@@ -367,17 +385,17 @@ class R3EntryPoint(Isolated):
     def test_no_load_when_no_resume_check_entry_has_a_fixture(self):
         watching = Watching()
         sys.meta_path.insert(0, watching)
-        r = go(real_files())
+        r = go(fixed_files())
         self.assertEqual(watching.asked, 0)
         self.assertNotIn(conformance.RESUME_CHECK_MODULE, sys.modules)
         self.assertNotIn('resume_check', r.value)
-        go(with_rc(real_files(), ['RC-01']))
+        go(with_rc(fixed_files(), ['RC-01']))
         self.assertEqual(watching.asked, 1)
 
 
 class R4FixtureForm(Isolated):
     def malformed(self, change):
-        files = with_rc(real_files(), ['RC-01'])
+        files = with_rc(fixed_files(), ['RC-01'])
         value = copy.deepcopy(rc_value(files, 'RC-01'))
         change(value)
         put_rc(files, 'RC-01', value)
@@ -507,7 +525,7 @@ class R5CallAndComparison(Isolated):
         self.assertEqual(self.run_rc(check, files), (conformance.FAIL, 'not met: case 2: decision'))
 
     def test_the_call_gets_a_copy_of_the_inputs(self):
-        files = with_rc(real_files(), ['RC-01'])
+        files = with_rc(fixed_files(), ['RC-01'])
         before = rc_value(files, 'RC-01')['cases'][0]['inputs']
         seen = []
 
@@ -521,7 +539,7 @@ class R5CallAndComparison(Isolated):
 
 class R6RunRecord(Isolated):
     def test_the_key_is_absent_without_a_resume_check_fixture(self):
-        r = go(real_files())
+        r = go(fixed_files())
         self.assertEqual(set(r.value), {'set_file_sha256', 'scenario_set_version', 'fixture_set_version', 'runner',
                                         'governor_identity', 'commit', 'counts', 'results'})
 
@@ -544,6 +562,18 @@ class R6RunRecord(Isolated):
         sys.modules.pop(conformance.RESUME_CHECK_MODULE)
         r = go(files)
         self.assertEqual((r.results['RC-01'], r.record['outcome']), (conformance.NOT_RUN, 'fail'))
+
+
+class FixedSetValue(unittest.TestCase):
+    """The fixed set value of TASK-013 (contract AC2): the set file at 1659a8cb, approved by TASK-002's freeze record."""
+
+    def test_the_fixed_value_is_the_frozen_set_file(self):
+        data = fixed_files()[conformance.SET_FILE]
+        self.assertEqual(conformance.sha256(data), FIXED_SET_SHA256)
+        self.assertEqual(conformance.freeze_approval(conformance._Tree(ROOT), FIXED_SET_SHA256), (True, ''))
+        value = conformance.unwrap(data)
+        self.assertEqual([e['fixture'] for e in value['scenarios'] if e['capability'] == 'Resume Check'], [None] * 11)
+        self.assertEqual(value['fixture_set_version'], 1)
 
 
 if __name__ == '__main__':

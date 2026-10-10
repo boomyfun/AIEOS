@@ -21,6 +21,45 @@ TEST_RECORDS = 'docs/records/TEST-6.jsonl'
 VERIFICATION_IDS = ['ACC-%02d' % n for n in range(1, 18)] + ['ADV-01', 'ADV-03']
 
 
+RC_STATE_IDS = ['RC-%02d' % n for n in range(1, 12)]
+GOVERNOR_IDS = ['ACC-%02d' % n for n in range(1, 18)] + ['ADV-01', 'ADV-03']
+
+# The searches for the Resume Check a run makes when it loads it from the tree (TASK-013, contract AC5).
+WATCH_ASKED = 1
+
+
+def rc_state(value=None):
+    """The state of the set file's Resume Check entries (TASK-013, contract AC1): 'null' when RC-01 to RC-11 all name
+    no fixture, 'present' when all eleven name their frozen file with its SHA-256; any other mix fails. Without a value
+    it reads the tree's set file."""
+    if value is None:
+        value = conformance.unwrap((ROOT / conformance.SET_FILE).read_bytes())
+    rc = [e for e in value['scenarios'] if e['capability'] == conformance.RESUME_CHECK]
+    if [e['id'] for e in rc] != RC_STATE_IDS:
+        raise AssertionError('the Resume Check entries are not RC-01 to RC-11')
+    if all(e['fixture'] is None for e in rc):
+        return 'null'
+    if all(e['fixture'] == {'path': conformance.expected_path(e['id'], e['capability']),
+                            'sha256': conformance.sha256((ROOT / conformance.expected_path(e['id'], e['capability'])).read_bytes())}
+           for e in rc):
+        return 'present'
+    raise AssertionError('the Resume Check entries are neither all without a fixture nor all with their frozen file')
+
+
+def resume_check_record():
+    """The run record's resume_check in the present state: the Resume Check of the tree, by path and SHA-256."""
+    return {'path': conformance.RESUME_CHECK_PATH,
+            'sha256': conformance.sha256((ROOT / conformance.RESUME_CHECK_PATH).read_bytes())}
+
+
+def present_results(governor_result):
+    """Every scenario's (result, reason) in the present state, the governor's nineteen given as one pair."""
+    out = {sid: governor_result for sid in GOVERNOR_IDS}
+    out.update({sid: (conformance.PASS, '') for sid in RC_STATE_IDS})
+    out.update({'RISK-01': (conformance.NOT_RUN, 'no fixture'), 'ADV-02': (conformance.NOT_RUN, 'no fixture')})
+    return out
+
+
 class Watching:
     """A meta-path finder that notes every search for the Resume Check and finds nothing itself."""
 
@@ -126,6 +165,21 @@ class Isolated(unittest.TestCase):
 
 class R7RepositoryTree(Isolated):
     def test_ac8_the_results_over_the_repositorys_tree_are_unchanged(self):
+        if rc_state() == 'present':
+            watching = Watching()
+            sys.meta_path.insert(0, watching)
+            r = conformance.run(ROOT, COMMIT, TASK)
+            self.assertEqual(set(r.value), {'set_file_sha256', 'scenario_set_version', 'fixture_set_version', 'runner',
+                                            'governor_identity', 'commit', 'counts', 'results', 'resume_check'})
+            self.assertTrue(r.value['counts'])
+            self.assertEqual(r.problems, [])
+            self.assertEqual(len(r.results), 32)
+            self.assertEqual({s: (v, r.reasons[s]) for s, v in r.results.items()}, present_results((conformance.PASS, '')))
+            self.assertEqual(r.record['outcome'], 'pass')
+            self.assertEqual(r.value['resume_check'], resume_check_record())
+            self.assertEqual(watching.asked, WATCH_ASKED)
+            self.assertIn(conformance.RESUME_CHECK_MODULE, sys.modules)
+            return
         watching = Watching()
         sys.meta_path.insert(0, watching)
         r = conformance.run(ROOT, COMMIT, TASK)
@@ -143,6 +197,26 @@ class R7RepositoryTree(Isolated):
         self.assertEqual(watching.asked, 0)
         self.assertNotIn(conformance.RESUME_CHECK_MODULE, sys.modules)
         self.assertTrue((ROOT / conformance.RESUME_CHECK_PATH).exists())
+
+    def test_the_state_check_fails_on_a_mix(self):
+        """TASK-013, contract AC1 and AC10 R1: all null and all present are the two states; any mix fails."""
+        present = conformance.unwrap(set_with_rc())
+        self.assertEqual(rc_state(present), 'present')
+        null = conformance.unwrap(set_with_rc())
+        for entry in null['scenarios']:
+            if entry['id'] in RC_IDS:
+                entry['fixture'] = None
+        self.assertEqual(rc_state(null), 'null')
+        mixed = conformance.unwrap(set_with_rc())
+        for entry in mixed['scenarios']:
+            if entry['id'] in RC_IDS[1:]:
+                entry['fixture'] = None
+        with self.assertRaises(AssertionError):
+            rc_state(mixed)
+        wrong = conformance.unwrap(set_with_rc())
+        next(e for e in wrong['scenarios'] if e['id'] == 'RC-05')['fixture']['sha256'] = '0' * 64
+        with self.assertRaises(AssertionError):
+            rc_state(wrong)
 
     def test_the_eleven_frozen_fixtures_pass_with_a_stand_in(self):
         read, listing = overlay(set_with_rc())

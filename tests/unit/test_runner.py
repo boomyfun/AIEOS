@@ -37,6 +37,34 @@ def real_files():
     return files
 
 
+FIXED_SET_SHA256 = '158323324f2803bceee870403bc6c0e297c407fbe50902d60bec90624cc95208'
+
+
+def fixed_files():
+    """real_files() with the set file replaced by the fixed set value of TASK-013 (contract AC2): the tree's set value
+    with every Resume Check entry's fixture null and fixture_set_version 1, written as the runner writes a set file.
+    It is the set file at 1659a8cb, whose hash TASK-002's freeze record approves, so no freeze line is added; in the
+    null state it equals real_files() byte for byte."""
+    files = real_files()
+    value = conformance.unwrap(files[conformance.SET_FILE])
+    for entry in value['scenarios']:
+        if entry['capability'] == 'Resume Check':
+            entry['fixture'] = None
+    value['fixture_set_version'] = 1
+    files[conformance.SET_FILE] = FIRST + conformance.canonical_text(value) + LAST
+    return files
+
+
+def tree_files():
+    """real_files() with the Resume Check module and the Resume Check fixtures too, as the tree holds them, so that a
+    run over these files equals the run over the tree in either state of the set file (contract AC3)."""
+    files = real_files()
+    files[conformance.RESUME_CHECK_PATH] = (ROOT / conformance.RESUME_CHECK_PATH).read_bytes()
+    for p in sorted((ROOT / conformance.RC_FIXTURE_DIR).glob('*.py')):
+        files[conformance.RC_FIXTURE_DIR + '/' + p.name] = p.read_bytes()
+    return files
+
+
 def go(files, evaluate=None, root=ROOT, commit=COMMIT, task=TASK):
     """A run over an in-memory tree, through the runner's reader and listing."""
     def read(path):
@@ -201,7 +229,7 @@ def isolate_governor(test):
 
 class R1ReaderAndRoot(RestoreImports):
     def test_inputs_come_only_through_the_reader(self):
-        files = real_files()
+        files = tree_files()
         r = go(files)
         self.assertTrue(r.value['counts'])
         self.assertEqual(r.text, conformance.run(ROOT, COMMIT, TASK).text)
@@ -209,7 +237,7 @@ class R1ReaderAndRoot(RestoreImports):
         self.assertFalse(go(files).value['counts'])
 
     def test_the_running_runner_must_be_the_roots(self):
-        files = real_files()
+        files = fixed_files()
         self.assertEqual(go(files).problems, [])
         files[conformance.RUNNER_PATH] = files[conformance.RUNNER_PATH] + b'# another runner\n'
         r = go(files)
@@ -274,7 +302,7 @@ class R2CanonicalForm(RestoreImports):
 
 class R3DoesNotCount(RestoreImports):
     def test_the_real_set_counts(self):
-        r = go(real_files())
+        r = go(tree_files())
         self.assertTrue(r.value['counts'])
         self.assertEqual(r.problems, [])
 
@@ -337,14 +365,14 @@ class R3DoesNotCount(RestoreImports):
                 self.assert_blocked(files, 'scenario_set_file_hash differs')
 
     def test_a_set_without_its_freeze_approval(self):
-        files = real_files()
+        files = fixed_files()
         value = set_value(files)
         value['fixture_set_version'] = 2
         put_set(files, value, freeze=False)
         self.assert_blocked(files, 'no freeze approval binds')
 
     def test_a_stand_in_never_counts_but_its_results_are_computed(self):
-        files = real_files()
+        files = fixed_files()
         r = go(files, evaluate=stand_in(files))
         self.assertFalse(r.value['counts'])
         self.assertEqual(r.problems, ['a stand-in governor (reading)'])
@@ -355,13 +383,13 @@ class R3DoesNotCount(RestoreImports):
 
 class R4FreezeApproval(RestoreImports):
     def without_the_set_freeze(self):
-        files = real_files()
+        files = fixed_files()
         path = conformance.RECORDS_DIR + '/TASK-002.jsonl'
         files[path] = b''.join(ln + b'\n' for ln in files[path].split(b'\n') if ln and b'TASK-002-freeze-set' not in ln)
         return files
 
     def test_the_real_approval_and_two_approvals_of_one_hash(self):
-        files = real_files()
+        files = tree_files()
         self.assertEqual(conformance.freeze_approval(conformance._Tree(ROOT), conformance.sha256(files[conformance.SET_FILE])), (True, ''))
         files[TEST_RECORDS] = freeze_line(conformance.sha256(files[conformance.SET_FILE]), 'human_authority')
         self.assertTrue(go(files).value['counts'])
@@ -463,7 +491,7 @@ class R5FixtureConditions(RestoreImports):
     def test_an_id_on_two_rows(self):
         # D-210 P4: an id on more than one row of the bound file binds no row, so its fixture is never run. The set's
         # scenario_set_file_hash follows the changed file (and is frozen), so that only this condition differs.
-        files = real_files()
+        files = fixed_files()
         data = files[conformance.SCENARIO_FILE]
         row = next(x for x in data.decode('utf-8').split('\n') if x.startswith('| ACC-01 | '))
         files[conformance.SCENARIO_FILE] = data + row.encode('utf-8') + b'\n'
@@ -485,12 +513,12 @@ class R5FixtureConditions(RestoreImports):
         self.assertEqual((r.results['ACC-01'], r.reasons['ACC-01']),
                          (conformance.NOT_RUN, 'the row hash differs from the bound scenario file'))
         self.assertEqual(r.results['ACC-02'], conformance.PASS)
-        cases = sum(len(conformance.unwrap(d)['cases']) for p, d in real_files().items()
+        cases = sum(len(conformance.unwrap(d)['cases']) for p, d in fixed_files().items()
                     if p.startswith(conformance.FIXTURE_DIR + '/'))
         self.assertEqual(len(calls), cases - len(fixture(files, 'ACC-01')['cases']))
 
     def test_a_path_outside_the_fixtures_is_never_read(self):
-        files = real_files()
+        files = fixed_files()
         value = set_value(files)
         sid = '../../../outside'
         value['scenarios'][0].update(id=sid, fixture={'path': conformance.module_path(sid), 'sha256': '0' * 64})
@@ -574,13 +602,13 @@ class R5FixtureConditions(RestoreImports):
 
 class R6EntryPoint(RestoreImports):
     def test_absent(self):
-        r = go(real_files())
+        r = go(fixed_files())
         self.assertTrue(r.value['counts'])
         self.assertIsNone(r.value['governor_identity'])
         self.assertEqual(sorted(set(r.reasons.values())), ['no fixture', 'the entry point is absent'])
 
     def test_loaded_from_the_root(self):
-        files = real_files()
+        files = fixed_files()
         files[conformance.GOVERNOR_PATH] = b'# the bytes of a governor\n'
         sys.modules[conformance.GOVERNOR_MODULE] = fake_governor(stand_in(files))
         r = go(files)
@@ -772,7 +800,7 @@ class R7Comparison(RestoreImports):
 
 class R8RunRecord(RestoreImports):
     def test_keys_order_and_record(self):
-        files = real_files()
+        files = fixed_files()
         r = go(files)
         self.assertEqual(set(r.value), {'set_file_sha256', 'scenario_set_version', 'fixture_set_version', 'runner',
                                         'governor_identity', 'commit', 'counts', 'results'})
@@ -790,7 +818,7 @@ class R8RunRecord(RestoreImports):
                                                    'functional'))
 
     def test_outcome_pass_and_fail(self):
-        files = real_files()
+        files = fixed_files()
         self.assertEqual(go(files).record['outcome'], 'fail')
         files[conformance.GOVERNOR_PATH] = b'# a governor\n'
         sys.modules[conformance.GOVERNOR_MODULE] = fake_governor(stand_in(files))
@@ -823,7 +851,7 @@ class R9Main(RestoreImports):
         self.assertEqual(line, json.dumps(r.record, sort_keys=True))
         # A run with outcome pass needs a governor file at the root, which no test writes; main's mapping of outcome
         # pass to 0 is checked with run replaced for this test (restored afterwards).
-        files = real_files()
+        files = fixed_files()
         files[conformance.GOVERNOR_PATH] = b'# a governor\n'
         sys.modules[conformance.GOVERNOR_MODULE] = fake_governor(stand_in(files))
         passing = go(files)
@@ -838,6 +866,18 @@ class R9Main(RestoreImports):
                      [str(ROOT), COMMIT, TASK, 'extra']):
             with self.subTest(args):
                 self.assertEqual(self.call(args)[0], 2)
+
+
+class FixedSetValue(unittest.TestCase):
+    """The fixed set value of TASK-013 (contract AC2): the set file at 1659a8cb, approved by TASK-002's freeze record."""
+
+    def test_the_fixed_value_is_the_frozen_set_file(self):
+        data = fixed_files()[conformance.SET_FILE]
+        self.assertEqual(conformance.sha256(data), FIXED_SET_SHA256)
+        self.assertEqual(conformance.freeze_approval(conformance._Tree(ROOT), FIXED_SET_SHA256), (True, ''))
+        value = conformance.unwrap(data)
+        self.assertEqual([e['fixture'] for e in value['scenarios'] if e['capability'] == 'Resume Check'], [None] * 11)
+        self.assertEqual(value['fixture_set_version'], 1)
 
 
 if __name__ == '__main__':

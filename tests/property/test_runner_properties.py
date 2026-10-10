@@ -33,6 +33,34 @@ def real_files():
     return files
 
 
+FIXED_SET_SHA256 = '158323324f2803bceee870403bc6c0e297c407fbe50902d60bec90624cc95208'
+
+
+def fixed_files():
+    """real_files() with the set file replaced by the fixed set value of TASK-013 (contract AC2): the tree's set value
+    with every Resume Check entry's fixture null and fixture_set_version 1, written as the runner writes a set file.
+    It is the set file at 1659a8cb, whose hash TASK-002's freeze record approves, so no freeze line is added; in the
+    null state it equals real_files() byte for byte."""
+    files = real_files()
+    value = conformance.unwrap(files[conformance.SET_FILE])
+    for entry in value['scenarios']:
+        if entry['capability'] == 'Resume Check':
+            entry['fixture'] = None
+    value['fixture_set_version'] = 1
+    files[conformance.SET_FILE] = FIRST + conformance.canonical_text(value) + LAST
+    return files
+
+
+def tree_files():
+    """real_files() with the Resume Check module and the Resume Check fixtures too, as the tree holds them, so that a
+    run over these files equals the run over the tree in either state of the set file (contract AC3)."""
+    files = real_files()
+    files[conformance.RESUME_CHECK_PATH] = (ROOT / conformance.RESUME_CHECK_PATH).read_bytes()
+    for p in sorted((ROOT / conformance.RC_FIXTURE_DIR).glob('*.py')):
+        files[conformance.RC_FIXTURE_DIR + '/' + p.name] = p.read_bytes()
+    return files
+
+
 def go(files, evaluate=None):
     def read(path):
         return files.get(path)
@@ -151,9 +179,9 @@ class RunnerProperties(unittest.TestCase):
         isolate_governor(self)
 
     def test_the_same_inputs_give_the_same_run_record(self):
-        files = real_files()
-        self.assertEqual(go(files).text, go(real_files()).text)
-        self.assertEqual(go(files, stand_in(files)).text, go(real_files(), stand_in(files)).text)
+        files = tree_files()
+        self.assertEqual(go(files).text, go(tree_files()).text)
+        self.assertEqual(go(files, stand_in(files)).text, go(tree_files(), stand_in(files)).text)
         self.assertEqual(go(files).record, conformance.run(ROOT, COMMIT, TASK).record)
 
     def test_a_one_byte_change_of_a_fixture_never_passes_and_is_never_run(self):
@@ -231,11 +259,11 @@ class RunnerProperties(unittest.TestCase):
         others = sorted(set(SOURCE_CLASSES) - conformance.APPROVERS)
         self.assertIn('agent_declared', others)
         for _ in range(TRIALS):
-            files = without_the_set_freeze(real_files())
+            files = without_the_set_freeze(fixed_files())
             cls = rng.choice(others)
             files[TEST_RECORDS] = freeze_line(conformance.sha256(files[conformance.SET_FILE]), cls)
             self.assertFalse(go(files).value['counts'], cls)
-        files = without_the_set_freeze(real_files())
+        files = without_the_set_freeze(fixed_files())
         files[TEST_RECORDS] = freeze_line(conformance.sha256(files[conformance.SET_FILE]), 'decision_agent')
         self.assertTrue(go(files).value['counts'])
 
@@ -244,6 +272,18 @@ def first_case():
     value = conformance.unwrap(real_files()[conformance.module_path('ACC-01')])
     case = value['cases'][0]
     return case['request'], case['inputs'], case['records']
+
+
+class FixedSetValue(unittest.TestCase):
+    """The fixed set value of TASK-013 (contract AC2): the set file at 1659a8cb, approved by TASK-002's freeze record."""
+
+    def test_the_fixed_value_is_the_frozen_set_file(self):
+        data = fixed_files()[conformance.SET_FILE]
+        self.assertEqual(conformance.sha256(data), FIXED_SET_SHA256)
+        self.assertEqual(conformance.freeze_approval(conformance._Tree(ROOT), FIXED_SET_SHA256), (True, ''))
+        value = conformance.unwrap(data)
+        self.assertEqual([e['fixture'] for e in value['scenarios'] if e['capability'] == 'Resume Check'], [None] * 11)
+        self.assertEqual(value['fixture_set_version'], 1)
 
 
 if __name__ == '__main__':
