@@ -1,4 +1,4 @@
-# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md), revision 5: the checks the first code task needs
+# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md), revision 6: the checks the first code task needs
 # (decision D-181, option K1), with the conformance runs of M2 (DM A62; decisions D-217 C5 and D-218). Runs on every push
 # to any branch and checks every pushed commit. It reads only: it writes nothing to the repository and uses no secret.
 # Records: this run's log, its step summary, its annotations and each step's conclusion. Its results are advisory (DM
@@ -33,6 +33,14 @@
 # once the set file names those fixtures, since a pinned base run whose record names no Resume Check fails; the pin
 # covers resume_check.py alone, not the modules it imports; the candidate run takes the Resume Check from the base,
 # so a task branch that changes resume_check.py is not run against the fixtures before it lands, as for the runner.
+# Revision 6 (decision D-396; the decision agent's own decision under DM A66, with decision D-317's reading) sets
+# AIEOS_PINNED_RESUME_CHECK to the Resume Check version accepted by decision D-363 (TASK-008; the file at commit
+# 99cd8c5c, unchanged on main since), after the first conformance base run over the set file of TASK-014 (run 106,
+# base 96841a00) gave RC-01 to RC-11 PASS; and says in the two pin comments who decides a change to a pin (DM A66).
+# It adds a check and loosens none: from it on, a conformance base run fails unless the base's Resume Check file and
+# the run record's resume_check have the pinned SHA-256, and a push to main that changes the file must leave it at
+# that SHA-256. It grants no write access, uses no secret and changes no setting. Limits as revision 5's: the pin
+# covers resume_check.py alone, not the modules it imports.
 name: aieos-checks
 
 on:
@@ -51,15 +59,19 @@ jobs:
       # aa14ae8d). Pinned: the conformance base run fails unless the base's governor file and the run's governor
       # identity have this SHA-256 and the outcome is pass. Empty: no version is pinned, and the base run reports and
       # does not fail on its outcome. The replay step fails on any decision record either way (revision 4). The one
-      # place; changing it is the owner's (DM A61, A63).
+      # place; a change to it is a change under .github/, each its own decision of the decision agent (DM A66; decision
+      # D-317), except that emptying it, which would undo the owner's decision DM A65, stays the owner's; accepting a new
+      # governor version is not decided by that change (DM A64, A65).
       AIEOS_PINNED_GOVERNOR: '2f2dcd7525bcc39dcb3539ada93daff428a624cf2c47876c2d17599cf7ec022f'
       # The pinned Resume Check version's content hash (SHA-256 of src/aieos_bootstrap/resume_check.py), revision 5.
       # Empty: no version is pinned; the conformance runs report the file's hash and compare it with the run record, and
       # do not fail on a version. Pinned: the conformance base run fails unless the base's Resume Check file and the run
       # record's resume_check have this SHA-256, and a push to main that changes the file must leave it at this SHA-256.
       # Set it only once the set file names the Resume Check fixtures (TASK-005b): a pinned base run whose record names
-      # no Resume Check fails. The one place; changing it is the owner's (DM A61).
-      AIEOS_PINNED_RESUME_CHECK: ''
+      # no Resume Check fails. Set by revision 6 to the version accepted by decision D-363 (the file at commit
+      # 99cd8c5c). The one place; changing it is the decision agent's, each change its own decision (DM A66;
+      # decision D-317).
+      AIEOS_PINNED_RESUME_CHECK: 'e1578939404da0b61d56d9187521b92c923e7cb841acdf15d0afb7155605a135'
     steps:
       - name: Fetch the pushed commit, its history and main (no third-party action, no token)
         env:
