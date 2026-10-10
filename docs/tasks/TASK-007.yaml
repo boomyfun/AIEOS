@@ -1,0 +1,253 @@
+# Task contract TASK-007, the event log's append rules (Master Plan revision 3, §4 M3; the M3 work order of decision
+# D-254, as amended by decisions D-262 and D-263; specification 2 §5.1). Revision 0, drafted under decisions D-311 (C5)
+# and D-313, brought for approval in its own request; whether it is approved is recorded in the decision files, not in
+# this file. Fields and value forms follow specification 2 §5.1 and the contracts of TASK-001 and TASK-006.
+# Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# Task type: implementation. What it adds: a pure module that, given an event log's bytes and one new event, decides
+# whether and how the event is appended under specification 1 §4 and §8 and specification 2 §6.1 to §6.3: idempotency
+# by event_id, the sequence number and the append time, the task_id rule, the form of the whole log after the append
+# (TASK-001's check_log), append-only bytes, and the fencing check of a submission against a lease the caller gives,
+# with the refusal's observation record. It returns the exact bytes to append; it opens no file (shape (P) of decision
+# D-313: the CI channel's deterministic_rule refuses any file write in src/ and tests/, and any string in src/ that
+# names the project-state directory, "no core writer exists yet"). The single file writer of INV-004, the local store
+# of leases (spec 2 §3) and the directory's path come with a later task and a later workflow revision; until then this
+# module is the only producer of log lines, and the lines it produces are written by no code of the repository.
+# Departure from the M3 work order (D-254 P3, TASK-007's row: "the core's single writer (S1, S2 §6.3; INV-004)"),
+# declared under D-313 C5: this task writes no file; the writer module, its tests and the workflow's exemption for
+# exactly that module are carried to a later M3 task and to the workflow's revision 6, with the Resume Check pin;
+# TASK-008 and TASK-009 take the same pure shape unless a later decision says otherwise.
+# Readers of the changed paths (D-263 C3's practice): src/aieos_bootstrap/__init__.py is read by every module that
+# imports the package and by the CI's G1 build; its __all__ gains eventlog; it must not name the Resume Check fixture
+# folder (TASK-010's assertion, tests/integration/test_conformance_rc_set.py). The new module is read by nothing
+# else in the repository; the deterministic_rule step and the GOV-003 step read every file under src/ and tests/.
+# Risk: high. R2 matches src/** and tests/** (medium); R3 read fail closed matches them too, the event log being one of
+# the parts that limit authority (spec 1 §8 fencing; risk rules section 2 point 3); no path meets R10 (.aieos/) or R11;
+# the highest wins. Profile (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture
+# [deterministic_rule], functional [integration_test], security [static_security_analysis] and architecture [ai_review
+# (cross-model)], plus the evidence_required of the applicable articles. Dimensions are named as TASK-006's records
+# name them (decision D-181, reading R-dim).
+# Change class: normal_cr (D-254 P3): not an evaluator part named by DM A29 (no validator, fixture, scenario, runner or
+# governor), although src/aieos_bootstrap/** is on GOV-003's pinned list, so the CI step reports it as an evaluator
+# change and it is judged by the base version.
+# Reviews (as TASK-006's): five way-2 reviews by a Claude model other than the implementer's, each under a decision of
+# the decision agent (architecture ai_review for INV-001, INV-002, INV-004; security ai_review for SEC-002; governance
+# ai_review for GOV-003; operational ai_review for OPS-003; the cross-model half), and three decision-agent reviews
+# (architecture human_review for INV-003, which also checks that the property tests cover INV-009's rule; operational
+# human_review for OPS-002; the cross-model half). Each way-2 review record's basis names every article whose entry it
+# covers and addresses each of their rules, beyond what the tool parts decide. Each reviewer's prompt is
+# self-sufficient, with the scratchpad's absolute path in its first line (D-277).
+# Evaluation path (A61; as TASK-006's): the approved contract is committed on main as its own commit C, which changes
+# only docs/tasks/TASK-007.yaml and has one parent equal to base_commit, and is pushed normally; the files are drafted
+# and tested in scratchpad clones (push URL disabled, the no-reply identity set first); the task's commits, each
+# carrying the trailer "AIEOS-Task: TASK-007" and no e-mail address in its message, go to the branch task/TASK-007 on
+# GitHub, each push under its own decision of the decision agent after a secret scan and a dry run against a bare
+# single-branch copy (D-229, D-274), never by force and never deleting; the CI channel runs on each push and its
+# records are re-fetched into docs/records/TASK-007.jsonl; main receives the task only at its acceptance, by a
+# fast-forward under its own decision. Before each task commit, the added text is scanned with the workflow's SEC-001,
+# SEC-002 and OPS-003 patterns (AC11).
+# Not applicable: OPS-001 (scope: the repository's refs; the task changes no ref); INV-005 to INV-008, INV-010 and
+# INV-011 (their scopes, the decision engine, the governor, evidence records and the policy, meet no path of the
+# write-set; the module emits no decision and judges no evidence); GOV-001, GOV-004 to GOV-006 and SEC-003 (their
+# scopes, the concept file, the bound artifacts, the decision matrix, the records and pre-genesis documents, and
+# .github/, meet no path of the write-set). INV-009 (scope: the event log) is applied as a reading: no path of the
+# write-set is an event log, but this module is where its rule is made, so its tests carry the rule (AC5, AC12).
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting, no push of its own (CR-002 part 4 limit 5 does not apply).
+# Uncovered and stated limits (AC11): no code writes the bytes this module returns, no local store holds leases, and
+# no event log exists in the repository, so nothing here shows that any log on disk is append-only; the module trusts
+# the lease it is given; whether a submission's commit exists and carries the trailer is recovery's (TASK-009); every
+# review is by AI of one vendor.
+task: TASK-007
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add a standard-library Python 3 module, src/aieos_bootstrap/eventlog.py, that decides how one event is appended to
+  an event log given as bytes, under specification 1 sections 4 and 8 and specification 2 sections 6.1 to 6.3: an
+  event_id already in the log has no effect; otherwise the next sequence number, the given append time, the task_id
+  rule and the payload's form; the whole log after the append free of findings under TASK-001's check_log; the old
+  bytes an exact prefix of the new; and, for an event that carries a fencing token, the token and expiry of a lease
+  the caller gives, with the observation record of a refusal. It returns the exact bytes to append, or why nothing is
+  appended, with unit, integration and property tests in new test modules. It opens, writes and removes no file,
+  keeps no lease, rebuilds no projection and decides no execution or acceptance.
+traces_to:
+  - docs/specs/spec-01-state-and-event-model.md#4
+  - docs/specs/spec-01-state-and-event-model.md#8
+  - docs/specs/spec-02-aieos-file-format.md#6.1
+  - docs/specs/spec-02-aieos-file-format.md#6.2
+  - docs/specs/spec-02-aieos-file-format.md#6.3
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-007.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id, unquoted, with nothing after it on the line (G0 reads the line raw).
+  base_commit: b5b51c6d16215b0e832e39fa087303223091ab28
+  depends_on: [TASK-001]
+  # The interim documents have no id and no vN version, so each is named by its path and pinned by its SHA-256, as in
+  # the contracts of TASK-003 to TASK-006.
+  intent_versions:
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 529b56d831d208594685aad3954fd3e8fc42cadc663e315b65bdfe615e3b09f7
+    docs/pre-genesis/constitution.md: 16e78d30214082d1248369b910b051e7e4c48929036fced1488acc2f3efcf836
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+write_set:
+  # One modified path: the package docstring and __all__, which name the package's modules (reading: TASK-003 and
+  # TASK-004 changed it for the same reason). Every other path is new.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/eventlog.py
+    - tests/unit/test_eventlog.py
+    - tests/integration/test_eventlog_log.py
+    - tests/property/test_eventlog_properties.py
+read_set:
+  paths:
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/pre-genesis/decision-matrix.md
+    - docs/records/TASK-001.jsonl
+    - src/aieos_bootstrap/records.py
+    - tests/unit/test_records.py
+    - tests/integration/test_records_log.py
+    - tests/property/test_records_properties.py
+  interfaces: [aieos_bootstrap.records.check_log, aieos_bootstrap.records.check_payload, aieos_bootstrap.records.check_record]
+  schemas: [spec-02 event line (6.1), spec-02 record (6.2), spec-02 event payloads (6.3), spec-01 fencing token (8)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/conformance.py
+  - tests/run_tests.py
+  - tests/unit/test_records.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The log given (reading). The function append takes the log as bytes (empty bytes for a new log), the event's
+      type, its payload, its event_id (required, a non-empty string chosen by the caller, so that a retried append is
+      recognised: spec 1 §4, concept line 856), the append time as a timezone-aware datetime in UTC, and, when they
+      apply, task_id, fencing_token, corrects and lease. Before anything else, the given log is checked with
+      records.check_log; a log with any finding, or that does not end with LF when it is not empty, gives the
+      result "refused" with reason "log", and nothing is appended (fail closed: a damaged log is never extended). The
+      result is one of "appended", "duplicate" or "refused", a refusal with one of the reasons log, conflict, event,
+      log_after and fence.
+  - AC2: >-
+      Idempotency (spec 1 §4; spec 2 §6.1 event_id). When a line of the given log has the same event_id, the result is
+      "duplicate", naming that line's seq, if the line's type, payload, task_id, fencing_token and corrects equal the
+      new event's (absent equals absent); otherwise "refused" with reason "conflict", naming that seq. Nothing is
+      appended in either case.
+  - AC3: >-
+      The line (spec 2 §6.1, §6.3). Otherwise the new event is one JSON object with event_id, type, appended_at (the
+      given time as ISO 8601 UTC with "Z", to the second), seq (one more than the given log's number of lines, 1 for
+      an empty log; records.check_log counts every line, an ignored duplicate included), payload, and task_id,
+      fencing_token and corrects only when given; corrects must name an event_id of the given log (reading: check_log
+      does not check that it exists); its payload is checked with records.check_payload. Its JSON text has sorted keys,
+      no spaces after separators, ASCII-only escapes, and one LF at the end (reading: one canonical form, so that the
+      same inputs always give the same bytes). Any finding gives "refused" with reason "event" and the findings.
+  - AC4: >-
+      The whole log after the append (spec 2 §6.1). The given bytes followed by the new line are checked with
+      records.check_log; any finding gives "refused" with reason "log_after" and the findings, so the module never
+      returns bytes whose log check_log rejects (for example a seq or task_id rule that AC3 does not restate).
+  - AC5: >-
+      Append-only (INV-009, reading). The result "appended" carries the line's bytes and the new log's bytes, and the
+      new log's bytes are the given bytes followed by exactly that one line: the given bytes are an exact prefix and
+      nothing before them changes; no line is removed, reordered or rewritten; a correction is a new event (spec 1
+      §4).
+  - AC6: >-
+      Fencing (spec 1 §8; spec 2 §6.1). An event that carries a fencing_token, task.submitted always, is appended only
+      when the lease given is a lease on the event's task_id whose token equals the event's token and whose expiry is
+      after the append time. No lease, another task, another token, or an expiry at or before the append time gives
+      the result "refused" with reason "fence", and nothing of the event is appended (reading: the module trusts the
+      lease it is given; the local store that holds leases is a later task). The lease is a mapping with exactly
+      task_id, fencing_token ({epoch, counter} as spec 2 §6.1) and expires_at (a timezone-aware UTC datetime). A
+      task.submitted event without a fencing_token gives the result "refused" with reason "fence".
+  - AC7: >-
+      The refusal's record (spec 1 §8; spec 2 §6.2 the core's observation types). A "fence" refusal also carries the
+      payload of the record.added event that records it: an observation record with source_class
+      deterministic_tool_local, evidence_type refused_submission, outcome fail, subject the task id, refers_to the
+      refused event's event_id, and a recorder and record_id the caller gives (reading); the module does not append it
+      itself: the caller appends it with append, as one more event.
+  - AC8: >-
+      Purity and the CI checks (INV-001, INV-002, INV-004). The module and its tests import only the Python 3 standard
+      library and aieos_bootstrap.records, the tests also aieos_bootstrap.eventlog; they use no exec, eval, compile,
+      __import__ or importlib, start no process, open no network connection, call no model, open, write or remove no
+      file, read the clock nowhere (the time is always given), and name no project-state directory in src/; the
+      tests build every log in memory. The CI steps at the task's commits report no finding: deterministic_rule,
+      OPS-003, SEC-001, SEC-002 and bandit, as TASK-006's AC9 lists them.
+  - AC9: >-
+      The existing modules and tests unchanged and passing. records.py and every existing test module are not changed
+      (forbidden) and pass at the task's commits, TASK-010's assertion included (the package file names no Resume
+      Check fixture folder). If one of them can pass only by a change, the task escalates (needs_out_of_scope_change)
+      instead of changing it.
+  - AC10: >-
+      The added text. Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003
+      patterns, and each count is 0; the file names are scanned with the same patterns and the records executors'
+      pre-push pattern (D-282).
+  - AC11: >-
+      Limits, stated and tested as such: the module returns bytes and writes none, so no code of the repository writes
+      an event log yet, and nothing shows that a log on disk is append-only; the lease is the caller's, and nothing
+      here grants, holds, releases or expires one; it rebuilds no projection and derives no task state, retry count
+      or record view (spec 1 §6); it does not check that a submitted commit exists or carries its trailer (recovery,
+      spec 1 §7, TASK-009); it checks the forms TASK-001's checker checks and the rules AC2 to AC7 add, nothing more.
+  - AC12: >-
+      Tests, with this rule-to-test list, each rule with at least one passing case and one failing case, all in
+      memory: R1 AC1 (an empty log; a log with a finding; a log without its final LF); R2 AC2 (a known event_id with
+      the same event, a different payload, a different type and a different token; the seq named); R3 AC3 (each envelope key; the time's form; seq after a log
+      with an ignored duplicate; corrects known and unknown; a payload with a finding; the canonical bytes); R4 AC4 (a
+      case that only the whole-log check refuses, if one exists, else a stated reason why none does); R5 AC5 (the
+      prefix, one line, a correction as a new line); R6 AC6 (no lease, another task, another token, expiry equal to
+      and before the time, a valid lease; an event without a token that needs none; a task.submitted without a token); R7 AC7 (the record's keys and
+      values, and that check_record finds no fault in it; appending it). Unit tests in tests/unit/test_eventlog.py;
+      integration tests in tests/integration/test_eventlog_log.py build a log of every event type of spec 2 §6.3 by
+      successive appends, check it with records.check_log (no finding), and replay a retried append of each event to
+      show it changes nothing. Property tests (tests/property/test_eventlog_properties.py; standard library only,
+      fixed seeds): for random sequences of valid appends, the bytes only grow and every earlier prefix is kept
+      (INV-009), seq runs 1 to n, every event_id is unique, appending any event a second time changes nothing, the
+      same inputs always give the same bytes, and no submission with a mismatched or expired lease is ever appended.
+      tests/run_tests.py, unchanged, runs all three groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC9, AC11, AC12]}
+  - {gate: G3, check: constitution, args: [AC8, AC10, INV-001, INV-002, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
