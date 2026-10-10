@@ -74,6 +74,9 @@ One occurrence in session 2026-10-10-0735 (../History/2026-10/2026-10-10-0735-de
 Three occurrences in session 2026-10-10-1612 (../History/2026-10/2026-10-10-1612-decision-files-d311-d318-the-widening-in-force-and-task-007-landed.md):
 - **2026-10-10 (:855, :872, :1284).** Short progress lines in English before tool calls ("Now the unit tests.", "Now replace the NaN test …", "Now the common brief and the five briefs."); found by `tools/english_lines.py` and brought to the decision agent.
 
+Four occurrences in session 2026-10-10-1810 (../History/2026-10/2026-10-10-1810-decision-files-d319-d330-contracts-of-task-011-008-012.md):
+- **2026-10-10 (:145, :771, :1009, :1775).** Short progress lines in English before tool calls ("Now run defcheck, …", "I'll apply the edits …", "Applying the five edits.", "Now the commit message …"), in long runs of tool calls while drafting English texts; found by `tools/english_lines.py` and brought to the decision agent (D-331, D-335, D-341). Remedy: no text before a tool call unless it is a deliberate Vietnamese line.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

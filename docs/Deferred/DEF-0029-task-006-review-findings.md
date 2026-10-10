@@ -24,3 +24,4 @@ TASK-006 accepted (D-308) and on `main`.
 
 ## Log
 - 2026-10-10: opened (decision files D-307 and D-308).
+- 2026-10-10 (session 675f09ef): the limit for TASK-008 is settled by TASK-011's contract (records.check_decision allows specification 3 §9's keys for decision.execution; D-333, D-334), and TASK-008's contract changes the AC8 integration test's absence assertion under its own AC9 (R3-2, R5-2). Added (TASK-012's way-2 R5, D-342): R5CallAndComparison.test_each_not_run_rule compares only the reason string, which any check_decision finding gives, so it cannot tell an unknown-key finding from another; for a later task touching the runner's tests.

@@ -87,6 +87,14 @@ Commands of mine of the kinds this lesson lists, in session 2026-10-10-1612 (../
 - **2026-10-10 (:1084, :1315, :1377, :1506, :1576).** Waits for a handback that paused with `timeout N tail -f <file>`, the first on /dev/null: bounded waits on a condition, but the pause itself is a filler form.
 - **2026-10-10 (:1429, :1601).** A helper script called with no arguments inside a longer command; it failed and did nothing.
 
+Commands of mine of the kinds this lesson lists, in session 2026-10-10-1810 (../History/2026-10/2026-10-10-1810-decision-files-d319-d330-contracts-of-task-011-008-012.md):
+- **2026-10-10 (:354).** A heredoc to write a scratch file; refused by the guard before it ran; rewritten with the Write tool.
+- **2026-10-10 (:404).** A helper script called with no arguments inside a longer command; it failed and did nothing.
+- **2026-10-10 (:559).** A filler command with Python's name followed by a dash, inside a pipeline; refused by the guard; not retried in that form.
+- **2026-10-10 (:668, :1038).** Python's name inside a grep pattern (with a dash, then alone); both refused by the guard; rewritten without it, the second with the Grep tool.
+- **2026-10-10 (:954).** A sed with a bad expression; it failed with no effect.
+- **2026-10-10 (later).** A sed edit of a checker script that mangled one line (repaired with the Edit tool before use), and the previous task's brief checker run on this session's briefs, which crashed with no effect.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
