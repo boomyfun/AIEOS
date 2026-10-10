@@ -1,0 +1,356 @@
+# Task contract TASK-008, the Resume Check (Master Plan revision 3, §4 M3; the M3 work order of decision D-254, as
+# amended by decisions D-262 and D-263; specification 2 §5.1). Revision 0, drafted under decisions D-331 (C3), D-333 (C2) and D-334 (E1 to E5),
+# brought for approval in its own request; whether it is approved is recorded in the decision files, not in this file.
+# Fields and value forms follow specification 2 §5.1 and the contracts of TASK-006 and TASK-007.
+# Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# Task type: implementation. What it adds: a pure module, src/aieos_bootstrap/resume_check.py, whose function check
+# takes the inputs of specification 3 §1 as values, in the form of conformance-files.md section 9 (the object a
+# Resume Check fixture's case gives), and returns one execution decision record of specification 3 §9: the check 0
+# precondition, the eight checks of §2 with the path matching of §3, the effective read-set of §4 from the given
+# sources, the signature verdicts of §5 from the given fixed forms, the deferral of §6, the decision table and its order
+# of §7, the record and its ids of §9, and the events §10 would append, returned in the record and appended by no code.
+# Two pure helpers compute what the inputs give as values (§4's direct imports and §5's fixed form) from given texts.
+# Shape (P) of decision D-313: it opens, writes and removes no file, reads no clock, starts no process and calls no
+# model; reading Git, the event log, the files at HEAD and the runtime's records, and writing the record, come with a
+# later task (DEF-0030). It does not change records.py: TASK-011, a task of its own before this one (decision D-333,
+# K1), lets a decision.execution payload carry specification 3 §9's keys (DEF-0029's limit: the runner checks the
+# Resume Check's answer with records.check_decision). It changes one assertion of the runner's integration test
+# (DEF-0029 R3-2, R5-2).
+# DEF-0026 (reading): the module returns the conflict.detected events that specification 3 §10 lists, as event
+# descriptions; it does not rely on specification 1 §5.3's stated effect of conflict.detected ("CONTINUE_WITH or
+# REPLAN") and derives no task state from any event, so DEF-0026 stays open for specification 1's next revision.
+# Readers of the changed paths (D-263 C3's practice): src/aieos_bootstrap/__init__.py is read by every module that
+# imports the package and by the CI's G1 build; its __all__ gains resume_check; it must not name the Resume Check
+# fixture folder (TASK-010's assertion). src/aieos_bootstrap/resume_check.py is read by the runner's Resume Check entry (load_resume_check, from the base) and
+# by the CI workflow's conformance step (revision 5: its SHA-256 in the notice, the pin AIEOS_PINNED_RESUME_CHECK still
+# empty); the set file names no Resume Check fixture until TASK-005b, so no run over the repository's tree imports it
+# (AC9). tests/integration/test_runner_rc_run.py is read by tests/run_tests.py only.
+# Risk: high. R2 matches src/** and tests/** (medium); R3 read fail closed matches them too, the Resume Check being a
+# part that limits authority (risk rules section 2 point 3); no path
+# of the write set meets R10 (.aieos/) or R11 (tests/conformance/**); the highest wins. Profile (assurance-model.md §5,
+# gov-AIEOS, high): functional [unit_test], architecture [deterministic_rule], functional [integration_test], security
+# [static_security_analysis] and architecture [ai_review (cross-model)], plus the evidence_required of the applicable
+# articles (INV-005: property_test). Dimensions are named as TASK-006's records name them (decision D-181, reading R-dim).
+# Change class: normal_cr (D-254 P3; the M3 work plan's TASK-008 row): the Resume Check emits execution decisions only
+# (A15) and is not an evaluator part named by DM A29 (no validator, fixture, scenario, runner or governor); it changes
+# no evaluator part (records.py and the runner are forbidden, the runner's integration test apart, AC9), although
+# src/aieos_bootstrap/** is on GOV-003's pinned list, so the CI step reports it as an evaluator change and it is
+# judged by the base version. Its first version needs no owner acceptance (D-254 P5).
+# Reviews (as TASK-006's and TASK-007's): five way-2 reviews by a Claude model other than the implementer's, each under
+# a decision of the decision agent (architecture ai_review for INV-001, INV-002, INV-004; correctness ai_review for
+# INV-005; security ai_review for SEC-002; governance ai_review for GOV-003; operational ai_review for OPS-003; the
+# cross-model half), and three decision-agent reviews (architecture human_review for INV-003, which also checks that the
+# property tests cover INV-005's rule; operational human_review for OPS-002; the cross-model half). Each way-2 review
+# record's basis names every article whose entry it covers and addresses each of their rules, beyond what the tool
+# parts decide. Each reviewer's prompt is self-sufficient, with the scratchpad's absolute path in its first line
+# (D-277), and names for testing: that resume_check imports nothing from the runner (DEF-0028); that no assert stands
+# in src (bandit B101, D-325); and the readings of AC2, AC6 and AC8.
+# Evaluation path (A61; as TASK-006's and TASK-007's): the approved contract is committed on main as its own commit C,
+# which changes only docs/tasks/TASK-008.yaml and has one parent equal to base_commit, and is pushed normally; the
+# files are drafted and tested in scratchpad clones (push URL disabled, the no-reply identity set first); the task's
+# commits, each carrying the trailer "AIEOS-Task: TASK-008" and no e-mail address in its message, go to the branch
+# task/TASK-008 on GitHub, each push under its own decision of the decision agent after a secret scan and a dry run
+# against a bare single-branch copy (D-229, D-274), never by force and never deleting; the CI channel runs on each push
+# and its records are re-fetched into docs/records/TASK-008.jsonl; main receives the task only at its acceptance, by a
+# fast-forward under its own decision. Before each task commit, the added text is scanned with the workflow's SEC-001,
+# SEC-002 and OPS-003 patterns (AC12).
+# Not applicable: OPS-001 (scope: the repository's refs; the task changes no ref); INV-006 to INV-008, INV-010 and
+# INV-011 (their scopes, the governor, evidence records and the policy, meet no path of the write-set; the module
+# judges no evidence and emits no acceptance decision); INV-009 (scope: the event log; the module appends nothing and
+# returns no log bytes); GOV-001, GOV-004 to GOV-006 and SEC-003 (their scopes, the concept file, the bound artifacts,
+# the decision matrix, the records and pre-genesis documents, and .github/, meet no path of the write-set).
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting, no push of its own (CR-002 part 4 limit 5 does not apply). Setting AIEOS_PINNED_RESUME_CHECK in
+# the workflow is a later .github/ change under its own decision (DM A66), not this task's.
+# Uncovered and stated limits (AC11): the module reads nothing, so how its inputs are read from Git, the event log, the
+# files at HEAD and the runtime is not shown here (conformance-files.md section 9, "Not covered"); the set file names
+# no Resume Check fixture until TASK-005b, so no CI conformance run calls it before then; the events of §10 are
+# returned, not appended; the code hash inside engine_identity is the caller's (AC8); a check-4 REPLAN returns no
+# task.stale, since the intent.changed event it must refer to is not an input (specification 3 §12 point 4), and every
+# conflict.detected names no task, since commit trailers are not an input; both are named in uncovered and supplied by
+# the later task that reads the log (DEF-0030) (decision D-334, E1); every review is by AI of one vendor.
+task: TASK-008
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add a standard-library Python 3 module, src/aieos_bootstrap/resume_check.py, whose function check takes the inputs
+  of specification 3 section 1 as values, in the form of conformance-files.md section 9, and returns one execution
+  decision record of specification 3 section 9: the check 0 precondition, the eight checks, the decision table and its
+  order, the effective read-set, the signature verdicts, the record and its ids, and the events of section 10 returned
+  in the record; with two pure helpers for the fixed signature form of section 5 and the direct imports of section 4,
+  computed from given texts; with unit, integration and property tests in new test modules. It changes no evaluator
+  part but one assertion of the runner's integration test; it opens, writes and removes no file, reads no clock,
+  appends no event and imports nothing from the conformance runner.
+traces_to:
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#1
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#2
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#3
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#4
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#5
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#6
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#7
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#9
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#10
+  - docs/specs/conformance-files.md#9
+  - docs/specs/spec-02-aieos-file-format.md#6.4
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-008.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id, unquoted, with nothing after it on the line (G0 reads the line raw).
+  base_commit: 3e2eb0c8eb7fb677ade12ac89d1e777803ab854a
+  depends_on: [TASK-006, TASK-007, TASK-011]
+  # The interim documents have no id and no vN version, so each is named by its path and pinned by its SHA-256, as in
+  # the contracts of TASK-003 to TASK-007.
+  intent_versions:
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 05c53318cd756a3acfc13e5adaffbfaede8f05be3d00289e9fd45fef08c63c73
+    docs/specs/conformance-files.md: 31e2853d78ecad81b27eea2e9738fc45787c22dc751fe5bc0f846e337cf8a114
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 529b56d831d208594685aad3954fd3e8fc42cadc663e315b65bdfe615e3b09f7
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+write_set:
+  # Two modified paths: the package docstring and __all__, which name the package's modules (as TASK-007); and one
+  # assertion of the runner's integration test (AC9). Every other path is new.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/resume_check.py
+    - tests/integration/test_runner_rc_run.py
+    - tests/unit/test_resume_check.py
+    - tests/integration/test_resume_check_fixtures.py
+    - tests/property/test_resume_check_properties.py
+read_set:
+  paths:
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/specs/conformance-files.md
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/pre-genesis/decision-matrix.md
+    - docs/pre-genesis/conformance-scenarios-initial.md
+    - docs/records/TASK-001.jsonl
+    - docs/records/TASK-006.jsonl
+    - docs/records/TASK-007.jsonl
+    - docs/records/TASK-011.jsonl
+    - tests/conformance/set.py
+    - tests/conformance/fixtures_rc/
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/conformance.py
+    - src/aieos_bootstrap/eventlog.py
+    - tests/unit/test_records.py
+    - tests/unit/test_runner_rc.py
+    - tests/integration/test_conformance_rc_set.py
+  interfaces: [aieos_bootstrap.records.check_decision, aieos_bootstrap.records.check_record, aieos_bootstrap.conformance.load_resume_check, aieos_bootstrap.conformance.execution_problem]
+  schemas: [conformance-files Resume Check case inputs (9), spec-03 execution decision record (9), spec-02 decision contract (6.4), spec-02 event payloads (6.3)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/eventlog.py
+  - tests/run_tests.py
+  - tests/unit/test_records.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-005, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The entry (conformance-files.md section 9). The module defines check(inputs, code_sha256=None). inputs is
+      one object with exactly the keys section 9 names (task_id, log_seq, task_state, contract, contract_hash,
+      approved_contract_hash, head_commit, base_is_ancestor, commits, components, interfaces, symbols, schemas,
+      derived_read_set, observed_read_set, intent_current, dependencies, articles, runtime, risk_rules,
+      policy_version, budget_use), in the forms section 9 gives. check never raises for any JSON-like value of
+      inputs. Every key of inputs that is missing or not in its section 9 form gives a record with decision null and
+      error, the reason in error (reading: specification 3 §7's list of inputs whose absence or malformed form gives
+      error is read as every key of section 9's object, since each stands for one of those inputs). Within
+      well-formed values, the cases the other criteria name are uncovered, never error: a budget use with reported
+      false, an article with violated null, observed_read_set null, and a budget form AC2 cannot parse; runtime's
+      max_risk null is check 7's STOP: runtime insufficient. The given inputs are not changed.
+  - AC2: >-
+      Check 0 and the eight checks (specification 3 §2). Check 0: contract_hash differs from approved_contract_hash:
+      error, no decision. Check 1: base_commit equal to head_commit: checks 2 and 3 skipped; base_is_ancestor false:
+      ESCALATE, checks 2 and 3 not_run; otherwise Δ is the union of the paths of every commit of commits whose
+      submitted is false (reading: commits is base_commit..HEAD in the caller's order, each with its paths against its
+      first parent; no rename detection). Check 2: Δ ∩ write-set not empty: STOP: scope invalid (§6: no rebase
+      branch). Check 3: Δ meets an entry of the effective read-set: CONTINUE_WITH when every met entry is
+      non-breaking, REPLAN when any is breaking (AC4). Check 4: an intent_versions entry whose intent_current differs
+      or is null: REPLAN. Check 5: a depends_on task whose state is not DONE, or that is STALE, or null: BLOCKED; a
+      DONE task with stale_evidence true passes. Check 6: an applicable article (§2 check 6's rule, its scope met by
+      write-set ∪ effective read-set as AC3 defines meeting, a scope.components entry standing for its component's
+      paths, an article with no scope not applicable, an unevaluable scope applicable, applicability naming the
+      task_type, and every article the contract lists) whose violated is true: ESCALATE; violated null on an
+      applicable article: uncovered, not a stop. Check 7: the task's risk is the higher of contract.risk and the class
+      of every risk rule whose pattern meets a write_set.paths pattern; max_risk null or lower: STOP: runtime
+      insufficient; a write_set.paths pattern that no rule meets: ESCALATE. Check 8: retries' used over the
+      contract's retries limit (a count equal to the limit passes), or a reported use over its budget: ESCALATE; an
+      unreported use: uncovered (reading: tokens, wall_time and human_attention compared by a fixed parse of their
+      forms, "10k", "400k", "10m", "2h", "0m"; a form it cannot parse is uncovered, never a stop). Every check that
+      applies runs even after one has fired, and each ends passed, fired (with its outcome), skipped or not_run.
+  - AC3: >-
+      Path matching (specification 3 §3; the risk rules §2 point 6). A path matches a pattern, and two patterns meet,
+      by the rules of §3: names compared from the root, "**" for any number of names, "*" within one name, a pattern
+      without "/" read as "**/" followed by it, a component path with no wildcard that names a folder standing for
+      "<it>/**"; when the rule cannot decide, the patterns meet (fail closed). Δ ∩ write-set is the paths of Δ that a
+      write_set.paths pattern matches; an interface entry is met when a path of Δ lies under its component; a schema
+      entry when a path of Δ matches the file it resolves to; a path entry when a path of Δ matches it.
+  - AC4: >-
+      The effective read-set and the signature verdicts (specification 3 §4, §5). The effective read-set is the
+      union of read_set.paths, read_set.interfaces and read_set.schemas, derived_read_set and observed_read_set, each
+      entry keeping its sources; observed_read_set null marks the read-set an estimate. A met interface entry is
+      non-breaking when its symbols entry has base equal to head, both not null and not ambiguous; breaking when they
+      differ, or either is null or ambiguous, or the interface or its component is unknown. A met schema entry is
+      non-breaking when base and head are equal {path, sha256} objects; breaking otherwise (null, ambiguous or
+      different). A met path entry is non-breaking. Every met entry's verdict and reason are in the record's
+      signatures.
+  - AC5: >-
+      The decision (specification 3 §7, INV-005). The decision is exactly one A15 value (records.EXECUTION_DECISIONS):
+      the first fired outcome in the order STOP: violation, STOP: scope invalid, STOP: runtime insufficient,
+      ESCALATE, BLOCKED, REPLAN, CONTINUE_WITH; CONTINUE when none fires. outcomes_fired lists every fired outcome in
+      that order. The module never emits STOP: violation (it is a decision during the run, §8; reading).
+  - AC6: >-
+      The record (specification 3 §9). The returned object has the record keys of spec 2 §6.2 (record_id, fact_kind
+      interpretation, source_class deterministic_tool_local (reading: the bootstrap's Resume Check runs locally; S3 §9
+      gives the class of where it ran), recorder "the Resume Check (aieos_bootstrap.resume_check)",
+      subject the task id) and the keys of §9's table: decision, contract_hash, contract_version, base_commit,
+      head_commit, log_seq, delta (each path with added, modified or deleted; reading: a path changed by several
+      commits takes the last commit's change), checks (eight entries {check, status, outcome, detail}, check 1 to
+      8), outcomes_fired, read_set ({entries, estimate, unresolved, unanalysed}), signatures, intent_versions (for
+      each entry {contract, current}), dependencies, constitution ({applicable, violated, no_result}), runtime
+      ({adapter, max_risk, task_risk}), budgets (for each budget {limit, used, reported}), policy_version,
+      engine_identity, uncovered, state_effect, and error only when decision is null. records.check_decision
+      ('decision.execution', record) gives no finding for every record the module returns, error records included.
+  - AC7: >-
+      The checker as TASK-011 leaves it (DEF-0029's limit). records.py is forbidden: the record of AC6 is checked by
+      records.check_decision as TASK-011 changes it (the keys of specification 3 §9 allowed for decision.execution,
+      with their forms); a record AC6 requires that check_decision still reports is a spec_conflict and the task
+      escalates instead of dropping the key. Every existing test of records.py, eventlog.py, governor.py and
+      conformance.py passes unchanged (forbidden).
+  - AC8: >-
+      Ids, engine identity and state effect (specification 3 §9, §10). engine_identity is an object with exactly the
+      keys code_sha256 and python (decision D-334, E2; S3 §9: "the content hash of the code that decided ... with the
+      interpreter's version"): code_sha256 is the caller's (reading: a pure module cannot hash its own file), 64
+      lowercase hex digits when given and null when not, uncovered then naming it; python is the interpreter's version
+      "X.Y.Z" from sys.version_info (no file or clock read). record_id is the SHA-256 hex of the task id, log_seq,
+      head_commit, code_sha256 (the empty string when null) and "decision.execution", joined by LF (reading).
+      state_effect lists the events §10 gives for the decision, each {event_id, type, payload, task_id} with its
+      event_id formed the same way with the event's type, in the order the caller would append them, and payloads in
+      spec 2 §6.3's form: CONTINUE and CONTINUE_WITH none (the lease is the caller's); REPLAN by check 3 a
+      conflict.detected, then one task.stale with cause conflict referring to that conflict.detected's event_id;
+      REPLAN by check 4 (the lowest-numbered REPLAN check being 4) no task.stale (reading, decision D-334 E1: the
+      intent.changed event it must refer to is not an input, specification 3 §12 point 4), uncovered naming it;
+      BLOCKED task.blocked reason dependency; ESCALATE task.blocked reason escalate, blocked_by the record_id; STOP:
+      scope invalid conflict.detected then task.blocked reason scope_invalid; STOP: runtime insufficient none; a READY
+      task given REPLAN gets no task.stale (§10). Every conflict.detected has tasks [] (reading, E1: commit trailers
+      are not an input), uncovered naming it. Nothing is appended.
+  - AC9: >-
+      The runner, the fixtures and the runner's test (conformance-files.md section 9; DEF-0028; DEF-0029). The module
+      imports only the Python 3 standard library and aieos_bootstrap.records, and nothing from
+      aieos_bootstrap.conformance or any fixture folder; it names no fixture folder; a script check reads the module's
+      syntax tree and lists every Import and ImportFrom node, and the list holds only standard-library names and
+      aieos_bootstrap.records (DEF-0028: a module under src/ that imports the runner could reach the fixtures without
+      naming the folder). The eleven frozen fixtures of
+      tests/conformance/fixtures_rc/ each give PASS when the runner runs them with check (the integration test builds
+      the set value with RC-01 to RC-11 pointing at the frozen files, as test_runner_rc_run.py's set_with_rc does, and
+      takes every path from conformance.expected_path, naming no fixture folder literally). In
+      tests/integration/test_runner_rc_run.py only the assertion that resume_check.py does not exist changes, to an
+      assertion that it exists while the run over the repository's tree still does not import it; every other test of
+      that module is unchanged and passes.
+  - AC10: >-
+      Purity and the CI checks (INV-001, INV-002, INV-003, INV-004). The module and its tests use no exec, eval,
+      compile, __import__ or importlib, start no process, open no network connection, call no model, open, write or
+      remove no file, read the clock nowhere (sys.version_info, read for engine_identity's python, is neither a file
+      nor a clock), hold no assert in src (bandit B101), and name no project-state directory
+      in src/; the tests build every input in memory, except the integration test, which reads the frozen fixtures
+      and the set file through the runner's own readers. The CI steps at the task's commits report no finding:
+      deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit, as TASK-006's AC9 lists them.
+  - AC11: >-
+      Limits, stated and tested as such: check reads nothing, so how its inputs are read from Git, the log, the files
+      at HEAD and the runtime is not shown; the helpers of AC13 compute from given texts only; the events are returned,
+      not appended, and no lease is granted or released; engine_identity's code_sha256 is the caller's; a check-4
+      REPLAN returns no task.stale and every conflict.detected names no task (AC8), both named in uncovered and
+      supplied by the later task that reads the log and Git (DEF-0030); the set file names no
+      Resume Check fixture until TASK-005b, so no CI conformance run calls check before then; every existing module
+      and test not in the write set is unchanged, and if one can pass only by a change the task escalates
+      (needs_out_of_scope_change).
+  - AC12: >-
+      The added text. Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003
+      patterns, and each count is 0; the file names are scanned with the same patterns and the records executors'
+      pre-push pattern (D-282).
+  - AC13: >-
+      The two helpers (specification 3 §4, §5). signature_form(source, name) parses a given Python source text with
+      the standard library's parser and returns the fixed form of §5 of the top-level function or class named name
+      (the dump of its syntax tree without positions: for a function its name, parameters, defaults' presence,
+      annotations, return annotation and decorators; for a class its name, bases and the forms of its methods and
+      class-level names not starting with "_"), or null when no top-level definition has that name, or "ambiguous"
+      when more than one does; a text that cannot be parsed gives "unparsable" (reading). direct_imports(source,
+      roots, paths) returns the repository paths of the modules the text imports directly that resolve under the given
+      module roots to one of the given paths, and the names that do not resolve (unresolved), or "unanalysed" when the
+      text cannot be parsed (one level, §4).
+  - AC14: >-
+      Tests, with this rule-to-test list, each rule with at least one passing and one failing case, all in memory but
+      the integration test's fixture reads: R1 AC1 (each missing or malformed input of the error list; inputs not
+      changed); R2 AC2 (each check's fire and pass, check 1's equal, not-ancestor and submitted-commit cases, check 5's
+      not DONE, STALE, unknown and DONE with stale evidence, check 6's applicability and scope cases, check 7's lower,
+      null and unmatched pattern, check 8's limit, over the limit, over a budget and unreported); R3 AC3 (the pattern
+      rules, the folder reading, the fail-closed case); R4 AC4 (each verdict and its reason; the estimate); R5 AC5
+      (every pair of fired outcomes gives the earlier one); R6 AC6 and AC7 (check_decision gives no finding on every
+      returned record, for every decision value and for an error record); R7 AC8 (the ids' formula, distinct ids for distinct log_seq, the events per decision, a READY
+      REPLAN, a check-4 REPLAN with no task.stale and uncovered naming it, engine_identity's form with and without
+      code_sha256; and, for every decision value, each state_effect entry's payload gives no finding under
+      records.check_payload(type, payload) as TASK-011 leaves it: if one cannot pass, that is a spec_conflict and the
+      task escalates, decision D-334 E5); R8 AC9 (the eleven fixtures PASS; the import list); R9 AC13 (each helper's cases). Unit tests in
+      tests/unit/test_resume_check.py; integration tests in
+      tests/integration/test_resume_check_fixtures.py. Property tests (tests/property/test_resume_check_properties.py;
+      standard library only, fixed seeds; INV-005's property_test): for random well-formed inputs, check returns a
+      record with no check_decision finding and exactly one A15 value or an error; the same inputs give the same
+      record; the decision is the first of outcomes_fired in §7's order, CONTINUE when it is empty; adding a fired
+      condition never yields a milder decision; and the inputs are never changed. tests/run_tests.py, unchanged, runs
+      all groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1200k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9, AC11, AC13, AC14]}
+  - {gate: G3, check: constitution, args: [AC10, AC12, INV-001, INV-002, INV-003, INV-004, INV-005, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
