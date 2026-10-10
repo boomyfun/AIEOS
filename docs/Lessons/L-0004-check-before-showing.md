@@ -117,6 +117,10 @@ Occurrences in session 2026-10-10-0348 (../History/2026-10/2026-10-10-0348-runne
 Occurrences in session 2026-10-10-0451 (../History/2026-10/2026-10-10-0451-decision-files-d284-d292-and-task-010-landed.md):
 - **2026-10-10 (the requests for D-295 and D-298).** Hash endings typed by hand were wrong or left as placeholders; each was caught by the abbreviation check or by reading before sending.
 
+Occurrences in session 2026-10-10-0626 (../History/2026-10/2026-10-10-0626-decision-files-d293-d302-and-task-006-landed.md):
+- **2026-10-10 (the requests D-303 and D-304).** Transcript line numbers written from memory were wrong in eight places, and the start time was given as 06:24 for 06:26; the line numbers were corrected by a steps listing before sending, the time only afterwards.
+- **2026-10-10 (D-304).** A decision file's execution record said the owner had been told of the model when the telling had not yet happened; the decision agent required the line to be corrected before the write.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

@@ -23,3 +23,4 @@ TASK-010 accepted (D-299) and on `main` (D-300).
 
 ## Log
 - 2026-10-10: opened (decision files D-298 and D-299).
+- 2026-10-10 (session b6752b9f): the TASK-006 points are met: `src/aieos_bootstrap/__init__.py` does not name the Resume Check fixture folder, and the allowed list was re-confirmed at TASK-006's acceptance (D-308: the modules naming the folder at 471f4e60 are exactly the runner and the six allowed test modules). The other points stay open.

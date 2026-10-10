@@ -65,6 +65,9 @@ Occurrences in session 2026-10-10-0451 (../History/2026-10/2026-10-10-0451-decis
 - **2026-10-10 (:551).** One short progress line in English before a tool call in this session.
 - **2026-10-10 (session 3d249e7e, found now by machine).** That session had seven English lines (:403, :620, :870, :889, :1230, :1341, :1630), not five; :1230 had been missed and the reply at :1407 had said five.
 
+Occurrences in session 2026-10-10-0626 (../History/2026-10/2026-10-10-0626-decision-files-d293-d302-and-task-006-landed.md):
+- **2026-10-10 (:1020, :1382, :1729).** Three short progress lines in English before a tool call, each beginning "Now"; all found by `tools/english_lines.py` and brought to the decision agent.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 
