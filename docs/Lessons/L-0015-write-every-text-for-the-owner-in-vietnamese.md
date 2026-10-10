@@ -99,6 +99,10 @@ Five in session 2026-10-11-0013 (../History/2026-10/2026-10-11-0013-decision-fil
 Two in session 2026-10-11-0121 (../History/2026-10/2026-10-11-0121-decision-files-d388-d398-and-task-015.md), found by Claude with english_lines.py and disclosed in the next request:
 - **2026-10-11 (:386, :876).** "Now the writer and its gated command file." and "Now the code change in the clone." before tool calls; the second after the remedy stated at D-400 C4 (a Vietnamese line only before a tool-call batch that carries text). Remedy since (D-404 C4): write the Vietnamese line first and nothing else in that text block.
 
+Four in session 2026-10-11-0333 (../History/2026-10/2026-10-11-0333-decision-files-d409-d420-and-specification-4.md), found by Claude with english_lines.py and disclosed in the next request:
+- **2026-10-11 (:607, :833).** Two one-line English text blocks before tool calls, the second after the remedy stated in D-423. The rule since (D-424 C4): no text block before a tool call except a planned progress line, and the steps listing checked for text lines after each turn.
+- **2026-10-11 (:1438, :1479).** Two more one-line English text blocks before tool calls, after D-424 C4's rule, while the session-end files were built; found by the check before the session-end request.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 
