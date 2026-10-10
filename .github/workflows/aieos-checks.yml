@@ -1,4 +1,4 @@
-# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md), revision 4: the checks the first code task needs
+# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md), revision 5: the checks the first code task needs
 # (decision D-181, option K1), with the conformance runs of M2 (DM A62; decisions D-217 C5 and D-218). Runs on every push
 # to any branch and checks every pushed commit. It reads only: it writes nothing to the repository and uses no secret.
 # Records: this run's log, its step summary, its annotations and each step's conclusion. Its results are advisory (DM
@@ -19,9 +19,20 @@
 # decision record whether or not a version is pinned (F13). Limits: on main the pushed governor file is compared
 # with the pin by its hash and not run; the pinned identity is governor.py's hash alone, although the governor's
 # decisions also depend on src/aieos_bootstrap/records.py; the deterministic_rule lists and GOV-003's list keep their
-# known gaps
-# (docs/Deferred/DEF-0024); a push to main whose head commit names no task gets no conformance run, so the pinned
-# check first runs at the next push of a task's commits.
+# known gaps (docs/Deferred/DEF-0024); a push to main whose head commit names no task gets no conformance run, so the
+# pinned check first runs at the next push of a task's commits.
+# Revision 5 (decision D-311 C3; written only on the owner's own yes, DM A61) adds, for M3: the Resume Check file
+# src/aieos_bootstrap/resume_check.py (TASK-008, not yet written) in the conformance runs: its SHA-256 in the base is
+# reported; a run record that names a Resume Check must name that file put in place; on main a push that changes it
+# must name exactly one task, as for the runner and the governor; and one value, the job's AIEOS_PINNED_RESUME_CHECK,
+# empty until a version is accepted, pins it as AIEOS_PINNED_GOVERNOR pins the governor. GOV-003's list adds the
+# test modules (tests/unit/**, tests/integration/**, tests/property/**, tests/run_tests.py) and the dependency files
+# (pyproject.toml, setup.cfg, setup.py, requirements*.txt, at any depth), which DM A29 counts as the evaluator. Limits:
+# the Resume Check runs in the runner's process, as the governor does; the RC scenarios are NOT_RUN until a Resume
+# Check exists and the set file names its fixtures (TASK-005b); the pin can only be set by a later revision, and only
+# once the set file names those fixtures, since a pinned base run whose record names no Resume Check fails; the pin
+# covers resume_check.py alone, not the modules it imports; the candidate run takes the Resume Check from the base,
+# so a task branch that changes resume_check.py is not run against the fixtures before it lands, as for the runner.
 name: aieos-checks
 
 on:
@@ -42,6 +53,13 @@ jobs:
       # does not fail on its outcome. The replay step fails on any decision record either way (revision 4). The one
       # place; changing it is the owner's (DM A61, A63).
       AIEOS_PINNED_GOVERNOR: '2f2dcd7525bcc39dcb3539ada93daff428a624cf2c47876c2d17599cf7ec022f'
+      # The pinned Resume Check version's content hash (SHA-256 of src/aieos_bootstrap/resume_check.py), revision 5.
+      # Empty: no version is pinned; the conformance runs report the file's hash and compare it with the run record, and
+      # do not fail on a version. Pinned: the conformance base run fails unless the base's Resume Check file and the run
+      # record's resume_check have this SHA-256, and a push to main that changes the file must leave it at this SHA-256.
+      # Set it only once the set file names the Resume Check fixtures (TASK-005b): a pinned base run whose record names
+      # no Resume Check fails. The one place; changing it is the owner's (DM A61).
+      AIEOS_PINNED_RESUME_CHECK: ''
     steps:
       - name: Fetch the pushed commit, its history and main (no third-party action, no token)
         env:
@@ -330,7 +348,9 @@ jobs:
           import sys
 
           EVALUATOR = ['.github/**', 'src/aieos_bootstrap/**', 'tests/conformance/**',
-                       'docs/pre-genesis/conformance-scenarios-initial.md', 'docs/records/**']
+                       'docs/pre-genesis/conformance-scenarios-initial.md', 'docs/records/**',
+                       'tests/unit/**', 'tests/integration/**', 'tests/property/**', 'tests/run_tests.py',
+                       '**/pyproject.toml', '**/setup.cfg', '**/setup.py', '**/requirements*.txt']
           OWNER_PATHS = ['docs/pre-genesis/measurement-protocol.md', 'docs/pre-genesis/measurements/**']
 
 
@@ -391,7 +411,9 @@ jobs:
           import sys
 
           EVALUATOR = ['.github/**', 'src/aieos_bootstrap/**', 'tests/conformance/**',
-                       'docs/pre-genesis/conformance-scenarios-initial.md', 'docs/records/**']
+                       'docs/pre-genesis/conformance-scenarios-initial.md', 'docs/records/**',
+                       'tests/unit/**', 'tests/integration/**', 'tests/property/**', 'tests/run_tests.py',
+                       '**/pyproject.toml', '**/setup.cfg', '**/setup.py', '**/requirements*.txt']
           OWNER_PATHS = ['docs/pre-genesis/measurement-protocol.md', 'docs/pre-genesis/measurements/**']
 
 
@@ -705,6 +727,12 @@ jobs:
           #   The result is one annotation (a notice) per run, built only from checked values; the runner's raw output is printed
           #   only between stop-commands markers with a random token, opened before the runner starts and closed in every case;
           #   every annotation value is escaped (%, CR, LF).
+          #   Revision 5 (decision D-311 C3): the Resume Check file (RESUME_CHECK_FILE) is put in place from the base in both
+          #   modes; its SHA-256 is in the notice; the step fails when the run record's resume_check (present only when a
+          #   Resume Check scenario has a fixture) names another path or a SHA-256 other than none or that file's; on main a
+          #   push that changes it is treated as one that changes the runner (exactly one task), and, with a version pinned in
+          #   AIEOS_PINNED_RESUME_CHECK, must leave it at that version; and a base run with a version pinned fails unless the
+          #   base's file and the run's resume_check both have that SHA-256. Empty, it changes no outcome.
           import hashlib
           import json
           import os
@@ -716,6 +744,8 @@ jobs:
           RUNNER = 'src/aieos_bootstrap/conformance.py'
           GOVERNOR_FILES = ['src/aieos_bootstrap/governor.py']
           PINNED = os.environ.get('AIEOS_PINNED_GOVERNOR', '')
+          RESUME_CHECK_FILE = 'src/aieos_bootstrap/resume_check.py'
+          PINNED_RC = os.environ.get('AIEOS_PINNED_RESUME_CHECK', '')
           HEX = re.compile(r'[0-9a-f]{64}')
           COMMIT_ID = re.compile(r'[0-9a-f]{40}')
           WATCHED = ['../task.json', '../range-base.txt', '../commits.txt', '../changed-paths.txt', '../before.txt']
@@ -861,7 +891,8 @@ jobs:
                       shown = before if COMMIT_ID.fullmatch(before) else 'unreadable or not a commit id'
                       return fail(title, 'the tip main held before the push (%s) is not a commit id that is an ancestor of the '
                                          'pushed commit' % shown)
-                  touched = git('diff', '--name-only', before, head, '--', RUNNER, *GOVERNOR_FILES).decode('utf-8', 'replace')
+                  touched = git('diff', '--name-only', before, head, '--', RUNNER, *GOVERNOR_FILES,
+                                RESUME_CHECK_FILE).decode('utf-8', 'replace')
                   touched = touched.split()
                   if touched and len(named) != 1:
                       return fail(title, 'the push changes %s and its head commit has %d trailer lines' % (
@@ -870,6 +901,11 @@ jobs:
                   pushed_sha = hashlib.sha256(pushed_gov).hexdigest() if pushed_gov is not None else 'absent'
                   if PINNED and GOVERNOR_FILES[0] in touched and pushed_sha != PINNED:
                       return fail(title, 'the push leaves the governor file %s, not the pinned version %s' % (pushed_sha, PINNED))
+                  pushed_rc = blob(head, RESUME_CHECK_FILE)
+                  pushed_rc_sha = hashlib.sha256(pushed_rc).hexdigest() if pushed_rc is not None else 'absent'
+                  if PINNED_RC and RESUME_CHECK_FILE in touched and pushed_rc_sha != PINNED_RC:
+                      return fail(title, 'the push leaves the Resume Check file %s, not the pinned version %s' % (
+                          pushed_rc_sha, PINNED_RC))
                   if len(named) != 1:
                       print('conformance base run: a push to main whose head commit has %d trailer lines; no run' % len(named))
                       return 0
@@ -884,6 +920,8 @@ jobs:
               runner_blob = blob(base, RUNNER)
               runner_sha = hashlib.sha256(runner_blob).hexdigest() if runner_blob is not None else None
               gov_sha = hashlib.sha256(gov).hexdigest() if gov is not None else 'absent'
+              rc_file = blob(base, RESUME_CHECK_FILE)
+              rc_sha = hashlib.sha256(rc_file).hexdigest() if rc_file is not None else 'absent'
               if mode == 'base':
                   root, commit, note = os.path.abspath('../conformance-base'), base, 'base %s' % base
                   if on_main:
@@ -929,15 +967,27 @@ jobs:
               if value.get('governor_identity') not in (placed, None):
                   return fail(title, 'the run names governor %s, not the governor file put in place (%s); %s' % (
                       value['governor_identity'], placed or 'none', note))
+              rc_run = value.get('resume_check')
+              rc_placed = rc_sha if rc_file is not None else None
+              if rc_run is not None and not (isinstance(rc_run, dict) and rc_run.get('path') == RESUME_CHECK_FILE
+                                             and 'sha256' in rc_run and rc_run['sha256'] in (None, rc_placed)):
+                  return fail(title, 'the run names a Resume Check other than the file put in place (%s); %s' % (
+                      rc_placed or 'none', note))
+              rc_named = 'not used' if rc_run is None else (rc_run.get('sha256') or 'none')
               results = ', '.join('%s %s' % (r['id'], r['result']) for r in value['results'])
               report_only = mode == 'candidate' or not PINNED
-              msg = 'outcome %s; counts %s; record %s; commit %s; task %s; governor %s; base governor file %s; %s; %s; results: %s' % (
+              msg = ('outcome %s; counts %s; record %s; commit %s; task %s; governor %s; base governor file %s; resume check %s; '
+                     'base resume check file %s; %s; %s; %s; results: %s') % (
                   record['outcome'], value['counts'], record['record_id'], commit, task, value['governor_identity'],
-                  gov_sha, note, 'report only' if report_only else 'pinned governor %s' % PINNED, results)
+                  gov_sha, rc_named, rc_sha, note, 'report only' if report_only else 'pinned governor %s' % PINNED,
+                  'pinned resume check %s' % PINNED_RC if PINNED_RC else 'no resume check pinned', results)
               annotate('notice', title, msg)
               print('%s: outcome %s, record %s' % (title, record['outcome'], record['record_id']))
               if mode == 'base' and gov is None and any(r['result'] == 'PASS' for r in value['results']):
                   return fail(title, 'a PASS with no governor in the base')
+              if mode == 'base' and PINNED_RC and (rc_sha != PINNED_RC or rc_named != PINNED_RC):
+                  return fail(title, 'the base Resume Check (file %s, run %s) is not the pinned version %s' % (
+                      rc_sha, rc_named, PINNED_RC))
               if report_only:
                   return 0
               if gov_sha != PINNED or value['governor_identity'] != PINNED:
@@ -1013,6 +1063,12 @@ jobs:
           #   The result is one annotation (a notice) per run, built only from checked values; the runner's raw output is printed
           #   only between stop-commands markers with a random token, opened before the runner starts and closed in every case;
           #   every annotation value is escaped (%, CR, LF).
+          #   Revision 5 (decision D-311 C3): the Resume Check file (RESUME_CHECK_FILE) is put in place from the base in both
+          #   modes; its SHA-256 is in the notice; the step fails when the run record's resume_check (present only when a
+          #   Resume Check scenario has a fixture) names another path or a SHA-256 other than none or that file's; on main a
+          #   push that changes it is treated as one that changes the runner (exactly one task), and, with a version pinned in
+          #   AIEOS_PINNED_RESUME_CHECK, must leave it at that version; and a base run with a version pinned fails unless the
+          #   base's file and the run's resume_check both have that SHA-256. Empty, it changes no outcome.
           import hashlib
           import json
           import os
@@ -1024,6 +1080,8 @@ jobs:
           RUNNER = 'src/aieos_bootstrap/conformance.py'
           GOVERNOR_FILES = ['src/aieos_bootstrap/governor.py']
           PINNED = os.environ.get('AIEOS_PINNED_GOVERNOR', '')
+          RESUME_CHECK_FILE = 'src/aieos_bootstrap/resume_check.py'
+          PINNED_RC = os.environ.get('AIEOS_PINNED_RESUME_CHECK', '')
           HEX = re.compile(r'[0-9a-f]{64}')
           COMMIT_ID = re.compile(r'[0-9a-f]{40}')
           WATCHED = ['../task.json', '../range-base.txt', '../commits.txt', '../changed-paths.txt', '../before.txt']
@@ -1169,7 +1227,8 @@ jobs:
                       shown = before if COMMIT_ID.fullmatch(before) else 'unreadable or not a commit id'
                       return fail(title, 'the tip main held before the push (%s) is not a commit id that is an ancestor of the '
                                          'pushed commit' % shown)
-                  touched = git('diff', '--name-only', before, head, '--', RUNNER, *GOVERNOR_FILES).decode('utf-8', 'replace')
+                  touched = git('diff', '--name-only', before, head, '--', RUNNER, *GOVERNOR_FILES,
+                                RESUME_CHECK_FILE).decode('utf-8', 'replace')
                   touched = touched.split()
                   if touched and len(named) != 1:
                       return fail(title, 'the push changes %s and its head commit has %d trailer lines' % (
@@ -1178,6 +1237,11 @@ jobs:
                   pushed_sha = hashlib.sha256(pushed_gov).hexdigest() if pushed_gov is not None else 'absent'
                   if PINNED and GOVERNOR_FILES[0] in touched and pushed_sha != PINNED:
                       return fail(title, 'the push leaves the governor file %s, not the pinned version %s' % (pushed_sha, PINNED))
+                  pushed_rc = blob(head, RESUME_CHECK_FILE)
+                  pushed_rc_sha = hashlib.sha256(pushed_rc).hexdigest() if pushed_rc is not None else 'absent'
+                  if PINNED_RC and RESUME_CHECK_FILE in touched and pushed_rc_sha != PINNED_RC:
+                      return fail(title, 'the push leaves the Resume Check file %s, not the pinned version %s' % (
+                          pushed_rc_sha, PINNED_RC))
                   if len(named) != 1:
                       print('conformance base run: a push to main whose head commit has %d trailer lines; no run' % len(named))
                       return 0
@@ -1192,6 +1256,8 @@ jobs:
               runner_blob = blob(base, RUNNER)
               runner_sha = hashlib.sha256(runner_blob).hexdigest() if runner_blob is not None else None
               gov_sha = hashlib.sha256(gov).hexdigest() if gov is not None else 'absent'
+              rc_file = blob(base, RESUME_CHECK_FILE)
+              rc_sha = hashlib.sha256(rc_file).hexdigest() if rc_file is not None else 'absent'
               if mode == 'base':
                   root, commit, note = os.path.abspath('../conformance-base'), base, 'base %s' % base
                   if on_main:
@@ -1237,15 +1303,27 @@ jobs:
               if value.get('governor_identity') not in (placed, None):
                   return fail(title, 'the run names governor %s, not the governor file put in place (%s); %s' % (
                       value['governor_identity'], placed or 'none', note))
+              rc_run = value.get('resume_check')
+              rc_placed = rc_sha if rc_file is not None else None
+              if rc_run is not None and not (isinstance(rc_run, dict) and rc_run.get('path') == RESUME_CHECK_FILE
+                                             and 'sha256' in rc_run and rc_run['sha256'] in (None, rc_placed)):
+                  return fail(title, 'the run names a Resume Check other than the file put in place (%s); %s' % (
+                      rc_placed or 'none', note))
+              rc_named = 'not used' if rc_run is None else (rc_run.get('sha256') or 'none')
               results = ', '.join('%s %s' % (r['id'], r['result']) for r in value['results'])
               report_only = mode == 'candidate' or not PINNED
-              msg = 'outcome %s; counts %s; record %s; commit %s; task %s; governor %s; base governor file %s; %s; %s; results: %s' % (
+              msg = ('outcome %s; counts %s; record %s; commit %s; task %s; governor %s; base governor file %s; resume check %s; '
+                     'base resume check file %s; %s; %s; %s; results: %s') % (
                   record['outcome'], value['counts'], record['record_id'], commit, task, value['governor_identity'],
-                  gov_sha, note, 'report only' if report_only else 'pinned governor %s' % PINNED, results)
+                  gov_sha, rc_named, rc_sha, note, 'report only' if report_only else 'pinned governor %s' % PINNED,
+                  'pinned resume check %s' % PINNED_RC if PINNED_RC else 'no resume check pinned', results)
               annotate('notice', title, msg)
               print('%s: outcome %s, record %s' % (title, record['outcome'], record['record_id']))
               if mode == 'base' and gov is None and any(r['result'] == 'PASS' for r in value['results']):
                   return fail(title, 'a PASS with no governor in the base')
+              if mode == 'base' and PINNED_RC and (rc_sha != PINNED_RC or rc_named != PINNED_RC):
+                  return fail(title, 'the base Resume Check (file %s, run %s) is not the pinned version %s' % (
+                      rc_sha, rc_named, PINNED_RC))
               if report_only:
                   return 0
               if gov_sha != PINNED or value['governor_identity'] != PINNED:
