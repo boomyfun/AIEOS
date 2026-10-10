@@ -1,0 +1,309 @@
+# Task contract TASK-009, recovery between Git and the event log (Master Plan revision 3, §4 M3; the M3 work order of
+# decision D-254, as amended by decisions D-262 and D-263; specification 2 §5.1). Revision 0, drafted under decisions
+# D-388 (C4) and D-390, brought for approval in its own request; whether it is approved is recorded in the decision
+# files, not in this file. Fields and value forms follow specification 2 §5.1 and the contracts of TASK-007 and
+# TASK-008. Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# Task type: implementation. What it adds: a pure module, src/aieos_bootstrap/recovery.py, whose function reconcile
+# takes, as values, the event log's bytes, the commits whose messages the caller read from Git, the leases the local
+# store holds and the recovery time, and returns what specification 1 §7 makes the core do at start: the events to
+# append, built by TASK-007's eventlog.append one at a time (step 1: a compensating task.submitted for a commit made
+# under a held lease, else the observation of an unfenced write; step 4: duplicates have no effect), the leases whose
+# expiry has passed (step 5), and findings that change no state (step 2: Git wins). A pure helper reads the AIEOS-Task
+# and AIEOS-Fence trailers of a commit message (specification 2 §7).
+# Shape (P) of decision D-313: it opens, writes and removes no file, reads no clock, starts no process and calls no
+# model; reading Git and the local store, writing the log and expiring leases come with a later task (DEF-0030). It
+# changes neither records.py nor eventlog.py: their checks as on main accept the payloads it returns (worker's probe,
+# decision D-390).
+# Departure from a proposed sentence (decision D-390, reading (t1)): specification 1 §7 step 1 counts "a lease on that
+# task which the local store still holds (this step runs before step 5)", whose parenthetical reads as counting a lease
+# past its expiry that the store has not yet expired; §8 says "The core refuses a submission whose token is not that of
+# the lease the local store holds on the task, or whose lease has passed its expiry time even if the store has not yet
+# expired it", and TASK-007's append (AC6) refuses such an event with reason fence. Both sentences are proposed (spec 1
+# §10 point 10). This contract follows concept line 849 ("lease hết hạn là hết hạn, bất kể agent nghĩ gì"): a lease
+# counts at step 1 only when it is held and its expiry is after the recovery time; a commit made under a lease past its
+# expiry gives the unfenced-write observation, never a compensating event (the stricter side; the commit still stands
+# as the fact of what changed in code, line 847). The tension is carried to specification 1's next revision in a
+# Deferred item opened with this task's records.
+# Readers of the changed paths (D-263 C3's practice): src/aieos_bootstrap/__init__.py is read by every module that
+# imports the package and by the CI's G1 build; its docstring and __all__ gain recovery; it must not name the Resume
+# Check fixture folder (TASK-010's assertion). The new module is read by nothing else in the repository; the
+# deterministic_rule step and the GOV-003 step read every file under src/ and tests/.
+# Risk: high. R2 matches src/** and tests/** (medium); R3 read fail closed matches them too, recovery being part of
+# the fencing that limits authority (spec 1 §8; risk rules section 2 point 3); no path of the write set meets R10
+# (.aieos/) or R11 (tests/conformance/**); the highest wins. Profile (assurance-model.md §5, gov-AIEOS, high):
+# functional [unit_test], architecture [deterministic_rule], functional [integration_test], security
+# [static_security_analysis] and architecture [ai_review (cross-model)], plus the evidence_required of the applicable
+# articles. Dimensions are named as TASK-006's records name them (decision D-181, reading R-dim).
+# Change class: critical_cr (reading, fail closed, decision D-390 C3: computed, not asserted). GOV-003's tool part
+# over the base, run by script, marks all five paths as evaluator paths (src/aieos_bootstrap/**, tests/unit/**,
+# tests/integration/**, tests/property/** on the workflow's pinned list), the reading by which decision D-383 ruled
+# TASK-014 critical_cr. The M3 work plan's row gave normal_cr, and TASK-008 kept normal_cr under D-254 P3 with its
+# paths on the same list; the stricter class is proposed here and lowers nothing. The change is judged by the base
+# version of every evaluator part; the module is not an evaluator part named by DM A29 (no validator, fixture,
+# scenario, runner or governor), and no evaluator file at the base changes but the package docstring and __all__.
+# Reviews (as TASK-007's): five way-2 reviews by a Claude model other than the implementer's, each under a decision of
+# the decision agent (architecture ai_review for INV-001, INV-002, INV-004; security ai_review for SEC-002; governance
+# ai_review for GOV-003; operational ai_review for OPS-003; the cross-model half, which also covers INV-009's rule),
+# and three decision-agent reviews (architecture human_review for INV-003, which also checks that the property tests
+# cover INV-009's rule and the idempotency of AC6; operational human_review for OPS-002; the cross-model half). Each
+# way-2 review record's basis names every article whose entry it covers and addresses each of their rules, beyond what
+# the tool parts decide. Each reviewer's prompt is self-sufficient, with the scratchpad's absolute path in its first
+# line (D-277), and names for testing: the reading (t1) of AC3; that recovery imports nothing from the runner
+# (DEF-0028); that no assert stands in src (bandit B101, D-325).
+# Evaluation path (A61; as TASK-007's and TASK-008's): the approved contract is committed on main as its own commit C,
+# which changes only docs/tasks/TASK-009.yaml and has one parent equal to base_commit, and is pushed normally; the
+# files are drafted and tested in scratchpad clones (push URL disabled, the no-reply identity set first); the task's
+# commits, each carrying the trailer "AIEOS-Task: TASK-009" and no e-mail address in its message, go to the branch
+# task/TASK-009 on GitHub, each push under its own decision of the decision agent after a secret scan and a dry run
+# against a bare single-branch copy (D-229, D-274), never by force and never deleting; the CI channel runs on each push
+# and its records are re-fetched into docs/records/TASK-009.jsonl; main receives the task only at its acceptance, by a
+# fast-forward under its own decision. Before each task commit, the added text is scanned with the workflow's SEC-001,
+# SEC-002 and OPS-003 patterns (AC11).
+# Not applicable: OPS-001 (scope: the repository's refs; the task changes no ref); INV-005 to INV-008, INV-010 and
+# INV-011 (their scopes, the decision engine, the governor, evidence records and the policy, meet no path of the
+# write-set; the module emits no execution or acceptance decision and judges no evidence); GOV-001, GOV-004 to GOV-006
+# and SEC-003 (their scopes, the concept file, the bound artifacts, the decision matrix, the records and pre-genesis
+# documents, and .github/, meet no path of the write-set). INV-009 (scope: the event log) is applied as a reading, as
+# in TASK-007: no path of the write-set is an event log, but this module returns log bytes, so its tests carry the
+# rule (AC5, AC12).
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting, no push of its own (CR-002 part 4 limit 5 does not apply).
+# Uncovered and stated limits (AC10): the module reads nothing, so how the commits are read from Git and the leases
+# from the local store is not shown; no code writes the bytes it returns, and no lease is expired by it; step 3 of
+# specification 1 §7 (an intent file against a projection) has nothing to act on, since no projection exists in the
+# bootstrap; whether an unfenced write blocks the task's acceptance stays open (specification 2 §10 point 7); every
+# review is by AI of one vendor.
+task: TASK-009
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add a standard-library Python 3 module, src/aieos_bootstrap/recovery.py, whose function reconcile takes an event
+  log's bytes, the commits whose messages the caller read from Git, the leases the local store holds and the recovery
+  time, and returns what specification 1 section 7 makes the core do at start: for every commit whose trailer names a
+  task and that no task.submitted event names, a compensating task.submitted when a held, unexpired lease on that
+  task has the trailer's token, else the observation of an unfenced write; the leases whose expiry has passed; and
+  findings that change no state; every event built by TASK-007's eventlog.append, so that its idempotency and fence
+  apply unchanged; with a pure helper that reads the AIEOS-Task and AIEOS-Fence trailers of a commit message; with unit,
+  integration and property tests in new test modules. It opens, writes and removes no file, reads no clock, keeps no
+  lease and changes neither records.py nor eventlog.py.
+traces_to:
+  - docs/specs/spec-01-state-and-event-model.md#4
+  - docs/specs/spec-01-state-and-event-model.md#7
+  - docs/specs/spec-01-state-and-event-model.md#8
+  - docs/specs/spec-02-aieos-file-format.md#6.2
+  - docs/specs/spec-02-aieos-file-format.md#6.3
+  - docs/specs/spec-02-aieos-file-format.md#7
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-009.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id, unquoted, with nothing after it on the line (G0 reads the line raw).
+  base_commit: 0aefc2a69d2b7a618319f304c48661ab8d25643d
+  depends_on: [TASK-001, TASK-007]
+  # The interim documents have no id and no vN version, so each is named by its path and pinned by its SHA-256, as in
+  # the contracts of TASK-003 to TASK-008.
+  intent_versions:
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 529b56d831d208594685aad3954fd3e8fc42cadc663e315b65bdfe615e3b09f7
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+write_set:
+  # One modified path: the package docstring and __all__, which name the package's modules (as TASK-007 and
+  # TASK-008). Every other path is new.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/recovery.py
+    - tests/unit/test_recovery.py
+    - tests/integration/test_recovery_log.py
+    - tests/property/test_recovery_properties.py
+read_set:
+  paths:
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/pre-genesis/decision-matrix.md
+    - docs/records/TASK-001.jsonl
+    - docs/records/TASK-007.jsonl
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/eventlog.py
+    - tests/unit/test_eventlog.py
+    - tests/integration/test_eventlog_log.py
+    - tests/property/test_eventlog_properties.py
+  interfaces: [aieos_bootstrap.eventlog.append, aieos_bootstrap.eventlog.LEASE_KEYS, aieos_bootstrap.records.check_log, aieos_bootstrap.records.check_payload]
+  schemas: [spec-02 event line (6.1), spec-02 record (6.2), spec-02 event payloads (6.3), spec-02 commit trailers (7), spec-01 fencing token (8)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/resume_check.py
+  - tests/run_tests.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The entry. The module defines reconcile(log, commits, leases, now, recorder). log is the event log's bytes
+      (empty bytes for an empty log); commits is a list of objects with exactly the keys commit (40 lowercase hex
+      digits) and message (a string), oldest first (reading: the commits of the branch being recovered, as the caller
+      read them from Git), and they are judged in that order (decision D-390 C2 (c)); leases is a list of mappings with exactly eventlog.LEASE_KEYS (task_id,
+      fencing_token, expires_at), the leases the local store holds, [] when the store was lost; now is a
+      timezone-aware UTC datetime; recorder is a non-empty string. reconcile returns a result with: log, the bytes
+      after every appended event; events, each {event_id, type, task_id, result} with result appended or duplicate in
+      the order they were built; expired, the given leases whose expires_at is at or before now, in the given order;
+      findings, as text. A log that has a finding under records.check_log, or that is not empty and does not end with
+      LF, gives a result with the given log unchanged, no event, and the reason in findings (fail closed: a damaged
+      log is never extended, as eventlog.append's AC1). Arguments not in these forms raise TypeError or ValueError
+      before anything is decided. The given arguments are not changed.
+  - AC2: >-
+      The trailers (specification 2 §7). trailers(message) returns the values of the lines "AIEOS-Task: <id>" and
+      "AIEOS-Fence: <epoch>:<counter>" of the message's last paragraph (reading: Git's trailer block), as {task,
+      fence}, each null when absent; the task is TASK- followed by digits, the fence {epoch, counter} in the form of
+      specification 2 §6.1 (reading: epoch the text before the last ":", counter a non-negative integer); a line that
+      names either key with another form, or a key given twice, gives a finding and that commit is reported, not
+      recovered.
+  - AC3: >-
+      Step 1 (specification 1 §7; concept line 855). For each given commit whose trailer names a task and whose id no
+      task.submitted event of the log names in its payload's commit: when a given lease counts, that is, it has that
+      task_id, a fencing_token equal to the trailer's fence and an expires_at after now, and no task.submitted event
+      of the log (the given one or the one built so far in this call) already carries that task_id and that
+      fencing_token, a task.submitted event with payload
+      {commit, compensating: true}, that task_id and that fencing_token, appended by eventlog.append under that lease
+      with appended_at now; otherwise, also when the trailer has no fence or the store was lost, a record.added event
+      whose payload is the observation of specification 2 §6.2 (record_id, fact_kind observation, source_class
+      deterministic_tool_local, recorder, subject the task id, evidence_type unfenced_write, outcome fail, refers_to
+      the commit), with task_id the task id (records.check_log's task_id rule) and no fencing_token, appended by
+      eventlog.append with appended_at now, and nothing else for that commit. Reading (t1)
+      of decision D-390, a departure from specification 1 §7 step 1's proposed parenthetical, stated in the header: a
+      lease still in the store whose expires_at is at or before now does not count, so it gives the observation,
+      never a compensating event. One submission per lease (decision D-390 C2 (b); spec 1 §5.1, the lease released on
+      submission, proposed): a lease whose token a task.submitted event already carries for that task no longer
+      counts, so when several given commits name one task with no submission, the oldest under a counting lease gives
+      the compensating event and every later one the observation. A trailer naming a task with no AIEOS-Fence gives
+      the observation; a malformed trailer gives the finding of AC2 and no event; never a submission (C2 (f)).
+      Commits whose trailer names no task are left alone.
+  - AC4: >-
+      Step 2 (Git wins; concept line 847). A task.submitted event of the log whose commit is not among the given
+      commits gives a finding naming the event and the commit, and no event; the log is never rewritten (reading: the
+      caller gives the commits it read; nothing the log says about code is taken over a commit). Step 3 has nothing to act on (no projection in
+      the bootstrap; AC10). Step 4: an event recovery would append that the log already holds under its event_id is
+      reported with result duplicate and changes nothing (TASK-007's AC2).
+  - AC5: >-
+      Step 5 and the append rules. expired lists the given leases whose expires_at is at or before now (spec 1 §8:
+      "An expired lease is expired, whatever its holder believes"); the given lease mappings are returned as given and
+      never changed, and nothing else is done with them. Every event is
+      built by eventlog.append, one at a time, each on the log the previous one returned; recovery builds no log line
+      itself, and the returned log's bytes are the given bytes followed by exactly the appended lines (INV-009). An
+      append refused by eventlog.append is reported in findings with its reason and leaves the log as it was before
+      that event (fail closed; reading: with the inputs of AC3 a refusal is not expected, and a test shows it is
+      reported).
+  - AC6: >-
+      Ids (concept line 856; decision D-390 C2 (d)). The compensating event's event_id is the SHA-256 hex digest of the
+      UTF-8 text "recovery", the commit id and "task.submitted", joined by LF; the observation's event_id is the same
+      with "record.added" in place of "task.submitted", and its record_id the same with "unfenced_write"; no time and
+      no random part enters any id. So reconcile over its own returned log with the same commits, leases and now
+      appends nothing new: a submitted commit is skipped, and every observation it builds is a duplicate (idempotency).
+  - AC7: >-
+      The checkers as on main. records.py and eventlog.py are forbidden: every payload the module builds gives no
+      finding under records.check_payload as on main, and every returned log no finding under records.check_log; a
+      payload or log that only a change to either module would accept is a spec_conflict and the task escalates.
+      Every existing test of records.py, eventlog.py, governor.py, conformance.py and resume_check.py passes
+      unchanged (forbidden).
+  - AC8: >-
+      Imports. The module imports only the Python 3 standard library, aieos_bootstrap.records and
+      aieos_bootstrap.eventlog, and nothing from aieos_bootstrap.conformance or any fixture folder; it names no
+      fixture folder; a script check reads the module's syntax tree and lists every Import and ImportFrom node, and the
+      list holds only standard-library names and those two modules (DEF-0028).
+  - AC9: >-
+      Purity and the CI checks (INV-001, INV-002, INV-003, INV-004). The module and its tests use no exec, eval,
+      compile, __import__ or importlib, start no process, open no network connection, call no model, open, write or
+      remove no file, read the clock nowhere (now is given), hold no assert in src (bandit B101), and name no
+      project-state directory in src/; the tests build every input in memory. The CI steps at the task's commits
+      report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit, as TASK-006's AC9 lists them.
+  - AC10: >-
+      Limits, stated and tested as such: reconcile reads nothing, so how the commits are read from Git and the leases
+      from the local store is not shown; no code writes the bytes it returns and no lease is expired by it (expired is
+      returned); step 3 has nothing to act on; whether an unfenced write blocks the task's acceptance stays open
+      (specification 2 §10 point 7); the tension of reading (t1) is carried to specification 1's next revision; every
+      existing module and test not in the write set is unchanged, and if one can pass only by a change the task
+      escalates (needs_out_of_scope_change).
+  - AC11: >-
+      The added text. Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003
+      patterns, and each count is 0; the file names are scanned with the same patterns and the records executors'
+      pre-push pattern (D-282).
+  - AC12: >-
+      Tests, with this rule-to-test list, each rule with at least one passing and one failing case, all in memory: R1
+      AC1 (each argument form; the damaged log; arguments not changed); R2 AC2 (both trailers, each absent, each
+      malformed, a key twice, a trailer outside the last paragraph); R3 AC3 (a held unexpired lease; another token;
+      another task; a lease still in the store with an expiry equal to now and one before now, each giving the
+      observation (C2 (a)); a lost store; no fence; two commits of one task under one lease, the second giving the
+      observation (C2 (b)); the same two commits given in the other order, judged in the given order (C2 (c)); a
+      lease whose token the log's task.submitted already carries; a commit already submitted; a commit naming no
+      task); R4 AC4 (a submission whose commit is not given, the log not rewritten; a duplicate); R5 AC5 (expired
+      leases returned unchanged; the returned log equal to the given bytes followed by the appended lines; a refused
+      append reported); R6 AC6 (the ids' formula; a second reconcile over the returned log appends nothing); R7 AC7 (no
+      check_payload finding for every payload built; no check_log finding for every returned log); R8 AC8 (the import
+      list). Unit tests in tests/unit/test_recovery.py; integration tests in tests/integration/test_recovery_log.py,
+      over logs built with eventlog.append (a log with drafted, approved and submitted events of several tasks, then
+      commits with and without submissions). Property tests (tests/property/test_recovery_properties.py; standard
+      library only, fixed seeds; INV-009): for random well-formed logs, commits, leases and times, the returned log
+      has no check_log finding and its first bytes are the given log (append-only); reconcile is idempotent (a second
+      run over its returned log appends nothing); every commit with a task trailer and no submission gives exactly one
+      event, compensating only under a counting lease; and the arguments are never changed. tests/run_tests.py,
+      unchanged, runs all groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1000k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC10, AC12]}
+  - {gate: G3, check: constitution, args: [AC9, AC11, INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
