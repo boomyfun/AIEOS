@@ -1,0 +1,192 @@
+# Task contract TASK-012, the unknown-key example of the runner's Resume Check unit test (Master Plan revision 3, §4
+# M3; the M3 work order of decision D-254, as amended by decisions D-262, D-263, D-333 and D-337; specification 2 §5.1).
+# Revision 0, drafted under decision D-337 (C2), brought for approval in its own request; whether it is approved is
+# recorded in the decision files, not in this file. Fields and value forms follow specification 2 §5.1 and TASK-010's
+# contract. Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# Why (D-337): TASK-006's unit test R5CallAndComparison.test_each_not_run_rule (tests/unit/test_runner_rc.py:483) uses
+# the key delta as its example of "a key that check_decision does not know", and expects the runner to report "the
+# call returned a value with a check_decision finding" (:491-492). TASK-011's AC1 makes delta, a key of specification 3
+# §9's execution decision record, a known key for decision.execution, and TASK-011's contract forbids this module, so
+# TASK-011 escalated (needs_out_of_scope_change). This task changes only the example key, from delta to
+# next_task_state, which is unknown for decision.execution both before TASK-011 (records.py's stated limit) and after
+# it (TASK-011 AC1), so the subtest keeps its point: a Resume Check answer with a key the checker does not know is
+# NOT_RUN. Lines :491-492 name the case by its label, which does not change.
+# The id: digits only, as G0's trailer pattern requires; TASK-011 is the highest id used, so this is TASK-012 (checked
+# by script against docs/tasks/ and the decision files). TASK-011's code waits for this task's acceptance and landing
+# (D-337 C4); TASK-011's contract does not change (its AC3 is read by the erratum of D-337).
+# The search of D-337 C2 (reads only, SP/tools/key_search.py over tests/ at f84a896): 118 lines name one of the 19 keys
+# of specification 3 §9 as a quoted string and 8 lines name decision.execution; apart from this line and the
+# intent_versions generator of tests/property/test_records_properties.py:41 (settled by D-337's erratum of TASK-011
+# AC3), every hit is a payload of another event type, a governor request or record, or a Resume Check fixture input,
+# none of which TASK-011 changes; with this change and the erratum the whole local suite passes over TASK-011's draft
+# (362 tests, a check only).
+# Task type: implementation (reading: the changed path is a unit test of the conformance runner, not a test of the
+# conformance files of conformance-files.md section 8, so not a fixture task). GOV-002 applies: tests/conformance/** is
+# forbidden.
+# Readers of the changed path: the CI workflow's unit_test step runs every test_*.py of tests/unit/; tests/run_tests.py
+# discovers it locally; tests/integration/test_conformance_rc_set.py names it on its list of modules allowed to name
+# the Resume Check fixture folder (TASK-010) and reads its bytes for that folder's name, which this change neither
+# adds nor removes; no other file imports or reads it (checked by script for this contract).
+# Risk: high. R2 matches tests/** (medium); R3 read fail closed matches tests/** (high; risk rules section 2 point 3);
+# no path of the write set meets R11 (tests/conformance/**); the highest wins. Profile (assurance-model.md §5,
+# gov-AIEOS, high): functional [unit_test], architecture [deterministic_rule], functional [integration_test], security
+# [static_security_analysis] and architecture [ai_review (cross-model)], plus the evidence_required of the applicable
+# articles (none adds an entry). Dimensions are named as TASK-006's records name them (decision D-181, reading R-dim).
+# Change class: critical_cr (reading, fail closed): the module is a test of the conformance runner that TASK-006 added
+# as critical_cr (an evaluator part, DM A29), so it is judged by the base version and never auto-accepted
+# (constitution GOV-003; governor-spec.md §8).
+# Evidence: the task changes no evidence requirement. The subtest keeps its assertion and its expected reason; only the
+# example key changes, to one that is unknown before and after TASK-011 (CR-002 part 4 limit 8 does not apply;
+# reading).
+# Reviews (as TASK-010's): five way-2 reviews by a Claude model other than the implementer's, each under a decision of
+# the decision agent (architecture ai_review for INV-001, INV-002, INV-004; security ai_review for SEC-002; governance
+# ai_review for GOV-003; operational ai_review for OPS-003; the cross-model half), and three decision-agent reviews
+# (architecture human_review for INV-003, which also checks that the subtest's point is kept; operational
+# human_review for OPS-002; the cross-model half). Each way-2 review record's basis names every article whose entry it
+# covers and addresses each of their rules. Each reviewer's prompt is self-sufficient, with the scratchpad's absolute
+# path in its first line (D-277).
+# Evaluation path (A61; as TASK-010's): the approved contract is committed on main as its own commit C, which changes
+# only docs/tasks/TASK-012.yaml and has one parent equal to base_commit, and is pushed normally; the file is drafted
+# and tested in scratchpad clones (push URL disabled, the no-reply identity set first); the task's commit, carrying the
+# trailer "AIEOS-Task: TASK-012" and no e-mail address in its message, goes to the branch task/TASK-012 on GitHub under
+# its own decision of the decision agent after a secret scan and a dry run against a bare single-branch copy (D-229,
+# D-274), never by force and never deleting; the CI channel runs on the push and its records are re-fetched into
+# docs/records/TASK-012.jsonl; main receives the task only at its acceptance, by a fast-forward under its own decision.
+# Before the task commit, the added text and the file name are scanned with the workflow's SEC-001, SEC-002 and OPS-003
+# patterns and the records executors' pre-push pattern (AC4).
+# Not applicable: OPS-001 (scope: the repository's refs; the task changes no ref); INV-005 (scope: the decision engine
+# and the governor; a unit test of the conformance runner meets neither); INV-006 to INV-011, GOV-001, GOV-004
+# to GOV-006 and SEC-003 (their scopes, the governor, evidence records, the event log, the policy, the concept file,
+# the bound artifacts, the decision matrix, the records and pre-genesis documents, and .github/, meet no path of the
+# write-set).
+# Owner-kept acts: none. Nothing under .github/, no workflow change, no Claude Code setting (CR-002 part 4 limit 5 does
+# not apply).
+# Uncovered and stated limits (AC3): the subtest shows that one unknown key gives NOT_RUN; it does not show that every
+# unknown key does; the check against TASK-011's records.py is run on a scratchpad draft, not on a landed version, so
+# it is repeated at TASK-011's acceptance; every review is by AI of one vendor.
+task: TASK-012
+contract_version: v1
+task_type: implementation
+objective: >-
+  Change only line 483 of tests/unit/test_runner_rc.py (TASK-006): the example of "a key that check_decision does not
+  know" in R5CallAndComparison.test_each_not_run_rule becomes changed({'next_task_state': 'DONE'}) instead of
+  changed({'delta': []}), so that the subtest keeps showing that a Resume Check answer with a key the checker does not
+  know is NOT_RUN with the reason "case 1: the call returned a value with a check_decision finding", both before and
+  after TASK-011. No other line, file, fixture or set file changes.
+traces_to:
+  - docs/specs/conformance-files.md#9
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#9
+  - docs/specs/spec-02-aieos-file-format.md#6.4
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-012.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id, unquoted, with nothing after it on the line (G0 reads the line raw).
+  base_commit: f84a8963619b3018e474d7247c3e8f5bfc124112
+  depends_on: [TASK-006]
+  # The interim documents have no id and no vN version, so each is named by its path and pinned by its SHA-256, as in
+  # TASK-010's contract.
+  intent_versions:
+    docs/specs/conformance-files.md: 31e2853d78ecad81b27eea2e9738fc45787c22dc751fe5bc0f846e337cf8a114
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 05c53318cd756a3acfc13e5adaffbfaede8f05be3d00289e9fd45fef08c63c73
+    docs/specs/spec-02-aieos-file-format.md: 529b56d831d208594685aad3954fd3e8fc42cadc663e315b65bdfe615e3b09f7
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+write_set:
+  # One modified path; nothing is added.
+  paths:
+    - tests/unit/test_runner_rc.py
+read_set:
+  paths:
+    - docs/specs/conformance-files.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/TASK-006.yaml
+    - docs/tasks/TASK-011.yaml
+    - docs/records/TASK-006.jsonl
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/conformance.py
+  interfaces: [aieos_bootstrap.records.check_decision, aieos_bootstrap.conformance.execution_problem]
+  schemas: []
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - src/**
+  - tests/conformance/**
+  - tests/run_tests.py
+  - tests/unit/test_records.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The change. The diff of tests/unit/test_runner_rc.py is exactly one line: line 483's
+      changed({'delta': []}) becomes changed({'next_task_state': 'DONE'}); the label "a key that check_decision does
+      not know", lines 491-492 and every other line of the module are byte-equal.
+  - AC2: >-
+      The subtest keeps its point. At the task's commit, R5CallAndComparison.test_each_not_run_rule passes, its
+      subtest "a key that check_decision does not know" giving NOT_RUN with the reason "case 1: the call returned a
+      value with a check_decision finding"; a script check run in the scratchpad shows the same result with TASK-011's
+      draft records.py in place (next_task_state is unknown for decision.execution before and after TASK-011, TASK-011
+      AC1), and the record of that check is cited in the acceptance request (reading: the check is repeated at
+      TASK-011's acceptance, AC3).
+  - AC3: >-
+      Nothing else changes, and the limits. Every other test that tests/run_tests.py runs passes unchanged at the
+      task's commit. Limits: one unknown key is shown, not every one; the check of AC2 against TASK-011 uses a draft.
+  - AC4: >-
+      Purity and the CI checks (INV-001, INV-002, INV-004). The module's imports do not change; it uses no exec, eval,
+      compile, __import__ or importlib, starts no process, opens no network connection, calls no model and writes no
+      file. The CI steps at the task's commit report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and
+      bandit, as TASK-006's contract lists them. Before the commit, the added text and the file name are scanned with
+      the workflow's SEC-001, SEC-002 and OPS-003 patterns and the records executors' pre-push pattern (D-282), and
+      each count is 0.
+  - AC5: >-
+      Tests, with this rule-to-test list: R1 AC1 (the one-line diff, checked by script); R2 AC2 (the subtest at the
+      task's commit; the scratchpad check against TASK-011's draft). tests/run_tests.py, unchanged, runs them.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 400k, wall_time: 2h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC5]}
+  - {gate: G3, check: constitution, args: [AC4, INV-001, INV-002, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
