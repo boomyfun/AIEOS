@@ -1,6 +1,7 @@
-"""The bootstrap package of gov-AIEOS (tasks TASK-001, TASK-003, TASK-004, TASK-006, TASK-007, TASK-008 and TASK-009).
+"""The bootstrap package of gov-AIEOS (tasks TASK-001, TASK-003, TASK-004, TASK-006, TASK-007, TASK-008, TASK-009 and
+TASK-016).
 
-It holds six modules:
+It holds seven modules:
 - ``records`` (TASK-001): a checker of the form of event-log lines, records and event payloads of specification 2
   sections 6.1 to 6.4. It reads only the text it is given, writes nothing and decides nothing.
 - ``conformance`` (TASK-003, with TASK-006's Resume Check entry): the conformance runner of
@@ -17,6 +18,9 @@ It holds six modules:
 - ``recovery`` (TASK-009): recovery between Git and the event log at start, specification 1 section 7. Given a log's
   bytes, the commits read from Git, the leases the local store holds and the recovery time, it returns the log after
   the events it appends through ``eventlog``, and the leases whose expiry has passed; it reads and writes no file.
+- ``writer`` (TASK-016): the core's single writer of the project-state directory, specifications 1 and 2: it appends
+  the lines ``eventlog`` decides to the event log file, records every fence refusal, and keeps the local store of the
+  fence's epoch and counter, the leases and the sessions; it opens no other file, and every time is an argument.
 """
 
-__all__ = ['conformance', 'eventlog', 'governor', 'records', 'recovery', 'resume_check']
+__all__ = ['conformance', 'eventlog', 'governor', 'records', 'recovery', 'resume_check', 'writer']
