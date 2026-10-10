@@ -80,6 +80,13 @@ Commands of mine of the kinds this lesson lists, in session 2026-10-10-0735 (../
 - **2026-10-10 (:1134, :1346).** A one-second sleep before a read (a filler), and a one-minute sleep while CI ran, which the harness refused before it ran; it was not retried.
 - **2026-10-10 (:1635, :1662).** While rebuilding the session-end records: a sed edit that replaced a line with itself, and a stray call of an earlier reply-composing script inside a longer command (its exclusive write refused, its output discarded); both ran and did nothing.
 
+Commands of mine of the kinds this lesson lists, in session 2026-10-10-1612 (../History/2026-10/2026-10-10-1612-decision-files-d311-d318-the-widening-in-force-and-task-007-landed.md):
+- **2026-10-10 (:105).** `ls tools/` run in the repository, where no such folder exists; it failed and the chained commands did not run.
+- **2026-10-10 (:276).** Python's name with a dash inside a pipeline; refused by the guard before it ran; not retried in that form.
+- **2026-10-10 (:346).** A `git diff --no-index` without GIT_OPTIONAL_LOCKS=0, outside any repository.
+- **2026-10-10 (:1084, :1315, :1377, :1506, :1576).** Waits for a handback that paused with `timeout N tail -f <file>`, the first on /dev/null: bounded waits on a condition, but the pause itself is a filler form.
+- **2026-10-10 (:1429, :1601).** A helper script called with no arguments inside a longer command; it failed and did nothing.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

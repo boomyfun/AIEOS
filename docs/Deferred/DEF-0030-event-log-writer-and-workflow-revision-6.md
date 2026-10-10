@@ -21,3 +21,4 @@ TASK-007 (the append rules), TASK-008, TASK-005b; DEF-0024 (the workflow's other
 
 ## Log
 - 2026-10-10: opened (decision files D-313 and D-315). ../History/2026-10/2026-10-10-0735-decision-files-d303-d310-ci-revision-5-and-task-007-contract.md
+- 2026-10-10 (session 72b399d0): TASK-007 (the append rules, shape (P)) accepted and on `main` (9803593c; D-328, D-329). The writer task must also resolve DEF-0032's F-a and F-b (two departures of TASK-007 from its contract's literal text) by or before its acceptance.

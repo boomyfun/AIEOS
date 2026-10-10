@@ -71,6 +71,9 @@ Occurrences in session 2026-10-10-0626 (../History/2026-10/2026-10-10-0626-decis
 One occurrence in session 2026-10-10-0735 (../History/2026-10/2026-10-10-0735-decision-files-d303-d310-ci-revision-5-and-task-007-contract.md):
 - **2026-10-10 (:1461).** A short progress line in English before a tool call ("Now I'll fill the placeholders …"); found by `tools/english_lines.py` at the session-end check and brought to the decision agent.
 
+Three occurrences in session 2026-10-10-1612 (../History/2026-10/2026-10-10-1612-decision-files-d311-d318-the-widening-in-force-and-task-007-landed.md):
+- **2026-10-10 (:855, :872, :1284).** Short progress lines in English before tool calls ("Now the unit tests.", "Now replace the NaN test …", "Now the common brief and the five briefs."); found by `tools/english_lines.py` and brought to the decision agent.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 
