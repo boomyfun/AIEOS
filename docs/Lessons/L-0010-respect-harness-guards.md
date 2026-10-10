@@ -116,6 +116,11 @@ Commands of mine of the kinds this lesson lists, in session 2026-10-10-2252 (../
 - **2026-10-10 (later).** A command with a heredoc and a no-effect `echo`; refused by the guard; the text was written with the Write tool.
 - **2026-10-10.** A helper script run without its arguments; a failed script chained with the next Python run in one command (against D-357 Q4); a browser wait of ten seconds while a CI run was in progress (:1479). No effect.
 
+Occurrences in session 2026-10-11-0013 (../History/2026-10/2026-10-11-0013-decision-files-d377-d387-recovery-and-the-pin.md), each my incorrect command, refused before it ran and rewritten within the approved step (D-390 Q5):
+- **2026-10-11 (:628).** A here-string to compare hashes.
+- **2026-10-11 (:991).** Python's name followed by a dash, to run one test module.
+- **2026-10-11 (:1246).** The same form inside a search pattern.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

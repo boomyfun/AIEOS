@@ -26,3 +26,4 @@ DM A66 and A67 (in force from commit fb841531).
 ## Log
 - 2026-10-10: opened (decision files D-321 and D-322).
 - 2026-10-10: the two workflow comments and the conformance files document's section 1 sentence added (decision files D-380 and D-381).
+- 2026-10-11: the two workflow comments on the pins corrected by the CI workflow's revision 6 (decision file D-396; emptying the governor pin stays the owner's, DM A65); the SEC-003 record step's message "(each needs the owner's own yes)" stays on the list (D-396 C5).

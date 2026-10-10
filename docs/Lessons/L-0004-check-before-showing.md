@@ -137,6 +137,10 @@ In session 2026-10-10-2141 (../History/2026-10/2026-10-10-2141-decision-files-d3
 Occurrence in session 2026-10-10-2252 (../History/2026-10/2026-10-10-2252-decision-files-d367-d376-task-014-landed.md):
 - **2026-10-10.** My first build of decision file D-376 said that this session's History already recorded a correction it had not yet written, and that D-376's own file carried another decision's label; the decision agent found it before the write (D-378), and the one line was rebuilt (D-379). A record that can never be edited must state only what is already true.
 
+Two in session 2026-10-11-0013 (../History/2026-10/2026-10-11-0013-decision-files-d377-d387-recovery-and-the-pin.md), caught by the decision agent before any write:
+- **2026-10-11 (D-395).** An acceptance text said the base run gave "every Verification and Resume Check scenario PASS", while RISK-01 and ADV-02 were NOT_RUN.
+- **2026-10-11 (D-396).** A workflow comment and a commit message said that changing any pin was the decision agent's, wider than A66 gives (emptying the governor pin, set on the owner's yes A65, stays the owner's).
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

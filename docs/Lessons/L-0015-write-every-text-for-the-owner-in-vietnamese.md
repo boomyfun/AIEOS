@@ -92,6 +92,10 @@ English text lines of mine, in session 2026-10-10-2141 (../History/2026-10/2026-
 English text lines of mine, in session 2026-10-10-2252 (../History/2026-10/2026-10-10-2252-decision-files-d367-d376-task-014-landed.md):
 - **2026-10-10 and 2026-10-11 (:730, :794, :1132, :1840, :1882).** "Now the two briefs.", "Now the revised bullet, as a second build of revision 5.", "Now the TASK-014 contract check, in the same shape.", "Now the change-set builder." and "Now the commit message and the dry run." before tool calls; found by english_lines.py before the next request. Remedy (D-383 C5): no text block before a tool call except a Vietnamese line checked before sending; the last two slipped after it was accepted.
 
+Five in session 2026-10-11-0013 (../History/2026-10/2026-10-11-0013-decision-files-d377-d387-recovery-and-the-pin.md), found by Claude with english_lines.py and disclosed in the next request:
+- **2026-10-11 (:432, :456).** Two short English lines before tool calls ("Now the writer …", "Now the gated command file, then the request.").
+- **2026-10-11 (:803, :818, :909).** Three more after the remedy stated at D-389 (check before each request and each reply); the remedy failed twice (D-391 C5). The rule since: check the steps listing before every tool-call batch that carries text, not only before requests.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 
