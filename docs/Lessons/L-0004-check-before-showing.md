@@ -125,6 +125,11 @@ Occurrences in session 2026-10-10-0735 (../History/2026-10/2026-10-10-0735-decis
 - **2026-10-10 (D-312).** The last session's turn-final replies never carried the decision agent's texts for the owner of D-305, D-306 and D-307: relays had been batched to the session end, and the session-end check compared only the last decision's text. Found by a script over every handback of that session while writing its decision files, and relayed late in this session (D-312). From now on the session-end check runs over every handback of the session, not only the last one.
 - **2026-10-10 (D-311).** The session-start request gave the start as about 07:25; the first record's timestamp gives 07:35.
 
+In session 2026-10-10-2044 (../History/2026-10/2026-10-10-2044-decision-files-d345-d355-task-008-landed.md):
+- **2026-10-10 (decision D-358).** The decision agent chose a contract revision of TASK-008 without checking that the CI's G0 reads a contract only at the commit that adds it (its own precedent, D-287); the worker brought the workflow's lines, and D-359 withdrew the choice.
+- **2026-10-10 (decision D-364).** The worker listed the tests that pin the present set file from a search, not from a run; a scratch run of the whole suite in the changed state found 73 failures in ten modules, not six tests in three (decision D-365).
+- **2026-10-10 (session 2c78123d, decision D-354).** A records file name holding "sk-" followed by more than 20 such characters stopped the push at its secret scan; neither the worker nor the decision agent had checked the name against the executor's pattern.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

@@ -21,3 +21,4 @@ TASK-011 accepted (done, D-351).
 
 ## Log
 - 2026-10-10: opened (decision files D-349, D-351 and D-352).
+- 2026-10-10: TASK-008's part done: TASK-008 accepted and on main with its AC9 assertion, decision D-352's and D-359's errata and the subject "TASK-0" stated by decision D-359 (decision D-363); F-a and F-d stay open.
