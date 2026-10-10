@@ -130,6 +130,10 @@ In session 2026-10-10-2044 (../History/2026-10/2026-10-10-2044-decision-files-d3
 - **2026-10-10 (decision D-364).** The worker listed the tests that pin the present set file from a search, not from a run; a scratch run of the whole suite in the changed state found 73 failures in ten modules, not six tests in three (decision D-365).
 - **2026-10-10 (session 2c78123d, decision D-354).** A records file name holding "sk-" followed by more than 20 such characters stopped the push at its secret scan; neither the worker nor the decision agent had checked the name against the executor's pattern.
 
+In session 2026-10-10-2141 (../History/2026-10/2026-10-10-2141-decision-files-d356-d366-task-013-landed.md):
+- **2026-10-10 (decision D-372).** The decision agent accepted a helper redirection as keeping an unnamed test's point without reading that test's digest line; all five first-round reviewers found the test vacuous in the present state (decision D-373).
+- **2026-10-10 (TASK-013).** The worker's line and loosening check compared text and counts only, so an unchanged line that received different inputs passed it; the first commit message said that only the named tests were redirected.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

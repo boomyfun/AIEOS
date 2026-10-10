@@ -22,6 +22,10 @@ One occurrence in session 2026-10-09-1918 (../History/2026-10/2026-10-09-1918-go
 One occurrence in session 2026-10-10-0235 (../History/2026-10/2026-10-10-0235-resume-check-fixtures-accepted.md):
 - **2026-10-10 (D-277).** With SP undefined in their prompts, the five reviewers of round 1 searched file names outside their copies (Glob only, and one failed Read); no content outside the copies was read and nothing was written. Their slips went to the decision agent first, and no reviewer was rerun before its ruling.
 
+In session 2026-10-10-2141 (../History/2026-10/2026-10-10-2141-decision-files-d356-d366-task-013-landed.md):
+- **2026-10-10 (decision D-373).** Each first-round prompt named its brief file instead of holding its text, and the brief files sat outside the tool rule's allowed paths, so each reviewer's first read was a path slip.
+- **2026-10-10 (decision D-374).** With the briefs given verbatim, one reviewer still searched the scratchpad itself once; its output was not used and the review was rerun alone with a sentence naming the allowed folders.
+
 ## Why it happens
 A brief's tool rule competes with the reviewer's habit of checking things by shell, and a path into the working tree makes a read-only command able to touch it.
 

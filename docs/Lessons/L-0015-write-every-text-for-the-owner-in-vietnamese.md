@@ -85,6 +85,10 @@ English text lines of mine, in sessions 2026-10-10-1946 and 2026-10-10-2044:
 - **2026-10-10 (2c78 :1561, :1692).** Two English lines of session 2c78123d found after its History was built (decisions D-353 C7 and D-357).
 - **2026-10-10 (:921).** "Now the five briefs." before a tool call; found by english_lines.py and reported in the next request.
 
+English text lines of mine, in session 2026-10-10-2141 (../History/2026-10/2026-10-10-2141-decision-files-d356-d366-task-013-landed.md):
+- **2026-10-10 (:907).** "Fix the insertion point to handle a module without top-level functions." before a tool call; found by english_lines.py and reported in the next request.
+- **2026-10-10 (:1502, :1687).** "Write the TASK-013 records builder, its basis file and the draft acceptance text." and "Now the change-set builder for the session-end records." before tool calls; found by english_lines.py before the session-end request.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

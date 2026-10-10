@@ -106,6 +106,11 @@ Commands of mine of the kinds this lesson lists, in session 2026-10-10-2044 (../
 - **2026-10-10 (:607).** Four Python runs with fixed arguments in one free-typed compound command, against the remedy of decision D-357 (such a set is first written as a script in the scratchpad, read once, then run).
 - **2026-10-10 (later).** A probe run with `timeout 60`, refused by the guard (the rule is `timeout 110`); rerun in the rule's form.
 
+Commands of mine of the kinds this lesson lists, in session 2026-10-10-2141 (../History/2026-10/2026-10-10-2141-decision-files-d356-d366-task-013-landed.md):
+- **2026-10-10 (:~150).** A free-typed compound command with an unset variable, so a grep read standard input and hung until it was stopped.
+- **2026-10-10 (:971).** A needless line holding Python's name followed by a dash inside a compound command; refused by the guard; the rest ran without that line.
+- **2026-10-10 (later).** The mutation probe's copy, edit and two Python runs as one free-typed command, against the remedy of decision D-357.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
