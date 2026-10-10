@@ -1,5 +1,5 @@
 DATA = r'''{
-  "fixture_set_version": 1,
+  "fixture_set_version": 2,
   "scenario_set_file_hash": "6b5c0666a1f364f5ecec9ad516c9a749969a1963f4e5dbef566adcbc8c80e24d",
   "scenario_set_version": 2,
   "scenarios": [
@@ -164,67 +164,100 @@ DATA = r'''{
     },
     {
       "capability": "Resume Check",
-      "fixture": null,
+      "fixture": {
+        "path": "tests/conformance/fixtures_rc/rc_01.py",
+        "sha256": "4788288ddb76e3e4712768c08dc2dc99e26dff0ea6cb7412883ecbcb5735042f"
+      },
       "id": "RC-01",
       "row_hash": "9e9a059a1c965aa238c7ca84970956088445d5d908b632621324f63eb248a2cb"
     },
     {
       "capability": "Resume Check",
-      "fixture": null,
+      "fixture": {
+        "path": "tests/conformance/fixtures_rc/rc_02.py",
+        "sha256": "69a6c106a05979425a8e217023a03746327893b1804fb8fbb404cab65b2ce7a8"
+      },
       "id": "RC-02",
       "row_hash": "c4b4e0157262949fb6df4b209befe61a5c4fe8bd7c4c4da7a4ba995d22981519"
     },
     {
       "capability": "Resume Check",
-      "fixture": null,
+      "fixture": {
+        "path": "tests/conformance/fixtures_rc/rc_03.py",
+        "sha256": "89de4595cb5c544c91cf938ccec3895915957020d87d993bbe40fda6a44cd5bb"
+      },
       "id": "RC-03",
       "row_hash": "be8acbb5a0c71e8f329c4de519938a724153c5a364244220634f89a6a38d9325"
     },
     {
       "capability": "Resume Check",
-      "fixture": null,
+      "fixture": {
+        "path": "tests/conformance/fixtures_rc/rc_04.py",
+        "sha256": "e073c5e035ec88ce8ea8dafbee1b64ca0bf9e704c5f11b96cbeea2cc3929a9b4"
+      },
       "id": "RC-04",
       "row_hash": "f1bb3392d501b6979010b4acbb021ae4f90c1c436bed5717810ae5b8c6998a4c"
     },
     {
       "capability": "Resume Check",
-      "fixture": null,
+      "fixture": {
+        "path": "tests/conformance/fixtures_rc/rc_05.py",
+        "sha256": "b8157f537623a93fcb17e937375cd9d4aeec1a6f82ca58d23ae4d8fce9c25ce5"
+      },
       "id": "RC-05",
       "row_hash": "e9f386b406635813a709c451b8e728690f943b47856ca61ff0ca2122a986365c"
     },
     {
       "capability": "Resume Check",
-      "fixture": null,
+      "fixture": {
+        "path": "tests/conformance/fixtures_rc/rc_06.py",
+        "sha256": "1af89ad530617b138b9895c7deab5fb1f41f30a304f4010536e4a049e4431ac6"
+      },
       "id": "RC-06",
       "row_hash": "210b7e3eedf5937528c770933ad8c7b16d3d3704ba6f4b25baad78af481ffe67"
     },
     {
       "capability": "Resume Check",
-      "fixture": null,
+      "fixture": {
+        "path": "tests/conformance/fixtures_rc/rc_07.py",
+        "sha256": "beb0f921b4b6646a4b6d27d5996f0478759e174783126bc98bcf9f22dde67763"
+      },
       "id": "RC-07",
       "row_hash": "fefafdb1fb979a5aa9049d2813f6ea06e4bfdbcaae3d8cbf55b108f22cec1870"
     },
     {
       "capability": "Resume Check",
-      "fixture": null,
+      "fixture": {
+        "path": "tests/conformance/fixtures_rc/rc_08.py",
+        "sha256": "a287c1d4529b1879fefdad80716fd6e27298575b69f9774d8bc87b049b47c6f8"
+      },
       "id": "RC-08",
       "row_hash": "4025f7ed95bd2f27243df91ccad198eba8dd08a5fcf13fd3f04b1cbd8ba08ade"
     },
     {
       "capability": "Resume Check",
-      "fixture": null,
+      "fixture": {
+        "path": "tests/conformance/fixtures_rc/rc_09.py",
+        "sha256": "0926b69ae605bccf4c00d1d157dff1e9b9ed44f6700ea53b6faa329714e4a8b0"
+      },
       "id": "RC-09",
       "row_hash": "18e36fc54d02478676485f8e264f4d0a29ae2ee94310c0bf031243960fc47e8c"
     },
     {
       "capability": "Resume Check",
-      "fixture": null,
+      "fixture": {
+        "path": "tests/conformance/fixtures_rc/rc_10.py",
+        "sha256": "f34ddb3e76f99371b542feb29823991ca5946e66c0d2472d815dff4302cd9b69"
+      },
       "id": "RC-10",
       "row_hash": "9352557108a1fe2fe3ab25d33a90928c528a3ed29513a697ab0911b8c024c424"
     },
     {
       "capability": "Resume Check",
-      "fixture": null,
+      "fixture": {
+        "path": "tests/conformance/fixtures_rc/rc_11.py",
+        "sha256": "cb1e38b17e073e0b1c088f57dccd967b3a54fbcb792881e74d426a5d2c998fc7"
+      },
       "id": "RC-11",
       "row_hash": "d2238379b8b5aebb96596e9478e85d01635d92151713d60c3f6b76f30192e3e7"
     },

@@ -19,6 +19,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCENARIO_FILE = 'docs/pre-genesis/conformance-scenarios-initial.md'
 SET_FILE = 'tests/conformance/set.py'
 FIXTURE_DIR = 'tests/conformance/fixtures'
+# TASK-014: the Resume Check fixture folder (sections 2 and 9), whose files the set file names from TASK-014 on.
+RC_FIXTURE_DIR = 'tests/conformance/fixtures_rc'
 FIRST, LAST = b"DATA = r'''", b"'''\n"
 ACCEPTANCE = ('ACCEPT', 'NEEDS_REVIEW', 'INSUFFICIENT_EVIDENCE', 'NEEDS_REWORK', 'REJECT')
 EXECUTION = ('CONTINUE', 'CONTINUE_WITH', 'REPLAN', 'STOP: scope invalid', 'STOP: runtime insufficient',
@@ -151,8 +153,11 @@ def scenario_rows(data=None):
     return rows
 
 
-def module_path(scenario_id):
-    return FIXTURE_DIR + '/' + scenario_id.lower().replace('-', '_') + '.py'
+def module_path(scenario_id, capability='Verification'):
+    """The fixture path of a scenario: the Resume Check folder for a Resume Check scenario (TASK-014), else the
+    Verification folder."""
+    folder = RC_FIXTURE_DIR if capability == 'Resume Check' else FIXTURE_DIR
+    return folder + '/' + scenario_id.lower().replace('-', '_') + '.py'
 
 
 def _is_str(v):
@@ -178,8 +183,8 @@ def check_set(value, rows=None, files=None):
         errors.append('set: scenario_set_version is not 2')
     if value['scenario_set_file_hash'] != sha256(read(SCENARIO_FILE)):
         errors.append('set: scenario_set_file_hash is not the bound file\'s SHA-256')
-    if value['fixture_set_version'] != 1 or isinstance(value['fixture_set_version'], bool):
-        errors.append('set: fixture_set_version is not 1')
+    if value['fixture_set_version'] != 2 or isinstance(value['fixture_set_version'], bool):
+        errors.append('set: fixture_set_version is not 2')
     entries = value['scenarios']
     if not isinstance(entries, list) or len(entries) != len(rows):
         return errors + ['set: not one entry per scenario row']
@@ -192,13 +197,13 @@ def check_set(value, rows=None, files=None):
         fixture = entry['fixture']
         if fixture is None:
             continue
-        if capability != 'Verification':
-            errors.append('set: %s is outside the Verification capability and has a fixture' % sid)
+        if capability not in ('Verification', 'Resume Check'):
+            errors.append('set: %s is outside the Verification and Resume Check capabilities and has a fixture' % sid)
         if not isinstance(fixture, dict) or set(fixture) != {'path', 'sha256'}:
             errors.append('set: the fixture of %s is not {path, sha256}' % sid)
             continue
-        if fixture['path'] != module_path(sid):
-            errors.append('set: the fixture path of %s is not %s' % (sid, module_path(sid)))
+        if fixture['path'] != module_path(sid, capability):
+            errors.append('set: the fixture path of %s is not %s' % (sid, module_path(sid, capability)))
         data = (files or {}).get(fixture['path'])
         if data is None or sha256(data) != fixture['sha256']:
             errors.append('set: the fixture of %s is missing or its SHA-256 differs' % sid)
@@ -333,7 +338,8 @@ def check_fixture(value, entry):
 def load_tree():
     """The set value, the fixture files' bytes by path, and the bound file's rows, as the repository holds them."""
     value = unwrap(read(SET_FILE))
-    files = {FIXTURE_DIR + '/' + p.name: p.read_bytes() for p in sorted((ROOT / FIXTURE_DIR).iterdir()) if p.is_file()}
+    files = {d + '/' + p.name: p.read_bytes() for d in (FIXTURE_DIR, RC_FIXTURE_DIR)
+             for p in sorted((ROOT / d).iterdir()) if p.is_file()}
     return value, files, scenario_rows()
 
 
@@ -351,7 +357,8 @@ class ConformanceSetEndToEndTest(unittest.TestCase):
     def test_the_whole_set(self):
         set_bytes = read(SET_FILE)
         value = unwrap(set_bytes)
-        files = {FIXTURE_DIR + '/' + p.name: p.read_bytes() for p in sorted((ROOT / FIXTURE_DIR).iterdir()) if p.is_file()}
+        files = {d + '/' + p.name: p.read_bytes() for d in (FIXTURE_DIR, RC_FIXTURE_DIR)
+                 for p in sorted((ROOT / d).iterdir()) if p.is_file()}
         rows = scenario_rows()
         self.assertEqual(check_set(value, rows, files), [])
         results = {}
@@ -361,15 +368,20 @@ class ConformanceSetEndToEndTest(unittest.TestCase):
                 continue
             data = files[entry['fixture']['path']]
             self.assertEqual(sha256(data), entry['fixture']['sha256'])
+            if capability == 'Resume Check':
+                # TASK-014: a Resume Check fixture is checked in its own form by test_conformance_rc_set.py
+                self.assertEqual(entry['fixture']['path'], module_path(sid, capability))
+                results[sid] = 'fixture'
+                continue
             self.assertEqual(check_fixture(unwrap(data), entry), [])
             self.assertEqual(capability, 'Verification')
             results[sid] = 'fixture'
-        self.assertEqual(sum(1 for r in results.values() if r == 'fixture'), 19)
+        self.assertEqual(sum(1 for r in results.values() if r == 'fixture'), 30)
         self.assertEqual(sorted(s for s, r in results.items() if r == 'no fixture'),
-                         sorted(['RISK-01', 'ADV-02'] + ['RC-%02d' % n for n in range(1, 12)]))
+                         sorted(['RISK-01', 'ADV-02']))
         # every case's records name its own task or, for ACC-13's batch, one of the batch's tasks
         for entry in value['scenarios']:
-            if entry['fixture'] is None:
+            if entry['fixture'] is None or entry['capability'] != 'Verification':
                 continue
             fx = unwrap(files[entry['fixture']['path']])
             tasks = {c['request']['task_id'] for c in fx['cases']}
@@ -380,7 +392,7 @@ class ConformanceSetEndToEndTest(unittest.TestCase):
         value = unwrap(read(SET_FILE))
         self.assertEqual(value['scenario_set_file_hash'], sha256(read(SCENARIO_FILE)))
         self.assertEqual(value['scenario_set_version'], 2)
-        self.assertEqual(value['fixture_set_version'], 1)
+        self.assertEqual(value['fixture_set_version'], 2)
 
 
 if __name__ == '__main__':

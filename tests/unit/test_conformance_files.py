@@ -19,6 +19,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCENARIO_FILE = 'docs/pre-genesis/conformance-scenarios-initial.md'
 SET_FILE = 'tests/conformance/set.py'
 FIXTURE_DIR = 'tests/conformance/fixtures'
+# TASK-014: the Resume Check fixture folder (sections 2 and 9), whose files the set file names from TASK-014 on.
+RC_FIXTURE_DIR = 'tests/conformance/fixtures_rc'
 FIRST, LAST = b"DATA = r'''", b"'''\n"
 ACCEPTANCE = ('ACCEPT', 'NEEDS_REVIEW', 'INSUFFICIENT_EVIDENCE', 'NEEDS_REWORK', 'REJECT')
 EXECUTION = ('CONTINUE', 'CONTINUE_WITH', 'REPLAN', 'STOP: scope invalid', 'STOP: runtime insufficient',
@@ -151,8 +153,11 @@ def scenario_rows(data=None):
     return rows
 
 
-def module_path(scenario_id):
-    return FIXTURE_DIR + '/' + scenario_id.lower().replace('-', '_') + '.py'
+def module_path(scenario_id, capability='Verification'):
+    """The fixture path of a scenario: the Resume Check folder for a Resume Check scenario (TASK-014), else the
+    Verification folder."""
+    folder = RC_FIXTURE_DIR if capability == 'Resume Check' else FIXTURE_DIR
+    return folder + '/' + scenario_id.lower().replace('-', '_') + '.py'
 
 
 def _is_str(v):
@@ -178,8 +183,8 @@ def check_set(value, rows=None, files=None):
         errors.append('set: scenario_set_version is not 2')
     if value['scenario_set_file_hash'] != sha256(read(SCENARIO_FILE)):
         errors.append('set: scenario_set_file_hash is not the bound file\'s SHA-256')
-    if value['fixture_set_version'] != 1 or isinstance(value['fixture_set_version'], bool):
-        errors.append('set: fixture_set_version is not 1')
+    if value['fixture_set_version'] != 2 or isinstance(value['fixture_set_version'], bool):
+        errors.append('set: fixture_set_version is not 2')
     entries = value['scenarios']
     if not isinstance(entries, list) or len(entries) != len(rows):
         return errors + ['set: not one entry per scenario row']
@@ -192,13 +197,13 @@ def check_set(value, rows=None, files=None):
         fixture = entry['fixture']
         if fixture is None:
             continue
-        if capability != 'Verification':
-            errors.append('set: %s is outside the Verification capability and has a fixture' % sid)
+        if capability not in ('Verification', 'Resume Check'):
+            errors.append('set: %s is outside the Verification and Resume Check capabilities and has a fixture' % sid)
         if not isinstance(fixture, dict) or set(fixture) != {'path', 'sha256'}:
             errors.append('set: the fixture of %s is not {path, sha256}' % sid)
             continue
-        if fixture['path'] != module_path(sid):
-            errors.append('set: the fixture path of %s is not %s' % (sid, module_path(sid)))
+        if fixture['path'] != module_path(sid, capability):
+            errors.append('set: the fixture path of %s is not %s' % (sid, module_path(sid, capability)))
         data = (files or {}).get(fixture['path'])
         if data is None or sha256(data) != fixture['sha256']:
             errors.append('set: the fixture of %s is missing or its SHA-256 differs' % sid)
@@ -333,7 +338,8 @@ def check_fixture(value, entry):
 def load_tree():
     """The set value, the fixture files' bytes by path, and the bound file's rows, as the repository holds them."""
     value = unwrap(read(SET_FILE))
-    files = {FIXTURE_DIR + '/' + p.name: p.read_bytes() for p in sorted((ROOT / FIXTURE_DIR).iterdir()) if p.is_file()}
+    files = {d + '/' + p.name: p.read_bytes() for d in (FIXTURE_DIR, RC_FIXTURE_DIR)
+             for p in sorted((ROOT / d).iterdir()) if p.is_file()}
     return value, files, scenario_rows()
 
 
@@ -543,9 +549,12 @@ class SetFileTest(unittest.TestCase):
         self.assertEqual(len(rows), 32)
         self.assertEqual([e['id'] for e in value['scenarios']], [r[0] for r in rows])
         with_fixture = [e['id'] for e in value['scenarios'] if e['fixture']]
-        self.assertEqual(with_fixture, [r[0] for r in rows if r[2] == 'Verification'])
-        self.assertEqual(len(with_fixture), 19)
-        self.assertEqual(sum(1 for e in value['scenarios'] if e['fixture'] is None), 13)
+        self.assertEqual(with_fixture, [r[0] for r in rows if r[2] in ('Verification', 'Resume Check')])
+        self.assertEqual(len(with_fixture), 30)
+        self.assertEqual(sum(1 for e in value['scenarios'] if e['fixture'] is None), 2)
+        self.assertEqual([e['id'] for e in value['scenarios'] if e['fixture'] is None], ['RISK-01', 'ADV-02'])
+        self.assertEqual([e['id'] for e in value['scenarios'] if e['fixture'] and e['capability'] == 'Resume Check'],
+                         ['RC-%02d' % n for n in range(1, 12)])
 
     def test_rows_are_read_from_the_bound_file(self):
         rows = scenario_rows()
@@ -569,11 +578,12 @@ class SetFileTest(unittest.TestCase):
             return check_set(v, rows, files)
 
         first = next(i for i, e in enumerate(value['scenarios']) if e['fixture'])
+        rc = next(i for i, e in enumerate(value['scenarios']) if e['capability'] == 'Resume Check')
         cases = {
             'a fifth key': lambda v: v.update(extra=1),
             'set version': lambda v: v.update(scenario_set_version=3),
             'set file hash': lambda v: v.update(scenario_set_file_hash='0' * 64),
-            'fixture set version': lambda v: v.update(fixture_set_version=2),
+            'fixture set version': lambda v: v.update(fixture_set_version=1),
             'an entry removed': lambda v: v['scenarios'].pop(),
             'two entries swapped': lambda v: v['scenarios'].insert(0, v['scenarios'].pop(1)),
             'a row hash': lambda v: v['scenarios'][0].update(row_hash='0' * 64),
@@ -585,6 +595,10 @@ class SetFileTest(unittest.TestCase):
                 fixture=dict(v['scenarios'][first]['fixture'])),
             'an entry with an extra key': lambda v: v['scenarios'][0].update(note='x'),
             'a fixture that is not {path, sha256}': lambda v: v['scenarios'][first]['fixture'].pop('sha256'),
+            'a Resume Check fixture at the Verification folder': lambda v: v['scenarios'][rc]['fixture'].update(
+                path=FIXTURE_DIR + '/rc_01.py'),
+            'a Verification fixture at the Resume Check folder': lambda v: v['scenarios'][first]['fixture'].update(
+                path=RC_FIXTURE_DIR + '/acc_01.py'),
         }
         for name, edit in cases.items():
             with self.subTest(case=name):
@@ -602,10 +616,15 @@ class FixtureTest(unittest.TestCase):
 
     def setUp(self):
         self.value, self.files, self.rows = load_tree()
-        self.entries = {e['id']: e for e in self.value['scenarios'] if e['fixture']}
+        self.entries = {e['id']: e for e in self.value['scenarios'] if e['fixture'] and e['capability'] == 'Verification'}
 
     def fixture(self, sid):
         return unwrap(self.files[self.entries[sid]['fixture']['path']])
+
+    def test_the_verification_fixtures_are_exactly_the_nineteen(self):
+        """TASK-014 AC3: the Verification form runs over every Verification entry and no other."""
+        self.assertEqual(sorted(self.entries), sorted(r[0] for r in self.rows if r[2] == 'Verification'))
+        self.assertEqual(len(self.entries), 19)
 
     def test_every_fixture(self):
         for sid, entry in self.entries.items():
@@ -687,7 +706,8 @@ def expected_mismatches(realised):
 def realised_fixtures():
     """The parsed fixture of every realised scenario, by id, as the set file names them."""
     value, files, _rows = load_tree()
-    return {e['id']: unwrap(files[e['fixture']['path']]) for e in value['scenarios'] if e['fixture']}
+    return {e['id']: unwrap(files[e['fixture']['path']]) for e in value['scenarios']
+            if e['fixture'] and e['capability'] == 'Verification'}
 
 
 class FaithfulnessTest(unittest.TestCase):
@@ -706,6 +726,7 @@ class FaithfulnessTest(unittest.TestCase):
 
     def test_fixtures_hold_the_table_values(self):
         self.assertEqual(expected_mismatches(realised_fixtures()), [])
+        self.assertEqual(len(realised_fixtures()), 19)
 
     def test_a_changed_expected_value_is_caught(self):
         realised = realised_fixtures()
