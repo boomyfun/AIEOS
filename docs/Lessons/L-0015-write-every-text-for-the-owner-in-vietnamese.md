@@ -103,6 +103,13 @@ Four in session 2026-10-11-0333 (../History/2026-10/2026-10-11-0333-decision-fil
 - **2026-10-11 (:607, :833).** Two one-line English text blocks before tool calls, the second after the remedy stated in D-423. The rule since (D-424 C4): no text block before a tool call except a planned progress line, and the steps listing checked for text lines after each turn.
 - **2026-10-11 (:1438, :1479).** Two more one-line English text blocks before tool calls, after D-424 C4's rule, while the session-end files were built; found by the check before the session-end request.
 
+Occurrences in session 2026-10-11-0333, recorded in the next session (decision D-435 C3):
+- **2026-10-11 (:1795, :1812).** Two more one-line English text blocks before tool calls while files were being built, after D-431 C5.
+
+Occurrences in session 2026-10-11-0538 (../History/2026-10/2026-10-11-0538-conformance-files-revision-7-and-task-017-contract.md):
+- **2026-10-11 (:1059, :1202, :1258).** Three one-line English text blocks before tool calls while files were being built, each right after the harness asked for a word on what Claude was doing; the last two after the remedy stated for the first. Remedy accepted in decision D-445: a harness prompt is answered only by a Vietnamese line checked by english_lines.py, or not at all while files are being built.
+- **2026-10-11 (the session's start).** Three Vietnamese text blocks written before tool calls, the start report among them, have no record in the transcript; the start report went into a turn-final reply instead (decision D-437).
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

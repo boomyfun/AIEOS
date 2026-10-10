@@ -130,6 +130,14 @@ Occurrences in session 2026-10-11-0220 (../History/2026-10/2026-10-11-0220-decis
 - **2026-10-11 (:365).** The same form, to test whether a YAML loader is installed; rewritten as a script file.
 - **2026-10-11 (:1305).** The same form inside a search pattern; rewritten without it.
 
+Occurrences in session 2026-10-11-0333 (../History/2026-10/2026-10-11-0333-decision-files-d409-d420-and-specification-4.md), recorded in the next session (decision D-435 C3), each my incorrect command, refused before it ran:
+- **2026-10-11 (:319).** A leftover filler at the start of a command, Python's name followed by a dash; the edit was made with the edit tool.
+- **2026-10-11 (:1747).** A no-op command of the same form; nothing ran. Remedy: no command that the step does not need.
+
+Occurrences in session 2026-10-11-0538 (../History/2026-10/2026-10-11-0538-conformance-files-revision-7-and-task-017-contract.md), each my incorrect command, refused before it ran (decisions D-437 Q3 and D-448 Q4):
+- **2026-10-11 (:359).** A check I added at the end of a command named the forbidden form in its own search pattern; dropped, the rest re-run unchanged. Remedy: no check whose pattern names that form; the guard itself is the check.
+- **2026-10-11 (:1545).** A run of one test module in the module-run form; the whole suite was run through tests/run_tests.py instead. Remedy: tests only through tests/run_tests.py.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
