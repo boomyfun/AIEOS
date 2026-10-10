@@ -1,9 +1,23 @@
-"""The conformance runner of gov-AIEOS (task TASK-003; docs/specs/conformance-files.md revision 2, section 6).
+"""The conformance runner of gov-AIEOS (task TASK-003; docs/specs/conformance-files.md revision 2, section 6), with
+the Resume Check entry of task TASK-006 (conformance-files.md revision 4, section 9).
 
 ``run`` reads the frozen set file, its freeze approval, the fixtures and the bound scenario file from the tree it is
-given, which is the base (governor-spec.md section 4 rule 1); calls the governor's entry point for each case when one
-exists; compares the observed decision records with the expected values; and returns the run record and its record of
-specification 2 section 6.2. ``main`` is the command-line entry.
+given, which is the base (governor-spec.md section 4 rule 1); chooses each scenario's entry by the capability of its
+set entry, which must equal the capability the bound scenario file gives its id; calls the governor's entry point for
+a Verification case, or the Resume Check entry point for a Resume Check case, when one exists; compares the observed
+decision records with the expected values; and returns the run record and its record of specification 2 section 6.2.
+``main`` is the command-line entry.
+
+Limits of TASK-006 (its AC12):
+- No Resume Check exists and the set file names no Resume Check fixture, so a run over the repository's tree gives
+  every Resume Check scenario NOT_RUN and its run record has exactly TASK-003's keys.
+- It checks a Resume Check fixture's form only as far as TASK-006 AC5 says, and compares the observed execution
+  decision with the expected one; it never decides an execution or an acceptance, and it does not check how a Resume
+  Check derives the inputs of specification 3 section 1, which the fixtures give as values.
+- The capability of an id is read from the bound scenario file's table and heading layout; a later revision of that
+  file that changes the layout makes its scenarios NOT_RUN, never PASS.
+- Running the Resume Check scenarios in the CI channel needs the set file's Resume Check entries and a later revision
+  of the CI workflow, which are not part of this module.
 
 Limits (TASK-003 AC11):
 - It checks its inputs and compares values; it never decides an acceptance. With no governor every scenario is
@@ -33,8 +47,11 @@ from aieos_bootstrap import records
 RUNNER_PATH = 'src/aieos_bootstrap/conformance.py'
 GOVERNOR_PATH = 'src/aieos_bootstrap/governor.py'
 GOVERNOR_MODULE = 'aieos_bootstrap.governor'
+RESUME_CHECK_PATH = 'src/aieos_bootstrap/resume_check.py'
+RESUME_CHECK_MODULE = 'aieos_bootstrap.resume_check'
 SET_FILE = 'tests/conformance/set.py'
 FIXTURE_DIR = 'tests/conformance/fixtures'
+RC_FIXTURE_DIR = 'tests/conformance/fixtures_rc'
 SCENARIO_FILE = 'docs/pre-genesis/conformance-scenarios-initial.md'
 RECORDS_DIR = 'docs/records'
 RECORD_PREFIX = 'conformance-run-'
@@ -58,6 +75,14 @@ INPUT_KEYS = frozenset({'traces_to', 'risk', 'owner_kept_act', 'weakens_evidence
                         'auto_accept', 'verification_plan', 'evidence_profile', 'applicable_articles',
                         'policy_version', 'level_version', 'ruleset_version'})
 APPROVERS = frozenset({'decision_agent', 'human_authority'})
+VERIFICATION, RESUME_CHECK = 'Verification', 'Resume Check'
+RC_CASE_KEYS = frozenset({'inputs', 'when', 'expected'})
+RC_INPUT_KEYS = frozenset({'task_id', 'log_seq', 'task_state', 'contract', 'contract_hash', 'approved_contract_hash',
+                           'head_commit', 'base_is_ancestor', 'commits', 'components', 'interfaces', 'symbols',
+                           'schemas', 'derived_read_set', 'observed_read_set', 'intent_current', 'dependencies',
+                           'articles', 'runtime', 'risk_rules', 'policy_version', 'budget_use'})
+RC_STATES = ('READY', 'REWORK', 'IN_PROGRESS')
+EXECUTION = records.EXECUTION_DECISIONS
 
 _HEX64 = re.compile(r'[0-9a-f]{64}')
 _COMMIT = re.compile(r'[0-9a-f]{40}|[0-9a-f]{64}')
@@ -65,6 +90,7 @@ _TASK = re.compile(r'TASK-[0-9]+')
 _VERSION = re.compile(r'v[0-9]+')
 _GATE = re.compile(r'G[0-9]+')
 _ROW = re.compile(r'^\| ((?:ACC|RISK|RC|ADV)-[0-9]+) \| ')
+_SECTION = re.compile(r'^## [0-9]+\.? (.*)$')
 
 
 class Malformed(ValueError):
@@ -174,6 +200,18 @@ def module_path(scenario_id):
     return FIXTURE_DIR + '/' + scenario_id.lower().replace('-', '_') + '.py'
 
 
+def expected_path(scenario_id, capability):
+    """The fixture path the runner expects for a set entry's capability (TASK-006 AC3; conformance-files.md section 9):
+    the Verification folder for Verification, the Resume Check folder for Resume Check, None for any other capability
+    (its entry point is absent until its milestone). The module name is formed as section 2 says."""
+    name = scenario_id.lower().replace('-', '_') + '.py'
+    if capability == VERIFICATION:
+        return FIXTURE_DIR + '/' + name
+    if capability == RESUME_CHECK:
+        return RC_FIXTURE_DIR + '/' + name
+    return None
+
+
 def _is_str(v):
     return isinstance(v, str) and v != ''
 
@@ -237,6 +275,56 @@ def scenario_rows(data):
             order.append(sid)
             hashes[sid] = sha256(line.encode('utf-8'))
     return order, hashes
+
+
+def _cells(line):
+    """The cells of a Markdown table line, stripped, without the empty parts outside its first and last bar."""
+    parts = line.split('|')
+    return [c.strip() for c in parts[1:-1]] if line.rstrip().endswith('|') else [c.strip() for c in parts[1:]]
+
+
+def scenario_capabilities(data):
+    """The capability the bound scenario file gives each id (TASK-006 AC2, a reading of conformance-files.md section
+    9), read from the same row lines whose hashes the run takes: for a row of a table whose header line names a column
+    Capability, the row's cell in that column; for any other row, the heading of the numbered section that holds it
+    (a line beginning "## " and a number), its text after the number up to the first colon or the line end. A value
+    that is not one of section 3's four capabilities, or an id on two rows, gives None."""
+    if data is None:
+        return {}
+    try:
+        text = data.decode('utf-8')
+    except UnicodeDecodeError:
+        return {}
+    caps, seen = {}, set()
+    section, header, previous_is_table = None, None, False
+    for line in text.split('\n'):
+        m = _SECTION.match(line)
+        if m:
+            section = m.group(1).split(':', 1)[0].strip()
+            header, previous_is_table = None, False
+            continue
+        is_table = line.startswith('|')
+        if is_table and not previous_is_table:
+            header = _cells(line)
+        if not is_table:
+            header = None
+        previous_is_table = is_table
+        row = _ROW.match(line)
+        if not row:
+            continue
+        sid = row.group(1)
+        if sid in seen:
+            caps[sid] = None
+            continue
+        seen.add(sid)
+        if header is not None and 'Capability' in header:
+            cells = _cells(line)
+            k = header.index('Capability')
+            value = cells[k] if k < len(cells) else None
+        else:
+            value = section
+        caps[sid] = value if value in CAPABILITIES else None
+    return caps
 
 
 def check_set(value):
@@ -437,6 +525,58 @@ def check_fixture(value, entry):
     return errors
 
 
+def _check_rc_inputs(inp):
+    if not isinstance(inp, dict) or set(inp) != RC_INPUT_KEYS:
+        return ['inputs is not exactly the keys of section 9']
+    errors = []
+    if not (isinstance(inp['task_id'], str) and _TASK.fullmatch(inp['task_id'])):
+        errors.append('task_id')
+    if inp['task_state'] not in RC_STATES:
+        errors.append('task_state')
+    if not isinstance(inp['contract'], dict):
+        errors.append('contract')
+    for key in ('contract_hash', 'approved_contract_hash'):
+        if not _is_hex64(inp[key]):
+            errors.append(key)
+    if not (isinstance(inp['head_commit'], str) and _COMMIT.fullmatch(inp['head_commit'])):
+        errors.append('head_commit')
+    if not isinstance(inp['base_is_ancestor'], bool):
+        errors.append('base_is_ancestor')
+    return ['inputs ' + e for e in errors]
+
+
+def check_rc_fixture(value, entry):
+    """The form of one Resume Check fixture's JSON object against its set entry (TASK-006 AC5; conformance-files.md
+    section 9). The runner checks the forms named here only; the other inputs are the Resume Check's to read (reading).
+    Returns a list of errors."""
+    if not isinstance(value, dict) or set(value) != {'scenario', 'row_hash', 'cases'}:
+        return ['the fixture is not exactly scenario, row_hash and cases']
+    errors = []
+    if value['scenario'] != entry['id'] or value['row_hash'] != entry['row_hash']:
+        errors.append('scenario or row_hash differs from the set entry')
+    cases = value['cases']
+    if not isinstance(cases, list) or not cases:
+        return errors + ['cases is not a non-empty list']
+    for n, case in enumerate(cases, 1):
+        where = 'case %d: ' % n
+        if not isinstance(case, dict) or set(case) != RC_CASE_KEYS:
+            errors.append(where + 'not exactly inputs, when and expected')
+            continue
+        if case['when'] != 'resume':
+            errors.append(where + 'when is not resume')
+        errors.extend(where + e for e in _check_rc_inputs(case['inputs']))
+        exp = case['expected']
+        if not (isinstance(exp, dict) and set(exp) == {'decision', 'not_fixed'}):
+            errors.append(where + 'expected is not exactly decision and not_fixed')
+            continue
+        if not (isinstance(exp['decision'], list) and len(exp['decision']) == 1 and isinstance(exp['decision'][0], str)
+                and exp['decision'][0] in EXECUTION):
+            errors.append(where + 'expected decision is not a list of exactly one execution decision value')
+        if exp['not_fixed'] != []:
+            errors.append(where + 'expected not_fixed is not the empty list')
+    return errors
+
+
 def load_governor(root):
     """The governor's entry point (AC6): (evaluate, status). The module is loaded by a plain import statement. It is
     absent when the import raises ModuleNotFoundError naming it; it is the base's only when the loaded module's file
@@ -454,6 +594,39 @@ def load_governor(root):
     if not callable(evaluate):
         return None, FAILED
     return evaluate, LOADED
+
+
+def load_resume_check(root):
+    """The Resume Check entry point (TASK-006 AC4): (check, status), with the rules of load_governor. The module is
+    loaded by a plain import statement. It is absent when the import raises ModuleNotFoundError naming it; it is the
+    base's only when the loaded module's file is the root's src/aieos_bootstrap/resume_check.py (reading); any other
+    failure, or no callable check, is FAILED."""
+    try:
+        import aieos_bootstrap.resume_check as resume_check
+    except ModuleNotFoundError as exc:
+        return None, (ABSENT if exc.name == RESUME_CHECK_MODULE else FAILED)
+    except Exception:
+        return None, FAILED
+    path = getattr(resume_check, '__file__', None)
+    if not isinstance(path, str) or pathlib.Path(path).resolve() != (root / RESUME_CHECK_PATH).resolve():
+        return None, FAILED
+    check = getattr(resume_check, 'check', None)
+    if not callable(check):
+        return None, FAILED
+    return check, LOADED
+
+
+def execution_problem(value):
+    """Why a value returned by the Resume Check is not a usable execution decision record (TASK-006 AC6), or '' when
+    it is one: not a JSON object, a finding under check_decision for decision.execution, or an error record (its
+    decision then null)."""
+    if not isinstance(value, dict):
+        return 'the call returned no JSON object'
+    if records.check_decision('decision.execution', value):
+        return 'the call returned a value with a check_decision finding'
+    if 'error' in value:
+        return 'the call returned an error record'
+    return ''
 
 
 def decision_problem(value):
@@ -522,18 +695,27 @@ def compare(expected, observed, case_records):
     return out
 
 
-def run_scenario(tree, entry, rows, evaluate):
-    """One scenario's result and its reason (AC5, AC7): NOT_RUN, with none of its cases run, for a fixture condition;
-    NOT_RUN for no entry point; otherwise each case is called and compared, and a failed case makes it FAIL before any
-    NOT_RUN of a call."""
+def run_scenario(tree, entry, rows, evaluate, caps=None, check=None):
+    """One scenario's result and its reason (AC5, AC7; TASK-006 AC3 to AC6): NOT_RUN, with none of its cases run, for
+    a fixture condition; NOT_RUN for no entry point; otherwise each case is called and compared, and a failed case
+    makes it FAIL before any NOT_RUN of a call. ``caps`` is the capability the bound scenario file gives each id
+    (scenario_capabilities); ``evaluate`` is the Verification entry and ``check`` the Resume Check entry."""
     sid, fixture = entry['id'], entry['fixture']
     if fixture is None:
         return NOT_RUN, 'no fixture'
-    if fixture['path'] != module_path(sid):
-        return NOT_RUN, 'the fixture path is not %s' % module_path(sid)
+    capability = entry['capability']
+    want = expected_path(sid, capability)
+    if want is None:
+        return NOT_RUN, 'the entry point of %s is absent until its milestone' % capability
+    if fixture['path'] != want:
+        return NOT_RUN, 'the fixture path is not %s' % want
     # The row is checked before the file is read, so that only a path built from an id of the bound file is read.
     if rows.get(sid) is None or rows[sid] != entry['row_hash']:
         return NOT_RUN, 'the row hash differs from the bound scenario file'
+    # TASK-006 AC3 (as read in decision D-287): the entry's capability against the bound file's, after the row hash
+    # and before the file is read.
+    if (caps or {}).get(sid) != capability:
+        return NOT_RUN, 'the capability differs from the bound scenario file'
     data = tree.read(fixture['path'])
     if data is None:
         return NOT_RUN, 'the fixture file is missing'
@@ -543,6 +725,8 @@ def run_scenario(tree, entry, rows, evaluate):
         value = unwrap(data)
     except Malformed as exc:
         return NOT_RUN, 'the fixture is malformed: %s' % exc
+    if capability == RESUME_CHECK:
+        return _run_rc_cases(value, entry, check)
     errors = check_fixture(value, entry)
     if errors:
         return NOT_RUN, 'the fixture is malformed: %s' % errors[0]
@@ -570,17 +754,48 @@ def run_scenario(tree, entry, rows, evaluate):
     return PASS, ''
 
 
+def _run_rc_cases(value, entry, check):
+    """The Resume Check cases of one well-formed fixture file (TASK-006 AC5, AC6): the form check, then each case is
+    called with a copy of its inputs and the observed decision compared with expected.decision only; a failed case
+    makes the scenario FAIL before any NOT_RUN of a call."""
+    errors = check_rc_fixture(value, entry)
+    if errors:
+        return NOT_RUN, 'the fixture is malformed: %s' % errors[0]
+    if check is None:
+        return NOT_RUN, 'the entry point is absent'
+    failed, not_run = [], ''
+    for n, case in enumerate(value['cases'], 1):
+        try:
+            observed = check(copy.deepcopy(case['inputs']))
+        except Exception as exc:
+            observed, problem = None, 'case %d: the call raised %s' % (n, type(exc).__name__)
+        else:
+            problem = execution_problem(observed)
+            if problem:
+                problem = 'case %d: %s' % (n, problem)
+        if problem:
+            not_run = not_run or problem
+        elif observed['decision'] not in case['expected']['decision']:
+            failed.append('case %d: decision' % n)
+    if failed:
+        return FAIL, 'not met: ' + ', '.join(failed)
+    if not_run:
+        return NOT_RUN, not_run
+    return PASS, ''
+
+
 def outcome(counts, results, with_fixture):
     """The record's outcome (AC8): pass exactly when the run counts and every scenario with a fixture is PASS; a run
     with no scenario that has a fixture is fail (reading)."""
     return 'pass' if counts and with_fixture and all(results[i] == PASS for i in with_fixture) else 'fail'
 
 
-def run(root, commit, task, read=None, listing=None, evaluate=None):
+def run(root, commit, task, read=None, listing=None, evaluate=None, check=None):
     """One conformance run over the tree at ``root``, the base (AC1). ``commit`` and ``task`` are only recorded.
     ``read`` and ``listing`` replace the default byte reader and records listing; ``evaluate`` is a test seam: a run
-    with it never counts and its governor_identity is null (AC6). Raises ValueError for a commit or task id of the
-    wrong form."""
+    with it never counts and its governor_identity is null (AC6). ``check`` is the Resume Check's test seam (TASK-006
+    AC4, reading): a run with it never counts, and the run record's resume_check sha256 is null. Raises ValueError for
+    a commit or task id of the wrong form."""
     if not (isinstance(commit, str) and _COMMIT.fullmatch(commit)):
         raise ValueError('the commit is not a full lowercase hex commit id')
     if not (isinstance(task, str) and _TASK.fullmatch(task)):
@@ -596,6 +811,7 @@ def run(root, commit, task, read=None, listing=None, evaluate=None):
 
     order, rows = scenario_rows(tree.read(SCENARIO_FILE))
     scenario_data = tree.read(SCENARIO_FILE)
+    caps = scenario_capabilities(scenario_data)
     set_data = tree.read(SET_FILE)
     set_sha = sha256(set_data) if set_data is not None else None
     set_value = None
@@ -636,6 +852,25 @@ def run(root, commit, task, read=None, listing=None, evaluate=None):
     if status == STAND_IN:
         problems.append('a stand-in governor (reading)')
 
+    # TASK-006 AC4, AC7: the Resume Check entry is loaded, and the run record gains resume_check, only when at least
+    # one Resume Check entry of the set file has a fixture.
+    rc_used = set_value is not None and any(e['capability'] == RESUME_CHECK and e['fixture'] is not None
+                                            for e in set_value['scenarios'])
+    rc_status, rc_record = None, None
+    if check is not None:
+        rc_status = STAND_IN
+        problems.append('a stand-in Resume Check (reading)')
+    elif rc_used:
+        check, rc_status = load_resume_check(root)
+        if rc_status == LOADED and tree.read(RESUME_CHECK_PATH) is None:
+            check, rc_status = None, FAILED
+        if rc_status == FAILED:
+            problems.append('the Resume Check could not be loaded from the root (reading)')
+    if rc_used:
+        rc_data = tree.read(RESUME_CHECK_PATH) if rc_status != STAND_IN else None
+        rc_record = {'path': RESUME_CHECK_PATH, 'sha256': sha256(rc_data) if rc_data is not None else None}
+    rc_entry = check if rc_status in (LOADED, STAND_IN) else None
+
     entries = set_value['scenarios'] if set_value is not None else [{'id': i, 'fixture': None} for i in order]
     results, reasons, with_fixture = [], {}, []
     for entry in entries:
@@ -643,8 +878,11 @@ def run(root, commit, task, read=None, listing=None, evaluate=None):
             with_fixture.append(entry['id'])
         if blocking:
             result, reason = NOT_RUN, 'the run does not count: %s' % blocking[0]
+        elif entry['fixture'] is not None and entry['capability'] == RESUME_CHECK and rc_status == FAILED:
+            result, reason = NOT_RUN, 'the run does not count: the Resume Check could not be loaded from the root (reading)'
         else:
-            result, reason = run_scenario(tree, entry, rows, evaluate if status in (LOADED, STAND_IN) else None)
+            result, reason = run_scenario(tree, entry, rows, evaluate if status in (LOADED, STAND_IN) else None,
+                                          caps, rc_entry)
         results.append({'id': entry['id'], 'result': result})
         reasons[entry['id']] = reason
     counts = not problems
@@ -658,6 +896,8 @@ def run(root, commit, task, read=None, listing=None, evaluate=None):
         'counts': counts,
         'results': results,
     }
+    if rc_record is not None:
+        value['resume_check'] = rc_record
     text = canonical_text(value)
     text_sha = sha256(text)
     by_id = {r['id']: r['result'] for r in results}
