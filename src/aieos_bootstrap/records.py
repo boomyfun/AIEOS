@@ -20,16 +20,24 @@ Limits (TASK-001 AC7):
   section 9's execution decision record (TASK-011): contract_hash, contract_version, base_commit, head_commit,
   log_seq, delta, checks, outcomes_fired, read_set, signatures, intent_versions, dependencies, constitution, runtime,
   budgets, policy_version, engine_identity, uncovered and state_effect; any other key is an unknown key. None of them
-  is required (a reading). When present, base_commit and head_commit must be commit ids, log_seq an integer at least
-  0, contract_hash 64 lowercase hex digits, contract_version v followed by digits, engine_identity an object with
-  exactly code_sha256 (null or 64 lowercase hex digits) and python ("X.Y.Z"), checks eight objects with exactly
-  check (1 to 8, each once), status, outcome and detail, outcomes_fired execution values without repeats in the order
-  of specification 3 section 7 whose first value is the decision (CONTINUE when it is empty), policy_version a
-  non-empty string or null, and intent_versions, for this payload type only, either in the record form or an object
-  mapping each entry to exactly {contract, current}, any other value refused (a reading, decision D-337's erratum of
-  AC3, carried to the next revision of specifications 2 and 3). Of delta, read_set,
-  signatures, dependencies, constitution, runtime, budgets, uncovered and state_effect only the JSON type (a list or
-  an object) is checked, not the forms inside.
+  is required (a reading). When present:
+  - base_commit and head_commit must be full lowercase hex commit ids; log_seq an integer at least 0 and not a
+    boolean; contract_hash 64 lowercase hex digits; contract_version v followed by digits;
+  - engine_identity an object with exactly code_sha256 (null or 64 lowercase hex digits) and python ("X.Y.Z", digits);
+  - checks a list of exactly eight objects with exactly the keys check, status, outcome and detail: check the integers
+    1 to 8 (not booleans), each once; status one of passed, fired, skipped and not_run; outcome an execution decision
+    value when status is fired and null otherwise; detail a string;
+  - outcomes_fired a list of the fired values of specification 3 section 7 (STOP: violation, STOP: scope invalid,
+    STOP: runtime insufficient, ESCALATE, BLOCKED, REPLAN, CONTINUE_WITH; CONTINUE is not one of them), without
+    repeats and in that order; when decision is not null, decision must equal its first value, or CONTINUE when it is
+    empty;
+  - policy_version a non-empty string or null;
+  - intent_versions, for this payload type only, either in the record form or an object mapping each entry to exactly
+    {contract, current}, each a non-empty string or null; any other value is refused (a reading, decision D-337's
+    erratum of AC3, carried to the next revision of specifications 2 and 3);
+  - of delta, signatures, uncovered and state_effect only that each is a list, and of read_set, dependencies,
+    constitution, runtime and budgets only that each is an object, is checked, not the forms inside.
+  No Resume Check exists until TASK-008, so no real execution record is checked by this module yet.
 - record_id is checked as a non-empty string; whether it is unique across a log is not checked. evidence_type and
   dimension are open vocabularies, checked as non-empty strings only.
 - An ignored duplicate is reported as such whether or not the line it repeats has findings of its own.
