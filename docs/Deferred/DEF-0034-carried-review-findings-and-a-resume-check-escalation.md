@@ -22,3 +22,4 @@ TASK-011 accepted (done, D-351).
 ## Log
 - 2026-10-10: opened (decision files D-349, D-351 and D-352).
 - 2026-10-10: TASK-008's part done: TASK-008 accepted and on main with its AC9 assertion, decision D-352's and D-359's errata and the subject "TASK-0" stated by decision D-359 (decision D-363); F-a and F-d stay open.
+- 2026-10-11 (session 22aadea0): the "Resume when" above names TASK-008's code, which is accepted (decision file D-363); TASK-008's escalation was settled there. F-a and F-d stay open, for the next revision of specification 3 or the next task that changes records.py or its tests (D-415 C3). ../History/2026-10/2026-10-11-0220-decision-files-d399-d408-the-writer-and-m3-exit.md

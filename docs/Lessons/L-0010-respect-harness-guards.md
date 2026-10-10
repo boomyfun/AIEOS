@@ -125,6 +125,11 @@ Occurrence in session 2026-10-11-0121 (../History/2026-10/2026-10-11-0121-decisi
 - **2026-10-11 (:850).** Python's name followed by a dash, without the timeout, to print the last session's browser inputs; rewritten as a script file run with the timeout.
 - **2026-10-11 (:1469).** The same form again, in a command with no purpose (a filler command); refused before it ran and not rewritten.
 
+Occurrences in session 2026-10-11-0220 (../History/2026-10/2026-10-11-0220-decision-files-d399-d408-the-writer-and-m3-exit.md), each my incorrect command, refused before it ran and rewritten within the approved step (D-390 Q5):
+- **2026-10-11 (:243).** Python's name followed by a dash, in a leftover loop with no purpose (a filler).
+- **2026-10-11 (:365).** The same form, to test whether a YAML loader is installed; rewritten as a script file.
+- **2026-10-11 (:1305).** The same form inside a search pattern; rewritten without it.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
