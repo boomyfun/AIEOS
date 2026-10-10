@@ -95,6 +95,12 @@ Commands of mine of the kinds this lesson lists, in session 2026-10-10-1810 (../
 - **2026-10-10 (:954).** A sed with a bad expression; it failed with no effect.
 - **2026-10-10 (later).** A sed edit of a checker script that mangled one line (repaired with the Edit tool before use), and the previous task's brief checker run on this session's briefs, which crashed with no effect.
 
+Commands of mine of the kinds this lesson lists, in session 2026-10-10-1946 (../History/2026-10/2026-10-10-1946-decision-files-d331-d344-task-011-landed.md):
+- **2026-10-10 (:294, :1058, :1361).** Filler or no-effect fragments at the head of real commands (`cat > /dev/null < /dev/null`; `git diff --no-index --stat /dev/null /dev/null`; `echo skip > /dev/null`); no effect.
+- **2026-10-10 (:1373).** A filler with Python's name followed by a dash; refused by the guard.
+- **2026-10-10 (later).** A sed expression holding Python's name; refused by the guard and rewritten without it.
+- **2026-10-10 (:942).** An approved one-run push command typed again as a fragment at the head of a hashing command; the executor refused at its first check and changed nothing, but its log was overwritten and recovered from the transcript (decision D-349). Remedy (D-349 C5, D-352 C6): compose each command in full and read it once as written before sending it; never start a command from a fragment; never type a one-run command's path again after its run.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

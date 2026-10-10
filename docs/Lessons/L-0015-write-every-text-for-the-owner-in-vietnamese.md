@@ -77,6 +77,10 @@ Three occurrences in session 2026-10-10-1612 (../History/2026-10/2026-10-10-1612
 Four occurrences in session 2026-10-10-1810 (../History/2026-10/2026-10-10-1810-decision-files-d319-d330-contracts-of-task-011-008-012.md):
 - **2026-10-10 (:145, :771, :1009, :1775).** Short progress lines in English before tool calls ("Now run defcheck, …", "I'll apply the edits …", "Applying the five edits.", "Now the commit message …"), in long runs of tool calls while drafting English texts; found by `tools/english_lines.py` and brought to the decision agent (D-331, D-335, D-341). Remedy: no text before a tool call unless it is a deliberate Vietnamese line.
 
+Nine occurrences found in session 2026-10-10-1946 (../History/2026-10/2026-10-10-1946-decision-files-d331-d344-task-011-landed.md):
+- **2026-10-10 (:494, :518, :567, :627, :958, :1146, :1269).** Short English lines before tool calls ("Now read the contract …", "Meanwhile, the TASK-011 script checks …", "Now the C2 comparison by script."), the last three after the decision agent's remedies (D-348 C5, D-350 C4); found by `tools/english_lines.py`.
+- **2026-10-10 (session 675f09ef :2267, :2449).** Two English lines of the previous session that came after its History was built.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 
