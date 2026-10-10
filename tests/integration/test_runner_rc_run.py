@@ -24,7 +24,8 @@ VERIFICATION_IDS = ['ACC-%02d' % n for n in range(1, 18)] + ['ADV-01', 'ADV-03']
 RC_STATE_IDS = ['RC-%02d' % n for n in range(1, 12)]
 GOVERNOR_IDS = ['ACC-%02d' % n for n in range(1, 18)] + ['ADV-01', 'ADV-03']
 
-# The searches for the Resume Check a run makes when it loads it from the tree (TASK-013, contract AC5).
+# The one search for the Resume Check's module that a run makes when it imports it from the tree (TASK-013,
+# contract AC5); a change to the runner's loading makes the present branch of R7 fail on purpose.
 WATCH_ASKED = 1
 
 

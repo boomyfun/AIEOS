@@ -275,7 +275,10 @@ def first_case():
 
 
 class FixedSetValue(unittest.TestCase):
-    """The fixed set value of TASK-013 (contract AC2): the set file at 1659a8cb, approved by TASK-002's freeze record."""
+    """The fixed set value of TASK-013 (contract AC2): the set file at 1659a8cb, approved by TASK-002's freeze record.
+    Limits (contract AC9): until TASK-014 lands, the present state is run only by a scratch simulation; if TASK-014
+    changes the set file beyond the eleven Resume Check fixtures and fixture_set_version, this pin fails on purpose
+    (fail closed), and TASK-014 must bring it."""
 
     def test_the_fixed_value_is_the_frozen_set_file(self):
         data = fixed_files()[conformance.SET_FILE]

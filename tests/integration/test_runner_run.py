@@ -187,6 +187,13 @@ class RunnerEndToEndTest(unittest.TestCase):
             want['ACC-01'] = conformance.FAIL
             self.assertEqual(r.results, want)
             self.assertEqual(list(r.results.values()).count(conformance.PASS), 29)
+            reasons = {s: why for s, (_, why) in present_results((conformance.PASS, '')).items()}
+            reasons['ACC-01'] = 'not met: case 1: decision'
+            self.assertEqual(r.reasons, reasons)
+            self.assertFalse(r.value['counts'])
+            self.assertEqual(r.problems, ['a stand-in governor (reading)'])
+            self.assertEqual(r.value['resume_check'], resume_check_record())
+            self.assertEqual(r.record['outcome'], 'fail')
             return
         def evaluate(request, inputs, case_records):
             sid, n, case = self.cases[json.dumps(request, sort_keys=True)]
