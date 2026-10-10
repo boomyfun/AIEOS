@@ -1,0 +1,243 @@
+# Task contract TASK-011, the execution decision record's keys in the record checker (Master Plan revision 3, §4 M3;
+# the M3 work order of decision D-254, as amended by decisions D-262, D-263 and D-333; specification 2 §5.1). Revision
+# 0, drafted under decisions D-333 (C3) and D-334 (E2), brought for approval in its own request; whether it is approved is recorded in
+# the decision files, not in this file. Fields and value forms follow specification 2 §5.1 and the contracts of
+# TASK-001, TASK-006 and TASK-007. Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# Id (reading): decision D-333 named this task "TASK-008a"; records.py checks a task id as "TASK-" followed by digits
+# only (the subject rule, DEF-0027's point for TASK-005b), so the task takes the next free digits-only id, TASK-011.
+# Order (decision D-333, K1): an M3 task inserted before TASK-008; TASK-008 depends on it and does not change
+# records.py.
+# Task type: implementation. What it changes: records.check_decision's decision.execution branch only, so that a
+# decision.execution payload may carry the keys of specification 3 §9's execution decision record (DEF-0029's limit:
+# the conformance runner checks a Resume Check's answer with records.check_decision, which now reports each of those
+# keys as unknown, so a Resume Check that returns specification 3 §9's record would be NOT_RUN in every case), with
+# form checks of some of them; and the module docstring's stated limit (records.py lines 19-20). Specification 3 §9
+# names the keys (proposed names, its §12 point 12) and settles spec 2 §10 point 6.
+# The key collision (reading, carried): specification 3 §9 names a key intent_versions "for each entry: the
+# contract's version and the current one", while spec 2 §6.2's record key intent_versions maps ids to versions
+# v<digits> and check_record checks it so. For a decision.execution payload only, the check reads §9's form; every
+# other payload keeps the record form. The collision is carried to the next revision of specifications 2 and 3 as a
+# new Deferred item, opened with this task's records.
+# Readers of the changed path (D-263 C3's practice): src/aieos_bootstrap/records.py is imported by eventlog.py,
+# governor.py and conformance.py and by their tests, and by the CI's G1 build and conformance runs; the conformance
+# runner's execution_problem calls check_decision('decision.execution', ...) on a Resume Check's answer; the governor
+# and the event log call it on decision.acceptance and on every event payload. Only the decision.execution branch
+# changes; every other path through records.py, and every existing test, stays as it is (AC4, AC5).
+# Risk: high. R2 matches src/** and tests/** (medium); R3 read fail closed matches them too, records.py being the
+# checker the runner and the governor judge with (risk rules section 2 point 3); no path meets R10 or R11; the highest
+# wins. Profile (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture [deterministic_rule],
+# functional [integration_test], security [static_security_analysis] and architecture [ai_review (cross-model)], plus
+# the evidence_required of the applicable articles (INV-005: property_test). Dimensions are named as TASK-006's records
+# name them (decision D-181, reading R-dim).
+# Change class: critical_cr (decision D-333 C3; as TASK-001, which wrote records.py, read fail closed as governor code):
+# records.py is what the conformance runner uses to judge a Resume Check's answer and what the governor's records are
+# checked with, an evaluator part (DM A29: the validator), so the task is judged by the base version and never
+# auto-accepted (constitution GOV-003; governor-spec.md §8).
+# Reviews (decision D-333 C3, as TASK-006's): five way-2 reviews by a Claude model other than the implementer's, each
+# under a decision of the decision agent (architecture ai_review for INV-001, INV-002, INV-004; correctness ai_review
+# for INV-005; security ai_review for SEC-002; governance ai_review for GOV-003; operational ai_review for OPS-003; the
+# cross-model half), and three decision-agent reviews (architecture human_review for INV-003, which also checks that
+# the property tests show no other payload type is loosened; operational human_review for OPS-002; the cross-model
+# half). Each way-2 review record's basis names every article whose entry it covers and addresses each of their
+# rules. Each reviewer's prompt is self-sufficient, with the scratchpad's absolute path in its first line (D-277).
+# Evaluation path (A61; as TASK-006's and TASK-007's): the approved contract is committed on main as its own commit C,
+# which changes only docs/tasks/TASK-011.yaml and has one parent equal to base_commit, and is pushed normally; the files
+# are drafted and tested in scratchpad clones (push URL disabled, the no-reply identity set first); the task's commits,
+# each carrying the trailer "AIEOS-Task: TASK-011" and no e-mail address in its message, go to the branch task/TASK-011
+# on GitHub, each push under its own decision of the decision agent after a secret scan and a dry run against a bare
+# single-branch copy (D-229, D-274), never by force and never deleting; the CI channel runs on each push and its
+# records are re-fetched into docs/records/TASK-011.jsonl; main receives the task only at its acceptance, by a
+# fast-forward under its own decision. Before each task commit, the added text is scanned with the workflow's SEC-001,
+# SEC-002 and OPS-003 patterns (AC7).
+# Not applicable: OPS-001 (scope: the repository's refs; the task changes no ref); INV-006 to INV-008, INV-010 and
+# INV-011 (their scopes, the governor, evidence records and the policy, meet no path of the write-set; the governor's
+# path through records.py does not change, AC4); INV-009 (scope: the event log; no log is written); GOV-001, GOV-004
+# to GOV-006 and SEC-003 (their scopes, the concept file, the bound artifacts, the decision matrix, the records and
+# pre-genesis documents, and .github/, meet no path of the write-set). INV-005 applies: the check is the schema rule
+# on the execution decision contract that the article's check names.
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting, no push of its own (CR-002 part 4 limit 5 does not apply). It weakens no evidence requirement
+# (CR-002 part 4 limit 8): it checks more of a decision.execution payload than before, and nothing less of any other.
+# Uncovered and stated limits (AC6): no Resume Check exists until TASK-008, so no real execution record is checked by
+# this task; the §9 keys whose inner forms are not checked (AC2) are checked as present-with-a-type only; the
+# intent_versions reading is carried, not settled.
+task: TASK-011
+contract_version: v1
+task_type: implementation
+objective: >-
+  Change records.check_decision in src/aieos_bootstrap/records.py so that a decision.execution payload may carry the
+  keys of specification 3 section 9's execution decision record besides the record keys, decision and error, with the
+  form checks of AC2 and, for that payload type only, section 9's form of intent_versions; update the module
+  docstring's stated limit; with unit and property tests in new test modules. Every other payload type is checked
+  exactly as before, and every existing test passes unchanged.
+traces_to:
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#9
+  - docs/specs/spec-02-aieos-file-format.md#6.2
+  - docs/specs/spec-02-aieos-file-format.md#6.4
+  - docs/specs/conformance-files.md#9
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-011.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id, unquoted, with nothing after it on the line (G0 reads the line raw).
+  base_commit: cc9273875ec893411f0e02764891783ab5d547fb
+  depends_on: [TASK-001, TASK-006]
+  # The interim documents have no id and no vN version, so each is named by its path and pinned by its SHA-256, as in
+  # the contracts of TASK-003 to TASK-007.
+  intent_versions:
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 05c53318cd756a3acfc13e5adaffbfaede8f05be3d00289e9fd45fef08c63c73
+    docs/specs/spec-02-aieos-file-format.md: 529b56d831d208594685aad3954fd3e8fc42cadc663e315b65bdfe615e3b09f7
+    docs/specs/conformance-files.md: 31e2853d78ecad81b27eea2e9738fc45787c22dc751fe5bc0f846e337cf8a114
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+write_set:
+  # One modified path: records.py (check_decision's decision.execution branch and the module docstring's limit only).
+  # The two test modules are new.
+  paths:
+    - src/aieos_bootstrap/records.py
+    - tests/unit/test_records_execution.py
+    - tests/property/test_records_execution_properties.py
+read_set:
+  paths:
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/conformance-files.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/pre-genesis/decision-matrix.md
+    - docs/records/TASK-001.jsonl
+    - src/aieos_bootstrap/conformance.py
+    - src/aieos_bootstrap/governor.py
+    - src/aieos_bootstrap/eventlog.py
+    - tests/unit/test_records.py
+    - tests/integration/test_records_log.py
+    - tests/property/test_records_properties.py
+  interfaces: [aieos_bootstrap.records.check_decision, aieos_bootstrap.records.check_record, aieos_bootstrap.conformance.execution_problem]
+  schemas: [spec-03 execution decision record (9), spec-02 record (6.2), spec-02 decision contract (6.4)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/eventlog.py
+  - tests/run_tests.py
+  - tests/unit/test_records.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-005, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The keys (specification 3 §9). For event type decision.execution, check_decision allows, besides the record
+      keys of spec 2 §6.2 and decision and error, exactly these keys: contract_hash, contract_version, base_commit,
+      head_commit, log_seq, delta, checks, outcomes_fired, read_set, signatures, intent_versions, dependencies,
+      constitution, runtime, budgets, policy_version, engine_identity, uncovered and state_effect. Any other key is
+      still reported as an unknown key (rule 6.4:unknown_key), next_task_state included. None of the new keys is
+      required (reading: specification 3 §9 does not say which keys a record with an error carries; the Resume Check's
+      own contract, TASK-008, requires them of its records).
+  - AC2: >-
+      The forms checked when the key is present (reading: the keys whose values decide or bind the record):
+      base_commit and head_commit full lowercase hex commit ids; log_seq an integer at least 0 and not a boolean;
+      contract_hash 64 lowercase hex digits; contract_version "v" followed by digits; engine_identity an object with exactly
+      the keys code_sha256 and python (decision D-334, E2; S3 §9: "the content hash of the code that decided ... with
+      the interpreter's version"), code_sha256 null or 64 lowercase hex digits and python digits "X.Y.Z"; checks a list of exactly eight objects, each with exactly the keys check, status, outcome
+      and detail, check the integers 1 to 8 each once, status one of passed, fired, skipped and not_run, outcome an
+      execution decision value when status is fired and null otherwise, detail a string; outcomes_fired a list of
+      execution decision values without repeats, in the order of specification 3 §7 (STOP: violation, STOP: scope
+      invalid, STOP: runtime insufficient, ESCALATE, BLOCKED, REPLAN, CONTINUE_WITH), and, when the decision is not
+      null, the decision equal to its first value or CONTINUE when it is empty; delta, read_set, signatures,
+      dependencies, constitution, runtime, budgets, uncovered and state_effect of the JSON type §9's table implies
+      (a list for delta, signatures, uncovered and state_effect; an object for read_set, dependencies, constitution,
+      runtime and budgets); policy_version a non-empty string or null. Each failed form is one finding with a rule
+      named 6.4:<key>.
+  - AC3: >-
+      intent_versions (reading, carried). For a decision.execution payload, intent_versions, when present, is an
+      object mapping each entry to an object with exactly the keys contract and current, each a non-empty string or
+      null (specification 3 §9: "the contract's version and the current one"); the record form of spec 2 §6.2 (ids
+      mapped to v<digits>) is not applied to it. For every other payload type, and for check_record called alone, the
+      record form is checked exactly as before.
+  - AC4: >-
+      Nothing else changes. check_record, check_payload, check_log, check_decision for decision.acceptance, and every
+      other function and constant of records.py behave exactly as before for every input (shown by every existing test
+      passing unchanged and by the property tests of AC8, and checked by the reviews in the diff); the record rules of
+      §6.2 still apply to a decision.execution payload's record keys; every existing test module passes unchanged
+      (forbidden), test_records.py's next_task_state case and the random unknown-key property included. If one can
+      pass only by a change, the task escalates (needs_out_of_scope_change).
+  - AC5: >-
+      The docstring. The module docstring's stated limit "A decision.execution payload may hold only the record keys,
+      decision and error ..." is replaced by one that says exactly what is now allowed and checked (AC1 to AC3) and
+      what is not (the inner forms of the keys AC2 checks by type only).
+  - AC6: >-
+      Limits, stated and tested as such: no Resume Check exists until TASK-008; the keys are allowed, not required;
+      inner forms beyond AC2 are not checked; the intent_versions reading is carried to the next revision of
+      specifications 2 and 3.
+  - AC7: >-
+      Purity and the CI checks (INV-001 to INV-004). The change and its tests import only the Python 3 standard
+      library and aieos_bootstrap.records; they use no exec,
+      eval, compile, __import__ or importlib, start no process, open no network connection, call no model, open, write
+      or remove no file, read the clock nowhere, and hold no assert in src (bandit B101). Before each commit the added
+      text is scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns, each count 0, and the file names with
+      the same patterns and the records executors' pre-push pattern (D-282). The CI steps at the task's commits report
+      no finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit, as TASK-006's AC9 lists them.
+  - AC8: >-
+      Tests, with this rule-to-test list, each rule with at least one passing and one failing case, all in memory: R1
+      AC1 (each new key allowed for decision.execution; the same keys still unknown for decision.acceptance and
+      record.added; next_task_state and a random key still unknown); R2 AC2 (each checked form, one good and one bad
+      value each; engine_identity with code_sha256 given and null, a missing or extra key, a bad python version; the order and the first-value rule of outcomes_fired; an error record with decision null and no
+      outcomes_fired); R3 AC3 (§9's form accepted and the record form refused for decision.execution; the record form
+      still required for record.added and in check_record); R4 AC4 (the existing tests run unchanged by
+      tests/run_tests.py). Unit tests in tests/unit/test_records_execution.py. Property tests
+      (tests/property/test_records_execution_properties.py; standard library only, fixed seeds; INV-005's
+      property_test): for random well-formed execution records with the §9 keys, check_decision gives no finding; for
+      random payloads of every other event type and for random acceptance decisions, check_decision, check_payload and
+      check_log give no finding on well-formed values and the same rule names as before on the same corruptions
+      (reading: no copy of the old module is loaded; the comparison is with the rules as test_records_properties.py
+      generates them); removing
+      or corrupting any checked key's form gives a finding named for that key.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 2h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC8]}
+  - {gate: G3, check: constitution, args: [AC7, INV-001, INV-002, INV-003, INV-004, INV-005, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
