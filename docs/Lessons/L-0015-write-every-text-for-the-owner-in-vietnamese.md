@@ -89,6 +89,9 @@ English text lines of mine, in session 2026-10-10-2141 (../History/2026-10/2026-
 - **2026-10-10 (:907).** "Fix the insertion point to handle a module without top-level functions." before a tool call; found by english_lines.py and reported in the next request.
 - **2026-10-10 (:1502, :1687).** "Write the TASK-013 records builder, its basis file and the draft acceptance text." and "Now the change-set builder for the session-end records." before tool calls; found by english_lines.py before the session-end request.
 
+English text lines of mine, in session 2026-10-10-2252 (../History/2026-10/2026-10-10-2252-decision-files-d367-d376-task-014-landed.md):
+- **2026-10-10 and 2026-10-11 (:730, :794, :1132, :1840, :1882).** "Now the two briefs.", "Now the revised bullet, as a second build of revision 5.", "Now the TASK-014 contract check, in the same shape.", "Now the change-set builder." and "Now the commit message and the dry run." before tool calls; found by english_lines.py before the next request. Remedy (D-383 C5): no text block before a tool call except a Vietnamese line checked before sending; the last two slipped after it was accepted.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

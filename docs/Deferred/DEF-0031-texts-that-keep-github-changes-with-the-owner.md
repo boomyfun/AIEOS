@@ -11,6 +11,8 @@
 - The pinned governor's own path rule, if it routes `.github/` to the owner as an owner-kept act.
 - The workflow's SEC-003 record step message ("each needs the owner's own yes").
 - Risk rules R9 (a risk class, not an approver; probably unchanged).
+- The CI workflow's comments on AIEOS_PINNED_GOVERNOR ("changing it is the owner's (DM A61, A63)") and on AIEOS_PINNED_RESUME_CHECK ("changing it is the owner's (DM A61)"); to be corrected in the workflow revision that sets the Resume Check pin, citing A66 and D-317, the governor comment keeping that accepting a new governor version is not decided by a workflow change (decisions D-380 and D-381).
+- docs/specs/conformance-files.md section 1: "the CI workflow (the owner's: A61; constitution SEC-003)" (decision D-381).
 
 ## Why deferred
 D-321: the widening's change-set is one isolated amendment and its records; these follow-on texts each have their own change class, and staying stricter costs nothing.
@@ -23,3 +25,4 @@ DM A66 and A67 (in force from commit fb841531).
 
 ## Log
 - 2026-10-10: opened (decision files D-321 and D-322).
+- 2026-10-10: the two workflow comments and the conformance files document's section 1 sentence added (decision files D-380 and D-381).

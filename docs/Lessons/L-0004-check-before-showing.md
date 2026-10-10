@@ -134,6 +134,9 @@ In session 2026-10-10-2141 (../History/2026-10/2026-10-10-2141-decision-files-d3
 - **2026-10-10 (decision D-372).** The decision agent accepted a helper redirection as keeping an unnamed test's point without reading that test's digest line; all five first-round reviewers found the test vacuous in the present state (decision D-373).
 - **2026-10-10 (TASK-013).** The worker's line and loosening check compared text and counts only, so an unchanged line that received different inputs passed it; the first commit message said that only the named tests were redirected.
 
+Occurrence in session 2026-10-10-2252 (../History/2026-10/2026-10-10-2252-decision-files-d367-d376-task-014-landed.md):
+- **2026-10-10.** My first build of decision file D-376 said that this session's History already recorded a correction it had not yet written, and that D-376's own file carried another decision's label; the decision agent found it before the write (D-378), and the one line was rebuilt (D-379). A record that can never be edited must state only what is already true.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.
