@@ -121,6 +121,10 @@ Occurrences in session 2026-10-10-0626 (../History/2026-10/2026-10-10-0626-decis
 - **2026-10-10 (the requests D-303 and D-304).** Transcript line numbers written from memory were wrong in eight places, and the start time was given as 06:24 for 06:26; the line numbers were corrected by a steps listing before sending, the time only afterwards.
 - **2026-10-10 (D-304).** A decision file's execution record said the owner had been told of the model when the telling had not yet happened; the decision agent required the line to be corrected before the write.
 
+Occurrences in session 2026-10-10-0735 (../History/2026-10/2026-10-10-0735-decision-files-d303-d310-ci-revision-5-and-task-007-contract.md):
+- **2026-10-10 (D-312).** The last session's turn-final replies never carried the decision agent's texts for the owner of D-305, D-306 and D-307: relays had been batched to the session end, and the session-end check compared only the last decision's text. Found by a script over every handback of that session while writing its decision files, and relayed late in this session (D-312). From now on the session-end check runs over every handback of the session, not only the last one.
+- **2026-10-10 (D-311).** The session-start request gave the start as about 07:25; the first record's timestamp gives 07:35.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

@@ -1,0 +1,23 @@
+# DEF-0030: The event log's file writer, the local store, and the workflow's revision 6
+
+- Status: open
+- Opened: 2026-10-10 (decision files D-313 and D-315)
+- Deferred by: decision agent (A41), D-313 Q4 and C5: TASK-007 takes shape (P), a pure module that returns the bytes to append and opens no file, because the CI workflow's deterministic_rule step refuses any file write in src/ and tests/ and any string in src/ that names the project-state directory ("no core writer exists yet").
+- Decision group: A for the later task's contents; B for the workflow's revision 6 (the owner's act: A61; constitution SEC-003).
+
+## What
+- The single file writer of the event log (constitution INV-004: "inside the core only the single writer's module opens files in the directory for writing"; spec 1 §4; spec 2 §3 and §6), its tests, and the local store of leases and sessions (spec 1 §5.2 and §8; spec 2 §3, SQLite), which TASK-007's AC6 takes as a lease the caller gives.
+- The workflow's revision 6, put to the owner as one question: an exemption of the deterministic_rule step for exactly that writer module (and what its tests need), together with setting the Resume Check pin AIEOS_PINNED_RESUME_CHECK once the Resume Check is accepted and the set file names its fixtures (TASK-005b), as revision 5's header and the owner question of D-313 say.
+- TASK-008 (the Resume Check reads Git) and TASK-009 (recovery between Git and the event log) meet the same rules (no process, no file write); they take the same pure shape unless a later decision says otherwise (D-313 C5).
+
+## Why deferred
+An exemption designed before the contract of the code that needs it would be designed blind, and revision 6 is needed anyway for the pin, so the owner is asked once for both (D-313).
+
+## Resume when
+After TASK-008 is accepted and TASK-005b has added the set file's Resume Check entries, or earlier if an M3 task needs the writer; before M3 exits (Master Plan §4 M3: "the core's single writer").
+
+## Depends on
+TASK-007 (the append rules), TASK-008, TASK-005b; DEF-0024 (the workflow's other carried points).
+
+## Log
+- 2026-10-10: opened (decision files D-313 and D-315). ../History/2026-10/2026-10-10-0735-decision-files-d303-d310-ci-revision-5-and-task-007-contract.md

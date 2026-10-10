@@ -73,6 +73,13 @@ Five commands of mine of the kinds this lesson lists, in session 2026-10-10-0626
 - **2026-10-10 (:555).** A removal command (`rm -rf` on a folder that did not exist); it removed nothing, but such a command must not be run at all.
 - **2026-10-10 (:320, :1275).** A grep of /dev/null inside a longer command; it ran and did nothing.
 
+Commands of mine of the kinds this lesson lists, in session 2026-10-10-0735 (../History/2026-10/2026-10-10-0735-decision-files-d303-d310-ci-revision-5-and-task-007-contract.md):
+- **2026-10-10 (:531).** Python's name with a dash; refused by the guard before it ran.
+- **2026-10-10 (:882).** Python's name followed by a file name that does not exist, typed by mistake inside a longer command; it ran and did nothing.
+- **2026-10-10 (:999).** A sed edit whose pattern matched nothing; the file stayed unchanged.
+- **2026-10-10 (:1134, :1346).** A one-second sleep before a read (a filler), and a one-minute sleep while CI ran, which the harness refused before it ran; it was not retried.
+- **2026-10-10 (:1635, :1662).** While rebuilding the session-end records: a sed edit that replaced a line with itself, and a stray call of an earlier reply-composing script inside a longer command (its exclusive write refused, its output discarded); both ran and did nothing.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
