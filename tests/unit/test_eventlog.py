@@ -104,7 +104,7 @@ class R2Idempotency(unittest.TestCase):
         r = eventlog.append(self.log, 'task.drafted', DRAFTED, 'ev-1', T0, task_id='TASK-008')
         self.assertEqual((r.result, r.reason), ('refused', 'conflict'))
 
-    def test_true_and_one_are_not_the_same(self):
+    def test_an_extra_payload_key_is_a_conflict(self):
         log = ok(b'', 'ev-1', 'task.blocked', {'reason': 'r', 'blocked_by': ['TASK-001']})
         r = eventlog.append(log, 'task.blocked', {'reason': 'r', 'blocked_by': ['TASK-001'], 'x': True}, 'ev-1', T0,
                             task_id=TASK)
@@ -290,15 +290,23 @@ class R6Fencing(unittest.TestCase):
                             recorder='aieos-core', record_id='rec-r')
         self.assertFenced(r)
 
-    def test_a_lease_event_naming_no_task_is_an_event_refusal(self):
+    def test_a_lease_event_naming_no_task_is_a_fence_refusal(self):
         r = eventlog.append(self.log, 'task.submitted', SUBMITTED, 'ev-2', T0, fencing_token=dict(TOKEN),
                             lease=lease(), recorder='aieos-core', record_id='rec-r')
-        self.assertEqual((r.result, r.reason, r.record), ('refused', 'event', None))
+        self.assertEqual((r.result, r.reason, r.record, r.log), ('refused', 'fence', None, None))
+        self.assertEqual(list(r.findings), ['fence: the event names no task_id, so no lease can be on its task',
+                                      'fence: no refusal record, the event names no task_id'])
 
     def test_recorder_and_record_id_are_required_for_a_lease_event(self):
-        for kw in ({'recorder': None}, {'record_id': ''}):
-            with self.assertRaises(ValueError):
-                submit(self.log, **kw)
+        # TASK-015 AC4: a fence refusal without them gives "fence" with no record and a finding; a lease-holding
+        # submission without them is appended.
+        for kw in ({'recorder': None}, {'record_id': ''}, {'recorder': 7}, {'recorder': None, 'record_id': None}):
+            r = submit(self.log, lease=None, **kw)
+            self.assertEqual((r.result, r.reason, r.record, r.log), ('refused', 'fence', None, None))
+            self.assertEqual(r.findings[-1], 'fence: no refusal record, recorder and record_id are not both '
+                                             'non-empty strings')
+        r = submit(self.log, recorder=None, record_id=None)
+        self.assertEqual((r.result, r.seq, r.record), ('appended', 2, None))
 
 
 class R7TheRefusalRecord(unittest.TestCase):
@@ -323,6 +331,73 @@ class R7TheRefusalRecord(unittest.TestCase):
     def test_no_record_on_other_refusals(self):
         r = eventlog.append(b'', 'task.drafted', DRAFTED, '', T0, task_id=TASK)
         self.assertIsNone(r.record)
+
+
+class R8Task015(unittest.TestCase):
+    """TASK-015: F-a and F-b of DEF-0032 resolved (AC1 to AC3), and F-d's tests (AC4)."""
+
+    def setUp(self):
+        self.log = ok(b'', 'ev-1')
+        self.logged = submit(self.log, 'ev-s').log
+
+    def test_no_value_error_for_recorder_or_record_id(self):
+        for kw in ({'recorder': None}, {'record_id': None}, {'recorder': ''}, {'record_id': 3}):
+            r = submit(self.log, lease=lease(task_id='TASK-008'), **kw)
+            self.assertEqual((r.result, r.reason), ('refused', 'fence'))
+
+    def test_a_log_that_is_not_bytes_still_raises(self):
+        with self.assertRaises(TypeError):
+            submit('not bytes', recorder=None)
+
+    def test_a_retried_logged_submission_without_recorder_is_a_duplicate(self):
+        r = submit(self.logged, 'ev-s', recorder=None, record_id=None)
+        self.assertEqual((r.result, r.seq, r.log), ('duplicate', 2, None))
+
+    def test_a_retried_submission_with_another_payload_is_a_conflict(self):
+        r = eventlog.append(self.logged, 'task.submitted', {'commit': C40, 'compensating': True}, 'ev-s', T0,
+                            task_id=TASK, fencing_token=dict(TOKEN), lease=lease())
+        self.assertEqual((r.result, r.reason, r.seq), ('refused', 'conflict', 2))
+
+    def test_fence_refusals_with_and_without_the_record(self):
+        for bad in (None, lease(task_id='TASK-008'), lease(token={'epoch': 'store-1', 'counter': 2}),
+                    lease(expires_at=T0)):
+            with_record = submit(self.log, lease=bad)
+            self.assertEqual((with_record.result, with_record.reason), ('refused', 'fence'))
+            self.assertEqual(with_record.record['subject'], TASK)
+            without = submit(self.log, lease=bad, recorder=None)
+            self.assertEqual((without.result, without.reason, without.record), ('refused', 'fence', None))
+            self.assertEqual(list(without.findings), list(with_record.findings) +
+                             ['fence: no refusal record, recorder and record_id are not both non-empty strings'])
+
+    def test_false_and_zero_are_not_the_same(self):
+        r = eventlog.append(self.logged, 'task.submitted', {'commit': C40, 'compensating': 0}, 'ev-s', T0,
+                            task_id=TASK, fencing_token=dict(TOKEN), lease=lease(), recorder='aieos-core',
+                            record_id='rec-r')
+        self.assertEqual((r.result, r.reason), ('refused', 'conflict'))
+
+    def test_true_and_one_in_a_lease_token(self):
+        r = submit(self.log, fencing_token={'epoch': 'store-1', 'counter': 1},
+                   lease=lease(token={'epoch': 'store-1', 'counter': True}))
+        self.assertEqual((r.result, r.reason), ('refused', 'fence'))
+
+    def test_one_and_one_point_zero_in_a_lease_token(self):
+        r = submit(self.log, fencing_token={'epoch': 'store-1', 'counter': 1},
+                   lease=lease(token={'epoch': 'store-1', 'counter': 1.0}))
+        self.assertEqual((r.result, r.reason), ('refused', 'fence'))
+
+    def test_a_payload_that_is_not_an_object(self):
+        r = eventlog.append(self.log, 'task.drafted', ['x'], 'ev-2', T0, task_id=TASK)
+        self.assertEqual((r.result, r.reason), ('refused', 'event'))
+
+    def test_an_expiry_with_a_non_zero_offset(self):
+        plus7 = datetime.timezone(datetime.timedelta(hours=7))
+        r = submit(self.log, lease=lease(expires_at=(T0 + datetime.timedelta(hours=1)).astimezone(plus7)))
+        self.assertEqual((r.result, r.reason), ('refused', 'fence'))
+        self.assertIn('fence: the lease\'s expires_at is not a timezone-aware UTC datetime', r.findings)
+
+    def test_a_retry_after_the_lease_expired_is_a_duplicate(self):
+        r = submit(self.logged, 'ev-s', at=T0 + datetime.timedelta(hours=2))
+        self.assertEqual((r.result, r.seq), ('duplicate', 2))
 
 
 if __name__ == '__main__':

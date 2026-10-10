@@ -7,8 +7,10 @@ when the log already holds the same event under its event_id, or ``refused`` wit
 - ``log``: the given log has a finding under ``records.check_log``, or is not empty and does not end with LF (AC1);
 - ``conflict``: the log holds another event under the same event_id (AC2);
 - ``event``: the new event has a finding of its own (AC3);
-- ``fence``: the event needs a lease and the lease given does not hold it (AC6), with the observation record of the
-  refusal in ``record`` (AC7);
+- ``fence``: the event needs a lease and the lease given does not hold it, or it names no task_id (AC6; TASK-015
+  AC3), with the observation record of the refusal in ``record`` when the event names a task and the caller gives
+  recorder and record_id, and otherwise no record and a finding that says which input is missing (AC7, narrowed by
+  TASK-015's choice (r1));
 - ``log_after``: the whole log after the append has a finding under ``records.check_log`` (AC4).
 
 Nothing is appended unless the result is ``appended``, and then the new log's bytes are the given bytes followed by
@@ -51,7 +53,8 @@ class AppendResult:
       conflict; else None.
     - ``line`` and ``log``: the bytes of the new line and of the whole new log when appended; else None.
     - ``findings``: the findings that caused a refusal, as text.
-    - ``record``: for a ``fence`` refusal, the payload of the record.added event that records it (AC7); else None.
+    - ``record``: for a ``fence`` refusal, the payload of the record.added event that records it (AC7) when it can be
+      built (TASK-015 AC3); else None.
     """
 
     __slots__ = ('result', 'reason', 'seq', 'line', 'log', 'findings', 'record')
@@ -148,14 +151,13 @@ def append(log, event_type, payload, event_id, appended_at, task_id=None, fencin
     ``appended_at`` is the append time, a timezone-aware datetime in UTC. ``task_id``, ``fencing_token`` and
     ``corrects`` go into the envelope only when given (not None). ``lease`` is the lease the caller holds for the
     event's task, a mapping with exactly task_id, fencing_token and expires_at. ``recorder`` and ``record_id`` are
-    those of the refusal's record if the event is refused by the fence; they are required for an event that needs a
-    lease (AC6, AC7), and a ValueError is raised before anything is decided if they are not non-empty strings.
+    those of the refusal's record if the event is refused by the fence (AC7); they are looked at only then, after the
+    log and event_id checks (TASK-015 AC1, AC2), and their absence never raises: a fence refusal without them, or for
+    an event that names no task_id, carries no record and a finding that says why (TASK-015 AC3, choice (r1)).
     """
     if not isinstance(log, (bytes, bytearray)):
         raise TypeError('the log is given as bytes, not %s' % type(log).__name__)
     log = bytes(log)
-    if _needs_lease(event_type, fencing_token) and not (records._is_str(recorder) and records._is_str(record_id)):
-        raise ValueError('recorder and record_id must be non-empty strings for an event that needs a lease')
 
     # AC1: the given log, checked before anything else; a damaged log is never extended (fail closed).
     report = records.check_log(log)
@@ -205,13 +207,20 @@ def append(log, event_type, payload, event_id, appended_at, task_id=None, fencin
     if findings:
         return _refused('event', findings)
 
-    # AC6, AC7: the fence. The record's subject is the event's task id, so an event that needs a lease and names no
-    # task is refused as an event (reading).
+    # AC6, AC7: the fence (TASK-015 AC3). An event that needs a lease and names no task_id cannot hold "a lease on the
+    # event's task_id", so it is refused by the fence (reading). The record's subject is the task id and its recorder
+    # and record_id are the caller's, so the record is built only when all three exist (choice (r1)).
     if _needs_lease(event_type, fencing_token):
         if task_id is None:
-            return _refused('event', ['6.1:task_id: an event that needs a lease names no task_id'])
-        fence = _lease_findings(lease, task_id, fencing_token, appended_at)
+            fence = ['fence: the event names no task_id, so no lease can be on its task']
+        else:
+            fence = _lease_findings(lease, task_id, fencing_token, appended_at)
         if fence:
+            if task_id is None:
+                return _refused('fence', fence + ['fence: no refusal record, the event names no task_id'])
+            if not (records._is_str(recorder) and records._is_str(record_id)):
+                return _refused('fence', fence + ['fence: no refusal record, recorder and record_id are not both '
+                                                  'non-empty strings'])
             return _refused('fence', fence, record=refusal_record(event_id, task_id, recorder, record_id))
 
     # AC4: the whole log after the append.
