@@ -121,6 +121,10 @@ Occurrences in session 2026-10-11-0013 (../History/2026-10/2026-10-11-0013-decis
 - **2026-10-11 (:991).** Python's name followed by a dash, to run one test module.
 - **2026-10-11 (:1246).** The same form inside a search pattern.
 
+Occurrence in session 2026-10-11-0121 (../History/2026-10/2026-10-11-0121-decision-files-d388-d398-and-task-015.md), my incorrect command, refused before it ran and rewritten within the approved step (D-390 Q5):
+- **2026-10-11 (:850).** Python's name followed by a dash, without the timeout, to print the last session's browser inputs; rewritten as a script file run with the timeout.
+- **2026-10-11 (:1469).** The same form again, in a command with no purpose (a filler command); refused before it ran and not rewritten.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

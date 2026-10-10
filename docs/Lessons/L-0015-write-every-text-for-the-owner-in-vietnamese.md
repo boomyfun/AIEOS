@@ -96,6 +96,9 @@ Five in session 2026-10-11-0013 (../History/2026-10/2026-10-11-0013-decision-fil
 - **2026-10-11 (:432, :456).** Two short English lines before tool calls ("Now the writer …", "Now the gated command file, then the request.").
 - **2026-10-11 (:803, :818, :909).** Three more after the remedy stated at D-389 (check before each request and each reply); the remedy failed twice (D-391 C5). The rule since: check the steps listing before every tool-call batch that carries text, not only before requests.
 
+Two in session 2026-10-11-0121 (../History/2026-10/2026-10-11-0121-decision-files-d388-d398-and-task-015.md), found by Claude with english_lines.py and disclosed in the next request:
+- **2026-10-11 (:386, :876).** "Now the writer and its gated command file." and "Now the code change in the clone." before tool calls; the second after the remedy stated at D-400 C4 (a Vietnamese line only before a tool-call batch that carries text). Remedy since (D-404 C4): write the Vietnamese line first and nothing else in that text block.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

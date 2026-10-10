@@ -28,3 +28,4 @@ TASK-007 accepted (D-328) and on `main`.
 
 ## Log
 - 2026-10-10: opened (decision files D-327 and D-328).
+- 2026-10-11: F-a and F-b resolved and F-d's tests added by TASK-015 (accepted, decision file D-405; c2c9196e on `main`); F-c, F-e, F-f, F-h and F-i stay open. ../History/2026-10/2026-10-11-0121-decision-files-d388-d398-and-task-015.md
