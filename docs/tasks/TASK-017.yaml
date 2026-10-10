@@ -1,0 +1,362 @@
+# Task contract TASK-017, the conformance runner's Risk Engine entry (Master Plan revision 3, §4 M4; M4's work order of
+# decisions D-428 and D-429, RISK-01's step 2; specification 2 §5.1). Revision 1, drafted under decision D-443 (C1 to
+# C5) and edited under decision D-444 (E1 to E4), brought for approval in its own request; whether it is approved is
+# recorded in the decision files, not in this
+# file. Fields and value forms follow specification 2 §5.1 and TASK-006's contract, the same kind of change to the same
+# runner. Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# Task type: implementation. Constitution GOV-002 applies: tests/conformance/** (the fixtures and the set file,
+# scenario files in the sense of conformance-files.md section 8) is in the forbidden set, so the task can read them but
+# never change them.
+# What it changes (conformance-files.md revision 7, section 10, DM F33): the runner routes the capability Risk Engine
+# to the fixture folder tests/conformance/fixtures_risk/; it checks a Risk Engine fixture's form and the Given, "a
+# change that matches no risk rule", from the fixture's values alone with a matcher of its own; per case it calls the
+# governor's derivation (derive_inputs), compares the derived inputs at once, then calls the governor's acceptance
+# function (evaluate) with the derived inputs and compares the record's profile_used; the capability Capability
+# Boundaries stays NOT_RUN. No Risk Engine fixture exists, and the set file's RISK-01 entry is null until TASK-018, so
+# over the repository's own tree every run record is unchanged by this task, byte for byte except the runner's own
+# sha256 (AC10).
+# Readers of the changed paths (D-263 C3's practice): src/aieos_bootstrap/conformance.py is read by the CI workflow's
+# conformance base run (from the base) and candidate run (from the base too; only GOVERNOR_FILES come from the head),
+# and imported by the test modules test_runner.py, test_runner_run.py, test_runner_properties.py,
+# test_governor_conformance.py, test_runner_rc.py, test_runner_rc_run.py and test_runner_rc_properties.py. Of these, two
+# tests of test_runner_rc.py assert the very limit this task lifts (RISK-01's entry point "absent until its milestone",
+# and no expected path for Risk Engine); they change by AC11 and in no other way (decision D-443 C1). Every other
+# assertion of those modules must keep passing unchanged (AC13). The run record gains no key (section 10: "The run
+# record of section 6 needs no new key"), so the workflow's check of the run record reads the same keys as now and no
+# file under .github/ changes. src/aieos_bootstrap/__init__.py's docstring describes the runner's entries and gains
+# this one (as TASK-006 changed it); __all__ does not change.
+# Risk: high. R2 matches src/** and tests/** (medium); R3 read fail closed matches them too, the runner falling under
+# its tag verification (risk rules section 2 point 3); no path of the write set meets R11 (tests/conformance/**); the
+# highest wins. Profile (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture
+# [deterministic_rule], functional [integration_test], security [static_security_analysis] and architecture [ai_review
+# (cross-model)], plus the evidence_required of the applicable articles. The class is to be computed over the base by
+# script and its output pasted unedited in the approval request (decision D-428 C3), as for TASK-015 and TASK-016.
+# Change class: critical_cr (an evaluator part that enforces acceptance, not bound: DM B1; A29; constitution GOV-003;
+# governor-spec.md §8), to be computed over the base by script as for TASK-015 and TASK-016 (the runner is on the
+# workflow's pinned evaluator list).
+# Reviews (as TASK-006's): five way-2 reviews by a Claude model other than the implementer's, and the decision agent's
+# three, each brief naming for testing: that a wrong classification is FAIL and never PASS or a silent NOT_RUN; that
+# the runner's matcher reads exactly the pattern forms of risk rules section 2 point 6 and refuses every other; that
+# the two changed tests of test_runner_rc.py lose nothing for ADV-02; that a run over the repository's own tree is
+# byte-equal before and after; the limits of AC15. Each reviewer's prompt is self-sufficient, with the scratchpad's
+# absolute path in its first line (D-277).
+# Evaluation path (A61; as TASK-006 to TASK-016): the approved contract is committed on main as its own commit C, which
+# changes only docs/tasks/TASK-017.yaml and has one parent equal to base_commit, and is pushed normally; the files are
+# drafted and tested in scratchpad clones (push URL disabled, the no-reply identity set first); the task's commits,
+# each carrying the trailer "AIEOS-Task: TASK-017" and no e-mail address in its message, go to the branch
+# task/TASK-017 on GitHub, each push under its own decision of the decision agent after a secret scan and a dry run
+# against a bare single-branch copy, never by force and never deleting; the CI channel runs on each push and its
+# records are re-fetched into docs/records/TASK-017.jsonl; main receives the task only at its acceptance, by a
+# fast-forward under its own decision.
+# Not applicable: OPS-001 (the task changes no ref); INV-009, INV-011, GOV-001, GOV-004, GOV-005, GOV-006 and SEC-003
+# (their scopes, the event log, the policy, the concept file, the bound artifacts, the decision matrix, the records and
+# pre-genesis documents, and .github/, meet no path of the write-set).
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting, no push of its own (CR-002 part 4 limit 5 does not apply).
+# Uncovered and stated limits (AC15): no Risk Engine fixture exists and RISK-01's set entry is null, so RISK-01 stays
+# NOT_RUN in every run over the repository's tree and nothing here shows that the governor meets RISK-01; the runner
+# reads the policy's rules only from a fixture's values, never from the repository (section 10, "Not covered"); in the
+# CI channel the base run takes the runner from the base, so this entry first runs there after it lands on main; every
+# review is by AI of one vendor.
+task: TASK-017
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add to the conformance runner (src/aieos_bootstrap/conformance.py, TASK-003 and TASK-006) the Risk Engine entry of
+  docs/specs/conformance-files.md revision 7, section 10: the expected fixture path for the capability Risk Engine;
+  the form check of a Risk Engine fixture, with the scenario's Given checked from the fixture's values alone by a path
+  matcher of the runner's own for exactly the pattern forms of the risk rules' section 2 point 6; the per-case order
+  of the governor's derivation, the comparison of the derived inputs, the governor's acceptance call and the comparison
+  of its profile_used; with unit, integration and property tests in new test modules, and the change of exactly two
+  tests of tests/unit/test_runner_rc.py that assert the limit this task lifts. It adds no fixture, changes no set file,
+  adds no key to the run record, changes nothing a run over the repository's own tree reports, and does not wire the CI
+  channel.
+traces_to:
+  - docs/specs/conformance-files.md#2
+  - docs/specs/conformance-files.md#6
+  - docs/specs/conformance-files.md#10
+  - docs/specs/spec-02-aieos-file-format.md#6.4
+  - docs/specs/risk-rules-gov-aieos.md#2
+  - docs/pre-genesis/conformance-methodology.md#3
+  - docs/pre-genesis/conformance-scenarios-initial.md#1
+  - docs/pre-genesis/conformance-scenarios-initial.md#3
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-017.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id, unquoted, with nothing after it on the line (G0 reads the line raw).
+  base_commit: 284bababe58dc203529a0d6d1c8c10fa99602307
+  depends_on: [TASK-003, TASK-004, TASK-006]
+  intent_versions:
+    docs/specs/conformance-files.md: e10f714b83eb6de1ab9a014e523e542576158ad920d8b11331adf152ab6a8d92
+    docs/pre-genesis/conformance-scenarios-initial.md: 6b5c0666a1f364f5ecec9ad516c9a749969a1963f4e5dbef566adcbc8c80e24d
+    docs/pre-genesis/conformance-methodology.md: a11928199da9b908fad5805b44d341b21f961f0bc925350b0d46ac9adc454c87
+    docs/specs/spec-02-aieos-file-format.md: 529b56d831d208594685aad3954fd3e8fc42cadc663e315b65bdfe615e3b09f7
+    docs/specs/spec-04-verification-and-evidence.md: 48d4f5bf06461ad49409f21bc6ea8d511d17a84eaac15adda14277483176a8d5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+write_set:
+  # Three modified paths: the runner; the package docstring, which describes the runner's entries (as TASK-006 changed
+  # it; __all__ does not change); and tests/unit/test_runner_rc.py, two of its tests only, by AC11 (decision D-443 C1).
+  # Every other path is new.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/conformance.py
+    - tests/unit/test_runner_rc.py
+    - tests/unit/test_runner_risk.py
+    - tests/integration/test_runner_risk_run.py
+    - tests/property/test_runner_risk_properties.py
+read_set:
+  paths:
+    - docs/specs/conformance-files.md
+    - docs/pre-genesis/conformance-scenarios-initial.md
+    - docs/pre-genesis/conformance-methodology.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-04-verification-and-evidence.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/pre-genesis/decision-matrix.md
+    - docs/tasks/TASK-006.yaml
+    - tests/conformance/set.py
+    - tests/conformance/fixtures/
+    - tests/conformance/fixtures_rc/
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/governor.py
+    - tests/unit/test_runner.py
+    - tests/unit/test_runner_rc.py
+    - tests/integration/test_runner_run.py
+    - tests/integration/test_runner_rc_run.py
+    - tests/property/test_runner_properties.py
+    - tests/property/test_runner_rc_properties.py
+  interfaces: [aieos_bootstrap.records.check_decision, aieos_bootstrap.governor.derive_inputs, aieos_bootstrap.governor.evaluate]
+  schemas: [conformance-files set file (3), conformance-files fixture file (4), conformance-files Risk Engine fixture file (10), conformance-files run record (6), spec-02 decision contract (6.4), spec-02 evaluation request (6.5)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/writer.py
+  - tests/run_tests.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_writer.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_writer_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-005, INV-006, INV-007, INV-008, INV-010, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      Unchanged where the task does not reach (TASK-003's AC1 to AC9 and AC11, TASK-006's AC1 to AC8). The run's
+      inputs, the reader and listing, the wrapped-file and canonical-form rules, the set file's form, its freeze
+      approval, the governor entry point, the Verification and Resume Check entries and comparisons, the run record's
+      keys and its record, and the command-line entry stay as those contracts say, apart from the changes AC2 to AC10
+      name. Every result of a Verification or Resume Check scenario is the same as before this task for the same tree,
+      governor, Resume Check and stand-ins.
+  - AC2: >-
+      The route (section 10, "Where the file is"). expected_path gives tests/conformance/fixtures_risk/<module name>.py
+      for the capability Risk Engine, the module name formed as section 2 says; Verification and Resume Check keep their
+      paths; any other capability (Capability Boundaries) gives none and its scenario stays NOT_RUN for "the entry point
+      of Capability Boundaries is absent until its milestone". TASK-006's order is kept: the path, then the row hash, then
+      the capability against the bound scenario file, all before the fixture file is read.
+  - AC3: >-
+      The entry point (section 10, "The entry and the comparison"; GS §4 rule 1). The derivation is the function
+      derive_inputs and the acceptance function the function evaluate of the one governor module the runner already
+      loads by TASK-003's AC6 (the root's src/aieos_bootstrap/governor.py, by a plain import statement); no other module
+      is loaded for it. When that module is absent, failed to load, or has no callable derive_inputs or evaluate, every
+      Risk Engine scenario with a fixture is NOT_RUN for "the entry point is absent" (reading: the run's counting stays
+      as TASK-003's AC6 gives it for the governor). The run function also takes a derivation function as a test seam
+      (reading): a run with a stand-in derivation never counts; the command-line entry never takes one.
+  - AC4: >-
+      A Risk Engine fixture's form (section 10, the fixture file and its table; section 5 applied). After the
+      conditions of TASK-003's AC5 that read the set entry, the row and the file's bytes and hash, and the wrapped-file
+      and canonical-form rules, a Risk Engine fixture is malformed, and its scenario NOT_RUN with none of its cases
+      run, unless: its object is exactly scenario, row_hash and cases, those two equal to the set entry; cases is a
+      non-empty list; each case is exactly values, request, records, when and expected; values is an object with exactly
+      the keys section 10's table names (contract, changed_paths, risk_rules, owner_kept_rules, articles,
+      default_profiles, requirement_profiles, delegation, evidence_comparison, auto_accept, policy_version,
+      level_version, ruleset_version), changed_paths a non-empty list of strings, every rule of risk_rules an object
+      exactly {match, class} with match a non-empty list of patterns of AC5's forms and class one of low, medium, high
+      and critical, every article an object exactly {id, scope, evidence_required} with scope a non-empty list of
+      patterns of AC5's forms, and requirement_profiles the empty list (reading: the runner checks these forms; the
+      others are the governor's to read); request has the form TASK-003's AC5 gives a request, with changed_paths equal
+      to values.changed_paths and task_state VERIFYING; records has the form TASK-003's AC5 gives records; when is
+      evaluate; and expected is exactly risk_not, profile_excludes and not_fixed, with risk_not exactly ["low"],
+      profile_excludes exactly the two pairs {dimension functional, evidence_type build} and {dimension functional,
+      evidence_type lint} in any order, and not_fixed exactly ["decision", "next_state"] in any order (section 10,
+      "Faithfulness": "a fixture with any other list is malformed").
+  - AC5: >-
+      The Given and the runner's own matcher (section 10: the Given is checked "from the values alone, without the
+      governor under test"; risk-rules-gov-aieos.md section 2 point 6, line 21). The matcher is a function of the
+      runner, never imported from the governor or any other module. A pattern is well formed only if it is a non-empty
+      string of names joined by "/", each name non-empty, with no leading or trailing "/", and each name holds only the
+      ASCII letters, the digits, ".", "_", "-" and "*" (decision D-444 E2); "**" is allowed only as a whole name; every
+      other character makes the pattern ill formed. The only pattern characters are "*" and "**" as point 6 defines
+      them: "*" matches any part of one name and never crosses "/"; "**" as a whole name matches any sequence of names,
+      so a trailing "/**" matches every file at any depth below that folder and "**/x/**" matches x at any depth; a
+      pattern without "/" matches a file name in any folder; matching is case-sensitive on the path as given. An ill
+      formed pattern makes the fixture malformed (NOT_RUN). Each path of changed_paths must be names joined by "/",
+      with no leading or trailing "/", each name non-empty and holding only the same characters without "*";
+      otherwise the fixture is malformed (NOT_RUN). The Given holds only if every rule's patterns are well formed and
+      no path of changed_paths is matched by any pattern of any rule; and, for the placeholders (section 10, reading: the runner
+      checks the one that keeps the articles out), no article's scope matches any changed path. A fixture whose values
+      break the Given is malformed (NOT_RUN), decided before any call.
+  - AC6: >-
+      Step (1), the derivation (section 10, r7 line 122). For each case, derive_inputs is called with a copy of the
+      case's values. A call that raises makes the scenario NOT_RUN, with the raised error's type recorded as the reason
+      in the runner's output (the scenario's reason, not a key of the run record), unless another case fails.
+  - AC7: >-
+      Step (2), the derived inputs (section 10, r7 line 122). The case fails if the derived inputs are not an object
+      whose risk is one of low, medium, high and critical or null and whose evidence_profile is a list of objects
+      exactly {dimension, evidence_types}, dimension a string and evidence_types a list of strings, or null; if their
+      risk is in expected.risk_not; or if a pair of expected.profile_excludes is held by their evidence_profile when it
+      is a list, a pair being held when an entry's dimension equals the pair's dimension and its evidence_types holds
+      the pair's evidence_type. A failure here makes the case fail whatever the acceptance call then does, and the call
+      is not made for that case.
+  - AC8: >-
+      Step (3), the acceptance call (section 10, r7 line 122). Only when step (2) passes, evaluate is called with a copy
+      of the case's request, the derived inputs and a copy of the case's records. A record in the form of spec 2 §6.4
+      is the expected kind of return, also one with decision null and error set (what GS §4 rule 8 gives a change that
+      matches no rule): the runner's decision_problem (TASK-003's AC7) gives no problem for it; this describes the form
+      of the return, not an expected decision value, which is never compared. A return whose profile_used is not a list
+      of objects is not such a record. The case fails if a pair of expected.profile_excludes is held by an entry of
+      profile_used, the entry's dimension equal to the pair's and its required holding the pair's evidence_type, and
+      passes otherwise. A call that raises, or returns anything that is not such a record, makes the scenario NOT_RUN
+      with the reason in the runner's output, unless another case fails.
+  - AC9: >-
+      The scenario's result (section 10, r7 line 122; CM §3). Every case is run, also after one has made the scenario
+      NOT_RUN by AC6 or AC8; a scenario is FAIL if any case fails; otherwise NOT_RUN under AC2 to AC8 and the
+      conditions of section 6 with "the entry point" read as this entry; otherwise PASS.
+  - AC10: >-
+      The run record (sections 6 and 10). The run record gains no key, and the record of spec 2 §6.2 keeps TASK-003's
+      keys and rules: outcome pass exactly when the run counts, at least one scenario has a fixture and every scenario
+      with a fixture is PASS, a Risk Engine scenario included; for RISK-01, "a scenario with a fixture" is one whose set
+      entry is not null, so a NOT_RUN RISK-01 with a fixture makes outcome fail. Over the repository's own tree (RISK-01's
+      entry null), a run with no stand-in gives the run record the runner at base_commit gives for the same tree, the
+      same commit and the same task, byte for byte except the runner's own sha256 in its runner key, which is the
+      changed module's hash (reading: decision D-443 C4's "byte-equal" cannot hold for that one value): the same keys,
+      counts true, every Verification and Resume Check scenario PASS as at base_commit, RISK-01 and ADV-02 NOT_RUN for
+      "no fixture", and the record's outcome pass. A test checks the keys, the counts, every result and reason and the
+      outcome; a script run at the task's last commit runs the runner of base_commit and the runner of that commit over
+      that commit's tree and compares the two run records' bytes after setting runner.sha256 to the same placeholder,
+      its output recorded in the acceptance request.
+  - AC11: >-
+      The change of tests/unit/test_runner_rc.py (decision D-443 C1). Only the tests test_an_unrouted_capability and
+      test_the_expected_path change, and only by removing RISK-01 from them; every ADV-02 assertion stays; no other line
+      of the module changes; RISK-01's routing and expected path are asserted in the new modules instead. At base_commit
+      the two tests read, at lines 306 to 327 (quoted in the approval request); after the task, line 309 and line 318
+      each read `        for sid, cap in (('ADV-02', 'Capability Boundaries'),):` and line 326,
+      `        self.assertIsNone(conformance.expected_path('RISK-01', 'Risk Engine'))`, is removed; nothing else in the
+      file differs. A script at each task commit compares the file with base_commit's and prints the diff, which must
+      be exactly these three changes; its output is recorded in the acceptance request (reading: a test cannot read
+      base_commit's file without a process, which AC12 forbids).
+  - AC12: >-
+      Purity and the CI checks (INV-001, INV-002, INV-004). The module and its tests import only the Python 3 standard
+      library, aieos_bootstrap.records, the tests also aieos_bootstrap.conformance, and, in the module only, aieos_bootstrap.governor and aieos_bootstrap.resume_check by
+      the guarded imports of TASK-003's AC6 and TASK-006's AC4; they use no exec, eval, compile, __import__ or
+      importlib, start no process, open no network connection, call no model, and write no file; they read files only
+      with pathlib's read_bytes and list them only with pathlib's glob; the tests build fixtures and malformed inputs in
+      memory and pass them through the byte reader and listing, never through files. The CI steps at the task's
+      commits report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit, as TASK-003's AC10 lists
+      them.
+  - AC13: >-
+      The existing test modules unchanged and passing. Every existing test module other than tests/unit/test_runner_rc.py
+      is unchanged (forbidden), and all pass at the task's commits, test_runner_rc.py with AC11's change. If one of them
+      can pass only by another change, the task escalates (needs_out_of_scope_change) instead of changing it.
+  - AC14: >-
+      The added text. Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003
+      patterns, and each count is 0; the file names are scanned with the same patterns and the records executors'
+      pre-push pattern.
+  - AC15: >-
+      Limits, stated and tested as such: no Risk Engine fixture exists and RISK-01's set entry is null, so a run over
+      the repository's tree gives RISK-01 NOT_RUN and its run record is unchanged (AC10); the runner checks its inputs
+      and compares values, and never decides a classification or an acceptance; it reads the policy's rules only from a
+      fixture's values; its matcher reads only point 6's forms, so a fixture with any other form is NOT_RUN, never PASS;
+      a raising derivation on well-formed values is NOT_RUN with its reason shown, never PASS (decision D-438, option
+      (a)); the entry first runs in the CI's base run after it lands on main; running RISK-01 needs its fixture and the
+      set file's entry (TASK-018); the in-memory integration test of AC16 in which the root's governor gives RISK-01
+      PASS tests the runner, not the governor's conformance, and is not conformance evidence.
+  - AC16: >-
+      Tests, with this rule-to-test list, each rule with at least one passing case and one failing case, the failing
+      cases built in memory: R1 AC2's route (Risk Engine's path, a Risk Engine fixture under another folder, Capability
+      Boundaries still absent); R2 AC3's entry point (absent, failed, no callable derive_inputs, a stand-in derivation
+      that never counts); R3 each malformed condition of AC4, one failing case per rule; R4 AC5's matcher and Given (each
+      point-6 form matching and not matching, a character outside the allowlist, "**" inside a name, an ill-formed
+      changed path, a changed path matched by a rule, an article scope meeting a changed path); R5 AC6 (a raising derivation NOT_RUN with its reason, and FAIL
+      when another case fails); R6 AC7 (a derived risk low, a derived low pair, each malformed derived form FAIL, and
+      no acceptance call after a failure); R7 AC8 (the governor's error record passes, a profile_used holding a low pair
+      fails, no profile_used list NOT_RUN, a raise NOT_RUN); R8 AC9 (every case run, FAIL before NOT_RUN); R9 AC10 (the
+      run record over the repository's tree: its keys, counts, every result and reason and its outcome; the outcome with
+      a Risk Engine scenario PASS, FAIL and NOT_RUN); AC10's byte comparison and AC11's diff are checked by the scripts
+      those criteria name, not by tests. Unit tests in
+      tests/unit/test_runner_risk.py; integration tests in tests/integration/test_runner_risk_run.py run over the
+      repository's own tree end to end: AC10 with no stand-in; with an in-memory set file whose RISK-01 entry names an
+      in-memory fixture under fixtures_risk/ built as section 10 says, and the root's governor, RISK-01 PASS (the
+      governor at base_commit gives an unmatched change no risk and an error record with profile_used []); with a
+      stand-in derivation that classifies the change low, RISK-01 FAIL and the run does not count. Property tests
+      (tests/property/test_runner_risk_properties.py; standard library only, fixed seeds): the same inputs always give
+      the same run record; any one-byte change of a Risk Engine fixture never gives that scenario PASS; for random
+      paths and point-6 patterns, "*" never matches across "/", "**" matches at any depth, and a pattern without "/"
+      matches a file name in any folder; a derivation that returns risk low, or a profile holding a low pair, never
+      gives PASS; and these properties of the invariants the task relates to: for INV-005, every Risk Engine result is
+      PASS, FAIL or NOT_RUN; for INV-006, with no governor no Risk Engine scenario is PASS; for INV-007, a Risk Engine
+      fixture whose bytes differ from its set entry's hash is never run; for INV-008, a stand-in derivation never makes
+      a run count. tests/run_tests.py, unchanged, runs all three groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1000k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9, AC10, AC11, AC13, AC15, AC16]}
+  - {gate: G3, check: constitution, args: [AC12, AC14, INV-001, INV-002, INV-004, INV-010, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
