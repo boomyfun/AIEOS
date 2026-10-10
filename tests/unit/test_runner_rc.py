@@ -480,7 +480,7 @@ class R5CallAndComparison(Isolated):
             'the call raised RuntimeError': raises,
             'the call returned no JSON object': lambda inputs: 'CONTINUE',
             'the call returned a value with a check_decision finding': changed({'decision': 'ACCEPT'}),
-            'a key that check_decision does not know': changed({'delta': []}),
+            'a key that check_decision does not know': changed({'next_task_state': 'DONE'}),
             'the call returned an error record': changed({'decision': None, 'error': 'the log could not be read'}),
         }
         for name, check in cases.items():
