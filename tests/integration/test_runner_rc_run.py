@@ -33,6 +33,24 @@ class Watching:
         return None
 
 
+class Refusing:
+    """A meta-path finder that makes the import of the Resume Check raise ModuleNotFoundError naming it, as if its
+    module were absent (TASK-008, the errata of its AC9, decisions D-352 and D-359)."""
+
+    def find_spec(self, name, path=None, target=None):
+        if name == conformance.RESUME_CHECK_MODULE:
+            raise ModuleNotFoundError('No module named %r' % name, name=name)
+        return None
+
+
+def without_resume_check(read):
+    """The reader ``read`` with the Resume Check's file absent, as if it were not in the tree (TASK-008, the errata of
+    its AC9, decisions D-352 and D-359)."""
+    def hidden(path):
+        return None if path == conformance.RESUME_CHECK_PATH else read(path)
+    return hidden
+
+
 def overlay(set_data):
     """A reader of the repository's tree with the set file replaced and a freeze approval of it added, and the
     records listing that goes with it."""
@@ -124,7 +142,7 @@ class R7RepositoryTree(Isolated):
         self.assertEqual(r.record['outcome'], 'pass')
         self.assertEqual(watching.asked, 0)
         self.assertNotIn(conformance.RESUME_CHECK_MODULE, sys.modules)
-        self.assertFalse((ROOT / conformance.RESUME_CHECK_PATH).exists())
+        self.assertTrue((ROOT / conformance.RESUME_CHECK_PATH).exists())
 
     def test_the_eleven_frozen_fixtures_pass_with_a_stand_in(self):
         read, listing = overlay(set_with_rc())
@@ -147,7 +165,9 @@ class R7RepositoryTree(Isolated):
                 self.assertEqual(r.results[sid], conformance.PASS, sid)
 
     def test_with_no_resume_check_the_eleven_are_not_run(self):
+        sys.meta_path.insert(0, Refusing())
         read, listing = overlay(set_with_rc())
+        read = without_resume_check(read)
         r = conformance.run(ROOT, COMMIT, TASK, read=read, listing=listing)
         for sid in RC_IDS:
             self.assertEqual((r.results[sid], r.reasons[sid]), (conformance.NOT_RUN, 'the entry point is absent'))

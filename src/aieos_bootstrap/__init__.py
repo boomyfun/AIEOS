@@ -1,6 +1,6 @@
-"""The bootstrap package of gov-AIEOS (tasks TASK-001, TASK-003, TASK-004, TASK-006 and TASK-007).
+"""The bootstrap package of gov-AIEOS (tasks TASK-001, TASK-003, TASK-004, TASK-006, TASK-007 and TASK-008).
 
-It holds four modules:
+It holds five modules:
 - ``records`` (TASK-001): a checker of the form of event-log lines, records and event payloads of specification 2
   sections 6.1 to 6.4. It reads only the text it is given, writes nothing and decides nothing.
 - ``conformance`` (TASK-003, with TASK-006's Resume Check entry): the conformance runner of
@@ -12,6 +12,8 @@ It holds four modules:
   its arguments and returns one acceptance decision record, which is advisory; it writes nothing.
 - ``eventlog`` (TASK-007): the event log's append rules of specifications 1 and 2. Given a log's bytes and one new
   event, it returns the exact bytes to append, or why nothing is appended; it opens and writes no file.
+- ``resume_check`` (TASK-008): the Resume Check of specification 3. Given the inputs of its section 1 as values, it
+  returns one execution decision record with the events its section 10 gives; it reads, writes and appends nothing.
 """
 
-__all__ = ['conformance', 'eventlog', 'governor', 'records']
+__all__ = ['conformance', 'eventlog', 'governor', 'records', 'resume_check']
