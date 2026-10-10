@@ -1,9 +1,10 @@
 # AIEOS Project Constitution
 
 > **Status: PRE-GENESIS DRAFT — proposed, not ratified.** A14 step 7 (DM A50: "thực hiện ngay bộ luật nền riêng của dự án"). Every article is a proposal. Its sources are DECIDED rows and rules of `decision-matrix.md` (DM), the concept, CR-001 or CR-002; B-rows and the assurance, Genesis and conformance documents are cited as proposed, and working records as non-authoritative. Nothing here is a Genesis fact.
-> Revision 3 — 2026-10-08 (revision 1, 2026-10-07: first version; revision 2, 2026-10-07). Written under decisions of the decision agent (A41; decision files D-078, D-088, D-094 and D-109); not an owner decision. Normative concept: `AIEOS-concept.md` v0.5 with CR-001 and CR-002 (A22, A52). Rows are cited by ID, concept text by line ("concept line N"), CR-002 by part or entry. Names (A53): **gov-AIEOS** is what is used to build AIEOS; **AIEOS** is the product.
+> Revision 4 — 2026-10-10 (revision 1, 2026-10-07: first version; revision 2, 2026-10-07; revision 3, 2026-10-08). Written under decisions of the decision agent (A41; decision files D-078, D-088, D-094 and D-109); not an owner decision. Normative concept: `AIEOS-concept.md` v0.5 with CR-001 and CR-002 (A22, A52). Rows are cited by ID, concept text by line ("concept line N"), CR-002 by part or entry. Names (A53): **gov-AIEOS** is what is used to build AIEOS; **AIEOS** is the product.
 > Revision 2 carries out CR-002 for gov-AIEOS (working record DEF-0020): way 1 in the six articles that require `ai_review` (section 2), with a wider scope for INV-004; a limit-5 sentence in OPS-002; a CR-002 source and a pointer in INV-011; sections 1, 2, 4, 5 and 6 updated; the names of A53.
 > Revision 3 carries the owner's answers of 2026-10-07 (A54) into INV-011, section 4 and section 5 point 3 (working record DEF-0021).
+> Revision 4 changes SEC-003 only: it carries the owner's widening of 2026-10-10 (A66) as one Genesis amendment (`genesis-model.md` §5), ratified with the owner's yes on its exact text (decision files D-317 and D-321).
 > Effect: every enforcement named here is a **target**; until that enforcement is measured, its effect is **advisory** (DM label rule "Anything unmeasured defaults to advisory"; A31). For gov-AIEOS, A29 stays a target, unmet by design (A51 item (7)).
 
 ## 1. What this is
@@ -118,9 +119,9 @@ Each article has the fields of concept §6.1: `id`, `category` (architecture, co
 - Check: partial. Tool (way 1): pattern rule for e-mail addresses in the files of a change, with no exception; pattern rule for credentials; pattern rule for GitHub account names, organization names and repository URLs, with the A24 exemption; and a list rule for the names of projects known to be unrelated, the list kept outside the public repository. Review: the whole rule except what the tool part decides, in particular names not on the list. evidence_required: [ai_review].
 - Severity: blocking. Scope: all paths. Applicability: all task types. Enforcement: blocking, pattern_rule, cheap.
 
-### SEC-003 · security · `.github/` only with the owner's own yes
-- Rule: no file under `.github/` is added, changed or deleted without the owner's own yes. Source: A41 (a normal push carries no change under `.github/`); A51 item (4).
-- Check: deterministic; tool: path rule, a change under `.github/` is routed to the owner.
+### SEC-003 · security · `.github/` only with the owner's own yes or, for gov-AIEOS, the decision agent's decision
+- Rule: no file under `.github/` is added, changed or deleted without the owner's own yes or, for gov-AIEOS, a decision of the decision agent that approves exactly that change as its own decision (A66), changes that remove or loosen a check included. Source: A41 (a normal push carries no change under `.github/`); A51 item (4); A66 (the owner's widening of 2026-10-10).
+- Check: deterministic; tool: path rule, a change under `.github/` is routed to the owner or, for gov-AIEOS, to the decision agent (A66).
 - Severity: blocking. Scope: `.github/`. Applicability: all task types. Enforcement: blocking, path_rule, cheap.
 
 ### OPS-001 · operational · History rewrite only with the owner's own yes
