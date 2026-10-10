@@ -1,0 +1,276 @@
+# Task contract TASK-016, the event log's single file writer and the local store (Master Plan revision 3, §4 M3:
+# "the core's single writer"; DEF-0030; specification 2 §5.1). Revision 0, drafted under decisions D-401 (S2, C2, C3)
+# and D-406 (C2), brought for approval in its own request; whether it is approved is recorded in the decision files,
+# not in this file. Fields and value forms follow specification 2 §5.1 and the contracts of TASK-007 to TASK-015.
+# Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# Task type: implementation. What it adds: one module, src/aieos_bootstrap/writer.py, the only module of the core that
+# opens files in the project-state directory for writing (constitution INV-004's code rule), holding both the event
+# log's file writer (specification 1 §4; specification 2 §3 and §6.1, events.jsonl) and the local store of leases and
+# sessions (specification 1 §5.2 and §8; specification 2 §3, local/state.sqlite, SQLite), in one module because the
+# store lives inside the same directory (decision D-401: one task, one module). Every event line is decided by
+# TASK-007's eventlog.append as TASK-015 left it; the writer only reads the log's bytes, calls append, and appends the
+# returned line to the file.
+# Order (decisions D-401 C2 and D-406): this contract is approved first and not committed; then the CI workflow's
+# revision 7, the deterministic_rule step's exemption for exactly the paths of this write set, sized to what this
+# contract's code needs (section "What the exemption must allow" below), as the decision agent's own .github/ decision
+# under DM A66, named as a loosening of a check; then commit C of this contract; then the code. Without revision 7
+# this task's CI fails by construction (the step refuses `open`, `sqlite3`, `tempfile`, `os.makedirs` and any string
+# naming the directory in src/), so G0's base_commit must be at or after revision 7's commit.
+# What the exemption must allow (for revision 7; each allowance justified by an AC of this contract):
+# - in src/aieos_bootstrap/writer.py only: the builtin name `open` (AC2 reads the log with mode "rb" and appends with
+#   mode "ab"; AC2 opens nothing else); `os.makedirs` (AC1 creates the directory and its local/ folder); `os.fsync`
+#   (AC2; not refused today); the module `sqlite3` (AC4 to AC7); `secrets` is not refused (AC4's epoch); a string naming
+#   the project-state directory (AC1's two fixed relative paths). Not needed, so not to be allowed: the attribute call
+#   `.open` (the module uses the builtin and sqlite3.connect, not Path.open or io.open), `os.replace`, `os.rename`,
+#   `os.remove`, `shutil`, `tempfile`, any process or network module;
+# - in the three test modules of the write set only: the modules `tempfile` (each test works in its own temporary
+#   folder, removed by the context manager) and `sqlite3` (tests read the store back), and the builtin `open` (tests
+#   read the files back, and write a damaged log line to test AC2's refusal); nothing else.
+# Reading of INV-004 for the tests (decision D-407 C1 (d)): INV-004's code rule is "inside the core", so the test modules
+# may write into their own temporary project-state folder only to make a damaged log for AC2's refusal; no test writes
+# outside its temporary folder.
+# Readers of the changed paths (D-263 C3's practice): src/aieos_bootstrap/__init__.py is read by every module that
+# imports the package and by the CI's G1 build; its docstring and __all__ gain writer; it must not name the Resume Check
+# fixture folder (TASK-010's assertion). No module of the repository calls the writer yet: governor.py, conformance.py,
+# resume_check.py and recovery.py stay pure and forbidden here.
+# Risk: high. R2 matches src/** and tests/** (medium); R3 read fail closed matches them too, the writer and the store
+# being where the fence's tokens are made (spec 1 §8; risk rules section 2 point 3); no path of the write set meets R10
+# (.aieos/) or R11 (tests/conformance/**); the highest wins. Profile (assurance-model.md §5, gov-AIEOS, high):
+# functional [unit_test], architecture [deterministic_rule], functional [integration_test], security
+# [static_security_analysis] and architecture [ai_review (cross-model)], plus the evidence_required of the applicable
+# articles.
+# Change class: critical_cr (to be computed over the base by script, as for TASK-009 and TASK-015: all write-set paths
+# are on the workflow's pinned evaluator list).
+# Reviews (as TASK-015's): five way-2 reviews by a Claude model other than the implementer's, and the decision agent's
+# three, each brief naming for testing: that only writer.py opens files in the directory and only the two fixed paths;
+# that every line is append's; the fence's tokens never repeat after a store is recreated; the limits of AC10.
+# Evaluation path (A61; as TASK-007 to TASK-015): revision 7 on main first; then commit C, which changes only
+# docs/tasks/TASK-016.yaml and has one parent equal to base_commit; the task's commits, each carrying "AIEOS-Task:
+# TASK-016", go to task/TASK-016 under their own decisions; main receives the task only at its acceptance.
+# Not applicable: OPS-001 (the task changes no ref); INV-005 to INV-008, INV-010 and INV-011 (the decision engine, the
+# governor, evidence records and the policy meet no path of the write-set); GOV-001, GOV-004 to GOV-006 and SEC-003
+# (the concept file, the bound artifacts, the decision matrix, the records and pre-genesis documents, and .github/, meet
+# no path of the write-set; revision 7 is its own decision). INV-009 (scope: the event log) applies directly: this
+# module is the first code that writes an event log file.
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/ (revision
+# 7 is a separate decision, the decision agent's under DM A66 unless it grants write access, secrets or settings), no
+# Claude Code setting, no push of its own.
+# Departures from proposed text, stated openly: specification 2 §3 says `.aieos/local/` is "listed as ignored by Git";
+# this task adds no .gitignore line (no .aieos/ exists in the repository, and the CI refuses any changed path under it),
+# carried to the task that first creates a real project-state directory (decision D-401 C3). Specification 1 §5.2
+# grants a lease "only on a task in READY or REWORK": the store cannot project task states from the log, so the caller
+# gives the task's state and the store refuses any other (reading). Specification 3 §1: a lease is granted only after the
+# Resume Check's CONTINUE or CONTINUE_WITH; the store does not run the Resume Check; the caller does (decision D-401).
+# Uncovered and stated limits (AC10): no repair of a damaged last line; no lock beyond SQLite's own transaction (v0.1
+# runs one task at a time, concept line 951); no caller in the core yet; every review is by AI of one vendor.
+task: TASK-016
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add a standard-library Python 3 module, src/aieos_bootstrap/writer.py, the core's single writer of the project-state
+  directory: append_event appends one event to <root>/.aieos/events.jsonl, every line decided by TASK-007's
+  eventlog.append, flushed and synced, and records every fence refusal as its own record.added event; and the local
+  store <root>/.aieos/local/state.sqlite (tables store, leases and sessions of specification 2 section 3) creates its
+  epoch once, grants one lease per task with a counter that only increases, and releases, expires and looks up leases
+  in the form append takes, and starts and ends sessions; with unit, integration and property tests in new test
+  modules, each in its own temporary folder. The time is always an argument; no other file is opened for writing.
+traces_to:
+  - docs/specs/spec-01-state-and-event-model.md#4
+  - docs/specs/spec-01-state-and-event-model.md#5.2
+  - docs/specs/spec-01-state-and-event-model.md#8
+  - docs/specs/spec-02-aieos-file-format.md#3
+  - docs/specs/spec-02-aieos-file-format.md#6.1
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, after the
+  # CI workflow's revision 7; filled by script from refs/heads/main just before C is made (D-198 C5).
+  base_commit: 548c4046466f848a9456b8ed4229469806e79f53
+  depends_on: [TASK-001, TASK-007, TASK-009, TASK-015]
+  intent_versions:
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 529b56d831d208594685aad3954fd3e8fc42cadc663e315b65bdfe615e3b09f7
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+write_set:
+  # One modified path (the package docstring and __all__); every other path is new.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/writer.py
+    - tests/unit/test_writer.py
+    - tests/integration/test_writer_files.py
+    - tests/property/test_writer_properties.py
+read_set:
+  paths:
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/Deferred/DEF-0030-event-log-writer-and-workflow-revision-6.md
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/eventlog.py
+    - src/aieos_bootstrap/recovery.py
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.eventlog.append, aieos_bootstrap.eventlog.LEASE_KEYS, aieos_bootstrap.records.check_log]
+  schemas: [spec-02 layout (3), spec-02 event line (6.1), spec-02 record (6.2), spec-01 fencing token (8)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/resume_check.py
+  - tests/run_tests.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The paths (INV-004; specification 2 section 3). Every function takes root, an existing folder given by the caller,
+      and touches only two files under it: <root>/.aieos/events.jsonl and <root>/.aieos/local/state.sqlite, creating
+      <root>/.aieos/ and <root>/.aieos/local/ when absent; no other path is opened, created, renamed or removed by the
+      module, and the store includes SQLite's own rollback journal <root>/.aieos/local/state.sqlite-journal, which
+      SQLite creates and removes during a transaction (the default rollback journal mode; no WAL). A root that is not an
+      existing folder raises before anything is opened.
+  - AC2: >-
+      append_event (specification 1 section 4; TASK-007, TASK-015). append_event(root, event_type, payload, event_id,
+      appended_at, recorder, task_id=None, fencing_token=None, corrects=None) reads the log file's bytes (empty when
+      absent), takes the lease append needs from the store (held_lease of AC6 for the event's task, None when there is
+      none), and calls eventlog.append with recorder and a record_id derived as in AC3; on "appended" it appends exactly
+      the returned line to the file opened with mode "ab", flushes and syncs it, and reads the file back to check that
+      its bytes are the given bytes followed by that line (INV-009); if that check fails, append_event raises, writes
+      nothing more and repairs nothing (fail closed); on "duplicate" or a refusal it writes nothing of the event. A log
+      file that append refuses with reason "log" (a damaged or cut last line) is never extended and
+      never repaired (AC10). recorder must be a non-empty string, else ValueError before anything is read: the writer
+      always gives append what it needs to build a refusal's record (DEF-0030; decision D-405, disposition (h)).
+  - AC3: >-
+      Every refusal recorded (specification 1 section 8: "The refusal is recorded as an observation"). When append
+      refuses an event with reason "fence" and returns its record, append_event appends that record as one record.added
+      event through append, with the event's task_id, event_id the SHA-256 hex digest of the UTF-8 text "refusal" and
+      the refused event's event_id joined by LF, and record_id the same digest of "refusal-record" and that event_id; a
+      retry of the same refused event appends nothing new (idempotency, concept line 856). A fence refusal without a
+      record (an event naming no task_id, TASK-015's choice (r1)) is returned with its findings and records nothing
+      (reading: no subject exists for it); the result says so.
+  - AC4: >-
+      The store (specification 2 section 3; specification 1 section 8). open_store(root, epoch=None) creates the SQLite
+      file with exactly the tables store (epoch, counter), leases (task_id, holder, session_id, fencing_epoch,
+      fencing_counter, granted_at, expires_at) and sessions (session_id, holder, started_at, ended_at) when it does not
+      exist, with one store row whose epoch is the given text or, when None, secrets.token_hex(16), and counter 0; an
+      existing store is opened unchanged and a given epoch that differs from its own raises. A new store (after a lost
+      one) has a new epoch, so a token it grants never equals an earlier store's token (spec 1 section 8).
+  - AC5: >-
+      Grants (specification 1 sections 5.2 and 8). grant_lease(root, task_id, task_state, holder, session_id, now,
+      expires_at) grants a lease only when task_state is READY or REWORK (the caller's reading of the log; the store does
+      not project it), no lease on task_id is held, expires_at is after now, and the session is started and not ended;
+      it increases the counter by one and inserts the lease in one SQLite transaction, and returns the lease in
+      eventlog.LEASE_KEYS' form (task_id, fencing_token {epoch, counter}, expires_at); any other case returns a refusal
+      with its reason and changes nothing. The caller runs the Resume Check first (specification 3 section 1); the store
+      does not.
+  - AC6: >-
+      Release, expiry and lookup. release_lease(root, task_id) removes the held lease on task_id and returns it, or
+      None; expire_leases(root, now) removes every lease whose expires_at is at or before now and returns them, oldest
+      first (spec 1 section 8: "An expired lease is expired, whatever its holder believes"; recovery step 5);
+      held_lease(root, task_id) and held_leases(root) return the held leases in eventlog.LEASE_KEYS' form, as recovery's
+      reconcile takes them. Times are timezone-aware UTC datetimes, stored as ISO 8601 text with "Z".
+  - AC7: >-
+      Sessions. start_session(root, session_id, holder, now) inserts a session once (a second start of the same id is
+      refused); end_session(root, session_id, now) sets ended_at once and releases the session's leases; both return
+      what they did.
+  - AC8: >-
+      The single writer and the imports (INV-004, INV-001, INV-002). The module imports only the Python 3 standard
+      library (datetime, hashlib, json, os, secrets, sqlite3 among the allowed), aieos_bootstrap.records and
+      aieos_bootstrap.eventlog; it opens files only with the builtin open on the log path (modes "rb" and "ab") and
+      sqlite3.connect on the store path (SQLite's own journal beside it, AC1, default rollback mode); no other module of
+      src/ changes except __init__.py's docstring and __all__; a
+      script check lists every Import, every call of open and every string naming the directory in src/, and they are
+      only in writer.py.
+  - AC9: >-
+      Purity of what remains and the CI checks. No exec, eval, compile, __import__ or importlib; no process, network or
+      model call; the clock is read nowhere (every time is an argument; secrets is used only for a new store's epoch);
+      no assert in src (bandit B101). With revision 7 on main, the CI steps at the task's commits report no finding:
+      deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit.
+  - AC10: >-
+      Limits, stated and tested as such where they can be: a damaged last line is refused and never repaired; a failed
+      read-back after an append raises and repairs nothing; no lock
+      beyond SQLite's own transaction (one task at a time, concept line 951); the caller runs the Resume Check before a
+      grant and gives the task's state; no .gitignore change (carried); no caller in the core yet; every existing module
+      and test not in the write set is unchanged, and if one can pass only by a change the task escalates
+      (needs_out_of_scope_change).
+  - AC11: >-
+      The added text. Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003
+      patterns, and each count is 0; the file names are scanned with the same patterns and the records executors'
+      pre-push pattern (D-282).
+  - AC12: >-
+      Tests, each rule with at least one passing and one failing case, each test in its own temporary folder: R1 AC1
+      (the two paths only, checked after each transaction ends, created on first use; a root that is not a folder); R2
+      AC2 (an append, a duplicate, a refusal
+      writing nothing; the file equal to the given bytes plus the line; a cut last line never extended; recorder
+      required); R3 AC3 (a fence refusal recorded once, its ids, a retry appending nothing; no record for no task_id);
+      R4 AC4 (the tables, the epoch given or random, an existing store unchanged, a differing epoch refused, a new store
+      in another folder, standing for a lost one, giving tokens unequal to the first store's; no test calls a removal
+      function itself; each temporary folder is removed by tempfile's own cleanup); R5 AC5 (each refusal reason; the
+      counter only increasing);
+      R6 AC6 (release, expiry at and before now, lookups in LEASE_KEYS' form); R7 AC7; R8 AC8 (the script check of the
+      imports, opens and directory strings). Unit tests in tests/unit/test_writer.py; integration tests in
+      tests/integration/test_writer_files.py (a full flow: a session, a grant, appends under the lease, a refused
+      submission recorded, recovery's reconcile over the file's bytes and the store's held leases, expiry); property
+      tests in tests/property/test_writer_properties.py (standard library only, fixed seeds): for random sequences of
+      appends, grants and releases, the file's bytes only grow and every earlier prefix is kept (INV-009), records.check_log
+      finds nothing, and no two grants ever carry the same token. tests/run_tests.py, unchanged, runs all groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1200k, wall_time: 5h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC10, AC12]}
+  - {gate: G3, check: constitution, args: [AC9, AC11, INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
