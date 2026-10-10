@@ -2,6 +2,7 @@
 import copy
 import hashlib
 import itertools
+import re
 import sys
 import unittest
 
@@ -112,6 +113,15 @@ class R1Inputs(unittest.TestCase):
 
     def test_a_bad_code_sha256_gives_error(self):
         self.assertIsNone(rc.check(inputs(), code_sha256='xyz')['decision'])
+
+    def test_log_seq_bound(self):
+        # decision D-361, reading R-a: an integer from 0 to 2**63 - 1; beyond it an error record, never a raise
+        self.assertEqual(rc.check(inputs(log_seq=2 ** 63 - 1))['decision'], 'CONTINUE')
+        for value in (2 ** 63, 10 ** 5000):
+            rec = rc.check(inputs(log_seq=value))
+            self.assertIsNone(rec['decision'])
+            self.assertIn('log_seq', rec['error'])
+            self.assertEqual(records.check_decision('decision.execution', rec), [])
 
 
 class R2Checks(unittest.TestCase):
@@ -230,6 +240,27 @@ class R3Patterns(unittest.TestCase):
     def test_fail_closed_on_an_undecidable_pattern(self):
         self.assertTrue(rc.meet(None, 'src/a.py'))
 
+    def test_many_stars_in_one_name_end_quickly(self):
+        # way-2 review R3 (decision D-361): a regular expression would backtrack for a very long time here
+        pattern = 'x/' + '*a' * 40 + '*b'
+        self.assertFalse(rc.meet(pattern, 'x/' + 'a' * 200))
+        self.assertTrue(rc.meet(pattern, 'x/' + 'a' * 200 + 'b'))
+
+    def test_the_name_match_equals_the_regular_expression_on_small_cases(self):
+        # decision D-361 C2 (c): every pattern up to 6 characters over a, b and *, against every name up to 6
+        # characters over a and b, as the earlier construction with one "[^/]*" per star decided it
+        def names(alphabet):
+            for size in range(7):
+                for t in itertools.product(alphabet, repeat=size):
+                    yield ''.join(t)
+        plain = list(names('ab'))
+        for pattern in names('ab*'):
+            if '*' not in pattern:
+                continue
+            rx = re.compile(''.join('[^/]*' if ch == '*' else re.escape(ch) for ch in pattern))
+            for name in plain:
+                self.assertEqual(rc._names_meet(pattern, name), rx.fullmatch(name) is not None, (pattern, name))
+
     def test_a_folder_component_stands_for_its_files(self):
         art = {'id': 'GOV-9', 'scope': {'paths': [], 'components': ['CMP-CORE']}, 'applicability': None, 'violated': True}
         contract = dict(inputs()['contract'], constitution=[], write_set={'paths': ['src/app/core/x.py']})
@@ -324,6 +355,21 @@ class R6Records(unittest.TestCase):
         for inp in (inputs(approved_contract_hash='c' * 64), inputs(task_id=5), {}):
             rec = rc.check(inp)
             self.assertEqual(records.check_decision('decision.execution', rec), [])
+
+    def test_the_subject_of_an_error_record(self):
+        # decision D-359, E1: "TASK-0" exactly when task_id is missing or malformed, named in uncovered
+        line = 'subject: task_id is malformed, so TASK-0 stands for it (decision D-359)'
+        missing = inputs()
+        del missing['task_id']
+        for inp in (missing, inputs(task_id='T-1'), inputs(task_id=5)):
+            rec = rc.check(inp)
+            self.assertIsNone(rec['decision'])
+            self.assertEqual(rec['subject'], 'TASK-0')
+            self.assertIn(line, rec['uncovered'])
+        rec = rc.check(inputs(log_seq=True))
+        self.assertIsNone(rec['decision'])
+        self.assertEqual(rec['subject'], 'TASK-100')
+        self.assertNotIn(line, rec['uncovered'])
 
     def test_the_record_keys(self):
         rec = rc.check(inputs())

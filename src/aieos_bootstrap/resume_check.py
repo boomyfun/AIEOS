@@ -11,6 +11,7 @@ Readings (each marked "(reading)" in the task contract):
 - Every key of the inputs that is missing or not in its section 9 form gives a record with decision null and error.
   Within well-formed values, a budget use that is not reported, an article with no result, observed_read_set null and
   a budget form that cannot be parsed are uncovered, never an error.
+- log_seq is in its section 9 form only when it is an integer from 0 to 2**63 - 1 (decision D-361).
 - commits is base_commit..HEAD in the caller's order, each with its paths against its first parent; a path changed by
   several commits takes the last commit's change; renames are not detected.
 - Tokens, wall time and human attention are compared by a fixed parse of their forms: tokens a number with an optional
@@ -58,6 +59,8 @@ UNPARSABLE = 'unparsable'
 UNANALYSED = 'unanalysed'
 # The subject of an error record whose task_id is malformed: a fixed value that names no task (decision D-359).
 NO_TASK = 'TASK-0'
+# log_seq is in its section 9 form only below this bound (decision D-361, reading R-a).
+MAX_LOG_SEQ = 2 ** 63
 
 _HEX64 = re.compile(r'[0-9a-f]{64}')
 _COMMIT = re.compile(r'[0-9a-f]{40}|[0-9a-f]{64}')
@@ -100,7 +103,7 @@ def _python_version():
 def _ids(task_id, log_seq, head_commit, code_sha256):
     def event_id(event_type):
         text = '\n'.join([task_id if isinstance(task_id, str) else '',
-                          str(log_seq) if _int(log_seq) else '',
+                          str(log_seq) if _int(log_seq) and log_seq < MAX_LOG_SEQ else '',
                           head_commit if isinstance(head_commit, str) else '',
                           code_sha256 or '', event_type])
         return hashlib.sha256(text.encode('utf-8')).hexdigest()
@@ -116,7 +119,30 @@ def _names_meet(a, b):
     if '*' in a and '*' in b:
         return True
     pattern, name = (a, b) if '*' in a else (b, a)
-    return re.fullmatch(''.join('[^/]*' if ch == '*' else re.escape(ch) for ch in pattern), name) is not None
+    return _star_match(pattern, name)
+
+
+def _star_match(pattern, name):
+    """Whether one name matches one name pattern in which "*" stands for any part of the name: the greedy two-index
+    match, at worst the product of the two lengths in steps, never the backtracking of a regular expression with many
+    stars (way-2 review R3, decision D-361)."""
+    p = n = 0
+    star, mark = -1, 0
+    while n < len(name):
+        if p < len(pattern) and pattern[p] == '*':
+            star, mark = p, n
+            p += 1
+        elif p < len(pattern) and pattern[p] == name[n]:
+            p += 1
+            n += 1
+        elif star >= 0:
+            mark += 1
+            p, n = star + 1, mark
+        else:
+            return False
+    while p < len(pattern) and pattern[p] == '*':
+        p += 1
+    return p == len(pattern)
 
 
 def _parts(pattern):
@@ -175,7 +201,7 @@ def _check_inputs(inp):
     extra = sorted(str(k) for k in set(inp) - INPUT_KEYS)
     _need(not extra, 'inputs has keys section 9 does not name: ' + ', '.join(extra))
     _need(isinstance(inp['task_id'], str) and _TASK.fullmatch(inp['task_id']) is not None, 'task_id is not TASK-<digits>')
-    _need(_int(inp['log_seq']), 'log_seq is not an integer at least 0')
+    _need(_int(inp['log_seq']) and inp['log_seq'] < MAX_LOG_SEQ, 'log_seq is not an integer from 0 to 2**63 - 1')
     _need(inp['task_state'] in TASK_STATES if isinstance(inp['task_state'], str) else False,
           'task_state is not READY, REWORK or IN_PROGRESS')
     for key in ('contract_hash', 'approved_contract_hash'):
