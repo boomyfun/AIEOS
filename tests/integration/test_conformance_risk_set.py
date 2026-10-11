@@ -96,7 +96,8 @@ def naming(name):
 class RiskSetTest(unittest.TestCase):
 
     def test_the_folder_holds_exactly_the_one_file(self):
-        names = sorted(p.name for p in (ROOT / FIXTURE_DIR).glob('*'))
+        # Files only: the CI's G1 build step compiles src and tests, so a __pycache__ folder may be there.
+        names = sorted(p.name for p in (ROOT / FIXTURE_DIR).glob('*') if p.is_file())
         self.assertEqual(names, ['risk_01.py'])
 
     def test_the_file_names_its_bound_row_and_expects_its_cell(self):
