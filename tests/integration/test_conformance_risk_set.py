@@ -25,7 +25,8 @@ OWN = ('tests/unit/test_conformance_risk_files.py', 'tests/integration/test_conf
        'tests/property/test_conformance_risk_properties.py')
 # The other modules that may name the folder (AC7): the runner, which section 10 has expect the folder for the Risk
 # Engine, and the runner's test modules named test_runner_risk*.py, which name the path for in-memory bytes (in this
-# form the test holds when TASK-019 changes them).
+# form the test holds when TASK-019 changes them); and the set file, whose RISK-01 entry names this file's path as data
+# once TASK-020 sets it (so the test holds in both states, as TASK-005's module allows the set file).
 RUNNER = 'src/aieos_bootstrap/conformance.py'
 RUNNER_TESTS = re.compile(r'tests/(?:unit|integration|property)/test_runner_risk[A-Za-z0-9_]*\.py')
 
@@ -80,7 +81,7 @@ def freeze_ids(digest):
 
 def not_allowed(paths):
     """The given repository paths that are not allowed to name the folder, sorted."""
-    return sorted(p for p in paths if p not in OWN and p != RUNNER and not RUNNER_TESTS.fullmatch(p))
+    return sorted(p for p in paths if p not in OWN and p not in (RUNNER, SET_FILE) and not RUNNER_TESTS.fullmatch(p))
 
 
 def naming(name):
@@ -96,8 +97,8 @@ def naming(name):
 class RiskSetTest(unittest.TestCase):
 
     def test_the_folder_holds_exactly_the_one_file(self):
-        # Files only: the CI's G1 build step compiles src and tests, so a __pycache__ folder may be there.
-        names = sorted(p.name for p in (ROOT / FIXTURE_DIR).glob('*') if p.is_file())
+        # The CI's G1 build step compiles src and tests, so a __pycache__ folder may be there; it alone is skipped.
+        names = sorted(p.name for p in (ROOT / FIXTURE_DIR).glob('*') if not (p.name == '__pycache__' and p.is_dir()))
         self.assertEqual(names, ['risk_01.py'])
 
     def test_the_file_names_its_bound_row_and_expects_its_cell(self):
@@ -145,13 +146,19 @@ class RiskSetTest(unittest.TestCase):
 
     def test_a_module_that_is_not_allowed_is_named(self):
         for other in ('src/aieos_bootstrap/governor.py', 'tests/unit/test_not_named_in_the_contract.py',
-                      'tests/unit/test_runner_rc.py', 'tests/unit/test_runner_risk.txt'):
-            self.assertEqual(not_allowed(list(OWN) + [RUNNER, other]), [other])
+                      'tests/unit/test_runner_rc.py', 'tests/unit/test_runner_risk.txt',
+                      'tests/conformance/fixtures/acc_01.py', 'tests/conformance/set_old.py'):
+            self.assertEqual(not_allowed(list(OWN) + [RUNNER, SET_FILE, other]), [other])
 
     def test_the_allowed_modules_are_all_allowed(self):
-        self.assertEqual(not_allowed(list(OWN) + [RUNNER, 'tests/unit/test_runner_risk.py',
+        self.assertEqual(not_allowed(list(OWN) + [RUNNER, SET_FILE, 'tests/unit/test_runner_risk.py',
                                                   'tests/integration/test_runner_risk_run.py',
                                                   'tests/property/test_runner_risk_properties.py']), [])
+
+    def test_the_set_file_naming_this_file_is_allowed(self):
+        """The second state of RISK-01's entry (TASK-020): the set file then holds this file's path as data."""
+        self.assertEqual(not_allowed([SET_FILE]), [])
+        self.assertEqual(not_allowed(['tests/conformance/fixtures_risk/risk_02.py']), ['tests/conformance/fixtures_risk/risk_02.py'])
 
     def test_no_risk_file_in_the_m2_folder(self):
         # Only the M2 folder is named here: the Resume Check folder may be named only by the modules TASK-005's
