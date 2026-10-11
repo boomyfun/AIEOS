@@ -1,0 +1,258 @@
+# Task contract TASK-021, the AC coverage check (Master Plan revision 3, §4 M4; specification 4 revision 3, section 6
+# item 1; concept line 730). Revision 0, drafted under decisions D-515 (Q3, C1, C2) and D-512 (C3), brought for
+# approval in its own request; whether it is approved is recorded in the decision files, not in this file. Fields and
+# value forms follow specification 2 §5.1 and the contracts of TASK-007 to TASK-016.
+# Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# Task type: implementation. What it adds: one pure module, src/aieos_bootstrap/ac_coverage.py, whose function check
+# takes one task contract as values (specification 2 §5.1: acceptance_criteria, verification_plan, constitution) and
+# returns the findings of specification 4 section 6 item 1, and whose function coverage_record returns, when there is a
+# finding, the one record of specification 2 §6.2 that item 1 names (outcome blocking, blocking_kind other), checked
+# by records.check_record. It writes nothing, appends nothing and reads no file: the caller gives the contract's values
+# and writes the record, if at all, through the core's single writer (TASK-016), which this task does not call.
+# What it does not do (D-515 C1): it does not settle DEF-0042 point 7 (specification 4 section 12 item 7): how a
+# corrected contract clears such a record, and whether the governor specification should name an uncovered AC as a
+# missing gate result instead, stay open. It changes no governor, writer, records or conformance code, nothing under
+# .github/ and no policy. It does not parse YAML: the integration test reads the contracts on main with its own
+# line-based reader of the three fields, which is test code, not the module's (reading: a contract reader for the
+# core is a later task's; stated in AC9).
+# The finding "an args entry that names no AC of the contract" (spec 4 line 70): a gate's args also name constitution
+# articles (for example TASK-016's G3 args: AC9, AC11, INV-001, ...), so an args entry is a finding unless it is an AC
+# id of the contract or an article id the contract's own constitution list names (reading, for ruling: otherwise
+# every G3 plan on main would be a finding).
+# Readers of the changed paths (D-263 C3's practice): src/aieos_bootstrap/__init__.py is read by every module that
+# imports the package and by the CI's G1 build; its docstring and __all__ gain ac_coverage; it must not name the
+# Resume Check fixture folder (TASK-010's assertion) nor the Risk Engine fixture folder (TASK-020's allow list). No
+# module of the repository calls ac_coverage yet.
+# Risk: high. R2 matches src/** and tests/** (medium); R3 read fail closed matches them too (risk rules section 2
+# point 3); no path of the write set meets R10 (.aieos/) or R11 (tests/conformance/**); the highest wins (to be
+# computed over the base by script, as for TASK-020). Profile (assurance-model.md §5, gov-AIEOS, high): functional
+# [unit_test], architecture [deterministic_rule], functional [integration_test], security [static_security_analysis]
+# and architecture [ai_review (cross-model)], plus the evidence_required of the applicable articles.
+# Change class: critical_cr (to be computed over the base by script: all write-set paths are on the workflow's pinned
+# evaluator list, src/aieos_bootstrap/** and tests/unit|integration|property/**).
+# Reviews (as TASK-016's): five way-2 reviews by a Claude model other than the implementer's, and the decision
+# agent's three, each brief naming for testing: the three findings and only them; that the record passes
+# records.check_record and is blocking with kind other; purity (no file, no clock, no write); the limits of AC9.
+# Evaluation path (A61; as TASK-007 to TASK-020): commit C changes only docs/tasks/TASK-021.yaml and has one parent
+# equal to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-021", go to task/TASK-021 under their own
+# decisions; main receives the task only at its acceptance. The task push's CI base run is RISK-01's first
+# conformance run over the set file of DM F35, reported advisory, never MEASURED (decision D-509 C4).
+# Not applicable: OPS-001 (the task changes no ref); INV-004 and INV-009 (the module writes no file and no log);
+# INV-005 to INV-008, INV-010 and INV-011 (the decision engine, the governor, evidence records as stored, the replay
+# and the policy meet no path of the write-set: the module returns a record and stores none); GOV-001, GOV-004 to
+# GOV-006 and SEC-003 (the concept file, the bound artifacts, the decision matrix, the records and pre-genesis
+# documents, and .github/, meet no path of the write-set).
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting, no push of its own; it weakens no evidence requirement (it adds a finding; CR-002 part 4
+# limit 8 does not apply), so its acceptance is one delegated approval of the decision agent (Master Plan section 6),
+# for the decision agent's ruling.
+# Uncovered and stated limits (AC9): the mapping is by AC id only, at gate level (spec 4 section 6 item 1); test-to-AC
+# (item 2) and a record key for covered ACs (item 3, DEF-0042 point 8) are not this task's; no caller in the core and no
+# YAML reader; clearing the record on a corrected contract is open (DEF-0042 point 7).
+task: TASK-021
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add a standard-library Python 3 module, src/aieos_bootstrap/ac_coverage.py, the AC coverage check of specification 4
+  section 6 item 1: check(contract) takes a task contract's acceptance_criteria, verification_plan and constitution as
+  values and returns its findings, in a fixed order: each AC id that no gate's args names, an empty acceptance_criteria
+  list, and each args entry that is neither an AC id of the contract nor an article id of its constitution list; a
+  contract whose three fields are not in their forms gives one malformed finding (fail closed). coverage_record returns,
+  when there are findings, the one record of specification 2 section 6.2 with outcome blocking and blocking_kind
+  other, and None when there are none; it writes nothing. With unit, integration and property tests in new test
+  modules; the integration test runs check over the contracts TASK-001 to TASK-021 in the tree, read only, and reports
+  what it finds as data.
+traces_to:
+  - docs/specs/spec-04-verification-and-evidence.md#6
+  - docs/specs/spec-02-aieos-file-format.md#5.1
+  - docs/specs/spec-02-aieos-file-format.md#6.2
+  - AIEOS-concept.md#730
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-021.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id.
+  base_commit: bcd2268b570d0eb9c972232e1dabae6b622c6e0e
+  depends_on: [TASK-001, TASK-011]
+  intent_versions:
+    docs/specs/spec-04-verification-and-evidence.md: 48d4f5bf06461ad49409f21bc6ea8d511d17a84eaac15adda14277483176a8d5
+    docs/specs/spec-02-aieos-file-format.md: 529b56d831d208594685aad3954fd3e8fc42cadc663e315b65bdfe615e3b09f7
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # One modified path (the package docstring and __all__); every other path is new.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/ac_coverage.py
+    - tests/unit/test_ac_coverage.py
+    - tests/integration/test_ac_coverage_contracts.py
+    - tests/property/test_ac_coverage_properties.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-04-verification-and-evidence.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/Deferred/DEF-0042-specification-4-open-points-and-the-risk-01-route.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/records.py
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.records.check_record, aieos_bootstrap.records.Finding]
+  schemas: [spec-02 task contract (5.1), spec-02 record (6.2)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/writer.py
+  - tests/run_tests.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_writer.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_writer_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The input (specification 2 section 5.1). check(contract) takes a mapping with at least the keys
+      acceptance_criteria (a list of one-entry mappings from an AC id, a string "AC" followed by digits and optionally
+      one lowercase letter, to its text, a non-empty string), verification_plan (a list of mappings with gate, a string
+      "G" followed by digits, check, a non-empty string, and optionally args, a list of non-empty strings) and
+      constitution (a list of non-empty strings); other keys are ignored. Any other form of these three fields, a
+      repeated AC id, or a contract that is not a mapping gives exactly one finding of kind "malformed" naming the
+      first form that fails, and no other finding (fail closed: a malformed contract is never "covered").
+  - AC2: >-
+      An uncovered AC (specification 4 section 6 item 1; concept line 730). For a well-formed contract, each AC id of
+      acceptance_criteria that appears in the args of no gate of verification_plan gives one finding of kind
+      "uncovered" naming that id, in the order of acceptance_criteria.
+  - AC3: >-
+      An empty list. A well-formed contract whose acceptance_criteria is the empty list gives one finding of kind
+      "no_acceptance_criteria".
+  - AC4: >-
+      A stray args entry. For a well-formed contract, each distinct args entry, over all gates in plan order and within
+      a gate in args order, that is neither an AC id of acceptance_criteria nor an entry of the contract's constitution
+      list gives one finding of kind "stray_arg" naming that entry and its gate (reading: article ids of the contract's
+      own constitution list are allowed, as every G3 plan on main names them).
+  - AC5: >-
+      The result. check returns a list of findings, each a mapping with exactly the keys kind, ref and detail (ref the
+      AC id, args entry or field concerned, detail a short English text); for a well-formed contract the order is the
+      no_acceptance_criteria finding, then the uncovered findings, then the stray_arg findings; a contract with none of
+      them gives the empty list. check is a pure function: the same input gives the same output, and the input is not
+      changed.
+  - AC6: >-
+      The record (specification 4 section 6 item 1 and section 10; specification 2 section 6.2).
+      coverage_record(task_id, contract_version, findings, recorder, source_class) returns None for an empty findings
+      list; otherwise the one record {record_id, fact_kind "observation", source_class, recorder, subject task_id,
+      evidence_type "ac_coverage", outcome "blocking", blocking_kind "other"}, whose record_id is the SHA-256 hex digest
+      of the UTF-8 text "ac-coverage", task_id and contract_version joined by LF (one record per contract version,
+      spec 4 section 10); source_class must be "deterministic_tool_local" or "deterministic_tool_external_ci", task_id
+      a task id "TASK-" followed by digits, contract_version "v" followed by digits, and recorder a non-empty string,
+      else ValueError; records.check_record finds nothing in every record it returns. It writes and appends nothing.
+  - AC7: >-
+      What it does not decide. The module decides no acceptance and no execution, refuses no approval, and settles
+      neither how a corrected contract clears such a record nor whether the governor should name an uncovered AC as a
+      missing gate result (DEF-0042 point 7; specification 4 section 12 item 7): its docstring says so. No module of src/
+      changes except __init__.py's docstring and __all__.
+  - AC8: >-
+      Purity and the CI checks (INV-001, INV-002, INV-003). The module imports only the Python 3 standard library
+      (hashlib and re among the allowed) and aieos_bootstrap.records; it opens, writes and removes no file, reads no
+      clock and no environment, and makes no process, network or model call; no exec, eval, compile, __import__ or
+      importlib; no assert in src (bandit B101); no string that names the project-state directory. At the task's
+      commits the CI steps report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit.
+  - AC9: >-
+      Limits, stated: the mapping is by AC id at gate level only; test-to-AC (spec 4 section 6 item 2) and a record key
+      for covered ACs (item 3; DEF-0042 point 8) are not this task's; there is no caller in the core and no YAML reader
+      in src; clearing the record is open (AC7). Every existing module and test not in the write set is unchanged, and if
+      one can pass only by a change the task escalates (needs_out_of_scope_change).
+  - AC10: >-
+      The contracts on main, read only (decision D-515 C2). tests/integration/test_ac_coverage_contracts.py reads
+      docs/tasks/TASK-001.yaml to TASK-021.yaml from the tree with pathlib's read_bytes only, extracts the three fields
+      with its own line-based reader (an AC line "  - AC<n>:" under acceptance_criteria, a gate line "  - {gate: ...,
+      check: ..., args: [...]}" under verification_plan, the line "constitution: [...]"), asserts that each contract
+      gives well-formed values, runs check over each, and asserts that the findings equal a list written in the test,
+      which the task's request states with its source lines: a finding on an accepted contract is data, reported to the
+      decision agent; it is not fixed by this task and reopens no acceptance.
+  - AC11: >-
+      The added text. Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003
+      patterns, and each count is 0; the file names are scanned with the same patterns and the records executors'
+      pre-push pattern (D-282).
+  - AC12: >-
+      Tests, each rule with at least one passing and one failing case: R1 AC1 (each malformed form, one finding only); R2
+      AC2; R3 AC3; R4 AC4 (an AC id of another contract, a typo, an article not in the constitution list, each a finding;
+      an article in the list not); R5 AC5 (the order, the keys, purity: the input unchanged, a second call equal); R6
+      AC6 (None for no findings; the record's keys and values; its id; check_record finds nothing; each ValueError); R7
+      AC7 and AC8 (a script check of the module's imports and of the absence of open, write and clock calls). Unit tests
+      in tests/unit/test_ac_coverage.py; AC10 in tests/integration/test_ac_coverage_contracts.py; property tests in
+      tests/property/test_ac_coverage_properties.py (standard library only, fixed seeds): for random well-formed
+      contracts, every AC id is either named by a gate or reported uncovered, never both; adding a gate that names every
+      AC leaves no uncovered finding; the result never depends on the order of the input's other keys.
+      tests/run_tests.py, unchanged, runs all groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC10, AC12]}
+  - {gate: G3, check: constitution, args: [AC8, AC9, AC11, INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
