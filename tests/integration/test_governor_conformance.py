@@ -44,6 +44,27 @@ def resume_check_record():
             'sha256': conformance.sha256((ROOT / conformance.RESUME_CHECK_PATH).read_bytes())}
 
 
+RISK_01_SHA256 = '8a0bdb1665dc30998fae3a6926a37f854a38780695e6276d62ce5d9ece06a45b'
+
+
+def risk_state(value=None):
+    """The state of the set file's RISK-01 entry (TASK-019, contract AC1): 'null' when it names no fixture, 'present'
+    when it names the file conformance.expected_path gives with the SHA-256 that DM row F34's freeze binds, that file
+    in the tree having that SHA-256; any other value fails. Without a value it reads the tree's set file."""
+    if value is None:
+        value = conformance.unwrap((ROOT / conformance.SET_FILE).read_bytes())
+    risk = [e for e in value['scenarios'] if e['capability'] == conformance.RISK_ENGINE]
+    if [e['id'] for e in risk] != ['RISK-01']:
+        raise AssertionError('the Risk Engine entries are not exactly RISK-01')
+    if risk[0]['fixture'] is None:
+        return 'null'
+    path = conformance.expected_path('RISK-01', conformance.RISK_ENGINE)
+    if (risk[0]['fixture'] == {'path': path, 'sha256': RISK_01_SHA256}
+            and conformance.sha256((ROOT / path).read_bytes()) == RISK_01_SHA256):
+        return 'present'
+    raise AssertionError('the RISK-01 entry names neither no fixture nor its frozen file')
+
+
 def present_results(governor_result):
     """Every scenario's (result, reason) in the present state, the governor's nineteen given as one pair."""
     out = {sid: governor_result for sid in GOVERNOR_IDS}
@@ -69,6 +90,20 @@ class GovernorConformanceTest(unittest.TestCase):
         self.assertEqual(pathlib.Path(governor.__file__).resolve(), (ROOT / conformance.GOVERNOR_PATH).resolve())
 
     def test_the_verification_scenarios_pass_and_the_others_are_not_run(self):
+        if risk_state() == 'present':
+            self.assertEqual(rc_state(), 'present')
+            r = conformance.run(ROOT, COMMIT, TASK)
+            self.assertEqual(r.problems, [])
+            self.assertTrue(r.value['counts'])
+            self.assertEqual(r.value['governor_identity'],
+                             hashlib.sha256((ROOT / conformance.GOVERNOR_PATH).read_bytes()).hexdigest())
+            self.assertEqual(len(r.results), 32)
+            want = present_results((conformance.PASS, ''))
+            want['RISK-01'] = (conformance.PASS, '')
+            self.assertEqual({s: (v, r.reasons[s]) for s, v in r.results.items()}, want)
+            self.assertEqual(r.value['resume_check'], resume_check_record())
+            self.assertEqual(r.record['outcome'], 'pass')
+            return
         if rc_state() == 'present':
             r = conformance.run(ROOT, COMMIT, TASK)
             self.assertEqual(r.problems, [])

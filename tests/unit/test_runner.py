@@ -42,13 +42,14 @@ FIXED_SET_SHA256 = '158323324f2803bceee870403bc6c0e297c407fbe50902d60bec90624cc9
 
 def fixed_files():
     """real_files() with the set file replaced by the fixed set value of TASK-013 (contract AC2): the tree's set value
-    with every Resume Check entry's fixture null and fixture_set_version 1, written as the runner writes a set file.
+    with every Resume Check and Risk Engine entry's fixture null (TASK-019 AC2) and fixture_set_version 1, written as
+    the runner writes a set file.
     It is the set file at 1659a8cb, whose hash TASK-002's freeze record approves, so no freeze line is added; in the
     null state it equals real_files() byte for byte."""
     files = real_files()
     value = conformance.unwrap(files[conformance.SET_FILE])
     for entry in value['scenarios']:
-        if entry['capability'] == 'Resume Check':
+        if entry['capability'] in ('Resume Check', 'Risk Engine'):
             entry['fixture'] = None
     value['fixture_set_version'] = 1
     files[conformance.SET_FILE] = FIRST + conformance.canonical_text(value) + LAST
