@@ -18,8 +18,11 @@ it (the CI workflow's revision 8), each under its own decision.
 repository given) and a timeout, and closes git's own ways of starting other programs by fixed options: no pager,
 core.fsmonitor off, core.hooksPath the null device, diff.external empty, and an environment built from nothing but
 PATH, SYSTEMROOT (only when present, for Windows), GIT_CONFIG_NOSYSTEM, GIT_CONFIG_GLOBAL (the null device),
-GIT_TERMINAL_PROMPT, GIT_OPTIONAL_LOCKS ("0", so git refreshes no index) and LC_ALL. It returns the exit code and the
-output as bytes, and raises nothing for a refused form, a timeout or a git that cannot be started.
+GIT_TERMINAL_PROMPT, GIT_OPTIONAL_LOCKS ("0", so git refreshes no index), GIT_NO_LAZY_FETCH ("1", so a partial clone
+starts no fetch) and LC_ALL. It refuses, before any process starts, when the PATH it would pass is empty or, split by
+os.pathsep, has an entry that is empty or not an absolute path, since on POSIX git would then be looked up relative
+to the repository (erratum E1 of the contract, decision D-580). It returns the exit code and the output as bytes,
+and raises nothing for a refused form, a timeout or a git that cannot be started.
 
 ``parse_commit(data)`` and ``parse_paths(data)`` are pure: they turn the bytes of "cat-file -p" of a commit and of the
 diff-tree form into values, and give an error, never an exception, for bytes out of form.
@@ -30,14 +33,22 @@ Readings (the implementer's, for the decision agent's ruling, not the contract's
   gpgsig and mergetag), each optionally followed by continuation lines that begin with a space; such further lines
   are accepted and not returned. Anything else is a header line out of form.
 - The trailers are taken from the message's last paragraph as the contract states it, including when that paragraph
-  is the message's only one.
+  is the message's only one. git's own rule differs: it treats a message's first paragraph as the subject, so a
+  one-line message "Key: value" has no trailer for git but one here. A caller that relies on a trailer must check
+  that the message has a body (carried to DEF-0030).
+- Bytes of the paths form that do not end with NUL keep their last name, so truncated output parses without error; a
+  caller checks run's exit and error before parsing.
 
 Limits (TASK-024 AC10): git is trusted as the operating system finds it, by its name, not by a pinned path or hash
-(on Windows a git program placed in a place searched before PATH would be found first); the repository's own
-configuration is still read by git, and the fixed options override only the keys named above; core.hooksPath has no
-test of effect, since none of the four subcommands runs a hook; the parsers check form, not that a commit exists or is
-reachable; no caller exists yet. The module opens, writes and removes no file, reads no clock, and reads the
-environment only for PATH and SYSTEMROOT.
+(on Windows a git program placed in a place searched before PATH would be found first), with the caller's PATH taken
+as given once every entry of it is absolute; on Windows the program search does not use the PATH passed to git, so
+the refusal of an empty or relative PATH entry closes that route on POSIX only; the repository's own configuration
+is still read by git, and the fixed options override only the keys named above; GIT_NO_LAZY_FETCH is ignored by a
+git older than 2.44, and GIT_CONFIG_GLOBAL by one older than 2.32; core.hooksPath has no test of effect, since none
+of the four subcommands runs a hook; output is not capped in size, and cat-file reads whatever object an id names;
+the repository path is the caller's; the parsers check form, not that a commit exists or is reachable;
+no caller exists yet. The module opens, writes and removes no file, reads no clock, and reads the environment only
+for PATH and SYSTEMROOT.
 """
 
 import os
@@ -99,18 +110,30 @@ def environment():
     env['GIT_CONFIG_GLOBAL'] = os.devnull
     env['GIT_TERMINAL_PROMPT'] = '0'
     env['GIT_OPTIONAL_LOCKS'] = '0'
+    env['GIT_NO_LAZY_FETCH'] = '1'
     env['LC_ALL'] = 'C'
     return env
+
+
+def path_error(path):
+    """Why the PATH git would get is refused, or None (erratum E1): it must be non-empty and every entry absolute."""
+    entries = path.split(os.pathsep)
+    if not path or any(not e or not os.path.isabs(e) for e in entries):
+        return 'PATH has an empty or relative entry'
+    return None
 
 
 def run(repo, args, timeout=30):
     """Run git with one pinned form (TASK-024 AC1 to AC3): a mapping with exactly the keys exit, out, err and error."""
     why = form_error(repo, args, timeout)
+    env = environment()
+    if why is None:
+        why = path_error(env['PATH'])
     if why is not None:
         return _result(None, b'', b'', why)
     try:
         p = subprocess.run(['git'] + FIXED_OPTIONS + ['-C', repo] + list(args), shell=False, stdin=subprocess.DEVNULL,
-                           capture_output=True, cwd=repo, timeout=timeout, check=False, env=environment())
+                           capture_output=True, cwd=repo, timeout=timeout, check=False, env=env)
     except subprocess.TimeoutExpired:
         return _result(None, b'', b'', 'timeout')
     except OSError as e:

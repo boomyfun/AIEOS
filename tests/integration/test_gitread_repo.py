@@ -1,6 +1,7 @@
 """Integration test of aieos_bootstrap.gitread over this repository's history (task TASK-024, rule R7, AC8): read
-only, with the four pinned forms, on fixed commits of main. The results are data about accepted commits: they reopen
-nothing. Each test names its criteria in its own docstring."""
+only, with the four pinned forms, on fixed commits of main; it needs the repository's full history (a shallow clone
+fails it). The results are data about accepted commits: they reopen nothing. Each test names its criteria in its own
+docstring."""
 
 import pathlib
 import unittest

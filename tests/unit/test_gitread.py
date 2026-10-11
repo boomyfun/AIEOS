@@ -13,6 +13,7 @@ from aieos_bootstrap import gitread
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SRC = ROOT / 'src' / 'aieos_bootstrap'
 REPO = str(ROOT)
+GOODPATH = os.pathsep.join([str(ROOT), str(SRC)])
 A = 'a' * 40
 B = 'b' * 40
 C = 'c' * 64
@@ -50,10 +51,15 @@ class StandIn:
         return self.result
 
 
-def call(args, repo=REPO, timeout=30, stand_in=None):
+def call(args, repo=REPO, timeout=30, stand_in=None, own_path=True):
+    """run with the stand-in; unless own_path is False, with PATH set to absolute entries for the call (erratum E1)."""
     s = stand_in or StandIn()
     with mock.patch.object(gitread.subprocess, 'run', s):
-        r = gitread.run(repo, args, timeout)
+        if own_path:
+            with mock.patch.dict(os.environ, {'PATH': GOODPATH}):
+                r = gitread.run(repo, args, timeout)
+        else:
+            r = gitread.run(repo, args, timeout)
     return r, s
 
 
@@ -82,7 +88,9 @@ class PinnedForms(unittest.TestCase):
             ['rev-parse', '--verify', A],
             ['rev-parse', '--verify', '--end-of-options', A, '--all'],
             ['cat-file', '-p', '--batch'], ['cat-file', '-e', A], ['cat-file', '-p', A.upper()],
-            ['cat-file', '-p', A[:39]],
+            ['cat-file', '-p', A[:39]], ['cat-file', '-p', 'a' * 41], ['cat-file', '-p', 'a' * 63],
+            ['cat-file', '-p', 'a' * 65], ['cat-file', '-p', A + '\n'], ['cat-file', '-p', 'HEAD'],
+            ['cat-file', '-t', 'HEAD'], ['rev-list', '--parents', '-n', '1', 'HEAD'],
             ['cat-file', '-p', A, A],
             ['rev-list', '--parents', '-n', '2', A], ['rev-list', '--all'],
             DIFF[:-1] + [A], DIFF + ['--', A], DIFF + ['HEAD'], ['diff-tree', '-p', A],
@@ -123,10 +131,13 @@ class PinnedForms(unittest.TestCase):
     def test_repo_and_timeout_out_of_range_are_refused(self):
         """TASK-024 AC1 and TASK-024 AC12: a relative repo, a repo that is not a directory, and a timeout of 0, below 0,
         above 120, a boolean or a string are refused with no call; 120 and a fraction are accepted."""
-        for repo in ('src', '', str(ROOT / 'no-such-folder'), str(SRC / 'gitread.py'), None):
+        for repo, why in (('src', 'repo is not an absolute path'), ('', 'repo is not an absolute path'),
+                          (None, 'repo is not an absolute path'),
+                          (str(ROOT / 'no-such-folder'), 'repo is not an existing directory'),
+                          (str(SRC / 'gitread.py'), 'repo is not an existing directory')):
             r, s = call(FORMS[2], repo=repo)
             self.assertEqual(s.calls, [], repo)
-            self.assertIn('repo', r['error'])
+            self.assertEqual(r['error'], why, repo)
         for t in (0, -1, 120.5, 121, True, '30', None, float('nan')):
             r, s = call(FORMS[2], timeout=t)
             self.assertEqual(s.calls, [], t)
@@ -146,7 +157,7 @@ class TheProcess(unittest.TestCase):
     def test_argument_list_keywords_and_environment(self):
         """TASK-024 AC2 and TASK-024 AC12: the stand-in receives exactly the argument list, the keyword arguments and
         the environment of AC2."""
-        env = {'PATH': '/usr/bin', 'SYSTEMROOT': 'C:\\Windows', 'GIT_DIR': '/elsewhere', 'GIT_WORK_TREE': '/w',
+        env = {'PATH': GOODPATH, 'SYSTEMROOT': 'C:\\Windows', 'GIT_DIR': '/elsewhere', 'GIT_WORK_TREE': '/w',
                'GIT_EXEC_PATH': '/x', 'HOME': '/h', 'GIT_SSH_COMMAND': 'x'}
         with mock.patch.dict(os.environ, env, clear=True):
             r, s = call(['cat-file', '-p', A], timeout=7)
@@ -162,23 +173,43 @@ class TheProcess(unittest.TestCase):
         self.assertEqual(kwargs['cwd'], REPO)
         self.assertEqual(kwargs['timeout'], 7)
         self.assertIs(kwargs['check'], False)
-        self.assertEqual(kwargs['env'], {'PATH': '/usr/bin', 'SYSTEMROOT': 'C:\\Windows', 'GIT_CONFIG_NOSYSTEM': '1',
+        self.assertEqual(kwargs['env'], {'PATH': GOODPATH, 'SYSTEMROOT': 'C:\\Windows', 'GIT_CONFIG_NOSYSTEM': '1',
                                          'GIT_CONFIG_GLOBAL': os.devnull, 'GIT_TERMINAL_PROMPT': '0',
-                                         'GIT_OPTIONAL_LOCKS': '0', 'LC_ALL': 'C'})
+                                         'GIT_OPTIONAL_LOCKS': '0', 'GIT_NO_LAZY_FETCH': '1', 'LC_ALL': 'C'})
 
     def test_planted_keys_never_reach_git(self):
-        """TASK-024 AC2, TASK-024 AC7 and TASK-024 AC12: with no PATH and no SYSTEMROOT, PATH is the empty string and
-        SYSTEMROOT is absent; a planted GIT_DIR, GIT_WORK_TREE, GIT_EXEC_PATH or HOME is not passed on."""
-        with mock.patch.dict(os.environ, {'GIT_DIR': '/elsewhere', 'HOME': '/h', 'GIT_WORK_TREE': '/w',
-                                          'GIT_EXEC_PATH': '/x'}, clear=True):
+        """TASK-024 AC2, TASK-024 AC7 and TASK-024 AC12: with no SYSTEMROOT, SYSTEMROOT is absent; a planted GIT_DIR,
+        GIT_WORK_TREE, GIT_EXEC_PATH or HOME is not passed on; GIT_NO_LAZY_FETCH is always "1"."""
+        with mock.patch.dict(os.environ, {'PATH': GOODPATH, 'GIT_DIR': '/elsewhere', 'HOME': '/h',
+                                          'GIT_WORK_TREE': '/w', 'GIT_EXEC_PATH': '/x', 'GIT_NO_LAZY_FETCH': '0'},
+                             clear=True):
             r, s = call(['rev-parse', '--verify', '--end-of-options', 'HEAD'])
         env = s.calls[0][1]['env']
-        self.assertEqual(env['PATH'], '')
         self.assertNotIn('SYSTEMROOT', env)
         for k in ('GIT_DIR', 'GIT_WORK_TREE', 'GIT_EXEC_PATH', 'HOME'):
             self.assertNotIn(k, env)
+        self.assertEqual(env['GIT_NO_LAZY_FETCH'], '1')
         self.assertEqual(sorted(env), sorted(['PATH', 'GIT_CONFIG_NOSYSTEM', 'GIT_CONFIG_GLOBAL', 'GIT_TERMINAL_PROMPT',
-                                              'GIT_OPTIONAL_LOCKS', 'LC_ALL']))
+                                              'GIT_OPTIONAL_LOCKS', 'GIT_NO_LAZY_FETCH', 'LC_ALL']))
+
+    def test_path_with_an_empty_or_relative_entry_is_refused(self):
+        """TASK-024 AC2 and TASK-024 AC12 (erratum E1, decision D-580): no PATH (so the empty string), an empty PATH, a
+        PATH with an empty entry and one with a relative entry are refused with no call; a PATH of absolute entries
+        passes, and environment() still gives the empty string when PATH is absent."""
+        for path in (None, '', GOODPATH + os.pathsep, os.pathsep + GOODPATH, GOODPATH + os.pathsep + 'bin',
+                     'bin', '.'):
+            env = {} if path is None else {'PATH': path}
+            with mock.patch.dict(os.environ, env, clear=True):
+                if path is None:
+                    self.assertEqual(gitread.environment()['PATH'], '')
+                r, s = call(FORMS[2], own_path=False)
+            self.assertEqual(s.calls, [], path)
+            self.assertEqual(r, {'exit': None, 'out': b'', 'err': b'', 'error': 'PATH has an empty or relative entry'},
+                             path)
+        with mock.patch.dict(os.environ, {'PATH': GOODPATH}, clear=True):
+            r, s = call(FORMS[2], own_path=False)
+        self.assertEqual(len(s.calls), 1)
+        self.assertIsNone(gitread.path_error(GOODPATH))
 
     def test_diff_tree_carries_its_closing_options(self):
         """TASK-024 AC1 and TASK-024 AC2: diff-tree's fixed form carries --no-ext-diff and --no-textconv, and the call
@@ -241,6 +272,13 @@ class CommitParser(unittest.TestCase):
         for m in ('Subject\n\nBody.\n', 'Subject\n\nAIEOS-Task: TASK-024\nnot a trailer\n', 'Subject\n\nKey:value\n',
                   'Subject\n\nA key: value\n', ''):
             self.assertEqual(gitread.parse_commit(commit_bytes(message=m))['trailers'], [], m)
+
+    def test_a_one_paragraph_message_yields_its_pairs(self):
+        """TASK-024 AC4 and TASK-024 AC12: the contract's rule, pinned (reading R-b): a message whose only paragraph is
+        "Key: value" lines yields them as trailers, although git would read the first line as the subject."""
+        p = gitread.parse_commit(commit_bytes(message='AIEOS-Task: TASK-024\n'))
+        self.assertIsNone(p['error'])
+        self.assertEqual(p['trailers'], [['AIEOS-Task', 'TASK-024']])
 
     def test_further_headers_are_accepted(self):
         """TASK-024 AC4: further header lines after the committer (an encoding line, a signature with continuation
@@ -311,6 +349,7 @@ class SingleWrapper(unittest.TestCase):
             if isinstance(n, ast.ImportFrom):
                 mods.add(n.module)
         self.assertEqual(mods, {'os', 're', 'subprocess'})
+        self.assertFalse([n for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)])
         names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
         for bad in ('exec', 'eval', 'compile', '__import__', 'open', 'importlib', 'time', 'datetime', 'socket', 'pty'):
             self.assertNotIn(bad, names)
@@ -318,7 +357,7 @@ class SingleWrapper(unittest.TestCase):
         attrs = [(n.value.id, n.attr) for n in ast.walk(tree)
                  if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)]
         os_attrs = {a for b, a in attrs if b == 'os'}
-        self.assertEqual(os_attrs, {'path', 'environ', 'devnull'})
+        self.assertEqual(os_attrs, {'path', 'environ', 'devnull', 'pathsep'})
         self.assertEqual(sorted(a for b, a in attrs if b == 'subprocess'), ['DEVNULL', 'TimeoutExpired', 'run'])
         runs = [n for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
                 and n.func.attr == 'run' and isinstance(n.func.value, ast.Name) and n.func.value.id == 'subprocess']
@@ -345,7 +384,8 @@ class SingleWrapper(unittest.TestCase):
         workflow's revision 8, and states the limits; the package lists the module; SUBCOMMANDS is the pinned tuple."""
         doc = ast.get_docstring(ast.parse(source('gitread.py')))
         for s in ('single process wrapper', 'pinned list is [git]', 'revision 8', 'Limits (TASK-024 AC10)',
-                  'trusted as the operating system finds it', "repository's own", 'no caller exists yet'):
+                  'trusted as the operating system finds it', "repository's own", 'no caller exists yet', 'POSIX only',
+                  'not capped in size', 'GIT_NO_LAZY_FETCH'):
             self.assertIn(s, doc)
         self.assertEqual(gitread.SUBCOMMANDS, ('cat-file', 'diff-tree', 'rev-list', 'rev-parse'))
         self.assertIn("'gitread'", source('__init__.py'))
