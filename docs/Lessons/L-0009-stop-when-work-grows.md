@@ -18,6 +18,9 @@ Three in session 2026-10-04-1817 (../History/2026-10/2026-10-04-1817-idea-to-cs3
 One in session 02bd7476 (../History/2026-10/2026-10-07-0033-hardening-choice-and-step-3-close.md and the History files of 2026-10-06 16:35 to 2026-10-07 00:19):
 - **D-034 to D-037; owner :1299.** A "minimal" security check grew into a protocol revision, row notes, machine details and four owner questions. The owner called it drift ("lan man, vòng vo"); the decision agent recorded it as its own drift (D-038).
 
+One in session 2026-10-11-2336 (../History/2026-10/2026-10-11-2336-spec-2-revision-3-and-the-git-reader-contract.md):
+- **2026-10-12 (decisions D-560 to D-563).** A specification revision grew from 20 to 37 changed lines over three drafts, and a review round then failed its counting rules on eleven blocking findings; the decision agent stopped and narrowed it to field names only (D-563), and any further design round of those rules waits for the owner's yes on cost versus value.
+
 ## Why it happens
 - No stop condition is tied to the decision the work serves.
 - Review agents always find something more.

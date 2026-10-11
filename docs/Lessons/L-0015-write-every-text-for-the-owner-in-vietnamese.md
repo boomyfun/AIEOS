@@ -140,6 +140,9 @@ Occurrences in session 2026-10-11-2112 (../History/2026-10/2026-10-11-2112-test-
 Occurrences in session 2026-10-11-2233 (../History/2026-10/2026-10-11-2233-stale-evidence-computation-accepted-and-on-main.md):
 - **2026-10-11 (:788, :908, :1117, :1843, :1990).** Five one-line English working notes as text blocks in messages holding tool calls, and one Vietnamese progress line in the same position (:1178), none an owner line; each listed in the next request (decisions D-547, D-548, D-550, D-551, D-554, D-555). Most followed the harness's prompt to say what I was doing. The rule stands: no text at all in a message with a tool call; an owner line goes only as a checked turn-final reply (decisions D-527, D-545 Q4).
 
+Occurrences in session 2026-10-11-2336 (../History/2026-10/2026-10-11-2336-spec-2-revision-3-and-the-git-reader-contract.md):
+- **2026-10-12 (:70, :118, :312, :1049, :1526, :1648, :1784).** Seven text blocks: two Vietnamese progress lines sent when the harness asked for a status, four one-line English working notes, and a Vietnamese progress line before the session-end request, each in a message holding a tool call; none an owner relay; each caught at the next pre_request run and listed in the next request (decisions D-557, D-558, D-565, D-571, D-572).
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 
