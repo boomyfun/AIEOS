@@ -178,6 +178,28 @@ class RunnerRiskEndToEndTest(unittest.TestCase):
         self.assertEqual(r.results['RISK-01'], conformance.FAIL)
         self.assertFalse(r.value['counts'])
 
+    def test_the_state_check_fails_on_a_wrong_state(self):
+        """TASK-019, contract AC1 and AC10 R1: no fixture and the frozen file with its hash are the two states; another
+        path, another hash or a second Risk Engine entry fails."""
+        path = conformance.expected_path('RISK-01', conformance.RISK_ENGINE)
+
+        def with_fixture(fixture_value):
+            value = conformance.unwrap((ROOT / conformance.SET_FILE).read_bytes())
+            next(e for e in value['scenarios'] if e['id'] == 'RISK-01')['fixture'] = fixture_value
+            return value
+        self.assertEqual(risk_state(with_fixture(None)), 'null')
+        self.assertEqual(risk_state(with_fixture({'path': path, 'sha256': RISK_01_SHA256})), 'present')
+        with self.assertRaises(AssertionError):
+            risk_state(with_fixture({'path': path + '.other', 'sha256': RISK_01_SHA256}))
+        with self.assertRaises(AssertionError):
+            risk_state(with_fixture({'path': path, 'sha256': '0' * 64}))
+        second = with_fixture(None)
+        extra = copy.deepcopy(next(e for e in second['scenarios'] if e['id'] == 'RISK-01'))
+        extra['id'] = 'RISK-02'
+        second['scenarios'].append(extra)
+        with self.assertRaises(AssertionError):
+            risk_state(second)
+
 
 if __name__ == '__main__':
     unittest.main()
