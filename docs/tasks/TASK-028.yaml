@@ -1,0 +1,295 @@
+# Task contract TASK-028, release by token (Master Plan revision 3, §4 M4; specification 1 sections 5.1, 5.2 and 8;
+# specification 2 section 3; DEF-0053 F3 and F5; DEF-0030, the core's caller). Revision 0, drafted under decisions
+# D-605 (Q2, C1) and D-606 (Q1, C1 to C3), brought for approval in its own request; whether it is approved is recorded
+# in the decision files, not in this file. Fields and value forms follow specification 2 §5.1 and the contracts of
+# TASK-007 to TASK-025. Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# Task type: implementation. What it changes: the core's single writer (TASK-016) gains one function,
+# release_lease_token(root, task_id, fencing_token), that removes the held lease on a task only when the lease's
+# fencing token equals the given one, compared and removed inside one SQLite transaction; and the submission path
+# (TASK-025) releases through it with the commit's token, so that a lease granted to another holder after the
+# submitter's lease expired is never released (DEF-0053 F3: "the release after an appended event takes no token").
+# The same change to submit.py closes DEF-0053 F5 (its resume condition: "the next task that changes submit.py"):
+# reading the writer's result never raises out of submit, whatever the stand-in.
+# Why first (decision D-605): recovery at start (TASK-026) must release the lease after each compensating submission
+# (specification 1 section 5.1, task.submitted row, "the lease is released (proposed)"), because a lease left held
+# after a compensating task.submitted would let submit append a second task.submitted for the same task; and
+# DEF-0053 F3's resume condition puts release by token before TASK-026 or TASK-027 relies on the release.
+# What it does not do: no change to release_lease (end_session and TASK-016's tests use it), grant_lease,
+# expire_leases, held_lease, held_leases, open_store, start_session, end_session or append_event; no new table or
+# column, no schema change; no recovery (TASK-026), no evaluation path (TASK-027); no change to eventlog's fence rule;
+# no Git read or write of its own; no clock read; nothing under .github/ and no workflow change (the workflow's
+# revision 7 allowances, which name exactly src/aieos_bootstrap/writer.py and its three test modules, cover the writer
+# paths of this write set; submit.py and its tests need none, as TASK-025 needed none); no policy, no frozen fixture.
+# The token's form (decision D-606 C1): a mapping with exactly the keys epoch and counter, epoch a non-empty string,
+# counter an int that is not a bool and is not negative, the form the store keeps (specification 2 section 3,
+# fencing_epoch TEXT and fencing_counter INTEGER) and held_lease returns; the comparison is of that form, so an
+# integer epoch, or a counter that is a bool or a float, is not a token of the store and never matches (it raises, as
+# the writer's other argument checks raise).
+# DEF-0041 (c) (decision D-414): "never give an earlier store's epoch to a recreated store" does not apply: the new
+# function grants nothing and never creates a store; with no store it changes nothing and says so.
+# Readers of the changed paths (D-263 C3's practice): writer.py is imported by submit.py and by the writer's three test
+# modules; submit.py by its three test modules; no other module of src/ imports either. The package's __init__.py is
+# not changed (its __all__ lists modules, not functions).
+# Risk: high, and change class critical_cr, each computed over the base by script (risk_class28.py and
+# gov003_class28.py of the drafting session). Profile (assurance-model.md §5, gov-AIEOS, high): functional
+# [unit_test], architecture [deterministic_rule], functional [integration_test], security [static_security_analysis]
+# and architecture [ai_review (cross-model)], plus the evidence_required of the applicable articles.
+# Reviews (as TASK-025's): five way-2 reviews by a Claude model other than the implementer's, and the decision agent's
+# three, each brief naming for testing: that the comparison and the removal happen in one transaction with the
+# removal keyed on task, epoch and counter; that no lease other than the one with the given token is ever removed
+# (the F3 window: a lease expired, then re-granted with a new counter); the token validation of AC2; that
+# release_lease and every other writer function are unchanged; submit's mapping of the release result (AC5); that no
+# exception escapes submit for any stand-in result (F5, AC6); the changed TASK-025 tests and the defaults pin (AC7).
+# Naming: every test this task adds names the AC ids it stands for as "TASK-028 ACn" in its own docstring, following
+# DEF-0049's convention; a TASK-025 test that this task changes keeps its "TASK-025 ACn" names and adds the
+# "TASK-028 ACn" it now also stands for.
+# Evaluation path (A61; as TASK-007 to TASK-025): commit C changes only docs/tasks/TASK-028.yaml and has one parent
+# equal to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-028", go to task/TASK-028 under their own
+# decisions; main receives the task only at its acceptance. The task push's CI base run is a RISK-01 conformance run
+# over the set file of DM F35, reported advisory, never MEASURED.
+# Not applicable: OPS-001 (the task changes no ref); INV-005 to INV-008, INV-010 and INV-011 (the decision engine, the
+# governor, evidence records, the replay and the policy meet no path of the write-set); GOV-001, GOV-004 to GOV-006
+# and SEC-003 (the concept file, the bound artifacts, the decision matrix, the records and pre-genesis documents, and
+# .github/, meet no path of the write-set).
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting, no push of its own; it weakens no evidence requirement (CR-002 part 4 limit 8 does not apply),
+# so its acceptance is one delegated approval of the decision agent (Master Plan section 6), for the decision agent's
+# ruling.
+task: TASK-028
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add to the core's single writer, src/aieos_bootstrap/writer.py, the function release_lease_token(root, task_id,
+  fencing_token), which removes the held lease on task_id only when its fencing token equals the given {epoch,
+  counter}, compared and removed in one SQLite transaction, and otherwise changes nothing and returns a refused
+  StoreResult; and switch the submission path, src/aieos_bootstrap/submit.py, to release through it with the
+  commit's token, mapping its result, and never raising on a writer or release result of any shape (DEF-0053 F3 and
+  F5). With unit tests in tests/unit/test_writer.py and tests/unit/test_submit.py and an integration test on a real
+  store in tests/integration/test_writer_files.py, each added test naming its AC ids as "TASK-028 ACn".
+traces_to:
+  - docs/specs/spec-01-state-and-event-model.md#5.1
+  - docs/specs/spec-01-state-and-event-model.md#5.2
+  - docs/specs/spec-01-state-and-event-model.md#8
+  - docs/specs/spec-02-aieos-file-format.md#3
+  - docs/specs/spec-04-verification-and-evidence.md#12
+  - docs/pre-genesis/constitution.md#INV-004
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-028.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id.
+  base_commit: 7eba72990bbf8a4a665831686c1c5520b992dac7
+  depends_on: [TASK-016, TASK-025]
+  intent_versions:
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: a517fcd7f885623aa874e1ce5920804f34a337d5650b32af4578142d30e0d8d5
+    docs/specs/spec-04-verification-and-evidence.md: 48d4f5bf06461ad49409f21bc6ea8d511d17a84eaac15adda14277483176a8d5
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # Five modified paths; no new path.
+  paths:
+    - src/aieos_bootstrap/writer.py
+    - src/aieos_bootstrap/submit.py
+    - tests/unit/test_writer.py
+    - tests/unit/test_submit.py
+    - tests/integration/test_writer_files.py
+read_set:
+  paths:
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-04-verification-and-evidence.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/Deferred/DEF-0030-event-log-writer-and-workflow-revision-6.md
+    - docs/Deferred/DEF-0041-the-review-findings-carried-from-task-016.md
+    - docs/Deferred/DEF-0053-the-review-findings-carried-from-task-025.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.writer.release_lease, aieos_bootstrap.writer.held_lease, aieos_bootstrap.writer.grant_lease, aieos_bootstrap.writer.expire_leases, aieos_bootstrap.writer.open_store, aieos_bootstrap.writer.StoreResult, aieos_bootstrap.submit.submit]
+  schemas: [spec-02 local store tables (3), spec-02 fencing_token {epoch, counter} (6.1)]
+forbidden:
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/stale.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_stale.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_submit_repo.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_writer_properties.py
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The interface. writer.release_lease_token(root, task_id, fencing_token) takes root as the writer's other
+      functions take it, task_id as _check_task checks it, and fencing_token as AC2 checks it; it returns a
+      StoreResult: result "done" with value the removed lease in eventlog.LEASE_KEYS' form (as held_lease returns it)
+      when the held lease on task_id has exactly that token; result "refused", reason "none", value None, and one
+      finding, when no lease on task_id is held or no store exists under root (no store is created); result "refused",
+      reason "token", value None, and one finding naming the held lease's epoch and counter and the given ones, when a
+      lease on task_id is held with another token. Nothing in the store changes on a refused result.
+  - AC2: >-
+      The token (decision D-606 C1). fencing_token must be a mapping (a dict) with exactly the keys "epoch" and
+      "counter", epoch a non-empty str and counter an int that is not a bool and is at least 0; anything else (None, a
+      list, a missing or extra key, an int, float or empty epoch, a bool, float, str or negative counter) raises
+      ValueError naming the token before the store is opened, as the writer's other argument checks raise. Two tokens
+      are equal only when their epochs are equal strings and their counters equal ints; so an integer epoch and a text
+      epoch are never equal (recovery's rule), since the former raises.
+  - AC3: >-
+      One transaction (DEF-0053 F3). The read of the held lease and its removal run in one call of the writer's
+      _transaction: the held lease on task_id is read, its token compared with the given one, and only on equality
+      the row is removed by "DELETE FROM leases WHERE task_id = ? AND fencing_epoch = ? AND fencing_counter = ?" with
+      the given values, a constant query text with parameters as every query of the writer; the function checks that
+      exactly one row was removed on "done" (the DELETE's row count is 1), else it raises and _transaction rolls the
+      change back. So a lease granted to another holder after the given token's lease expired or was released, which
+      has a new counter, is never removed by the old token.
+  - AC4: >-
+      The rest of the writer unchanged. release_lease, grant_lease, expire_leases, held_lease, held_leases, open_store,
+      start_session, end_session, append_event, the schema, the tables, the constants and every query text other than
+      the new one are unchanged; the new function is added after release_lease; the module docstring gains one line
+      naming it, and no other claim.
+  - AC5: >-
+      submit's release (decisions D-605, D-606 C2). submit's release parameter defaults, at call time, to
+      writer.release_lease_token and is called as release(root, task_id, fence) with the commit's token, exactly once,
+      in the same two places as before: after an appended task.submitted, and after a duplicate when held gives a
+      lease whose token is the commit's (the held() pre-check of TASK-025 AC5 is kept unchanged). Its result is
+      mapped: an object whose result is "done" gives released equal to its value; any other result, a refused one
+      included, gives released None and the finding "store: the held lease, if any, is not the commit's; nothing was
+      released"; an exception raised by release keeps TASK-025's result and finding ("the release raised <type>; the
+      lease was not released, and it expires by its own expiry"). submit's result keys and every other branch are
+      unchanged.
+  - AC6: >-
+      No exception escapes submit (DEF-0053 F5). Every read of an object returned by append or release (its result,
+      reason, findings, refusal, value, and the refusal's result) is made so that an attribute that raises any
+      Exception, or findings that are not an iterable of strings, gives result "refused" with reason "store" and a
+      finding naming the exception's type or the bad form (or, for the release's result after an appended or
+      duplicate event, released None and a finding), never an exception out of submit.
+  - AC7: >-
+      The defaults and the docstrings. A test pins submit's four defaults at call time as gitread.run,
+      writer.append_event, writer.release_lease_token and writer.held_lease (TASK-025 AC7's test, changed for the
+      third). submit.py's docstring replaces the limit sentence "The release after an appended event takes no token
+      ..." with: the release removes the lease only while the store holds the commit's token (writer
+      release_lease_token, TASK-028), so a lease granted to another holder since is never released; and names
+      release_lease_token where it names release_lease; no other claim is added (decision D-606 C2).
+  - AC8: >-
+      Purity and the CI checks (INV-001 to INV-004). writer.py keeps to the workflow's revision-7 allowances for it
+      (sqlite3, os.makedirs, open only as open(<path>, "rb") or open(<path>, "ab"), strings naming the project-state
+      directory) and adds no import; submit.py adds no import; no exec, eval, compile, __import__ or importlib; no
+      assert in src (bandit B101); deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit report no finding at the
+      task's commits, on the base with the workflow's revision 8, with no change under .github/.
+  - AC9: >-
+      Limits, stated: v0.1 runs one task at a time (concept line 951) and the store has no lock beyond SQLite's own
+      transaction (TASK-016 AC10), which the comparison and removal now share; release_lease stays token-less for
+      end_session's use and is no longer called by submit; the lease is still released after the append in a separate
+      call, so a stop between them leaves the lease until a retry (the duplicate path) or its expiry (TASK-025 AC11);
+      the trusted PATH stays the caller's precondition (DEF-0052 G1). Every existing module and test not in the write
+      set is unchanged, and if one can pass only by a change the task escalates (needs_out_of_scope_change).
+  - AC10: >-
+      Its own tests and the added text. Every test this task adds names the AC ids it stands for as "TASK-028 ACn" in
+      its own docstring and names no other task's AC in qualified form there, except a changed TASK-025 test, which
+      keeps its own names and adds TASK-028's. Before each commit, the added text is scanned with the workflow's
+      SEC-001, SEC-002 and OPS-003 patterns, and each count is 0.
+  - AC11: >-
+      Tests, each rule with at least one passing and one failing case: R1 AC1 (done with the lease returned and the
+      store then holding none; refused "none" with no lease and with no store, nothing created; refused "token" for
+      another epoch and for another counter, the lease still held); R2 AC2 (each malformed token raises ValueError,
+      the bool counter and the integer epoch among them, and the store is unchanged); R3 AC3 (the F3 window on a real
+      store: grant, expire_leases past the expiry, grant again to another holder, then release_lease_token with the
+      first token is refused "token" and the second lease is still held; a test that the DELETE names epoch and
+      counter); R4 AC4 (release_lease's own tests pass unchanged; AC4 is checked by the diff, read by the decision agent and
+      the way-2 reviewers); R5 AC5 (with stand-ins: release called with (root, task_id, token) once after
+      appended and after a duplicate with the same token; a done result gives released the value; a refused, None or
+      unknown result gives released None and the finding; an exception keeps the finding); R6 AC6 (stand-in results
+      whose attributes raise and whose findings are not iterable, from append and from release); R7 AC7 (the four
+      defaults pinned). Unit tests in tests/unit/test_writer.py and tests/unit/test_submit.py; R3's real-store test in
+      tests/integration/test_writer_files.py. tests/run_tests.py, unchanged, runs all groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC11]}
+  - {gate: G3, check: constitution, args: [AC8, AC9, AC10, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
