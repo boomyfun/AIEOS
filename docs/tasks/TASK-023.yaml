@@ -1,0 +1,327 @@
+# Task contract TASK-023, the stale-evidence computation (Master Plan revision 3, §4 M4; specification 4 revision 3,
+# section 3 rules 2 and 3 and section 7 item 3; concept lines 728 and 746). Revision 0, drafted under decision D-544
+# (Q2, Q3, C1 to C3), brought for approval in its own request; whether it is approved is recorded in the decision
+# files, not in this file. Fields and value forms follow specification 2 §5.1 and the contracts of TASK-007 to TASK-022.
+# Readings marked "(reading)" are the worker's, for the decision agent's ruling; the four readings of AC3 to AC6 are the
+# decision agent's (D-544 Q2, points 1 to 4), marked proposed, not the specification's own words.
+# Task type: implementation. What it adds: one pure module, src/aieos_bootstrap/stale.py. Its function stale takes, as
+# values, one task's facts for reconciliation (its accepted commit, its records, the current intent versions at the
+# base's head, its effective read-set with each entry resolved by the caller, the base commits after the accepted commit
+# with their changed paths, the triggering base commit and the task's earlier evidence.stale events) and returns the
+# stale record ids by specification 4 section 3 rule 2 (reason intent_version) and rule 3 (reason commit), at most one
+# evidence.stale event per reason with only the ids no earlier event of the same reason listed, each with an event id
+# derived from the task, the triggering commit and the reason, and the list of what it could not check (uncovered). It
+# reads no Git, no file and no log, and appends nothing: reading the facts and appending the events through the core's
+# single writer (TASK-016) are the caller's, the item carried in DEF-0030 (specification 4 section 7 item 4), which this
+# task does not build.
+# The specification's text (spec 4 lines 40-42): rule 2: "a record whose `intent_versions` differ from the current
+# version of each intent artefact the record concerns, read at the base's head, is stale"; rule 3: "reconciliation
+# only: when a later commit on the base changes a path in the task's effective read-set (specification 3 §4), leaving
+# out the commits that the task's own `task.submitted` events name, as check 1 does [...], every record of the task
+# bound to an earlier commit is reported stale. [...] it schedules a re-verify and blocks nothing, and a DONE task stays
+# DONE [...]. Where the read-set is an estimate, the rule inherits its flags, and a check it could not complete is
+# listed as uncovered, never as passed." Line 42: "its result is a list of stale record ids, each with its `reason`
+# [...]: `commit` for rules 1 and 3, `intent_version` for rule 2". Section 7 item 3 (line 82): "section 3's rules 2 and
+# 3, run at the same point (rule 1 applies at an evaluation only); each base commit gives at most one `evidence.stale`
+# event per task and reason, with the list of the stale record ids that no earlier `evidence.stale` event of the same
+# task and reason has listed [...], idempotent by an event id derived from the task, the commit and the reason
+# (proposed, as the writer derives refusal ids)."
+# What it does not do: rule 1 (the governor's rule 2, TASK-004) is not run; the governor's counting is unchanged
+# (spec 4 line 42; whether the governor should also use rule 3 is DEF-0042 point 10, not settled here). No Git read,
+# no file read, no derived read-set computation (specification 3 §4; the caller's, as for resume_check), no
+# resolution of interfaces and schemas to paths (the caller's), no writer call, no caller in the core, nothing under
+# .github/, no policy, no frozen fixture. It changes no governor, writer, records, resume_check, conformance, ac_coverage
+# or ac_tests code.
+# Readers of the changed paths (D-263 C3's practice): src/aieos_bootstrap/__init__.py is read by every module that
+# imports the package and by the CI's G1 build; its docstring and __all__ gain stale; it must not name the Resume Check
+# fixture folder (TASK-010's assertion) nor the Risk Engine fixture folder (TASK-020's allow list). No module of the
+# repository calls stale yet.
+# Risk: high, and change class critical_cr, each to be computed over the base by script, as for TASK-022. Profile
+# (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture [deterministic_rule], functional
+# [integration_test], security [static_security_analysis] and architecture [ai_review (cross-model)], plus the
+# evidence_required of the applicable articles.
+# Reviews (as TASK-022's): five way-2 reviews by a Claude model other than the implementer's, and the decision agent's
+# three, each brief naming for testing: rules 2 and 3 and only them; the four readings of AC3 to AC6; the dedup and the
+# event id; the uncovered list (never stale, never passed); purity (no file, no clock, no write); AC11's limits.
+# Naming (D-544 Q3): every test of the three new test modules names the AC ids it stands for as "TASK-023 ACn" in its
+# own docstring, following DEF-0049's convention, adopted for this contract only; whether it applies generally stays
+# open in DEF-0049.
+# Evaluation path (A61; as TASK-007 to TASK-022): commit C changes only docs/tasks/TASK-023.yaml and has one parent
+# equal to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-023", go to task/TASK-023 under their own
+# decisions; main receives the task only at its acceptance. The task push's CI base run is a RISK-01 conformance run
+# over the set file of DM F35, reported advisory, never MEASURED.
+# Not applicable: OPS-001 (the task changes no ref); INV-004 and INV-009 (the module writes no file and no log; the
+# events are returned, not appended); INV-005 to INV-008, INV-010 and INV-011 (the decision engine, the governor,
+# evidence records as stored, the replay and the policy meet no path of the write-set: the module returns events and
+# stores none); GOV-001, GOV-004 to GOV-006 and SEC-003 (the concept file, the bound artifacts, the decision matrix,
+# the records and pre-genesis documents, and .github/, meet no path of the write-set).
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting, no push of its own; it weakens no evidence requirement (it reports stale evidence and blocks
+# nothing; CR-002 part 4 limit 8 does not apply), so its acceptance is one delegated approval of the decision agent
+# (Master Plan section 6), for the decision agent's ruling.
+# Uncovered and stated limits (AC11): the facts are the caller's and are not checked against Git or the log; interface
+# and schema entries are only as good as the caller's resolution; an estimate read-set is flagged, never trusted as
+# complete; the event's appending, its writer and its caller are DEF-0030's.
+task: TASK-023
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add a standard-library Python 3 module, src/aieos_bootstrap/stale.py, the stale-evidence computation of specification
+  4 section 3 rules 2 and 3 and section 7 item 3: stale(inputs) takes one task's reconciliation facts as values and
+  returns the stale record ids by reason (intent_version for rule 2, commit for rule 3), at most one evidence.stale
+  event per reason listing only the ids no earlier evidence.stale event of the task and reason listed, with an event id
+  derived from the task, the triggering commit and the reason, and the list of what it could not check; a malformed
+  input gives an error and no event (fail closed). It reads and writes nothing. With unit, integration and property
+  tests in new test modules, each test naming its AC ids as "TASK-023 ACn" in its own docstring; the integration test
+  runs stale over TASK-022's records on main with the later base commits as fixed inputs and asserts the result as data.
+traces_to:
+  - docs/specs/spec-04-verification-and-evidence.md#3
+  - docs/specs/spec-04-verification-and-evidence.md#7
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#3
+  - docs/specs/spec-02-aieos-file-format.md#6.2
+  - docs/specs/spec-02-aieos-file-format.md#6.3
+  - AIEOS-concept.md#728
+  - AIEOS-concept.md#746
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-023.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id.
+  base_commit: a4c2255be6e29b5e020018b6f32943787129aa50
+  depends_on: [TASK-001, TASK-008, TASK-011, TASK-016]
+  intent_versions:
+    docs/specs/spec-04-verification-and-evidence.md: 48d4f5bf06461ad49409f21bc6ea8d511d17a84eaac15adda14277483176a8d5
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 05c53318cd756a3acfc13e5adaffbfaede8f05be3d00289e9fd45fef08c63c73
+    docs/specs/spec-02-aieos-file-format.md: 529b56d831d208594685aad3954fd3e8fc42cadc663e315b65bdfe615e3b09f7
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # One modified path (the package docstring and __all__); every other path is new.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/stale.py
+    - tests/unit/test_stale.py
+    - tests/integration/test_stale_records.py
+    - tests/property/test_stale_properties.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-04-verification-and-evidence.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/Deferred/DEF-0030-event-log-writer-and-workflow-revision-6.md
+    - docs/Deferred/DEF-0042-specification-4-open-points-and-the-risk-01-route.md
+    - docs/Deferred/DEF-0049-carried-findings-of-the-test-listing-and-the-untested-criteria.md
+    - docs/tasks/**
+    - docs/records/**
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/resume_check.py
+    - src/aieos_bootstrap/writer.py
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.records.check_payload, aieos_bootstrap.resume_check.matches, aieos_bootstrap.resume_check.meet]
+  schemas: [spec-02 record (6.2), spec-02 event payloads (6.3)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/writer.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_writer_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The input. stale(inputs) takes a mapping with exactly the keys task_id, accepted_commit, trigger_commit, records,
+      intent_current, read_set, read_set_estimate, base_commits and earlier_events: task_id a string "TASK-" followed by
+      three digits; accepted_commit and trigger_commit each 40 or 64 lowercase hex characters; records a list of
+      mappings, each with a non-empty string record_id (unique in the list), a commit, when present, in the same hex
+      form, and intent_versions, when present, a mapping from a non-empty string to "v" followed by digits (the record
+      form of specification 2 section 6.2), other keys ignored; intent_current a mapping in that same form; read_set a
+      list of mappings {entry, kind, patterns} with entry a non-empty string, kind "path", "interface" or "schema", and
+      patterns a list of non-empty strings or None (None: the caller could not resolve the entry); read_set_estimate a
+      bool; base_commits a list, in base order, of mappings {commit, paths, submitted_by_task} with commit in the hex
+      form (no commit twice, none equal to accepted_commit), paths a list of strings and submitted_by_task a bool;
+      earlier_events a list of mappings {reason, records} with reason "commit" or "intent_version" and records a list
+      of strings. Any other form gives the result of AC8 with error naming the first key that fails, in the order
+      above, and no stale id and no event (fail closed).
+  - AC2: >-
+      Rule 2 (spec 4 line 40): a record with intent_versions is stale with reason intent_version when, for some id it
+      names, intent_current has that id with a different version. An id it names that intent_current lacks gives an
+      uncovered entry {rule "rule 2", ref the record_id, detail naming the id} and does not by itself make the record
+      stale (reading).
+  - AC3: >-
+      Rule 3 (spec 4 line 41) and the decision agent's reading of D-544 Q2 point 1. A base commit meets the read-set
+      when submitted_by_task is false and one of its paths matches an entry: a path entry when
+      aieos_bootstrap.resume_check.matches(entry, path) is true; an interface or schema entry when matches(pattern,
+      path) is true for one of its patterns. An entry whose patterns is None gives one uncovered entry {rule "rule 3",
+      ref the entry, detail "not resolved by the caller"} and meets nothing; read_set_estimate true gives one uncovered
+      entry {rule "rule 3", ref "read_set", detail naming the estimate}. Path matching is resume_check's own (called,
+      not copied), so it follows specification 3 section 3.
+  - AC4: >-
+      The order of commits (the decision agent's reading of D-544 Q2 point 2, with its addition). The position of
+      accepted_commit is before every base commit, and a base commit's position is its index in base_commits. A record
+      with a commit is stale with reason commit when some base commit that meets the read-set has a later position than
+      the record's commit. A record whose commit is neither accepted_commit nor in base_commits is treated as earlier
+      than every base commit (fail closed), and is also named in an uncovered entry {rule "rule 3", ref the record_id,
+      detail "commit order not known"}.
+  - AC5: >-
+      Records that cannot be checked (the decision agent's reading of D-544 Q2 point 3). A record with no
+      intent_versions gives an uncovered entry {rule "rule 2", ref the record_id, detail "no intent_versions"}; a record
+      with no commit gives an uncovered entry {rule "rule 3", ref the record_id, detail "no commit"}. Such a record is
+      never stale by that rule and never reported as passed.
+  - AC6: >-
+      The events (spec 4 section 7 item 3 and the decision agent's reading of D-544 Q2 point 4). For each reason, in
+      the order commit then intent_version, the new ids are the stale ids of that reason that no earlier_events entry of
+      the same reason lists, sorted. When they are not empty, the result holds one event {event_id, event_type
+      "evidence.stale", task_id, payload {records: the new ids, reason}}, whose event_id is the SHA-256 hex digest of
+      the UTF-8 text "evidence.stale", task_id, trigger_commit and the reason joined by LF (as the writer's _digest
+      joins its parts), and aieos_bootstrap.records.check_payload("evidence.stale", payload) finds nothing. When they
+      are empty, no event of that reason. The same inputs always give the same event ids.
+  - AC7: >-
+      What it does not decide. The module runs neither rule 1 nor any governor rule, changes no task state, blocks
+      nothing and appends nothing (spec 4 line 41: a re-verify is scheduled and a DONE task stays DONE, by the event's
+      effect in specification 1, not by this module); its docstring says so, names the caller as DEF-0030's, and states
+      that whether the governor uses rule 3 is DEF-0042 point 10. No module of src/ changes except __init__.py's
+      docstring and __all__.
+  - AC8: >-
+      The result. stale returns a mapping with exactly the keys stale, events, uncovered and error: stale maps
+      "commit" and "intent_version" each to the sorted list of the stale record ids of that reason (all of them, not
+      only the new ones); events is the list of AC6; uncovered is a list of mappings with exactly the keys rule, ref and
+      detail, sorted by (rule, ref, detail), without duplicates; error is None, or for a malformed input a short English
+      text, with stale {"commit": [], "intent_version": []}, events [] and uncovered []. stale is a pure function: the
+      same input gives the same output, and the input is not changed.
+  - AC9: >-
+      Purity and the CI checks (INV-001, INV-002, INV-003). The module imports only the Python 3 standard library
+      (hashlib and re among the allowed) and aieos_bootstrap.records and aieos_bootstrap.resume_check; it opens, writes
+      and removes no file, reads no clock and no environment, and makes no process, network or model call; no exec,
+      eval, compile, __import__ or importlib; no assert in src (bandit B101); no string that names the project-state
+      directory. At the task's commits the CI steps report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002
+      and bandit.
+  - AC10: >-
+      Main's records, read only (decision D-544 C1). tests/integration/test_stale_records.py reads
+      docs/records/TASK-022.jsonl and docs/tasks/TASK-022.yaml with pathlib's read_bytes only, takes the contract's
+      read_set paths, interfaces and schemas with its own line-based reader (path entries with their own text as the
+      pattern; interface and schema entries with patterns None), and runs stale with task_id TASK-022, accepted_commit
+      4ef7dfa91df7eed00e7c3d5180d3aac12e94f768, read_set_estimate true, intent_current {}, earlier_events [], and, as
+      fixed inputs in the test, the two base commits after it on main with their changed paths against their first
+      parent: 92da3802e54722b9232507ceac402052916e6bd7 (docs/records/TASK-022.jsonl) and
+      a4c2255be6e29b5e020018b6f32943787129aa50 (its six paths, DEF-0042's among them), both submitted_by_task false,
+      trigger_commit a4c2255b…. It asserts (reading; values to be confirmed against a scratch prescan before the code is
+      pushed, and a difference goes to the decision agent): stale commit holds all 25 record ids (24 bound to
+      4ef7dfa9…, one bound to e71f7bb3…, the contract commit, named "commit order not known"); stale intent_version is
+      empty; one event, reason commit, with the 25 ids and the event id of AC6; the uncovered list has 32 entries (25 "no
+      intent_versions", one "commit order not known", five unresolved interface and schema entries, one estimate).
+      These are data about an accepted task: they reopen no acceptance and schedule nothing (no caller exists).
+  - AC11: >-
+      Limits, stated: the facts are the caller's and are not checked against Git or the log; interface and schema
+      entries are only as good as the caller's resolution; the derived and observed read-sets are the caller's;
+      appending the events, the writer and the caller are DEF-0030's; rule 1 is the governor's. Every existing module
+      and test not in the write set is unchanged, and if one can pass only by a change the task escalates
+      (needs_out_of_scope_change).
+  - AC12: >-
+      Its own tests and the added text. Every test function of the three new test modules names the AC ids it stands
+      for as "TASK-023 ACn" in its own docstring and names no other task's AC in qualified form there (D-544 Q3). Before
+      each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns, and each count
+      is 0; the file names are scanned with the same patterns and the records executors' pre-push pattern (D-282).
+  - AC13: >-
+      Tests, each rule with at least one passing and one failing case: R1 AC1 (each malformed form, the first one
+      named; no event on error); R2 AC2 (a differing version is stale; an equal one is not; a missing current id is
+      uncovered only); R3 AC3 (a path entry met; an interface or schema pattern met; a submitted commit ignored; an
+      unresolved entry uncovered; the estimate flag); R4 AC4 (a meeting commit later than the record's is stale, an
+      earlier one is not; the accepted commit before all; an unknown record commit stale and uncovered); R5 AC5 (no
+      intent_versions, no commit); R6 AC6 (dedup against earlier events of the same reason only; no event when nothing
+      is new; the event id's value; check_payload finds nothing); R7 AC8 (the keys, the sorting, no duplicates, purity:
+      the input unchanged, a second call equal); R8 AC7 and AC9 (a script check of the module's imports and of the
+      absence of open, write and clock calls). Unit tests in tests/unit/test_stale.py; AC10 in
+      tests/integration/test_stale_records.py; property tests in tests/property/test_stale_properties.py (standard
+      library only, fixed seeds): for random well-formed inputs, every record id is in at most the stale lists and the
+      uncovered refs it should be in and an event's ids are a subset of its reason's stale ids; a second run with the
+      first run's events as earlier_events gives no event; the result never depends on the order of records or of
+      read_set. tests/run_tests.py, unchanged, runs all groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC10, AC13]}
+  - {gate: G3, check: constitution, args: [AC9, AC11, AC12, INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
