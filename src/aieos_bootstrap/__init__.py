@@ -1,7 +1,7 @@
 """The bootstrap package of gov-AIEOS (tasks TASK-001, TASK-003, TASK-004, TASK-006, TASK-007, TASK-008, TASK-009,
-TASK-016, TASK-021, TASK-022 and TASK-023).
+TASK-016, TASK-021, TASK-022, TASK-023 and TASK-024).
 
-It holds ten modules:
+It holds eleven modules:
 - ``records`` (TASK-001): a checker of the form of event-log lines, records and event payloads of specification 2
   sections 6.1 to 6.4. It reads only the text it is given, writes nothing and decides nothing.
 - ``conformance`` (TASK-003, with TASK-006's Resume Check entry and TASK-017's Risk Engine entry): the conformance runner of
@@ -32,7 +32,12 @@ It holds ten modules:
   3. Given one task's reconciliation facts as values, it returns the stale record ids by reason, at most one
   evidence.stale event per reason with only the new ids, and what it could not check; it reads and writes no file and
   appends nothing.
+- ``gitread`` (TASK-024): the Git reader, constitution INV-001's single process wrapper and the first piece of the
+  core's caller. It starts only git, with one of four pinned read-only subcommands in fixed forms, no shell, a
+  controlled environment, a pinned working directory and a timeout, and returns the exit code and the output as bytes;
+  its parsers turn a commit object and a list of changed paths into values. It writes nothing, and no module calls it
+  yet.
 """
 
-__all__ = ['ac_coverage', 'ac_tests', 'conformance', 'eventlog', 'governor', 'records', 'recovery', 'resume_check', 'stale',
-           'writer']
+__all__ = ['ac_coverage', 'ac_tests', 'conformance', 'eventlog', 'gitread', 'governor', 'records', 'recovery',
+           'resume_check', 'stale', 'writer']
