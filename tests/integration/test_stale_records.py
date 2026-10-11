@@ -68,8 +68,8 @@ class Task022Records(unittest.TestCase):
         self.assertEqual(sum(1 for e in x['read_set'] if e['patterns'] is None), 5)
 
     def test_result_as_data(self):
-        """TASK-023 AC10, AC3, AC4 and AC5: all 25 records stale by commit, none by intent_version, and 32 uncovered
-        entries, as the scratch prescan found (decision D-545 Q2)."""
+        """TASK-023 AC10, TASK-023 AC3, TASK-023 AC4 and TASK-023 AC5: all 25 records stale by commit, none by
+        intent_version, and 32 uncovered entries, as the scratch prescan found (decision D-545 Q2)."""
         x = the_inputs()
         r = stale.stale(x)
         self.assertIsNone(r['error'])
@@ -85,7 +85,7 @@ class Task022Records(unittest.TestCase):
                          ['e71f7bb36fe04000082982e59583f1faee8b2edf'])
 
     def test_the_one_event(self):
-        """TASK-023 AC10 and AC6: one event, reason commit, with the 25 ids and the prescan's event id."""
+        """TASK-023 AC10 and TASK-023 AC6: one event, reason commit, with the 25 ids and the prescan's event id."""
         r = stale.stale(the_inputs())
         self.assertEqual(len(r['events']), 1)
         e = r['events'][0]
@@ -96,7 +96,8 @@ class Task022Records(unittest.TestCase):
         self.assertEqual(records.check_payload('evidence.stale', e['payload']), [])
 
     def test_second_run_adds_nothing(self):
-        """TASK-023 AC10 and AC6: with the first run's event as an earlier event, a second run gives no event."""
+        """TASK-023 AC10 and TASK-023 AC6: with the first run's event as an earlier event, a second run gives no
+        event."""
         x = the_inputs()
         first = stale.stale(x)['events'][0]['payload']
         x['earlier_events'] = [first]

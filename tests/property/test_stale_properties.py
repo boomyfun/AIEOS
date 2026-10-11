@@ -56,9 +56,12 @@ class Properties(unittest.TestCase):
                 yield random_input(rng)
 
     def test_stale_only_when_checkable(self):
-        """TASK-023 AC2, AC4, AC5 and AC6: a record stale by commit has a commit, one stale by intent_version has
-        intent_versions, and each event's ids are a subset of its reason's stale ids, in a payload check_payload
-        accepts."""
+        """TASK-023 AC2, TASK-023 AC4, TASK-023 AC5 and TASK-023 AC6: a record stale by commit has a commit, one stale
+        by intent_version has intent_versions, and each event's ids are a subset of its reason's stale ids, in a payload
+        check_payload accepts; over the seeds the generator reaches each case (a stale record by each reason, an unknown
+        record commit, an unresolved entry and an event), so no property holds vacuously."""
+        reached = {'commit': 0, 'intent_version': 0, 'commit order not known': 0, 'not resolved by the caller': 0,
+                   'event': 0}
         for x in self.cases():
             r = stale.stale(x)
             self.assertIsNone(r['error'])
@@ -68,16 +71,26 @@ class Properties(unittest.TestCase):
             for e in r['events']:
                 self.assertTrue(set(e['payload']['records']) <= set(r['stale'][e['payload']['reason']]))
                 self.assertEqual(records.check_payload('evidence.stale', e['payload']), [])
+            for reason in ('commit', 'intent_version'):
+                reached[reason] += len(r['stale'][reason])
+            for u in r['uncovered']:
+                if u['detail'] in reached:
+                    reached[u['detail']] += 1
+            reached['event'] += len(r['events'])
+        self.assertTrue(all(n > 0 for n in reached.values()), reached)
 
     def test_second_run_gives_no_event(self):
-        """TASK-023 AC6 and AC8: with the first run's events as earlier events, a second run gives no event and the
-        same stale lists."""
+        """TASK-023 AC6 and TASK-023 AC8: with the first run's events as earlier events, a second run gives no event and
+        the same stale lists; over the seeds some first run gives an event, so the property is not vacuous."""
+        events = 0
         for x in self.cases():
             first = stale.stale(x)
+            events += len(first['events'])
             y = dict(x, earlier_events=[e['payload'] for e in first['events']])
             second = stale.stale(y)
             self.assertEqual(second['events'], [])
             self.assertEqual(second['stale'], first['stale'])
+        self.assertGreater(events, 0)
 
     def test_order_does_not_matter(self):
         """TASK-023 AC8: the result does not depend on the order of the records or of the read-set."""

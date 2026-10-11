@@ -14,8 +14,10 @@ event (fail closed).
 - Rule 3 (reason commit), reconciliation only: a base commit meets the read-set when the task's own submission did not
   make it and one of its paths matches an entry; a record is stale when such a commit comes later, in the given order,
   than the record's commit. A path entry is matched by its own text; an interface or schema entry by the patterns
-  the caller resolved it to; any entry whose patterns the caller gives as None is uncovered and meets nothing. Path
-  matching is aieos_bootstrap.resume_check's (specification 3 section 3), called, not copied.
+  the caller resolved it to; any entry whose patterns the caller gives as None is uncovered and meets nothing (the
+  implementer's reading, approved in decision D-548 Q2), and so is one whose patterns are an empty list, which names
+  no path (the decision agent's reading, decision D-551 Q2, proposed). Path matching is aieos_bootstrap.resume_check's
+  (specification 3 section 3), called, not copied.
 
 The readings of the decision agent (decision D-544 Q2, points 1 to 4, proposed, not the specification's own words):
 - An interface or schema entry is met when a changed path matches one of the patterns the caller resolved it to; an
@@ -167,7 +169,7 @@ def stale(inputs):
     # Rule 3 (AC3 to AC5).
     entries = []
     for e in inputs['read_set']:
-        if e['patterns'] is None:
+        if not e['patterns']:
             uncovered.add(('rule 3', e['entry'], 'not resolved by the caller'))
         else:
             entries.append(e)
