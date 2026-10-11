@@ -143,6 +143,9 @@ Occurrences in session 2026-10-11-2233 (../History/2026-10/2026-10-11-2233-stale
 Occurrences in session 2026-10-11-2336 (../History/2026-10/2026-10-11-2336-spec-2-revision-3-and-the-git-reader-contract.md):
 - **2026-10-12 (:70, :118, :312, :1049, :1526, :1648, :1784).** Seven text blocks: two Vietnamese progress lines sent when the harness asked for a status, four one-line English working notes, and a Vietnamese progress line before the session-end request, each in a message holding a tool call; none an owner relay; each caught at the next pre_request run and listed in the next request (decisions D-557, D-558, D-565, D-571, D-572).
 
+Occurrences in session 2026-10-12-0048 (../History/2026-10/2026-10-12-0048-the-git-reader-accepted-and-on-main.md):
+- **2026-10-12 (:167, :644, :813, :898, :917, :1212, :1285, :1370, :1482, :1632, :1751, :1827, :1844).** Thirteen one-line English working notes as text blocks in messages holding tool calls, none an owner line, most after the harness's prompt to say what I was doing; aid (a), a check run first in every gated command, kept every mutation from running until each was listed in a request to the decision agent (decisions D-575 to D-586). Two turn-final replies were sent without a checked draft (:679, :758) and one not byte-equal to its checked draft (:861; decisions D-577, D-579).
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

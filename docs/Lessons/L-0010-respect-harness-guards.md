@@ -166,6 +166,10 @@ Occurrences in session 2026-10-11-2233 (../History/2026-10/2026-10-11-2233-stale
 - **2026-10-11 (:916).** A compile and test command holding Python's name followed by a dash twice; refused before it ran; the compile script of an earlier session was used instead.
 - **2026-10-11 (:1892).** A hashing command with a stray no-op tail holding Python's name followed by a dash; refused before it ran; rerun without the tail.
 
+Occurrences in session 2026-10-12-0048 (../History/2026-10/2026-10-12-0048-the-git-reader-accepted-and-on-main.md), the refusals each my incorrect command (decisions D-575, D-577, D-581, D-586):
+- **2026-10-12 (:168, :495, :1197, :1922).** Four commands holding Python's name followed by a dash (a no-op, the module flag, the version flag, a no-op tail); refused before they ran; not retried; a runner script was written for the second.
+- **2026-10-12 (:676, :677).** The harness's safety classifier withheld one of my responses while I prepared to send TASK-024's code to the decision agent; nothing in it ran; I did not retry, reword or reconstruct it, and asked the owner in one plain question (:679); the owner answered "(a) Làm tiếp" (:683), and the decision agent ruled how to go on (decision D-577).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
