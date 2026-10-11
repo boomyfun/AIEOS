@@ -170,6 +170,10 @@ Occurrences in session 2026-10-12-0048 (../History/2026-10/2026-10-12-0048-the-g
 - **2026-10-12 (:168, :495, :1197, :1922).** Four commands holding Python's name followed by a dash (a no-op, the module flag, the version flag, a no-op tail); refused before they ran; not retried; a runner script was written for the second.
 - **2026-10-12 (:676, :677).** The harness's safety classifier withheld one of my responses while I prepared to send TASK-024's code to the decision agent; nothing in it ran; I did not retry, reword or reconstruct it, and asked the owner in one plain question (:679); the owner answered "(a) Làm tiếp" (:683), and the decision agent ruled how to go on (decision D-577).
 
+Occurrences in session 2026-10-12-0215 (../History/2026-10/2026-10-12-0215-the-submission-path-accepted-and-on-main.md), the refusals each my incorrect command (decision D-591):
+- **2026-10-12 (:521, :526).** Two commands holding Python's name followed by a dash (a filler piece, then the same form inside a search pattern meant to find the first); refused before they ran; not retried in that form.
+- **2026-10-12 (:669, :1120, :1877).** The harness's safety classifier withheld one of my responses three times; nothing in them ran; I did not retry, reword or reconstruct them, and each time asked the owner in one plain question; the owner answered "(a) Làm tiếp" twice (:675, :1130) and "(a) Kết thúc phiên đúng các bước" the third time (:1886), and the decision agent ruled how to go on (decisions D-592, D-596 and D-602).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

@@ -146,6 +146,9 @@ Occurrences in session 2026-10-11-2336 (../History/2026-10/2026-10-11-2336-spec-
 Occurrences in session 2026-10-12-0048 (../History/2026-10/2026-10-12-0048-the-git-reader-accepted-and-on-main.md):
 - **2026-10-12 (:167, :644, :813, :898, :917, :1212, :1285, :1370, :1482, :1632, :1751, :1827, :1844).** Thirteen one-line English working notes as text blocks in messages holding tool calls, none an owner line, most after the harness's prompt to say what I was doing; aid (a), a check run first in every gated command, kept every mutation from running until each was listed in a request to the decision agent (decisions D-575 to D-586). Two turn-final replies were sent without a checked draft (:679, :758) and one not byte-equal to its checked draft (:861; decisions D-577, D-579).
 
+Occurrences in session 2026-10-12-0215 (../History/2026-10/2026-10-12-0215-the-submission-path-accepted-and-on-main.md):
+- **2026-10-12 (:253, :654, :922, :1109, :1246, :1276, :1718, :1862).** Eight one-line English working notes as text blocks in messages holding tool calls, none an owner line, most after the harness's prompt to say what I was doing; aid (a) stopped the next gated run until each was listed in a request to the decision agent (decisions D-589 to D-602). Of the three turn-final questions after classifier stops, one was sent without a checked draft (:671; decision D-592) and one reworded from its checked draft (:1882).
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 
