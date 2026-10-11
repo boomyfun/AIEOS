@@ -141,6 +141,9 @@ Two in session 2026-10-11-0013 (../History/2026-10/2026-10-11-0013-decision-file
 - **2026-10-11 (D-395).** An acceptance text said the base run gave "every Verification and Resume Check scenario PASS", while RISK-01 and ADV-02 were NOT_RUN.
 - **2026-10-11 (D-396).** A workflow comment and a commit message said that changing any pin was the decision agent's, wider than A66 gives (emptying the governor pin, set on the owner's yes A65, stays the owner's).
 
+Occurrences in session 2026-10-11-2233 (../History/2026-10/2026-10-11-2233-stale-evidence-computation-accepted-and-on-main.md):
+- **2026-10-11 (D-550, D-551).** The review briefs stated "Ran 683 tests" after the fix had made it 684; found before launch by checking the common text against its input file, corrected and rebuilt. My own naming check for TASK-023's tests required one qualified criterion per docstring, while TASK-022's listing counts only qualified ones; a reviewer's question led me to run the listing itself, which found a criterion named by no test. A check written for a rule must use the rule's own implementation where one exists.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

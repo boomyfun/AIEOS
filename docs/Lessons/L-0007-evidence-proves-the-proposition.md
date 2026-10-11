@@ -44,6 +44,9 @@ Occurrences in session 2026-10-11-2112 (../History/2026-10/2026-10-11-2112-test-
 - **2026-10-11 (a447 :821, :1664; D-526 to D-528).** The last session's request said a pre-code owner line was "sent byte-equal" as a text block, and its History said the owner was told before any code; neither was checked in the transcript, which holds no such text block before the code (only a thinking block with a paraphrase, and the line in the session-end reply). Then this session's own correction over-claimed twice: first that the line was certainly not sent, then that a text block before a tool call is never kept as text (refuted at :560). The decision files now say only what the transcript shows. A claimed send to the owner is now checked by script in the transcript, by block type and bytes (tools/line_sent.py, D-526 C4, D-527).
 - **2026-10-11 (:532).** A pause reply re-laid out the checked line instead of sending it byte-equal; line_sent.py found it (D-528).
 
+Occurrences in session 2026-10-11-2233 (../History/2026-10/2026-10-11-2233-stale-evidence-computation-accepted-and-on-main.md):
+- **2026-10-11 (a067 :2036; D-542, D-543).** The last session's closing reply carried its owner texts word for word but re-laid out the checked line around them (a sentence added, the opening and closing reworded); line_sent.py against the checked file gave "sent as text: False". The check was made at this session's start, as the reply promised, and the owner was told.
+
 ## Why it happens
 - Proxies are cheaper than the real check.
 - The same model picks the evidence and judges it.

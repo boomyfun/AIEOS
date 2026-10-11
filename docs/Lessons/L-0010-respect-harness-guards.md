@@ -162,6 +162,10 @@ Occurrences in session 2026-10-11-2017 (../History/2026-10/2026-10-11-2017-ac-co
 - **2026-10-11 (:281).** A one-line program run by Python's name followed by a dash, to print a transcript record; refused before it ran; a small script file was written and run instead.
 - **2026-10-11 (:764).** A polling loop for the decision agent's answer that ran Python under a short timeout and waited by reading with a time limit, close to a sleep; refused before it ran; not retried; the answer was checked once instead.
 
+Occurrences in session 2026-10-11-2233 (../History/2026-10/2026-10-11-2233-stale-evidence-computation-accepted-and-on-main.md), each my incorrect command (decisions D-548, D-554):
+- **2026-10-11 (:916).** A compile and test command holding Python's name followed by a dash twice; refused before it ran; the compile script of an earlier session was used instead.
+- **2026-10-11 (:1892).** A hashing command with a stray no-op tail holding Python's name followed by a dash; refused before it ran; rerun without the tail.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

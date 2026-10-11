@@ -137,6 +137,9 @@ Occurrences in session 2026-10-11-2017 (../History/2026-10/2026-10-11-2017-ac-co
 Occurrences in session 2026-10-11-2112 (../History/2026-10/2026-10-11-2112-test-to-ac-listing-accepted-and-on-main.md):
 - **2026-10-11 (:560, :668, :847, :1265, :1420, :1486, :1823).** Seven one-line English working notes as text blocks in messages holding tool calls, none an owner line; each caught at the next pre_request run and brought to the decision agent (decisions D-528, D-529, D-531, D-535, D-536, D-537, D-539). Five (:847, :1265, :1420, :1486, :1823) followed the harness's prompt to say what I was doing (:840, :1262, :1403, :1483, :1730). The rule stands: no text at all before a tool call, whatever the prompt; an owner line goes only as a checked turn-final reply (decision D-527).
 
+Occurrences in session 2026-10-11-2233 (../History/2026-10/2026-10-11-2233-stale-evidence-computation-accepted-and-on-main.md):
+- **2026-10-11 (:788, :908, :1117, :1843, :1990).** Five one-line English working notes as text blocks in messages holding tool calls, and one Vietnamese progress line in the same position (:1178), none an owner line; each listed in the next request (decisions D-547, D-548, D-550, D-551, D-554, D-555). Most followed the harness's prompt to say what I was doing. The rule stands: no text at all in a message with a tool call; an owner line goes only as a checked turn-final reply (decisions D-527, D-545 Q4).
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 
