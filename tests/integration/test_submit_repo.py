@@ -59,7 +59,9 @@ class RepositoryHistory(unittest.TestCase):
         self.assertEqual(len(rec.append_calls), 1)
         args, kwargs = rec.append_calls[0]
         self.assertEqual(args[1:3], ('task.submitted', {'commit': FIX, 'compensating': False}))
-        self.assertEqual(kwargs, {'task_id': 'TASK-024', 'fencing_token': None})
+        self.assertEqual(sorted(kwargs), ['fencing_token', 'task_id'])
+        self.assertEqual(kwargs['task_id'], 'TASK-024')
+        self.assertIsNone(kwargs['fencing_token'])
         self.assertIn('no usable AIEOS-Fence', ' '.join(r['findings']))
         self.assertEqual((rec.release_calls, rec.held_calls), ([], []))
 
