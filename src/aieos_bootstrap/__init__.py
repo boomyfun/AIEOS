@@ -1,7 +1,7 @@
 """The bootstrap package of gov-AIEOS (tasks TASK-001, TASK-003, TASK-004, TASK-006, TASK-007, TASK-008, TASK-009,
-TASK-016, TASK-021, TASK-022, TASK-023 and TASK-024).
+TASK-016, TASK-021, TASK-022, TASK-023, TASK-024 and TASK-025).
 
-It holds eleven modules:
+It holds twelve modules:
 - ``records`` (TASK-001): a checker of the form of event-log lines, records and event payloads of specification 2
   sections 6.1 to 6.4. It reads only the text it is given, writes nothing and decides nothing.
 - ``conformance`` (TASK-003, with TASK-006's Resume Check entry and TASK-017's Risk Engine entry): the conformance runner of
@@ -35,9 +35,11 @@ It holds eleven modules:
 - ``gitread`` (TASK-024): the Git reader, constitution INV-001's single process wrapper and the first piece of the
   core's caller. It starts only git, with one of four pinned read-only subcommands in fixed forms, no shell, a
   controlled environment, a pinned working directory and a timeout, and returns the exit code and the output as bytes;
-  its parsers turn a commit object and a list of changed paths into values. It writes nothing, and no module calls it
-  yet.
+  its parsers turn a commit object and a list of changed paths into values. It writes nothing; submit calls it.
+- ``submit`` (TASK-025): the submission path of the core's caller. It reads one commit through gitread, takes its
+  AIEOS-Task and AIEOS-Fence trailers with recovery's rules, appends the task.submitted event through the writer, whose
+  fence check decides and records any refusal, and releases the lease; it opens no file itself and reads no clock.
 """
 
 __all__ = ['ac_coverage', 'ac_tests', 'conformance', 'eventlog', 'gitread', 'governor', 'records', 'recovery',
-           'resume_check', 'stale', 'writer']
+           'resume_check', 'stale', 'submit', 'writer']
