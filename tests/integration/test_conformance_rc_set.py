@@ -17,6 +17,10 @@ SET_FREEZE_RECORDS = 'docs/records/TASK-002.jsonl'
 # TASK-014: the set file with the 11 entries is frozen by its own record, given before TASK-014's first commit
 # (conformance-files.md section 7, revision 5); TASK-002's freeze of the earlier set file stays.
 SET_FREEZE_RECORDS_14 = 'docs/records/TASK-014.jsonl'
+# TASK-020: the set file with RISK-01's entry is frozen by its own record, given before TASK-020's first commit
+# (section 7, revision 5; DM F35); TASK-014's freeze of the set file it replaces stays (DM F31).
+SET_FREEZE_RECORDS_20 = 'docs/records/TASK-020.jsonl'
+REPLACED_SET_SHA256 = 'f1c01c75f3e018ee2d1430337a848535a1fb97742ded45602316c7bce9bcfbc9'
 EARLIER_SET_SHA256 = '158323324f2803bceee870403bc6c0e297c407fbe50902d60bec90624cc95208'
 FIXTURE_DIR = 'tests/conformance/fixtures_rc'
 M2_FIXTURE_DIR = 'tests/conformance/fixtures'
@@ -84,16 +88,24 @@ class RcSetTest(unittest.TestCase):
             self.assertEqual(value['cases'][0]['when'], 'resume', sid)
 
     def test_the_set_file_is_unchanged_and_frozen(self):
-        """TASK-014 AC4: the set file is bound by exactly one freeze approval of TASK-014, and TASK-002's freeze of
-        the earlier set file is still recorded."""
+        """TASK-020 AC4 (in place of TASK-014 AC4): the set file is bound by exactly one freeze approval of TASK-020,
+        TASK-014's freeze of the set file it replaces is still recorded, and so is TASK-002's freeze of the earlier
+        set file."""
         digest = sha256(read(SET_FILE))
         bound = []
-        for line in read(SET_FREEZE_RECORDS_14).decode('utf-8').split('\n'):
+        for line in read(SET_FREEZE_RECORDS_20).decode('utf-8').split('\n'):
             if line:
                 rec = json.loads(line)
                 if rec.get('fact_kind') == 'authority' and rec.get('approval_binding') == {'kind': 'change_request', 'hash': digest}:
                     bound.append(rec['record_id'])
-        self.assertEqual(len(bound), 1, 'the set file is bound by exactly one freeze approval of TASK-014')
+        self.assertEqual(bound, ['TASK-020-freeze-set'], 'the set file is bound by exactly one freeze approval of TASK-020')
+        replaced = []
+        for line in read(SET_FREEZE_RECORDS_14).decode('utf-8').split('\n'):
+            if line:
+                rec = json.loads(line)
+                if rec.get('fact_kind') == 'authority' and rec.get('approval_binding') == {'kind': 'change_request', 'hash': REPLACED_SET_SHA256}:
+                    replaced.append(rec['record_id'])
+        self.assertEqual(replaced, ['TASK-014-freeze-set'])
         earlier = []
         for line in read(SET_FREEZE_RECORDS).decode('utf-8').split('\n'):
             if line:

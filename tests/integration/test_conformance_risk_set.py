@@ -29,6 +29,9 @@ OWN = ('tests/unit/test_conformance_risk_files.py', 'tests/integration/test_conf
 # once TASK-020 sets it (so the test holds in both states, as TASK-005's module allows the set file).
 RUNNER = 'src/aieos_bootstrap/conformance.py'
 RUNNER_TESTS = re.compile(r'tests/(?:unit|integration|property)/test_runner_risk[A-Za-z0-9_]*\.py')
+# TASK-020 AC5: the three modules whose set check names the folder for RISK-01's path (sections 2 and 10), each by name.
+SET_CHECKS = ('tests/unit/test_conformance_files.py', 'tests/integration/test_conformance_set.py',
+              'tests/property/test_conformance_properties.py')
 
 
 def read(path):
@@ -81,7 +84,8 @@ def freeze_ids(digest):
 
 def not_allowed(paths):
     """The given repository paths that are not allowed to name the folder, sorted."""
-    return sorted(p for p in paths if p not in OWN and p not in (RUNNER, SET_FILE) and not RUNNER_TESTS.fullmatch(p))
+    return sorted(p for p in paths if p not in OWN and p not in (RUNNER, SET_FILE) and not RUNNER_TESTS.fullmatch(p)
+                  and p not in SET_CHECKS)
 
 
 def naming(name):
@@ -154,6 +158,10 @@ class RiskSetTest(unittest.TestCase):
         self.assertEqual(not_allowed(list(OWN) + [RUNNER, SET_FILE, 'tests/unit/test_runner_risk.py',
                                                   'tests/integration/test_runner_risk_run.py',
                                                   'tests/property/test_runner_risk_properties.py']), [])
+        # TASK-020 AC5: the three set-check modules are allowed by name, and a fourth conformance module is not.
+        self.assertEqual(not_allowed(list(SET_CHECKS)), [])
+        self.assertEqual(not_allowed(list(SET_CHECKS) + ['tests/unit/test_conformance_rc_files.py']),
+                         ['tests/unit/test_conformance_rc_files.py'])
 
     def test_the_set_file_naming_this_file_is_allowed(self):
         """The second state of RISK-01's entry (TASK-020): the set file then holds this file's path as data."""
