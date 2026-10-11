@@ -1,0 +1,346 @@
+# Task contract TASK-025, the submission path (Master Plan revision 3, §4 M4; specification 1 sections 5.1 and 8;
+# specification 2 sections 6.1, 6.3 and 6.6; DEF-0030, the core's caller). Revision 0, drafted under decision D-591
+# (Q2 to Q5, C1, C2), and revision 1 under decision D-592 (M1, M2), brought for approval in its own request; whether it
+# is approved is recorded in the decision files, not in this file. Fields and value forms follow specification 2 §5.1 and the contracts of TASK-007 to TASK-024.
+# Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# Task type: implementation. What it adds: one module, src/aieos_bootstrap/submit.py, the second piece of the core's
+# caller (DEF-0030; the row 13 note of decision D-567 as amended by decision D-591 Q4): one function, submit, that reads
+# one commit through the Git reader (TASK-024), takes its AIEOS-Task and AIEOS-Fence trailers with recovery.trailers
+# (TASK-009, the same trailer rules recovery applies), and appends the task.submitted event through the single writer
+# (TASK-016), whose existing fence check decides whether the submission holds and records a refusal as an observation
+# (specification 1 section 8); on success it releases the lease (specification 1 section 5.1, task.submitted row).
+# Which refusals are recorded (decision D-592 M1; specification 1 section 8, "The refusal is recorded as an
+# observation"): a commit that identifies this task (a message with a body and exactly one AIEOS-Task equal to the
+# task) but carries no usable AIEOS-Fence is a submission whose token is not the lease's, so submit appends the
+# task.submitted event with no fencing token and the writer refuses it and records the observation; a commit that
+# cannot be identified as this task's submission (no body, no, a doubled or a different AIEOS-Task, or a trailer
+# finding on the task key), and a commit that cannot be read, are refused before the writer with nothing appended,
+# since there is no submission of this task to record. Which lease is released (decision D-592 M2): after an
+# appended event, the held lease; after a duplicate, only a held lease whose token is the commit's, never a lease
+# granted to another holder since.
+# What it does not do (decision D-591 Q4): no recovery at start (TASK-026: specification 1 section 7 step 1, the walk
+# over parents and its bound), no evaluation path (TASK-027: the Resume Check, stale evidence, the AC checks and the
+# governor on a submitted task, and the execution decision's state effect), no lease grant and no store creation, no
+# projection of task state, no check that the commit's changed paths lie in the write set, no check that the commit is
+# reachable from a branch, no Git write of any kind, no process except through gitread.run, no file opened except
+# through the writer's functions, no clock read, nothing under .github/ and no workflow change (decision D-591 Q3,
+# option (i)), no policy, no frozen fixture. It changes no other module of src/ apart from the package's docstring and
+# __all__.
+# The two caller requirements of DEF-0030 (decisions D-580 F6 and D-584 G1): (1) the trailer is trusted only when the
+# commit message has a body, that is at least two paragraphs, so that its last paragraph is not the subject line (AC3);
+# (2) the PATH that gitread passes to git is the caller's precondition: gitread refuses an empty or relative entry, but
+# whether an absolute entry is trusted cannot be checked in code; a refused PATH comes back as a refusal result with
+# nothing appended (AC2, AC11).
+# DEF-0041 (c) (decision D-414): "never give an earlier store's epoch to a recreated store" does not apply here,
+# because submit grants no lease and never calls open_store, so it creates no store and gives no epoch; it reads the
+# held lease only through the writer's append_event (AC8, AC11).
+# Readers of the changed paths (D-263 C3's practice): src/aieos_bootstrap/__init__.py is read by every module that
+# imports the package and by the CI's G1 build; its docstring and __all__ gain submit; it must not name the Resume Check
+# fixture folder (TASK-010's assertion) nor the Risk Engine fixture folder (TASK-020's allow list). No module of the
+# repository calls submit yet.
+# Risk: high, and change class critical_cr, each computed over the base by script (risk_class25.py and
+# gov003_class25.py of the drafting session). Profile (assurance-model.md §5, gov-AIEOS, high): functional
+# [unit_test], architecture [deterministic_rule], functional [integration_test], security [static_security_analysis]
+# and architecture [ai_review (cross-model)], plus the evidence_required of the applicable articles.
+# Reviews (as TASK-024's): five way-2 reviews by a Claude model other than the implementer's, and the decision agent's
+# three, each brief naming for testing: that no event is appended before every check of AC1 to AC3 passes; that the
+# fence decision is the writer's and is not duplicated or weakened; compensating false; the trailer-body rule; which
+# refusals are recorded (M1); the lease release after an appended event, and after a duplicate only for a held lease
+# with the commit's token (M2); the result form and that no exception escapes; the injected defaults;
+# AC11's limits, the end-to-end gap among them.
+# Naming: every test of the three new test modules names the AC ids it stands for as "TASK-025 ACn" in its own
+# docstring, following DEF-0049's convention as TASK-023 and TASK-024 did, for this contract only.
+# Evaluation path (A61; as TASK-007 to TASK-024): commit C changes only docs/tasks/TASK-025.yaml and has one parent
+# equal to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-025", go to task/TASK-025 under their own
+# decisions; main receives the task only at its acceptance. The task push's CI base run is a RISK-01 conformance run
+# over the set file of DM F35, reported advisory, never MEASURED.
+# Not applicable: OPS-001 (the task changes no ref; gitread runs only read-only subcommands); INV-005 to INV-008,
+# INV-010 and INV-011 (the decision engine, the governor, evidence records other than the writer's fence refusal, the
+# replay and the policy meet no path of the write-set); GOV-001, GOV-004 to GOV-006 and SEC-003 (the concept file, the
+# bound artifacts, the decision matrix, the records and pre-genesis documents, and .github/, meet no path of the
+# write-set).
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting, no push of its own; it weakens no evidence requirement (CR-002 part 4 limit 8 does not apply),
+# so its acceptance is one delegated approval of the decision agent (Master Plan section 6), for the decision agent's
+# ruling.
+task: TASK-025
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add a standard-library Python 3 module, src/aieos_bootstrap/submit.py, the submission path of the core's caller
+  (DEF-0030): submit(root, repo, commit_id, task_id, event_id, recorder, now) reads one commit through gitread.run,
+  requires a message body, takes the AIEOS-Task and AIEOS-Fence trailers with recovery.trailers, and appends the
+  task.submitted event with payload {commit, compensating false} and the trailer's fencing token through
+  writer.append_event, whose fence check decides and records any refusal, a commit of this task with no usable fence
+  trailer among them; it releases the lease when the event is appended, or when it was already appended and the
+  held lease carries the commit's token; a commit that cannot be read or identified as this task's submission is a
+  refusal result with nothing appended. With unit tests on injected stand-ins for gitread.run, writer.append_event,
+  writer.release_lease and writer.held_lease, a read-only integration test over
+  this repository's history, and property tests, each test naming its AC ids as "TASK-025 ACn" in its own docstring.
+traces_to:
+  - docs/specs/spec-01-state-and-event-model.md#5.1
+  - docs/specs/spec-01-state-and-event-model.md#8
+  - docs/specs/spec-02-aieos-file-format.md#6.1
+  - docs/specs/spec-02-aieos-file-format.md#6.3
+  - docs/specs/spec-02-aieos-file-format.md#6.6
+  - docs/specs/spec-04-verification-and-evidence.md#12
+  - docs/pre-genesis/constitution.md#INV-001
+  - docs/pre-genesis/constitution.md#INV-004
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-025.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id.
+  base_commit: 2e9d42de8e19a755ced7ca40a636334f25aaa8c7
+  depends_on: [TASK-009, TASK-016, TASK-024]
+  intent_versions:
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: a517fcd7f885623aa874e1ce5920804f34a337d5650b32af4578142d30e0d8d5
+    docs/specs/spec-04-verification-and-evidence.md: 48d4f5bf06461ad49409f21bc6ea8d511d17a84eaac15adda14277483176a8d5
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # One modified path (the package docstring and __all__); every other path is new.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/submit.py
+    - tests/unit/test_submit.py
+    - tests/integration/test_submit_repo.py
+    - tests/property/test_submit_properties.py
+read_set:
+  paths:
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-04-verification-and-evidence.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/Deferred/DEF-0030-event-log-writer-and-workflow-revision-6.md
+    - docs/Deferred/DEF-0041-the-review-findings-carried-from-task-016.md
+    - docs/Deferred/DEF-0052-the-review-findings-carried-from-task-024.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.gitread.run, aieos_bootstrap.gitread.parse_commit, aieos_bootstrap.recovery.trailers, aieos_bootstrap.writer.append_event, aieos_bootstrap.writer.release_lease, aieos_bootstrap.writer.held_lease]
+  schemas: [spec-02 event envelope (6.1), spec-02 task.submitted payload (6.3), spec-02 commit trailers (6.6)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/writer.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_writer_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The interface and its arguments. submit(root, repo, commit_id, task_id, event_id, recorder, now, read=None,
+      append=None, release=None, held=None) takes root and repo, non-empty strings that are absolute paths; commit_id, 40
+      lowercase hexadecimal characters (reading: the full commit id of specification 2, as recovery takes it);
+      task_id, TASK- followed by digits; event_id and recorder, non-empty strings (decision D-405 (h): both always
+      given); now, a timezone-aware datetime in UTC with whole seconds (specification 2 section 6.1), used as the
+      event's appended_at. Any other value gives the refusal result of AC6 with reason "argument" and a finding naming
+      the argument, before read is called (fail closed).
+  - AC2: >-
+      Reading the commit. submit calls read exactly with (repo, ["cat-file", "-t", commit_id]) and, only when that
+      call's result has error None, exit 0 and out exactly b"commit\n", with (repo, ["cat-file", "-p", commit_id]); the
+      second result must have error None and exit 0, and gitread.parse_commit of its out must give error None. Any
+      other result (a refused form, a refused PATH, a timeout, a git that cannot be started, a non-zero exit, an object
+      that is not a commit, bytes out of form) gives the refusal result with reason "git" and a finding that names the
+      call and its error or exit, and append and release are not called.
+  - AC3: >-
+      The trailers (decisions D-580 F6, D-584 and D-592 M1; specification 2 section 6.6; specification 1 section 8).
+      Identification: the parsed message must have at least two paragraphs, split as recovery.trailers splits them
+      (lines that are empty or hold only spaces and tabs between paragraphs), so that its last paragraph is not its
+      subject, and recovery.trailers of the message must give exactly one AIEOS-Task, equal to task_id, and no
+      finding on the AIEOS-Task key; else refusal, reason "trailer", with recovery's findings and a finding for a
+      missing body or a missing, doubled or different task, and append, release and held are not called (the commit
+      cannot be identified as this task's submission, so there is nothing to record). The fence: when the commit is
+      identified and recovery.trailers gives a usable AIEOS-Fence ({epoch, counter}) and no finding on that key, its
+      value is the token of AC4; when the AIEOS-Fence is missing or gives a finding, submit calls append as AC4 says
+      with fencing_token None, so that the writer refuses the submission by its fence check and records the
+      observation (specification 1 section 8); submit adds a finding that the commit carries no usable fence, does
+      not call release or held, and returns "refused" with the writer's reason.
+  - AC4: >-
+      The append. When AC1 to AC3 pass, submit calls append exactly once as append(root, "task.submitted",
+      {"commit": commit_id, "compensating": false}, event_id, now, recorder, task_id=task_id,
+      fencing_token=<the AIEOS-Fence value as {epoch, counter}, or None in AC3's case of no usable fence>); compensating is false on every event submit appends,
+      true being only recovery's (specification 2 section 6.3); no other event and no other call of append is made.
+      The fence decision is the writer's (writer.append_event passes the store's held lease to eventlog.append, which
+      refuses a token that is not the held lease's or a lease that expired at or before now, and records the refusal
+      as an observation, specification 1 section 8); submit makes no fence comparison of its own and weakens none.
+  - AC5: >-
+      The outcome and the lease (specification 1 section 5.1, task.submitted row: "the lease is released"; decision
+      D-592 M2). When the append's result is "appended", submit calls release(root, task_id) once and returns result
+      "submitted"; when it is "duplicate" (the same event already appended, for example after a stop between the
+      append and the release), it calls held(root, task_id) once and calls release(root, task_id) once only when held
+      returns a lease whose fencing_token equals the commit's token (compared as eventlog compares tokens, the
+      canonical JSON text), else it does not call release and adds a finding that the held lease, if any, is not the
+      commit's, so that a lease granted to another holder since is never released; it returns result "duplicate";
+      when the result is "refused", it does not call release or held and returns result "refused" with the writer's
+      reason (for example "fence", "form", "conflict" or "log"), its findings, and whether the writer appended the
+      refusal record.
+  - AC6: >-
+      The result. submit returns a mapping with exactly the keys result, reason, findings, appended and released:
+      result one of "submitted", "duplicate" and "refused"; reason None for "submitted" and "duplicate", else a short
+      English word (argument, git, trailer, store, or the writer's reason); findings a list of short English texts;
+      appended the append's result object, or None when append was not called; released the lease release returned, or
+      None. An exception raised by append or release (an OSError, a ValueError of the writer's own argument checks, or
+      any other Exception) is caught and gives result "refused" with reason "store" and a finding naming its type, or,
+      when raised by release after an appended or duplicate event, result "submitted" or "duplicate" with a finding
+      that the lease was not released (it expires by its own expiry, specification 1 section 8). No exception escapes
+      submit for these cases.
+  - AC7: >-
+      The injected functions. read, append, release and held, when None, are gitread.run, writer.append_event,
+      writer.release_lease and writer.held_lease, resolved at call time from those modules; tests pass stand-ins. A
+      test pins the defaults: with read, append, release and held None, the functions called are exactly those four of
+      those modules (shown by
+      replacing the module attributes for the duration of the test and restoring them).
+  - AC8: >-
+      Purity apart from the calls (INV-001, INV-004). submit.py imports only the Python 3 standard library and
+      aieos_bootstrap's gitread, recovery and writer; it imports no subprocess, opens, writes and removes no file
+      itself, starts no process except through read, reads no clock and no environment variable, calls of the writer only
+      append_event, release_lease and held_lease (through append, release and held), and no open_store,
+      start_session, end_session, grant_lease, expire_leases or held_leases, and builds no event-log line itself (the writer and
+      eventlog do). Its docstring states this and the limits of AC11.
+  - AC9: >-
+      This repository's history, read only. tests/integration/test_submit_repo.py finds the repository root from its
+      own path (pathlib, two parents up) and calls submit with the real gitread.run and stand-ins for append and release
+      that record calls: for commit 057cc530e8fa39814eed4431c4de0fd9887014cf (a commit of main whose last paragraph
+      holds "AIEOS-Task: TASK-024" and no AIEOS-Fence) with task_id TASK-024, append is called exactly once with
+      fencing_token None (AC3, AC4), release and held are not called, and the result is "refused" with the reason the
+      stand-in's refusal gives and a finding of the missing fence; with task_id TASK-025, "refused", "trailer", with a
+      finding of the different task, and append, release and held are not called; for
+      c7b8728f2d0a4bb0efec66076fe3ad0b4f2da441 (that commit's tree), "refused" with reason "git", and append, release
+      and held are not called. root is a path that is never written (the stand-ins write
+      nothing). These are data about accepted commits: they reopen nothing.
+  - AC10: >-
+      Purity and the CI checks (INV-001, INV-002, INV-003). No exec, eval, compile, __import__ or importlib; no assert
+      in src (bandit B101); no string that names the project-state directory; deterministic_rule, OPS-003, SEC-001,
+      SEC-002 and bandit report no finding at the task's commits, on the base with the workflow's revision 8, with no
+      change under .github/ (decision D-591 Q3).
+  - AC11: >-
+      Limits, stated: the PATH git is found by is the caller's precondition (DEF-0052 G1): gitread refuses an empty or
+      relative entry, and an absolute entry is trusted as given; the tests use stand-ins for the writer, so the real
+      store's fence path is covered by the writer's own tests (TASK-016) and not end to end with submit (decision D-591
+      Q3, option (i)), and no test makes a commit with an AIEOS-Fence trailer; DEF-0041 (c) does not apply, since
+      submit grants nothing and creates no store; submit does not check that the commit's changed paths lie in the
+      task's write set, that the commit is reachable from a branch, or the task's state in the log (the held lease
+      stands for IN_PROGRESS, and the evaluation path is TASK-027); recovery at start is TASK-026; the lease is released
+      after the append in a separate call, so a stop between them leaves the lease until a retry (AC5's duplicate,
+      which releases it only while the store holds that same token) or its expiry; recorded and not recorded
+      refusals (decision D-592 M1): a commit of this task with no usable fence is refused by the writer and recorded as
+      an observation, while a commit that cannot be read, has no body, or names no, a doubled or a different task is
+      refused with nothing appended and no record, since it cannot be identified as this task's submission. Every existing module and test not in the write set is unchanged, and if one can pass only by a change
+      the task escalates (needs_out_of_scope_change).
+  - AC12: >-
+      Its own tests and the added text. Every test function of the three new test modules names the AC ids it stands
+      for as "TASK-025 ACn" in its own docstring and names no other task's AC in qualified form there. Before each
+      commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns, and each count is 0;
+      the file names are scanned with the same patterns and the records executors' pre-push pattern (D-282).
+  - AC13: >-
+      Tests, each rule with at least one passing and one failing case: R1 AC1 (each argument wrong in turn, read not
+      called); R2 AC2 (each failing read result of AC2 from a stand-in, append not called); R3 AC3 (a one-paragraph
+      message "AIEOS-Task: TASK-025" plus a fence line refused with append not called; a different, missing, doubled
+      or misspelled task key refused with append not called; a missing fence and a malformed fence each reaching
+      append once with fencing_token None and returning the stand-in's refusal, release and held not called; a
+      well-formed two-paragraph message reaching append with its token); R4 AC4 (the exact append call, compensating
+      false, the token as {epoch, counter} with the counter an integer); R5 AC5 (appended, duplicate and refused
+      results from a stand-in; release called once after appended; after duplicate, release called once when held
+      returns the same token, and not called when held returns a different token or None; neither after refused); R6 AC6 (the result keys; exceptions from append and from release);
+      R7 AC7 (the four defaults pinned); R8 AC8 and AC10 (a script check of the module's imports and of the absence of
+      process, file, clock, environment and store-changing calls); R9 AC9 (the integration test). Unit tests in
+      tests/unit/test_submit.py; AC9 in tests/integration/test_submit_repo.py; property tests in
+      tests/property/test_submit_properties.py (standard library only, fixed seeds): random arguments outside AC1's
+      forms never reach read; random two-paragraph messages with a valid task and fence always reach append exactly
+      once with that fence; random read failures never reach append. tests/run_tests.py, unchanged, runs all groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC9, AC13]}
+  - {gate: G3, check: constitution, args: [AC8, AC10, AC11, AC12, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
