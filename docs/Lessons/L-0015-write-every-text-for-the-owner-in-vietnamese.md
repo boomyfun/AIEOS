@@ -131,6 +131,9 @@ Occurrences in session 2026-10-11-1800 (../History/2026-10/2026-10-11-1800-runne
 Occurrences in session 2026-10-11-1912 (../History/2026-10/2026-10-11-1912-set-entry-accepted-and-on-main-for-task-020.md):
 - **2026-10-11 (:594, :810, :1047).** Three one-line English working notes as text blocks in messages holding tool calls, none a relay to the owner; each caught at the next pre_request run and brought to the decision agent (decisions D-502, D-504, D-505), which then forbade any text block in a message with a tool call (D-502 C1) and put owner lines only in messages with no tool call (D-504). Two Vietnamese progress lines were also sent unchecked at the start (:243, :332; decision D-501). The owner's answer on a machine block is still open.
 
+Occurrences in session 2026-10-11-2017 (../History/2026-10/2026-10-11-2017-ac-coverage-check-accepted-and-on-main.md):
+- **2026-10-11 (:999, :1171, :1379, :1432, :1467, :1484).** Six one-line English working notes as text blocks in messages holding tool calls, none an owner line; each caught at the next pre_request run and brought to the decision agent (decisions D-519, D-520, D-522, D-523); the third came after decision D-520 C5 required a check of each such message before sending it, and the last three after decision D-522 C4 said such a message holds tool calls only. The owner had answered "không" to a machine block (DM A68), so detection stays after the fact. Remedy (D-522 C4): every message with a tool call holds tool calls only, except a pre-checked owner line allowed by decision D-517 C3.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

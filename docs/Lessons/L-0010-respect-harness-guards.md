@@ -158,6 +158,10 @@ Occurrences in session 2026-10-11-1912 (../History/2026-10/2026-10-11-1912-set-e
 - **2026-10-11 (:252).** A search whose grep pattern held a Python run form as a search string; refused before it ran; corrected, not retried unchanged.
 - **2026-10-11 (:743).** A one-line program piped into Python by its name followed by a dash, without the timeout prefix; refused before it ran; the data was read with grep instead.
 
+Occurrences in session 2026-10-11-2017 (../History/2026-10/2026-10-11-2017-ac-coverage-check-accepted-and-on-main.md), each my incorrect command (decisions D-514, D-518):
+- **2026-10-11 (:281).** A one-line program run by Python's name followed by a dash, to print a transcript record; refused before it ran; a small script file was written and run instead.
+- **2026-10-11 (:764).** A polling loop for the decision agent's answer that ran Python under a short timeout and waited by reading with a time limit, close to a sleep; refused before it ran; not retried; the answer was checked once instead.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
