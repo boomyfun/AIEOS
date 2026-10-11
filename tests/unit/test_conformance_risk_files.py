@@ -388,9 +388,9 @@ class Ac1FileKindTest(unittest.TestCase):
             self.assertTrue(all_problems(bad)[0].startswith('AC1: '))
 
     def test_the_path_and_folder(self):
-        # Files only: the CI's G1 build step compiles src and tests, so a __pycache__ folder may be there.
-        self.assertEqual(sorted(p.name for p in (ROOT / 'tests/conformance/fixtures_risk').glob('*') if p.is_file()),
-                         ['risk_01.py'])
+        # The CI's G1 build step compiles src and tests, so a __pycache__ folder may be there; it alone is skipped.
+        self.assertEqual(sorted(p.name for p in (ROOT / 'tests/conformance/fixtures_risk').glob('*')
+                                if not (p.name == '__pycache__' and p.is_dir())), ['risk_01.py'])
 
 
 class Ac2FormTest(unittest.TestCase):
