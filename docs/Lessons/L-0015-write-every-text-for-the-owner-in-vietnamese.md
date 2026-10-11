@@ -128,6 +128,9 @@ Occurrences in session 2026-10-11-1540 (../History/2026-10/2026-10-11-1540-fixtu
 Occurrences in session 2026-10-11-1800 (../History/2026-10/2026-10-11-1800-runner-tests-accepted-and-set-freeze-for-task-020.md):
 - **2026-10-11 (:204, :425, :615, :1245, :1635).** Five one-line English text blocks before tool calls. The mechanical stop of decision D-485 C4 (the steps listing's English lines at every pre_request run) caught each at the next request, and each went to the decision agent (decisions D-489, D-490, D-494, D-498); three came after decision D-489 C5 made "no text block in a message that holds a tool call, except a pre-checked Vietnamese line" binding. The check finds them but does not prevent them; by decision D-490 C5 the owner is asked whether to install a machine block (a hook is the owner's, A51 item (4)).
 
+Occurrences in session 2026-10-11-1912 (../History/2026-10/2026-10-11-1912-set-entry-accepted-and-on-main-for-task-020.md):
+- **2026-10-11 (:594, :810, :1047).** Three one-line English working notes as text blocks in messages holding tool calls, none a relay to the owner; each caught at the next pre_request run and brought to the decision agent (decisions D-502, D-504, D-505), which then forbade any text block in a message with a tool call (D-502 C1) and put owner lines only in messages with no tool call (D-504). Two Vietnamese progress lines were also sent unchecked at the start (:243, :332; decision D-501). The owner's answer on a machine block is still open.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

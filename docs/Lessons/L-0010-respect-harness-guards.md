@@ -154,6 +154,10 @@ Occurrences in session 2026-10-11-1540 (../History/2026-10/2026-10-11-1540-fixtu
 Occurrences in session 2026-10-11-1800 (../History/2026-10/2026-10-11-1800-runner-tests-accepted-and-set-freeze-for-task-020.md), my incorrect command (decision D-489):
 - **2026-10-11 (:442).** A check of my own builder whose grep pattern held the forbidden forms as search strings (the occurrences of :356 of session 2026-10-11-1439 and :425 of session 2026-10-11-1540 again); refused before it ran; not retried unchanged.
 
+Occurrences in session 2026-10-11-1912 (../History/2026-10/2026-10-11-1912-set-entry-accepted-and-on-main-for-task-020.md), each my incorrect command (decisions D-501, D-504):
+- **2026-10-11 (:252).** A search whose grep pattern held a Python run form as a search string; refused before it ran; corrected, not retried unchanged.
+- **2026-10-11 (:743).** A one-line program piped into Python by its name followed by a dash, without the timeout prefix; refused before it ran; the data was read with grep instead.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

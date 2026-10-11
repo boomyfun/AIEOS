@@ -1,6 +1,6 @@
 # DEF-0045: TASK-019's erratum E1 and the four tests that TASK-020 changes
 
-- Status: open
+- Status: done
 - Opened: 2026-10-11 (decision files D-484 to D-486)
 - Deferred by: decision agent (A41, A51), D-484 (erratum E1 by D-359's route); decision agent (A41), D-481 (the split with TASK-020).
 - Decision group: A (test and wording within the self-build).
@@ -19,3 +19,4 @@ TASK-019's reviews and acceptance.
 ## Log
 - 2026-10-11: opened (decisions D-481, D-484; session b94736f9).
 - 2026-10-11: erratum E1 recorded in docs/records/TASK-019.jsonl (its contract record) at TASK-019's acceptance (decisions D-493, D-494); the set file's freeze for TASK-020 given first (decision D-496, DM F35); the four tests stay for TASK-020's contract (session d662611e).
+- 2026-10-11: done: the four tests changed by TASK-020, accepted (decision D-507) and on `main` (bc45ece8, records 456e7fd8; session e6209999).
