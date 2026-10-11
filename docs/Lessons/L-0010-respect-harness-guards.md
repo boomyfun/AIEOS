@@ -151,6 +151,9 @@ Occurrences in session 2026-10-11-1540 (../History/2026-10/2026-10-11-1540-fixtu
 - **2026-10-11 (:425).** A check whose own pattern held the forbidden forms (the occurrence of :356 of session 2026-10-11-1439 again); refused before it ran.
 - **2026-10-11 (:1585).** A command that began with `rm -rf` on a scratch folder that did not exist; it was not refused, nothing was removed, and the rules forbid any removal command. Remedy (D-484 C4): no removal command at all; a new scratch folder gets a new name.
 
+Occurrences in session 2026-10-11-1800 (../History/2026-10/2026-10-11-1800-runner-tests-accepted-and-set-freeze-for-task-020.md), my incorrect command (decision D-489):
+- **2026-10-11 (:442).** A check of my own builder whose grep pattern held the forbidden forms as search strings (the occurrences of :356 of session 2026-10-11-1439 and :425 of session 2026-10-11-1540 again); refused before it ran; not retried unchanged.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

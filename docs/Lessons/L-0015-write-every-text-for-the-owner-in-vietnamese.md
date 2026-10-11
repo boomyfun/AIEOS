@@ -125,6 +125,9 @@ Occurrences in session 2026-10-11-1540 (../History/2026-10/2026-10-11-1540-fixtu
 - **Correction (D-473 C4):** the occurrence of session 2026-10-11-1439 that says the remedy "failed three times (D-467, D-472)" should read "D-466, D-467, D-472".
 - Remedy proposed (mechanical, D-485 C4): at every pre_request run, english_lines.py's output over the whole steps listing is compared with the list of English lines already reported; any new one is a stop: it goes to the decision agent before any other step. Whether a hook should block an English text block is an owner matter (hooks are the owner's, A51 item (4)).
 
+Occurrences in session 2026-10-11-1800 (../History/2026-10/2026-10-11-1800-runner-tests-accepted-and-set-freeze-for-task-020.md):
+- **2026-10-11 (:204, :425, :615, :1245, :1635).** Five one-line English text blocks before tool calls. The mechanical stop of decision D-485 C4 (the steps listing's English lines at every pre_request run) caught each at the next request, and each went to the decision agent (decisions D-489, D-490, D-494, D-498); three came after decision D-489 C5 made "no text block in a message that holds a tool call, except a pre-checked Vietnamese line" binding. The check finds them but does not prevent them; by decision D-490 C5 the owner is asked whether to install a machine block (a hook is the owner's, A51 item (4)).
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

@@ -18,3 +18,4 @@ TASK-019's reviews and acceptance.
 
 ## Log
 - 2026-10-11: opened (decisions D-481, D-484; session b94736f9).
+- 2026-10-11: erratum E1 recorded in docs/records/TASK-019.jsonl (its contract record) at TASK-019's acceptance (decisions D-493, D-494); the set file's freeze for TASK-020 given first (decision D-496, DM F35); the four tests stay for TASK-020's contract (session d662611e).
