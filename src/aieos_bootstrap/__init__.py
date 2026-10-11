@@ -1,7 +1,7 @@
 """The bootstrap package of gov-AIEOS (tasks TASK-001, TASK-003, TASK-004, TASK-006, TASK-007, TASK-008, TASK-009,
-TASK-016, TASK-021 and TASK-022).
+TASK-016, TASK-021, TASK-022 and TASK-023).
 
-It holds nine modules:
+It holds ten modules:
 - ``records`` (TASK-001): a checker of the form of event-log lines, records and event payloads of specification 2
   sections 6.1 to 6.4. It reads only the text it is given, writes nothing and decides nothing.
 - ``conformance`` (TASK-003, with TASK-006's Resume Check entry and TASK-017's Risk Engine entry): the conformance runner of
@@ -28,6 +28,11 @@ It holds nine modules:
   values, the test files' source texts and every task's write set, it returns per acceptance criterion the tests
   that name it in their own name or docstring, and the criteria of the G2 tests gate that no test names, and the one
   blocking record for them; it reads and writes no file.
+- ``stale`` (TASK-023): the stale-evidence computation of specification 4 section 3 rules 2 and 3 and section 7 item
+  3. Given one task's reconciliation facts as values, it returns the stale record ids by reason, at most one
+  evidence.stale event per reason with only the new ids, and what it could not check; it reads and writes no file and
+  appends nothing.
 """
 
-__all__ = ['ac_coverage', 'ac_tests', 'conformance', 'eventlog', 'governor', 'records', 'recovery', 'resume_check', 'writer']
+__all__ = ['ac_coverage', 'ac_tests', 'conformance', 'eventlog', 'governor', 'records', 'recovery', 'resume_check', 'stale',
+           'writer']
