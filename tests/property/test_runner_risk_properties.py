@@ -6,6 +6,7 @@ import copy
 import json
 import pathlib
 import random
+import re
 import unittest
 
 from aieos_bootstrap import conformance
@@ -96,6 +97,15 @@ def fixture(files, cases=None):
     return {'scenario': 'RISK-01', 'row_hash': entry['row_hash'], 'cases': cases or [risk_case(files)]}
 
 
+def put_raw(files, data, path=RISK_PATH):
+    """As put_fixture, with the fixture's bytes given as they are."""
+    files[path] = data
+    entry, sv = entry_of(files)
+    entry['fixture'] = {'path': path, 'sha256': conformance.sha256(data)}
+    files[conformance.SET_FILE] = wrap(sv)
+    files[TEST_RECORDS] = files.get(TEST_RECORDS, b'') + freeze_line(conformance.sha256(files[conformance.SET_FILE]))
+
+
 
 def go(files, derive, evaluate=None):
     def read(path):
@@ -138,6 +148,28 @@ class RiskEntryProperties(unittest.TestCase):
             files[RISK_PATH] = data[:i] + bytes([(data[i] + rng.randint(1, 255)) % 256]) + data[i + 1:]
             self.assertNotEqual(go(files, none_derive).results['RISK-01'], conformance.PASS)
 
+    def test_a_rehashed_one_byte_change(self):
+        # The fixture's bytes changed and the set entry re-frozen over them, so the form checks are what decide:
+        # the unchanged fixture passes; any change runs to one of the three results without an exception; a change
+        # inside a key of the fixture's object never passes.
+        rng = random.Random(18)
+        base = real_files()
+        put_fixture(base, fixture(base))
+        self.assertEqual(go(base, none_derive).results['RISK-01'], conformance.PASS)
+        data = base[RISK_PATH]
+        keys = [m.start() + 1 + k for key in (b'"risk_not"', b'"profile_excludes"', b'"not_fixed"', b'"changed_paths"',
+                                              b'"risk_rules"', b'"when"', b'"row_hash"')
+                for m in re.finditer(re.escape(key), data) for k in range(len(key) - 2)]
+        for n in range(80):
+            i = rng.choice(keys) if n % 2 else rng.randrange(len(data))
+            files = dict(base)
+            mutated = data[:i] + bytes([(data[i] + rng.randint(1, 255)) % 256]) + data[i + 1:]
+            put_raw(files, mutated)
+            result = go(files, none_derive).results['RISK-01']
+            self.assertIn(result, (conformance.PASS, conformance.FAIL, conformance.NOT_RUN))
+            if n % 2:
+                self.assertNotEqual(result, conformance.PASS, (i, mutated[i - 5:i + 5]))
+
     def test_the_matcher_follows_point_6(self):
         rng = random.Random(6)
         for _ in range(400):
@@ -150,6 +182,13 @@ class RiskEntryProperties(unittest.TestCase):
             # A pattern without "/" matches a file name in any folder.
             self.assertTrue(conformance.path_matches(names[-1], path))
             self.assertFalse(conformance.path_matches(names[-1] + 'z', path))
+            # "**" in the middle matches any sequence of names, none included.
+            self.assertEqual(conformance.path_matches(names[0] + '/**/' + names[-1], path), len(names) >= 2)
+            # "*" inside a name matches any part of that name only.
+            self.assertTrue(conformance.path_matches(names[-1][0] + '*', path))
+            self.assertEqual(conformance.path_matches(names[0] + '*/*', path), len(names) == 2)
+            # Matching is case-sensitive.
+            self.assertFalse(conformance.path_matches(names[0].upper() + '/**', path))
 
     def test_a_low_classification_never_passes(self):
         rng = random.Random(8)
@@ -186,6 +225,25 @@ class RiskEntryProperties(unittest.TestCase):
         files = real_files()
         put_fixture(files, fixture(files))
         self.assertFalse(go(files, none_derive).value['counts'])
+
+    def test_inv_008_a_stand_in_derivation_alone_never_counts(self):
+        # The root's governor (no stand-in acceptance function) with only a stand-in derivation: the derivation seam
+        # alone makes the run not count, whatever the derivation returns.
+        rng = random.Random(9)
+        files = real_files()
+        put_fixture(files, fixture(files))
+
+        def read(path):
+            return files.get(path)
+
+        def listing():
+            return sorted(p for p in files if p.startswith(conformance.RECORDS_DIR + '/') and p.endswith('.jsonl'))
+        for _ in range(5):
+            out = rng.choice([{'risk': None, 'evidence_profile': None}, {'risk': 'high', 'evidence_profile': None}])
+            r = conformance.run(ROOT, COMMIT, TASK, read=read, listing=listing, derive=lambda v, d=out: d)
+            self.assertFalse(r.value['counts'])
+            self.assertIn('a stand-in derivation (reading)', r.problems)
+            self.assertNotIn('a stand-in governor (reading)', r.problems)
 
 
 if __name__ == '__main__':

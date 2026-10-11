@@ -6,7 +6,10 @@ records listing; no file is written. Stand-in derivations and acceptance functio
 import copy
 import json
 import pathlib
+import sys
+import types
 import unittest
+from unittest import mock
 
 from aieos_bootstrap import conformance
 
@@ -166,39 +169,103 @@ class R2EntryPoint(Base):
     def test_load_derive_from_elsewhere(self):
         self.assertIsNone(conformance.load_derive(pathlib.Path('/nowhere')))
 
+    def stub(self, module):
+        """The governor module seen by load_derive's plain import replaced in memory (None: the import fails)."""
+        import aieos_bootstrap
+        patches = [mock.patch.dict(sys.modules, {'aieos_bootstrap.governor': module})]
+        if module is not None:
+            patches.append(mock.patch.object(aieos_bootstrap, 'governor', module, create=True))
+        for p in patches:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def module(self, path=None, **attrs):
+        m = types.ModuleType('aieos_bootstrap.governor')
+        m.__file__ = str(path or ROOT / conformance.GOVERNOR_PATH)
+        for k, v in attrs.items():
+            setattr(m, k, v)
+        return m
+
+    def test_load_derive_branches(self):
+        # AC3: absent or failed, a module that is not the root's, no callable derive_inputs: None; else the function.
+        self.stub(None)
+        self.assertIsNone(conformance.load_derive(ROOT))
+
+    def test_load_derive_no_callable_derive_inputs(self):
+        self.stub(self.module())
+        self.assertIsNone(conformance.load_derive(ROOT))
+
+    def test_load_derive_not_callable(self):
+        self.stub(self.module(derive_inputs=5))
+        self.assertIsNone(conformance.load_derive(ROOT))
+
+    def test_load_derive_another_file(self):
+        self.stub(self.module(path=ROOT / 'src/elsewhere/governor.py', derive_inputs=derive_none))
+        self.assertIsNone(conformance.load_derive(ROOT))
+
+    def test_load_derive_the_roots_function(self):
+        self.stub(self.module(derive_inputs=derive_none))
+        self.assertIs(conformance.load_derive(ROOT), derive_none)
+
+
+MALFORMED = 'the fixture is malformed: '
+
 
 class R3Form(Base):
-    def bad(self, change):
+    def bad(self, change, why):
         files = real_files()
         value = fixture(files)
         change(value)
         put_fixture(files, value)
         result, reason, _ = self.result(files)
-        self.assertEqual(result, conformance.NOT_RUN, reason)
-        self.assertTrue(reason.startswith('the fixture is malformed'), reason)
+        self.assertEqual((result, reason), (conformance.NOT_RUN, MALFORMED + why))
 
     def test_each_malformed_condition(self):
+        rules = 'case 1: risk_rules is not a list of {match, class} with well-formed patterns and a risk class'
+        pairs = 'case 1: profile_excludes is not exactly the two pairs of the low default'
+        nf = 'case 1: not_fixed is not exactly decision and next_state'
         changes = [
-            lambda v: v.update(extra=1),
-            lambda v: v.update(row_hash='0' * 64),
-            lambda v: v.update(cases=[]),
-            lambda v: v['cases'][0].pop('when'),
-            lambda v: v['cases'][0]['values'].pop('delegation'),
-            lambda v: v['cases'][0]['values'].update(requirement_profiles=[{'id': 'x', 'add': []}]),
-            lambda v: v['cases'][0]['values']['risk_rules'][0].update({'class': 'none'}),
-            lambda v: v['cases'][0]['values']['risk_rules'][0].update(match=[]),
-            lambda v: v['cases'][0]['values']['articles'][0].update(scope=[]),
-            lambda v: v['cases'][0]['request'].update(changed_paths=['other.txt']),
-            lambda v: v['cases'][0]['request'].update(task_state='IN_REVIEW'),
-            lambda v: v['cases'][0].update(when='re_evaluate'),
-            lambda v: v['cases'][0].update(records='none'),
-            lambda v: v['cases'][0]['expected'].update(risk_not=['low', 'medium']),
-            lambda v: v['cases'][0]['expected']['profile_excludes'].pop(),
-            lambda v: v['cases'][0]['expected'].update(not_fixed=['decision']),
-            lambda v: v['cases'][0]['expected'].update(decision=['REJECT']),
+            (lambda v: v.update(extra=1), 'the fixture is not exactly scenario, row_hash and cases'),
+            (lambda v: v.update(row_hash='0' * 64), 'scenario or row_hash differs from the set entry'),
+            (lambda v: v.update(cases=[]), 'cases is not a non-empty list'),
+            (lambda v: v['cases'][0].pop('when'), 'case 1: not exactly values, request, records, when and expected'),
+            (lambda v: v['cases'][0]['values'].pop('delegation'), 'case 1: values is not exactly the keys of section 10'),
+            (lambda v: v['cases'][0]['values'].update(requirement_profiles=[{'id': 'x', 'add': []}]),
+             'case 1: requirement_profiles is not the empty list'),
+            (lambda v: v['cases'][0]['values']['risk_rules'][0].update({'class': 'none'}), rules),
+            (lambda v: v['cases'][0]['values']['risk_rules'][0].update(match=[]), rules),
+            (lambda v: v['cases'][0]['values']['articles'][0].update(scope=[]),
+             'case 1: articles is not a list of {id, scope, evidence_required} with well-formed scopes'),
+            (lambda v: v['cases'][0]['values']['articles'][0].update(extra=1),
+             'case 1: articles is not a list of {id, scope, evidence_required} with well-formed scopes'),
+            (lambda v: v['cases'][0]['values'].update(changed_paths=[]),
+             'case 1: changed_paths is not a non-empty list of well-formed paths'),
+            (lambda v: v['cases'][0]['request'].update(changed_paths=['other.txt']),
+             'case 1: request changed_paths differs from values changed_paths'),
+            (lambda v: v['cases'][0]['request'].update(task_state='IN_REVIEW'),
+             'case 1: when is not evaluate with task_state VERIFYING'),
+            (lambda v: v['cases'][0].update(when='re_evaluate'), 'case 1: when is not evaluate with task_state VERIFYING'),
+            (lambda v: v['cases'][0].update(records='none'), 'case 1: records is not a list'),
+            (lambda v: v['cases'][0]['records'][0].update(record_id=['x']), 'case 1: a record with a check_record finding'),
+            (lambda v: v['cases'][0]['expected'].update(risk_not=['low', 'medium']), 'case 1: risk_not is not ["low"]'),
+            (lambda v: v['cases'][0]['expected']['profile_excludes'].pop(), pairs),
+            (lambda v: v['cases'][0]['expected']['profile_excludes'][0].update(dimension=['functional']), pairs),
+            (lambda v: v['cases'][0]['expected']['profile_excludes'][1].update(evidence_type={'t': 'lint'}), pairs),
+            (lambda v: v['cases'][0]['expected'].update(not_fixed=['decision']), nf),
+            (lambda v: v['cases'][0]['expected'].update(not_fixed=[['decision'], ['next_state']]), nf),
+            (lambda v: v['cases'][0]['expected'].update(decision=['REJECT']),
+             'case 1: expected is not exactly risk_not, profile_excludes and not_fixed'),
         ]
-        for change in changes:
-            self.bad(change)
+        for change, why in changes:
+            self.bad(change, why)
+
+    def test_reordered_lists_are_well_formed(self):
+        files = real_files()
+        value = fixture(files)
+        value['cases'][0]['expected']['profile_excludes'].reverse()
+        value['cases'][0]['expected']['not_fixed'].reverse()
+        put_fixture(files, value)
+        self.assertEqual(self.result(files)[:2], (conformance.PASS, ''))
 
 
 class R4Matcher(Base):
@@ -211,26 +278,41 @@ class R4Matcher(Base):
         self.assertTrue(m('*.md', 'docs/x/readme.md'))
         self.assertFalse(m('*.md', 'docs/readme.MD'))
         self.assertFalse(m('docs/**', 'src/docs/a.md'))
+        self.assertTrue(m('a*b', 'x/aXYb'))
+        self.assertFalse(m('a*b', 'a/b'))
+        self.assertTrue(m('src/**/x.py', 'src/x.py'))
+        self.assertTrue(m('src/**/x.py', 'src/a/b/x.py'))
+        self.assertFalse(m('Src/**', 'src/a.py'))
+        self.assertFalse(m('a/**', 'a'))
 
     def test_well_formed(self):
-        for p in ('src/**', '*.md', 'a-b_c.d/*', '**'):
+        for p in ('src/**', '*.md', 'a-b_c.d/*', '**', '.github/*', 'a..b'):
             self.assertTrue(conformance.pattern_ok(p), p)
-        for p in ('', '/src', 'src/', 'a//b', 'a?b', 'a[b]', '{a}', '!a', 'a\\b', 'a**b', 'x/***', 5):
+        for p in ('', '/src', 'src/', 'a//b', 'a?b', 'a[b]', '{a}', '!a', 'a\\b', 'a**b', 'x/***', 5, '.', '..',
+                  'a/./b', 'a/../b', '../*'):
             self.assertFalse(conformance.pattern_ok(p), p)
-        self.assertTrue(conformance.path_ok('a/b.txt'))
-        for p in ('a/*.txt', '/a', 'a/', 'a b', ''):
+        for p in ('a/b.txt', '.gitignore', 'a/.b/c', 'a..b/c'):
+            self.assertTrue(conformance.path_ok(p), p)
+        for p in ('a/*.txt', '/a', 'a/', 'a b', '', '.', '..', 'x/../src/a.py', './a', 'a/.'):
             self.assertFalse(conformance.path_ok(p), p)
 
     def test_the_given(self):
-        for change in (lambda v: v['cases'][0]['values']['risk_rules'][0].update(match=['unmatched/**']),
-                       lambda v: v['cases'][0]['values']['articles'][0].update(scope=['*.txt']),
-                       lambda v: v['cases'][0]['values']['risk_rules'][0].update(match=['a?b']),
-                       lambda v: v['cases'][0]['values'].update(changed_paths=['bad path'])):
+        rules = 'case 1: risk_rules is not a list of {match, class} with well-formed patterns and a risk class'
+        paths = 'case 1: changed_paths is not a non-empty list of well-formed paths'
+        for change, why in (
+                (lambda v: v['cases'][0]['values']['risk_rules'][0].update(match=['unmatched/**']),
+                 'case 1: the Given does not hold: a changed path matches a risk rule'),
+                (lambda v: v['cases'][0]['values']['articles'][0].update(scope=['*.txt']),
+                 "case 1: an article's scope matches a changed path"),
+                (lambda v: v['cases'][0]['values']['risk_rules'][0].update(match=['a?b']), rules),
+                (lambda v: v['cases'][0]['values']['risk_rules'][0].update(match=['../src/**']), rules),
+                (lambda v: v['cases'][0]['values'].update(changed_paths=['bad path']), paths),
+                (lambda v: v['cases'][0]['values'].update(changed_paths=['x/../src/a.py']), paths)):
             files = real_files()
             value = fixture(files)
             change(value)
             put_fixture(files, value)
-            self.assertEqual(self.result(files)[0], conformance.NOT_RUN)
+            self.assertEqual(self.result(files)[:2], (conformance.NOT_RUN, MALFORMED + why))
 
 
 class R5Derivation(Base):
@@ -283,9 +365,14 @@ class R6Derived(Base):
         self.check({'risk': None, 'evidence_profile': 'low'})
         self.check({'risk': None})
         self.check(['low'])
+        self.check({'risk': 'high', 'evidence_profile': [{'dimension': 'functional', 'evidence_types': ['unit_test', 5]}]})
+        self.check({'risk': ['low'], 'evidence_profile': None})
 
     def test_a_good_derivation_passes(self):
         self.check({'risk': 'high', 'evidence_profile': [{'dimension': 'functional', 'evidence_types': ['unit_test']}]},
+                   conformance.PASS)
+        # A low pair's type in another dimension is not the pair.
+        self.check({'risk': 'high', 'evidence_profile': [{'dimension': 'security', 'evidence_types': ['build', 'lint']}]},
                    conformance.PASS)
 
 
@@ -312,6 +399,45 @@ class R7Acceptance(Base):
             del rec['profile_used']
             return rec
         self.assertEqual(self.run_with(evaluate)[0], conformance.NOT_RUN)
+
+    def item(self, **kw):
+        it = {'dimension': 'functional', 'required': ['unit_test'], 'satisfied_by': [], 'missing_types': []}
+        it.update(kw)
+        return it
+
+    def test_profile_used_items_of_another_form_are_not_run(self):
+        # AC8 with spec 2 section 6.4's form: a low pair given in any other form never counts as not held.
+        for bad in (self.item(required='build'), self.item(required=['build', ['lint']]),
+                    self.item(dimension=['functional']), self.item(dimension=''), self.item(required=None)):
+            def evaluate(req, inp, recs, bad=bad):
+                rec = error_record(req)
+                rec['profile_used'] = [bad]
+                return rec
+            self.assertEqual(self.run_with(evaluate), (conformance.NOT_RUN, 'case 1: ' + conformance.PROFILE_USED_PROBLEM),
+                             bad)
+
+    def test_profile_used_items_of_the_form_pass(self):
+        def evaluate(req, inp, recs):
+            rec = error_record(req)
+            rec['profile_used'] = [self.item(), self.item(dimension='security', required=['build', 'lint'])]
+            return rec
+        self.assertEqual(self.run_with(evaluate), (conformance.PASS, ''))
+
+    def test_fail_wins_over_a_profile_used_of_another_form(self):
+        files = real_files()
+        put_fixture(files, fixture(files, [risk_case(files), risk_case(files)]))
+        calls = []
+
+        def evaluate(req, inp, recs):
+            rec = error_record(req)
+            if req['changed_paths'] == ['unmatched/file.txt']:
+                calls.append(1)
+                rec['profile_used'] = ([self.item(required='build')] if len(calls) == 1
+                                       else [self.item(required=['lint'])])
+            return rec
+        self.assertEqual(self.result(files, evaluate=evaluate)[:2],
+                         (conformance.FAIL, 'not met: case 2: profile_used holds a pair of the low default'))
+        self.assertEqual(len(calls), 2)
 
     def test_a_raise_is_not_run(self):
         def evaluate(req, inp, recs):

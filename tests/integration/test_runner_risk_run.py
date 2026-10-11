@@ -131,6 +131,9 @@ class RunnerRiskEndToEndTest(unittest.TestCase):
     def test_the_root_governor_meets_an_in_memory_fixture(self):
         r = self.run_fixture()
         self.assertEqual((r.results['RISK-01'], r.reasons['RISK-01']), (conformance.PASS, ''))
+        # AC10's outcome rule with a Risk Engine scenario PASS in a real run (in memory; a test of the runner).
+        self.assertTrue(r.value['counts'], r.problems)
+        self.assertEqual(r.record['outcome'], 'pass')
 
     def test_a_derivation_that_classifies_low_fails(self):
         def derive(values):

@@ -608,14 +608,16 @@ def pattern_ok(pattern):
     if not isinstance(pattern, str) or not pattern:
         return False
     for name in pattern.split('/'):
-        if not _PATTERN_NAME.fullmatch(name) or ('**' in name and name != '**'):
+        if not _PATTERN_NAME.fullmatch(name) or ('**' in name and name != '**') or name in ('.', '..'):
             return False
     return True
 
 
 def path_ok(path):
-    """Whether a changed path is well formed (TASK-017 AC5): the pattern rule without "*"."""
-    return isinstance(path, str) and bool(path) and all(_PATH_NAME.fullmatch(n) for n in path.split('/'))
+    """Whether a changed path is well formed (TASK-017 AC5): the pattern rule without "*". A name "." or ".." is ill
+    formed in a path and in a pattern: Git records no such name (point 6 compares "the path as Git records it")."""
+    return isinstance(path, str) and bool(path) and all(_PATH_NAME.fullmatch(n) and n not in ('.', '..')
+                                                        for n in path.split('/'))
 
 
 def path_matches(pattern, path):
@@ -681,11 +683,12 @@ def _check_risk_expected(exp):
         errors.append('risk_not is not ["low"]')
     pairs = exp['profile_excludes']
     if not (isinstance(pairs, list) and len(pairs) == 2
-            and all(isinstance(p, dict) and set(p) == {'dimension', 'evidence_type'} for p in pairs)
+            and all(isinstance(p, dict) and set(p) == {'dimension', 'evidence_type'} and _is_str(p['dimension'])
+                    and _is_str(p['evidence_type']) for p in pairs)
             and {(p['dimension'], p['evidence_type']) for p in pairs} == LOW_PAIRS):
         errors.append('profile_excludes is not exactly the two pairs of the low default')
     nf = exp['not_fixed']
-    if not (isinstance(nf, list) and len(nf) == 2 and set(nf) == {'decision', 'next_state'}):
+    if not (_is_str_list(nf) and len(nf) == 2 and set(nf) == {'decision', 'next_state'}):
         errors.append('not_fixed is not exactly decision and next_state')
     return errors
 
@@ -721,12 +724,26 @@ def check_risk_fixture(value, entry):
             for rec in case_records:
                 if records.check_record(rec):
                     errors.append(where + 'a record with a check_record finding')
+                # A record id that is not a string is a check_record finding already; only strings are compared.
                 rid = rec.get('record_id') if isinstance(rec, dict) else None
-                if rid in seen:
-                    errors.append(where + 'a repeated record id')
-                seen.add(rid)
+                if isinstance(rid, str):
+                    if rid in seen:
+                        errors.append(where + 'a repeated record id')
+                    seen.add(rid)
         errors.extend(where + e for e in _check_risk_expected(case['expected']))
     return errors
+
+
+PROFILE_USED_PROBLEM = ('the decision record has no profile_used list of objects with a string dimension and a list '
+                        'of strings required')
+
+
+def _profile_used_ok(entries):
+    """Whether an acceptance return's profile_used is in the form step (3) reads (TASK-017 AC8; spec 2 section 6.4):
+    a list of objects, each with a string dimension and a list of strings required. Any other form is not such a
+    record, so the scenario is NOT_RUN unless another case fails; a malformed entry never counts as holding nothing."""
+    return isinstance(entries, list) and all(isinstance(e, dict) and _is_str(e.get('dimension'))
+                                             and _is_str_list(e.get('required')) for e in entries)
 
 
 def _held(entries, key, pairs):
@@ -1009,9 +1026,8 @@ def _run_risk_cases(value, entry, derive, evaluate):
             not_run = not_run or 'case %d: the call raised %s' % (n, type(exc).__name__)
             continue
         problem = decision_problem(observed)
-        if not problem and not (isinstance(observed.get('profile_used'), list)
-                                and all(isinstance(e, dict) for e in observed['profile_used'])):
-            problem = 'the decision record has no profile_used list'
+        if not problem and not _profile_used_ok(observed.get('profile_used')):
+            problem = PROFILE_USED_PROBLEM
         if problem:
             not_run = not_run or 'case %d: %s' % (n, problem)
             continue
