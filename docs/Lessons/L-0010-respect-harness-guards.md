@@ -138,6 +138,11 @@ Occurrences in session 2026-10-11-0538 (../History/2026-10/2026-10-11-0538-confo
 - **2026-10-11 (:359).** A check I added at the end of a command named the forbidden form in its own search pattern; dropped, the rest re-run unchanged. Remedy: no check whose pattern names that form; the guard itself is the check.
 - **2026-10-11 (:1545).** A run of one test module in the module-run form; the whole suite was run through tests/run_tests.py instead. Remedy: tests only through tests/run_tests.py.
 
+Occurrences in session 2026-10-11-1318 (../History/2026-10/2026-10-11-1318-runner-entry-accepted-and-fixture-contract-drafted.md), each my incorrect command, refused before it ran (decisions D-453, D-461 and D-462):
+- **2026-10-11 (:368).** A here-string in a `sha256sum -c` command; re-run with `echo … | sha256sum -c -`.
+- **2026-10-11 (:452).** A purposeless placeholder command with Python's name followed by a dash.
+- **2026-10-11 (:1462).** A leftover of the same form at the start of a real command, after D-453's remedy (no command without a purpose); the remedy did not hold. Remedy now: grep each command's text for those forms before sending it.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

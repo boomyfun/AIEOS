@@ -28,3 +28,4 @@ Specification 4 approved (done, F32; 75cfc58d).
 ## Log
 - 2026-10-11: opened (decision files D-428, D-429 and D-430; session 9dd21f8f).
 - 2026-10-11: step 1 done: the conformance files' revision 7 approved (DM F33, decision D-441) and on `main` (284babab); step 2: TASK-017's contract approved (D-446) and on `main` (f1b218c9); its code written in a scratchpad clone and archived as a patch, not pushed, not reviewed (D-448); session a212bf73.
+- 2026-10-11: step 2 done: TASK-017 accepted (decision D-458) and on `main` (1779085a); step 3 split by decision D-459 into TASK-018 (the fixture), TASK-019 (the runner tests in both states) and TASK-020 (the set file's entry, its freeze first); TASK-018's contract at revision 1, not committed (session 51321169); TASK-017's carried findings in DEF-0043.
