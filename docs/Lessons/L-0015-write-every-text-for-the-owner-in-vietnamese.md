@@ -134,6 +134,9 @@ Occurrences in session 2026-10-11-1912 (../History/2026-10/2026-10-11-1912-set-e
 Occurrences in session 2026-10-11-2017 (../History/2026-10/2026-10-11-2017-ac-coverage-check-accepted-and-on-main.md):
 - **2026-10-11 (:999, :1171, :1379, :1432, :1467, :1484).** Six one-line English working notes as text blocks in messages holding tool calls, none an owner line; each caught at the next pre_request run and brought to the decision agent (decisions D-519, D-520, D-522, D-523); the third came after decision D-520 C5 required a check of each such message before sending it, and the last three after decision D-522 C4 said such a message holds tool calls only. The owner had answered "không" to a machine block (DM A68), so detection stays after the fact. Remedy (D-522 C4): every message with a tool call holds tool calls only, except a pre-checked owner line allowed by decision D-517 C3.
 
+Occurrences in session 2026-10-11-2112 (../History/2026-10/2026-10-11-2112-test-to-ac-listing-accepted-and-on-main.md):
+- **2026-10-11 (:560, :668, :847, :1265, :1420, :1486, :1823).** Seven one-line English working notes as text blocks in messages holding tool calls, none an owner line; each caught at the next pre_request run and brought to the decision agent (decisions D-528, D-529, D-531, D-535, D-536, D-537, D-539). Five (:847, :1265, :1420, :1486, :1823) followed the harness's prompt to say what I was doing (:840, :1262, :1403, :1483, :1730). The rule stands: no text at all before a tool call, whatever the prompt; an owner line goes only as a checked turn-final reply (decision D-527).
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 
