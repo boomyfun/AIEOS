@@ -1,6 +1,6 @@
 # DEF-0053: the review findings carried from TASK-025, the submission path
 
-- Status: open
+- Status: done
 - Opened: 2026-10-12 (decisions D-598 and D-599)
 - Deferred by: decision agent (A41), D-598 (the dispositions F1 to F10 of the five way-2 reviews; F3 and F5 carried) and D-599 (C4).
 - Decision group: A (a design point of the writer and a test gap within the self-build).
@@ -20,3 +20,4 @@ DEF-0030 (the core's caller); TASK-016 (the writer).
 
 ## Log
 - 2026-10-12 (session a3411bd9): opened. TASK-025 accepted at b647c160 and on `main` (decision D-600; records ee7d5ccd, D-601). ../History/2026-10/2026-10-12-0215-the-submission-path-accepted-and-on-main.md
+- 2026-10-12 (session bab88211): done. F3 resolved by TASK-028 (release by token: writer.release_lease_token removes the held lease only when its token equals the given one, compared and removed in one store transaction; the submission path releases through it with the commit's token) and F5 resolved by TASK-028 (the submission path reads writer and release results of any shape without raising); TASK-028 accepted at 0f204666 and on `main` (decision D-613; records bcd3fe9a). ../History/2026-10/2026-10-12-0333-release-by-token-accepted-and-the-recovery-contract.md

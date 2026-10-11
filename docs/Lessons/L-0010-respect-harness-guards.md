@@ -174,6 +174,9 @@ Occurrences in session 2026-10-12-0215 (../History/2026-10/2026-10-12-0215-the-s
 - **2026-10-12 (:521, :526).** Two commands holding Python's name followed by a dash (a filler piece, then the same form inside a search pattern meant to find the first); refused before they ran; not retried in that form.
 - **2026-10-12 (:669, :1120, :1877).** The harness's safety classifier withheld one of my responses three times; nothing in them ran; I did not retry, reword or reconstruct them, and each time asked the owner in one plain question; the owner answered "(a) Làm tiếp" twice (:675, :1130) and "(a) Kết thúc phiên đúng các bước" the third time (:1886), and the decision agent ruled how to go on (decisions D-592, D-596 and D-602).
 
+Occurrences in session 2026-10-12-0333 (../History/2026-10/2026-10-12-0333-release-by-token-accepted-and-the-recovery-contract.md), the refusals each my incorrect command:
+- **2026-10-12 (:256, :516).** A command holding a heredoc (writing a helper script; guard rule R1), and a command holding Python's name followed by a dash (an import probe added to a hashing command; guard rule R2); refused before they ran; not retried in that form (decisions D-604 and D-607).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

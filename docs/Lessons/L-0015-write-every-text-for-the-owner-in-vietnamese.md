@@ -149,6 +149,9 @@ Occurrences in session 2026-10-12-0048 (../History/2026-10/2026-10-12-0048-the-g
 Occurrences in session 2026-10-12-0215 (../History/2026-10/2026-10-12-0215-the-submission-path-accepted-and-on-main.md):
 - **2026-10-12 (:253, :654, :922, :1109, :1246, :1276, :1718, :1862).** Eight one-line English working notes as text blocks in messages holding tool calls, none an owner line, most after the harness's prompt to say what I was doing; aid (a) stopped the next gated run until each was listed in a request to the decision agent (decisions D-589 to D-602). Of the three turn-final questions after classifier stops, one was sent without a checked draft (:671; decision D-592) and one reworded from its checked draft (:1882).
 
+Occurrences in session 2026-10-12-0333 (../History/2026-10/2026-10-12-0333-release-by-token-accepted-and-the-recovery-contract.md):
+- **2026-10-12 (:255, :574, :1457, :1494, :1739, :1923).** Text blocks in messages holding tool calls (English working notes, and once a Vietnamese status line), all while working between requests to the decision agent; aid (a) stopped the next gated run until each was listed (decisions D-604, D-608, D-614, D-617 and D-619). Four turn-final replies carried only a status line while I waited for background work (:1070, :1118, :1138, :1152); the decision agent ruled the practice (decision D-611 C5).
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 
