@@ -1,4 +1,4 @@
-# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md), revision 7: the checks the first code task needs
+# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md), revision 8: the checks the first code task needs
 # (decision D-181, option K1), with the conformance runs of M2 (DM A62; decisions D-217 C5 and D-218). Runs on every push
 # to any branch and checks every pushed commit. It reads only: it writes nothing to the repository and uses no secret.
 # Records: this run's log, its step summary, its annotations and each step's conclusion. Its results are advisory (DM
@@ -52,6 +52,25 @@
 # setting. Limits: the paths are matched by name, so the allowances follow the file names, not their content's
 # purpose; open's path argument is not checked (that only the two fixed paths are opened stays with the task's tests
 # and review, TASK-016 AC1 and AC8); the rules stay an accident filter, not a containment.
+# Revision 8 (decision D-569; the decision agent's own decision under DM A66) loosens two checks for exactly one path,
+# sized to TASK-024's contract (the Git reader, constitution INV-001's single process wrapper):
+# deterministic_rule lets src/aieos_bootstrap/gitread.py import subprocess, under a pattern rule: only `import
+# subprocess` (no alias, no `from subprocess import`); the name subprocess used only as the object of an attribute (no
+# assignment, argument, getattr or return of it); of its attributes only run, DEVNULL, PIPE and TimeoutExpired, run
+# only as the function of a call, DEVNULL and PIPE only as keyword values, TimeoutExpired only in an except clause;
+# each call subprocess.run with exactly one positional argument, a list display (or a sum whose leftmost term is one)
+# beginning with the constant 'git', and only the keywords shell (the constant False only), stdin, stdout, stderr,
+# capture_output, cwd, timeout, check and env (executable, preexec_fn and every other keyword, and **, refused); and
+# SUBCOMMANDS bound once to exactly ('cat-file', 'diff-tree', 'rev-list', 'rev-parse'). Its test modules get no
+# allowance: they reach the module's subprocess only through gitread (for example gitread.subprocess.TimeoutExpired
+# to raise a timeout in a stand-in), so the import of subprocess stays refused in them as everywhere else.
+# static_security_analysis runs bandit on gitread.py without B404, B603 and B607 (the import of subprocess, a call
+# without a shell, a partial executable path); every other file keeps every bandit test it had. It grants no write
+# access, uses no secret and changes no setting. Limits: the path is matched by name; the pattern rule pins the
+# executable's name, the keywords and the subcommand tuple, not that the arguments passed are the pinned forms (that
+# stays with the task's tests and review, TASK-024 AC1, AC2 and AC12); routes the rules do not follow (for example
+# the posix or nt modules, os.environ edits, or a computed name) stay with review, as for every file; git's own
+# reading of the repository's configuration is not closed by the workflow (TASK-024 AC10).
 name: aieos-checks
 
 on:
@@ -1420,6 +1439,8 @@ jobs:
           # - revision 7 (TASK-016): the single writer src/aieos_bootstrap/writer.py and its three test modules get exactly
           #   the allowances in ALLOW below; the builtin open is allowed there only as a call open(<path>, <mode>) with
           #   exactly two positional arguments, no keyword, and the mode a constant "rb" or "ab"; nothing else is relaxed.
+          # - revision 8 (TASK-024): the Git reader src/aieos_bootstrap/gitread.py may import subprocess (ALLOW below), under
+          #   the pattern rule of check_subprocess; nothing else is relaxed, and its test modules get no allowance.
           import ast
           import json
           import subprocess
@@ -1447,12 +1468,76 @@ jobs:
           for _p in WRITER_TESTS:
               ALLOW[_p] = {'modules': frozenset({'sqlite3', 'tempfile'}), 'os': frozenset(),
                            'open_modes': frozenset({'rb', 'ab'}), 'aieos_string': False}
+          # revision 8: the Git reader (TASK-024, INV-001's single process wrapper) may import subprocess
+          GITREAD = 'src/aieos_bootstrap/gitread.py'
+          ALLOW[GITREAD] = {'modules': frozenset({'subprocess'}), 'os': frozenset(), 'open_modes': frozenset(),
+                            'aieos_string': False}
+          SUBCOMMANDS = ('cat-file', 'diff-tree', 'rev-list', 'rev-parse')
+          RUN_KEYWORDS = {'shell', 'stdin', 'stdout', 'stderr', 'capture_output', 'cwd', 'timeout', 'check', 'env'}
           MANIFESTS = {'setup.py', 'setup.cfg', 'pyproject.toml', 'Pipfile', 'Pipfile.lock', 'poetry.lock', 'MANIFEST.in'}
           VENDOR_DIRS = {'site-packages', 'vendor', '_vendor', 'node_modules', '__pypackages__'}
 
 
           def git(*a):
               return subprocess.run(['git'] + list(a), capture_output=True, check=True).stdout.decode('utf-8')
+
+
+          def starts_with_git(node):
+              # a list display whose first element is the constant 'git', or a sum whose leftmost term is one (revision 8)
+              while isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+                  node = node.left
+              return (isinstance(node, ast.List) and bool(node.elts) and isinstance(node.elts[0], ast.Constant)
+                      and node.elts[0].value == 'git')
+
+
+          def check_subprocess(path, tree, findings):
+              # revision 8: the pattern rule for the one path that may import subprocess (GITREAD)
+              parent = {}
+              for n in ast.walk(tree):
+                  for c in ast.iter_child_nodes(n):
+                      parent[id(c)] = n
+              for n in ast.walk(tree):
+                  if isinstance(n, ast.ImportFrom) and n.module == 'subprocess':
+                      findings.append('%s:%d: from subprocess import is refused (revision 8)' % (path, n.lineno))
+                  if isinstance(n, ast.Import) and any(a.name == 'subprocess' and a.asname for a in n.names):
+                      findings.append('%s:%d: import subprocess as is refused (revision 8)' % (path, n.lineno))
+                  if isinstance(n, ast.Name) and n.id == 'subprocess':
+                      p = parent.get(id(n))
+                      if not (isinstance(p, ast.Attribute) and p.value is n):
+                          findings.append('%s:%d: the name subprocess used other than as an attribute\'s object (revision 8)' % (path, n.lineno))
+                          continue
+                      a = p
+                      ap = parent.get(id(a))
+                      if a.attr == 'run':
+                          if not (isinstance(ap, ast.Call) and ap.func is a):
+                              findings.append('%s:%d: subprocess.run used other than as the function of a call (revision 8)' % (path, n.lineno))
+                              continue
+                          bad = sorted(k.arg or '**' for k in ap.keywords if k.arg not in RUN_KEYWORDS)
+                          if bad:
+                              findings.append('%s:%d: subprocess.run keyword refused: %s (revision 8)' % (path, n.lineno, ', '.join(bad)))
+                          shell = [k for k in ap.keywords if k.arg == 'shell']
+                          if shell and not (isinstance(shell[0].value, ast.Constant) and shell[0].value.value is False):
+                              findings.append('%s:%d: subprocess.run with a shell (revision 8)' % (path, n.lineno))
+                          if len(ap.args) != 1 or not starts_with_git(ap.args[0]):
+                              findings.append('%s:%d: subprocess.run must take one list beginning with git (revision 8)' % (path, n.lineno))
+                      elif a.attr in ('DEVNULL', 'PIPE'):
+                          if not isinstance(ap, ast.keyword):
+                              findings.append('%s:%d: subprocess.%s used other than as a keyword value (revision 8)' % (path, n.lineno, a.attr))
+                      elif a.attr == 'TimeoutExpired':
+                          q = ap if isinstance(ap, ast.Tuple) else a
+                          h = parent.get(id(q))
+                          if not (isinstance(h, ast.ExceptHandler) and h.type is q):
+                              findings.append('%s:%d: subprocess.TimeoutExpired used other than in an except clause (revision 8)' % (path, n.lineno))
+                      else:
+                          findings.append('%s:%d: subprocess.%s is refused (revision 8)' % (path, n.lineno, a.attr))
+              subs = [n for n in tree.body if isinstance(n, ast.Assign) and len(n.targets) == 1
+                      and isinstance(n.targets[0], ast.Name) and n.targets[0].id == 'SUBCOMMANDS']
+              try:
+                  ok = len(subs) == 1 and ast.literal_eval(subs[0].value) == SUBCOMMANDS
+              except ValueError:
+                  ok = False
+              if not ok:
+                  findings.append('%s: SUBCOMMANDS is not bound once to the pinned tuple (revision 8)' % path)
 
 
           def check_source(path, text, findings):
@@ -1466,6 +1551,8 @@ jobs:
               os_names = {'os'} | {a.asname for n in ast.walk(tree) if isinstance(n, ast.Import)
                                    for a in n.names if a.name == 'os' and a.asname}
               allow = ALLOW.get(path, NONE)
+              if path == GITREAD:
+                  check_subprocess(path, tree, findings)
               # the Name nodes `open` that are the function of an allowed call open(<path>, <constant mode>) (revision 7)
               open_ok = {id(n.func) for n in ast.walk(tree)
                          if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == 'open'
@@ -1614,8 +1701,11 @@ jobs:
           cd "$A"
           "$A/venv/bin/bandit" --version
           # src/: every bandit test. tests/: every test but B101 (assert) and B311 (the random module, which seeded
-          # property tests use); both options are written here, never read from the change.
+          # property tests use); both options are written here, never read from the change. Revision 8: the Git reader
+          # src/aieos_bootstrap/gitread.py without B404, B603 and B607; every other file as before.
+          GR="$GITHUB_WORKSPACE/work/src/aieos_bootstrap/gitread.py"
           S=0
-          "$A/venv/bin/bandit" -r "$GITHUB_WORKSPACE/work/src" --ini "$A/empty.bandit" --ignore-nosec -f txt || S=1
+          "$A/venv/bin/bandit" -r "$GITHUB_WORKSPACE/work/src" -x "$GR" --ini "$A/empty.bandit" --ignore-nosec -f txt || S=1
+          if [ -e "$GR" ]; then "$A/venv/bin/bandit" "$GR" --ini "$A/empty.bandit" --ignore-nosec --skip B404,B603,B607 -f txt || S=1; fi
           "$A/venv/bin/bandit" -r "$GITHUB_WORKSPACE/work/tests" --ini "$A/empty.bandit" --ignore-nosec --skip B101,B311 -f txt || S=1
           [ "$S" = 0 ]
