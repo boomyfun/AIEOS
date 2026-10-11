@@ -1,7 +1,7 @@
 """The bootstrap package of gov-AIEOS (tasks TASK-001, TASK-003, TASK-004, TASK-006, TASK-007, TASK-008, TASK-009,
-TASK-016 and TASK-021).
+TASK-016, TASK-021 and TASK-022).
 
-It holds eight modules:
+It holds nine modules:
 - ``records`` (TASK-001): a checker of the form of event-log lines, records and event payloads of specification 2
   sections 6.1 to 6.4. It reads only the text it is given, writes nothing and decides nothing.
 - ``conformance`` (TASK-003, with TASK-006's Resume Check entry and TASK-017's Risk Engine entry): the conformance runner of
@@ -24,6 +24,10 @@ It holds eight modules:
 - ``ac_coverage`` (TASK-021): the AC coverage check of specification 4 section 6 item 1. Given a task contract's
   values, it returns the acceptance criteria that no gate of its verification plan names, an empty list of criteria
   and the stray args entries, and the one blocking record for them; it reads and writes no file.
+- ``ac_tests`` (TASK-022): the test-to-AC listing of specification 4 section 6 item 2. Given a task id, its contract's
+  values, the test files' source texts and every task's write set, it returns per acceptance criterion the tests
+  that name it in their own name or docstring, and the criteria of the G2 tests gate that no test names, and the one
+  blocking record for them; it reads and writes no file.
 """
 
-__all__ = ['ac_coverage', 'conformance', 'eventlog', 'governor', 'records', 'recovery', 'resume_check', 'writer']
+__all__ = ['ac_coverage', 'ac_tests', 'conformance', 'eventlog', 'governor', 'records', 'recovery', 'resume_check', 'writer']
