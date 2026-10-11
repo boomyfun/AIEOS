@@ -427,5 +427,78 @@ class R8SingleWriter(unittest.TestCase):
         self.assertNotIn('time', imports)
 
 
+class R9ReleaseByToken(Case):
+    """TASK-028's rules R1 to R3 on the store: release_lease_token."""
+
+    def setUp(self):
+        super().setUp()
+        self.store()
+        self.session()
+
+    def test_the_held_token_releases_the_lease(self):
+        """TASK-028 AC1 and TASK-028 AC11: the held lease's own token removes it and returns it; the store then holds
+        none."""
+        lease = self.grant().value
+        r = writer.release_lease_token(self.root, TASK, dict(lease['fencing_token']))
+        self.assertEqual((r.result, r.reason, r.value), ('done', None, lease))
+        self.assertIsNone(writer.held_lease(self.root, TASK))
+
+    def test_another_token_changes_nothing(self):
+        """TASK-028 AC1 and TASK-028 AC11: another epoch or another counter is refused with reason "token" and one
+        finding, and the lease is still held."""
+        lease = self.grant().value
+        token = lease['fencing_token']
+        for other in (dict(token, epoch='epoch-2'), dict(token, counter=token['counter'] + 1), dict(token, counter=0)):
+            with self.subTest(other=other):
+                r = writer.release_lease_token(self.root, TASK, other)
+                self.assertEqual((r.result, r.reason, r.value, len(r.findings)), ('refused', 'token', None, 1))
+                self.assertEqual(writer.held_lease(self.root, TASK), lease)
+
+    def test_no_lease_or_no_store_changes_nothing(self):
+        """TASK-028 AC1 and TASK-028 AC11: with no lease held, or no store under the root, the result is refused with
+        reason "none", and no store is created."""
+        r = writer.release_lease_token(self.root, TASK, {'epoch': 'epoch-1', 'counter': 1})
+        self.assertEqual((r.result, r.reason, r.value), ('refused', 'none', None))
+        with tempfile.TemporaryDirectory() as empty:
+            r = writer.release_lease_token(empty, TASK, {'epoch': 'epoch-1', 'counter': 1})
+            self.assertEqual((r.result, r.reason), ('refused', 'none'))
+            self.assertEqual(files_under(empty), [])
+
+    def test_a_malformed_token_raises_and_changes_nothing(self):
+        """TASK-028 AC2 and TASK-028 AC11: a token out of the store's form raises ValueError, a bool counter and an
+        integer epoch among them, and the store is unchanged."""
+        lease = self.grant().value
+        good = lease['fencing_token']
+        for bad in (None, [], 'epoch-1:1', {'epoch': 'epoch-1'}, dict(good, extra=1), dict(good, epoch=1),
+                    dict(good, epoch=''), dict(good, epoch=None), dict(good, counter=True), dict(good, counter=False),
+                    dict(good, counter=1.0), dict(good, counter='1'), dict(good, counter=-1)):
+            with self.subTest(bad=bad):
+                with self.assertRaises(ValueError):
+                    writer.release_lease_token(self.root, TASK, bad)
+                self.assertEqual(writer.held_lease(self.root, TASK), lease)
+        with self.assertRaises(ValueError):
+            writer.release_lease_token(self.root, 'task-1', good)
+
+    def test_the_removal_is_keyed_on_task_epoch_and_counter(self):
+        """TASK-028 AC3 and TASK-028 AC11: the one DELETE of release_lease_token names the task, the epoch and the
+        counter as parameters, in one transaction with the read."""
+        source = read(os.path.join(SRC, 'writer.py')).decode('utf-8')
+        body = source.split('def release_lease_token(', 1)[1].split('\ndef ', 1)[0]
+        self.assertIn("'DELETE FROM leases WHERE task_id = ? AND fencing_epoch = ? AND fencing_counter = ?'", body)
+        self.assertEqual(body.count('DELETE'), 1)
+        self.assertEqual(body.count('_transaction('), 1)
+
+    def test_a_lease_granted_since_is_not_released_by_the_old_token(self):
+        """TASK-028 AC3 and TASK-028 AC11 (DEF-0053 F3): a lease expires, the task is granted again to another holder,
+        and the first lease's token releases nothing; the old token's release_lease would have removed the new lease."""
+        first = self.grant(until=T0 + datetime.timedelta(minutes=5)).value
+        self.assertEqual(writer.expire_leases(self.root, T0 + datetime.timedelta(minutes=5)), [first])
+        self.session(sid='s-2', holder='agent-2')
+        second = self.grant(holder='agent-2', sid='s-2', at=T0 + datetime.timedelta(minutes=6)).value
+        r = writer.release_lease_token(self.root, TASK, first['fencing_token'])
+        self.assertEqual((r.result, r.reason), ('refused', 'token'))
+        self.assertEqual(writer.held_lease(self.root, TASK), second)
+
+
 if __name__ == '__main__':
     unittest.main()

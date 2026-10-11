@@ -78,13 +78,29 @@ class Calls:
         self.release_calls.append(args)
         if self.release_raises is not None:
             raise self.release_raises
-        return {'task_id': TASK, 'fencing_token': FENCE, 'expires_at': NOW}
+        return self.released if hasattr(self, 'released') else Released('done', {'task_id': TASK, 'fencing_token': FENCE,
+                                                                                 'expires_at': NOW})
 
     def held(self, *args):
         self.held_calls.append(args)
         if self.held_raises is not None:
             raise self.held_raises
         return self.held_lease
+
+
+class Released:
+    """A stand-in for the writer's StoreResult of release_lease_token (TASK-028)."""
+
+    def __init__(self, result, value=None):
+        self.result = result
+        self.value = value
+
+
+class Raising:
+    """A stand-in result whose every attribute raises (TASK-028 AC6, DEF-0053 F5)."""
+
+    def __getattr__(self, name):
+        raise RuntimeError(name)
 
 
 def run(reader=None, calls=None, **kw):
@@ -264,23 +280,24 @@ class Append(unittest.TestCase):
 
 class Outcome(unittest.TestCase):
     def test_appended_releases_once(self):
-        """TASK-025 AC5, TASK-025 AC6 and TASK-025 AC13: after appended, release is called once and held is not."""
+        """TASK-025 AC5, TASK-025 AC6, TASK-025 AC13 and TASK-028 AC5: after appended, release is called once, with the
+        commit's token, and held is not."""
         r, _, calls = run()
         self.assertEqual(r['result'], 'submitted')
         self.assertIsNone(r['reason'])
-        self.assertEqual(calls.release_calls, [(FS_ROOT, TASK)])
+        self.assertEqual(calls.release_calls, [(FS_ROOT, TASK, FENCE)])
         self.assertEqual(calls.held_calls, [])
         self.assertEqual(r['released']['task_id'], TASK)
 
     def test_duplicate_with_the_same_token_releases(self):
-        """TASK-025 AC5 and TASK-025 AC13: after duplicate, held is read once and the lease is released when its token
-        is the commit's."""
+        """TASK-025 AC5, TASK-025 AC13 and TASK-028 AC5: after duplicate, held is read once and the lease is released, by
+        the commit's token, when its token is the commit's."""
         calls = Calls(written=Written('duplicate'), held_lease={'task_id': TASK, 'fencing_token': {'counter': 7, 'epoch': 'e0'},
                                                                  'expires_at': NOW})
         r, _, calls = run(calls=calls)
         self.assertEqual(r['result'], 'duplicate')
         self.assertEqual(calls.held_calls, [(FS_ROOT, TASK)])
-        self.assertEqual(calls.release_calls, [(FS_ROOT, TASK)])
+        self.assertEqual(calls.release_calls, [(FS_ROOT, TASK, FENCE)])
 
     def test_duplicate_with_another_or_no_lease_does_not_release(self):
         """TASK-025 AC5 and TASK-025 AC13: after duplicate, a held lease with a different token, a token of another
@@ -366,25 +383,76 @@ class Result(unittest.TestCase):
 class Defaults(unittest.TestCase):
     def test_the_four_defaults_are_the_real_functions(self):
         """TASK-025 AC7 and TASK-025 AC13: with read, append, release and held None, the functions called are
-        gitread.run, writer.append_event, writer.release_lease and writer.held_lease, resolved at call time."""
+        gitread.run, writer.append_event, writer.release_lease_token and writer.held_lease, resolved at call time
+        (TASK-028 AC7)."""
         reader = Reader()
         calls = Calls(written=Written('appended'))
         with mock.patch.object(gitread, 'run', reader), mock.patch.object(writer, 'append_event', calls.append), \
-                mock.patch.object(writer, 'release_lease', calls.release), mock.patch.object(writer, 'held_lease', calls.held):
+                mock.patch.object(writer, 'release_lease_token', calls.release), mock.patch.object(writer, 'held_lease', calls.held):
             r = submit.submit(FS_ROOT, REPO, COMMIT, TASK, 'ev-1', 'worker', NOW)
         self.assertEqual(r['result'], 'submitted')
         self.assertEqual((len(reader.calls), len(calls.append_calls), len(calls.release_calls)), (2, 1, 1))
         calls = Calls(written=Written('duplicate'), held_lease=None)
         with mock.patch.object(gitread, 'run', Reader()), mock.patch.object(writer, 'append_event', calls.append), \
-                mock.patch.object(writer, 'release_lease', calls.release), mock.patch.object(writer, 'held_lease', calls.held):
+                mock.patch.object(writer, 'release_lease_token', calls.release), mock.patch.object(writer, 'held_lease', calls.held):
             submit.submit(FS_ROOT, REPO, COMMIT, TASK, 'ev-1', 'worker', NOW)
         self.assertEqual(len(calls.held_calls), 1)
         self.assertEqual(gitread.run.__module__, 'aieos_bootstrap.gitread')
 
 
+class TokenRelease(unittest.TestCase):
+    def test_a_done_release_gives_its_value(self):
+        """TASK-028 AC5 and TASK-028 AC11: a release result "done" gives released equal to its value, with no finding."""
+        calls = Calls()
+        calls.released = Released('done', {'task_id': TASK, 'fencing_token': FENCE, 'expires_at': NOW})
+        r, _, calls = run(calls=calls)
+        self.assertEqual((r['result'], r['released'], r['findings']), ('submitted', calls.released.value, []))
+
+    def test_any_other_release_result_releases_nothing(self):
+        """TASK-028 AC5 and TASK-028 AC11: a refused, None or unknown release result gives released None and the
+        finding, after an appended and after a duplicate event."""
+        for released in (Released('refused'), None, Released('maybe', {'task_id': TASK}), Released(['done'])):
+            for written, lease, result in ((Written('appended'), None, 'submitted'),
+                                           (Written('duplicate'), {'fencing_token': FENCE}, 'duplicate')):
+                with self.subTest(released=released, written=written.result):
+                    calls = Calls(written=written, held_lease=lease)
+                    calls.released = released
+                    r, _, calls = run(calls=calls)
+                    self.assertEqual((r['result'], r['released']), (result, None))
+                    self.assertEqual(calls.release_calls, [(FS_ROOT, TASK, FENCE)])
+                    self.assertIn('nothing was released', ' '.join(r['findings']))
+
+    def test_a_release_result_whose_attributes_raise(self):
+        """TASK-028 AC6 and TASK-028 AC11: a release result whose attributes raise gives released None and a finding
+        naming the exception's type; nothing escapes."""
+        calls = Calls()
+        calls.released = Raising()
+        r, _, _ = run(calls=calls)
+        self.assertEqual((r['result'], r['released']), ('submitted', None))
+        self.assertIn('RuntimeError', ' '.join(r['findings']))
+
+    def test_a_writer_result_whose_attributes_raise_or_are_out_of_form(self):
+        """TASK-028 AC6 and TASK-028 AC11 (DEF-0053 F5): an append result whose attributes raise, whose findings are not
+        iterable or not strings, or whose result is not a string gives refused, store, with a finding; release is not
+        called."""
+        cases = ((Raising(), 'RuntimeError'), (Written('refused', 'fence', ()), None), (Written(['appended']), 'TypeError'))
+        bad_findings = Written('refused', 'fence')
+        bad_findings.findings = 5
+        not_strings = Written('refused', 'fence')
+        not_strings.findings = (b'x',)
+        for written, name in cases[:1] + cases[2:] + ((bad_findings, 'TypeError'), (not_strings, 'TypeError')):
+            with self.subTest(written=written):
+                r, _, calls = run(calls=Calls(written=written))
+                self.assertEqual((r['result'], r['reason']), ('refused', 'store'))
+                self.assertIn(name, ' '.join(r['findings']))
+                self.assertEqual(calls.release_calls, [])
+        r, _, _ = run(calls=Calls(written=cases[1][0]))
+        self.assertEqual((r['result'], r['reason']), ('refused', 'fence'))
+
+
 IMPORTS = {'datetime', 'json', 'os', 're', 'aieos_bootstrap.gitread', 'aieos_bootstrap.recovery', 'aieos_bootstrap.writer'}
 # Every dotted name rooted at an imported module that the module may use, followed to its end (decision D-598, F2, F6).
-CHAINS = {'writer.append_event', 'writer.release_lease', 'writer.held_lease', 'gitread.run', 'gitread.parse_commit',
+CHAINS = {'writer.append_event', 'writer.release_lease_token', 'writer.held_lease', 'gitread.run', 'gitread.parse_commit',
           'recovery.trailers', 'recovery.TASK_KEY', 'recovery.FENCE_KEY', 'os.path.isabs', 'datetime.datetime',
           'datetime.timedelta', 'json.dumps', 're.compile'}
 NAMES = ('open', 'exec', 'eval', 'compile', '__import__', 'subprocess', 'environ', 'getenv', 'input', 'breakpoint')

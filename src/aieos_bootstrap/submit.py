@@ -24,7 +24,7 @@ The result (AC6) is a mapping with exactly the keys result ("submitted", "duplic
 appended and released. An exception raised by the writer's functions is caught and becomes a result; none escapes.
 
 ``read``, ``append``, ``release`` and ``held`` default, at call time, to gitread.run, writer.append_event,
-writer.release_lease and writer.held_lease (AC7); tests pass stand-ins.
+writer.release_lease_token and writer.held_lease (AC7); tests pass stand-ins.
 
 Purity (AC8): this module starts no process except through ``read``, opens no file itself, reads no clock and no
 environment variable, grants no lease and creates no store (it never calls open_store, so DEF-0041 (c), never giving
@@ -40,10 +40,8 @@ Limits (AC11):
   recovery at start is TASK-026.
 - The lease is released in a separate call after the append, so a stop between them leaves the lease until a retry
   (a duplicate, which releases it only while the store holds that same token) or its expiry.
-- The release after an appended event takes no token (writer.release_lease removes whatever lease the store holds on
-  the task): if the lease expired and a new one was granted to another holder between the append and the release,
-  that new lease would be released. v0.1 runs one task at a time (concept line 951); a release by token needs a writer
-  change (DEF-0053).
+- The release removes the lease only while the store holds the commit's token (writer.release_lease_token,
+  TASK-028), so a lease granted to another holder since is never released.
 - Recorded and not recorded refusals: a commit of the task with no usable fence is refused by the writer and recorded
   as an observation; a commit that cannot be read, has no body, or names no, a doubled or a different task is refused
   with nothing appended and no record, since it cannot be identified as this task's submission.
@@ -170,7 +168,7 @@ def submit(root, repo, commit_id, task_id, event_id, recorder, now, read=None, a
     """Take one commit as the submission of one task (TASK-025 AC1 to AC7); returns a mapping with RESULT_KEYS."""
     read = gitread.run if read is None else read
     append = writer.append_event if append is None else append
-    release = writer.release_lease if release is None else release
+    release = writer.release_lease_token if release is None else release
     held = writer.held_lease if held is None else held
 
     try:
@@ -197,9 +195,12 @@ def submit(root, repo, commit_id, task_id, event_id, recorder, now, read=None, a
         w = append(root, 'task.submitted', payload, event_id, now, recorder, task_id=task_id, fencing_token=fence)
     except Exception as exc:  # AC6
         return _refused('store', fence_found + ['store: the append raised %s' % type(exc).__name__])
-    outcome = getattr(w, 'result', None)
+    try:
+        outcome, reason, findings = _written(w)
+    except Exception as exc:  # TASK-028 AC6 (DEF-0053 F5): a result whose attributes raise or are out of form
+        return _refused('store', fence_found + ['store: reading the writer\'s result raised %s' % type(exc).__name__], w)
     if outcome == 'appended' and fence is not None:
-        return _release(root, task_id, release, 'submitted', w, [])
+        return _release(root, task_id, release, fence, 'submitted', w, [])
     if outcome == 'duplicate' and fence is not None:
         try:
             lease = held(root, task_id)
@@ -209,23 +210,42 @@ def submit(root, repo, commit_id, task_id, event_id, recorder, now, read=None, a
         mine = isinstance(lease, dict) and _token_text(lease.get('fencing_token')) == _token_text(fence)
         if not mine:
             return _result('duplicate', None, ['store: the held lease, if any, is not the commit\'s; nothing was released'], w)
-        return _release(root, task_id, release, 'duplicate', w, [])
+        return _release(root, task_id, release, fence, 'duplicate', w, [])
     if outcome in ('appended', 'duplicate'):
         # An event without a token is always refused by the writer's fence; reaching here means the writer did not.
         return _refused('store', fence_found + ['store: the writer gave %r for an event with no fencing token' % outcome], w)
-    reason = getattr(w, 'reason', None)
-    findings = list(getattr(w, 'findings', ()) or ())
-    refusal = getattr(w, 'refusal', None)
-    if refusal is not None:
-        findings.append('store: the refusal record was %s' % getattr(refusal, 'result', None))
     return _refused(reason if _is_str(reason) else 'store', fence_found + findings, w)
 
 
-def _release(root, task_id, release, result, w, findings):
-    """AC5, AC6: release the lease once; a raised exception leaves the result and adds a finding."""
+def _written(w):
+    """TASK-028 AC6 (DEF-0053 F5): the writer's result, its reason and its findings as a list of strings, with a
+    finding for the refusal record; raises when an attribute raises or the findings are not strings, and the caller
+    turns that into a result."""
+    outcome = getattr(w, 'result', None)
+    if not isinstance(outcome, str):
+        raise TypeError('the result is not a string')
+    reason = getattr(w, 'reason', None)
+    findings = list(getattr(w, 'findings', ()) or ())
+    if not all(isinstance(f, str) for f in findings):
+        raise TypeError('the findings are not strings')
+    refusal = getattr(w, 'refusal', None)
+    if refusal is not None:
+        findings.append('store: the refusal record was %s' % getattr(refusal, 'result', None))
+    return outcome, reason, findings
+
+
+def _release(root, task_id, release, fence, result, w, findings):
+    """AC5, AC6 and TASK-028 AC5: release the lease once, by the commit's token; a result other than "done" or a
+    raised exception leaves the result and adds a finding."""
     try:
-        lease = release(root, task_id)
+        r = release(root, task_id, fence)
+        state = getattr(r, 'result', None)
+        done = isinstance(state, str) and state == 'done'
+        lease = getattr(r, 'value', None) if done else None
     except Exception as exc:  # AC6
         return _result(result, None, findings + ['store: the release raised %s; the lease was not released, and it '
                                                  'expires by its own expiry' % type(exc).__name__], w)
+    if not done:
+        return _result(result, None, findings + ['store: the held lease, if any, is not the commit\'s; nothing was '
+                                                 'released'], w)
     return _result(result, None, findings, w, lease)

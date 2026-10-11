@@ -73,5 +73,30 @@ class FullFlow(unittest.TestCase):
             self.assertEqual(read(writer.log_path(root)), log)
 
 
+class ReleaseByToken(unittest.TestCase):
+
+    def test_the_old_token_never_releases_a_lease_granted_since(self):
+        """TASK-028 AC3 and TASK-028 AC11 (DEF-0053 F3), on real files: a lease expires and is granted again to another
+        holder; the first token is refused and the second lease stays; the second token then releases it, and the store
+        file is the only file under .aieos/local/."""
+        with tempfile.TemporaryDirectory() as root:
+            writer.open_store(root)
+            for sid, holder in (('s-1', 'agent-1'), ('s-2', 'agent-2')):
+                self.assertEqual(writer.start_session(root, sid, holder, T0).result, 'done')
+            first = writer.grant_lease(root, 'TASK-028', 'READY', 'agent-1', 's-1', T0,
+                                       T0 + datetime.timedelta(minutes=5)).value
+            self.assertEqual(writer.expire_leases(root, T0 + datetime.timedelta(minutes=5)), [first])
+            later = T0 + datetime.timedelta(minutes=6)
+            second = writer.grant_lease(root, 'TASK-028', 'READY', 'agent-2', 's-2', later,
+                                        later + datetime.timedelta(hours=1)).value
+            r = writer.release_lease_token(root, 'TASK-028', first['fencing_token'])
+            self.assertEqual((r.result, r.reason), ('refused', 'token'))
+            self.assertEqual(writer.held_lease(root, 'TASK-028'), second)
+            r = writer.release_lease_token(root, 'TASK-028', second['fencing_token'])
+            self.assertEqual((r.result, r.value), ('done', second))
+            self.assertEqual(writer.held_leases(root), [])
+            self.assertEqual(sorted(os.listdir(os.path.dirname(writer.store_path(root)))), ['state.sqlite'])
+
+
 if __name__ == '__main__':
     unittest.main()

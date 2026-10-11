@@ -9,7 +9,8 @@ the caller gives, it touches exactly two files (AC1):
   file back (AC2); a fence refusal is recorded as its own ``record.added`` event (AC3);
 - ``<root>/.aieos/local/state.sqlite``, the local store of the fence's epoch and counter, the leases and the sessions
   (AC4 to AC7), with SQLite's own rollback journal ``state.sqlite-journal`` beside it, which SQLite creates and removes
-  during a transaction (the default rollback journal mode; no WAL).
+  during a transaction (the default rollback journal mode; no WAL); ``release_lease_token`` releases a lease only for
+  its own fencing token (TASK-028).
 
 Every time is an argument, a timezone-aware datetime in UTC with whole seconds; the clock is read nowhere. The store's
 times are ISO 8601 text with "Z" as specification 2 section 6.1 writes them.
@@ -396,6 +397,42 @@ def release_lease(root, task_id):
             return None
         con.execute('DELETE FROM leases WHERE task_id = ?', (task_id,))
         return _lease(row)
+    return _transaction(path, work)
+
+
+def _check_token(token):
+    """TASK-028 AC2: a fencing token in the store's own form, {epoch: a non-empty str, counter: an int, not a bool, at
+    least 0}; anything else raises ValueError."""
+    if (not isinstance(token, dict) or set(token) != {'epoch', 'counter'} or not _is_str(token['epoch'])
+            or type(token['counter']) is not int or token['counter'] < 0):
+        raise ValueError('the fencing token is not {epoch: a non-empty string, counter: an int at least 0}')
+
+
+def release_lease_token(root, task_id, fencing_token):
+    """Remove the held lease on ``task_id`` only when its fencing token equals ``fencing_token`` (TASK-028 AC1 to AC3;
+    DEF-0053 F3). The comparison and the removal run in one transaction, and the removal is keyed on the task, the
+    epoch and the counter, so a lease granted to another holder since, which has a new counter, is never removed.
+    Returns StoreResult('done', value=the removed lease); else nothing changes and the result is refused with reason
+    ``none`` (no lease on the task is held, or no store exists; none is created) or ``token`` (another token is held)."""
+    _check_task(task_id)
+    _check_token(fencing_token)
+    epoch, counter = fencing_token['epoch'], fencing_token['counter']
+    path = _existing_store(root)
+    if path is None:
+        return _refused('none', 'no store exists under the root, so no lease on %s is held' % task_id)
+
+    def work(con):
+        row = con.execute(_LEASE_OF_TASK, (task_id,)).fetchone()
+        if row is None:
+            return _refused('none', 'no lease on %s is held' % task_id)
+        if (row[1], row[2]) != (epoch, counter):
+            return _refused('token', 'the lease on %s is held with epoch %r and counter %r, not epoch %r and counter %r'
+                            % (task_id, row[1], row[2], epoch, counter))
+        removed = con.execute('DELETE FROM leases WHERE task_id = ? AND fencing_epoch = ? AND fencing_counter = ?',
+                              (task_id, epoch, counter)).rowcount
+        if removed != 1:
+            raise sqlite3.DatabaseError('the release removed %d rows, not 1' % removed)
+        return StoreResult('done', value=_lease(row))
     return _transaction(path, work)
 
 
