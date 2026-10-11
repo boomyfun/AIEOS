@@ -103,6 +103,31 @@ class Raising:
         raise RuntimeError(name)
 
 
+class OneRaising:
+    """A stand-in writer result whose one named attribute raises (TASK-028 AC6)."""
+
+    def __init__(self, result, raising):
+        self.result = result
+        self._raising = raising
+
+    def __getattr__(self, name):
+        if name == self._raising:
+            raise LookupError(name)
+        return {'reason': None, 'findings': (), 'refusal': None}[name]
+
+
+class Sly(str):
+    """A str subclass whose equality raises (TASK-028 AC6)."""
+
+    def __eq__(self, other):
+        raise RuntimeError('eq')
+
+    def __ne__(self, other):
+        raise RuntimeError('ne')
+
+    __hash__ = str.__hash__
+
+
 def run(reader=None, calls=None, **kw):
     reader = reader or Reader()
     calls = calls or Calls()
@@ -448,6 +473,55 @@ class TokenRelease(unittest.TestCase):
                 self.assertEqual(calls.release_calls, [])
         r, _, _ = run(calls=Calls(written=cases[1][0]))
         self.assertEqual((r['result'], r['reason']), ('refused', 'fence'))
+
+    def test_an_unreadable_writer_result_says_the_append_is_not_known(self):
+        """TASK-028 AC6 and TASK-028 AC11: the finding for an unreadable writer result says that whether the event was
+        appended is not known."""
+        r, _, _ = run(calls=Calls(written=Raising()))
+        self.assertIn('whether the event was appended is not known', ' '.join(r['findings']))
+
+    def test_one_raising_attribute_at_a_time(self):
+        """TASK-028 AC6 and TASK-028 AC11: a writer result whose reason, findings or refusal alone raises gives
+        refused, store, with the exception's type; release is not called."""
+        for name in ('reason', 'findings', 'refusal'):
+            with self.subTest(name=name):
+                r, _, calls = run(calls=Calls(written=OneRaising('appended', name)))
+                self.assertEqual((r['result'], r['reason']), ('refused', 'store'))
+                self.assertIn('LookupError', ' '.join(r['findings']))
+                self.assertEqual(calls.release_calls, [])
+
+    def test_a_str_subclass_whose_equality_raises(self):
+        """TASK-028 AC6 and TASK-028 AC11: a result or a reason that is a str subclass whose == raises never reaches a
+        comparison: the result gives refused, store, and the reason is taken as no reason."""
+        r, _, calls = run(calls=Calls(written=Written(Sly('appended'))))
+        self.assertEqual((r['result'], r['reason']), ('refused', 'store'))
+        self.assertEqual(calls.release_calls, [])
+        r, _, _ = run(calls=Calls(written=Written('refused', Sly('fence'), ['why'])))
+        self.assertEqual((r['result'], r['reason']), ('refused', 'store'))
+        self.assertIn('why', r['findings'])
+
+    def test_findings_given_as_one_string_are_out_of_form(self):
+        """TASK-028 AC6 and TASK-028 AC11: findings given as one str or bytes value are out of form, never split into
+        characters."""
+        for value in ('abc', b'abc'):
+            with self.subTest(value=value):
+                written = Written('refused', 'fence')
+                written.findings = value
+                r, _, _ = run(calls=Calls(written=written))
+                self.assertEqual((r['result'], r['reason']), ('refused', 'store'))
+                self.assertIn('TypeError', ' '.join(r['findings']))
+                self.assertNotIn('a', r['findings'])
+
+    def test_a_release_raising_and_a_release_result_unreadable_are_told_apart(self):
+        """TASK-028 AC5, TASK-028 AC6 and TASK-028 AC11: an exception from the release call keeps TASK-025's finding;
+        a release result whose attributes raise says that whether the lease was released is not known."""
+        r, _, _ = run(calls=Calls(release_raises=OSError('x')))
+        self.assertIn('the release raised OSError; the lease was not released', ' '.join(r['findings']))
+        calls = Calls()
+        calls.released = Raising()
+        r, _, _ = run(calls=calls)
+        self.assertIn('whether the lease was released is not known', ' '.join(r['findings']))
+        self.assertNotIn('the lease was not released', ' '.join(r['findings']))
 
 
 IMPORTS = {'datetime', 'json', 'os', 're', 'aieos_bootstrap.gitread', 'aieos_bootstrap.recovery', 'aieos_bootstrap.writer'}

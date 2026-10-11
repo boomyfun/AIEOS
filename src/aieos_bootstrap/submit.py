@@ -198,7 +198,8 @@ def submit(root, repo, commit_id, task_id, event_id, recorder, now, read=None, a
     try:
         outcome, reason, findings = _written(w)
     except Exception as exc:  # TASK-028 AC6 (DEF-0053 F5): a result whose attributes raise or are out of form
-        return _refused('store', fence_found + ['store: reading the writer\'s result raised %s' % type(exc).__name__], w)
+        return _refused('store', fence_found + ['store: reading the writer\'s result raised %s; whether the event was '
+                                               'appended is not known' % type(exc).__name__], w)
     if outcome == 'appended' and fence is not None:
         return _release(root, task_id, release, fence, 'submitted', w, [])
     if outcome == 'duplicate' and fence is not None:
@@ -220,13 +221,18 @@ def submit(root, repo, commit_id, task_id, event_id, recorder, now, read=None, a
 def _written(w):
     """TASK-028 AC6 (DEF-0053 F5): the writer's result, its reason and its findings as a list of strings, with a
     finding for the refusal record; raises when an attribute raises or the findings are not strings, and the caller
-    turns that into a result."""
+    turns that into a result. Only exact str values pass, so no str subclass reaches a comparison outside the try."""
     outcome = getattr(w, 'result', None)
-    if not isinstance(outcome, str):
+    if type(outcome) is not str:
         raise TypeError('the result is not a string')
     reason = getattr(w, 'reason', None)
-    findings = list(getattr(w, 'findings', ()) or ())
-    if not all(isinstance(f, str) for f in findings):
+    if type(reason) is not str:
+        reason = None
+    raw = getattr(w, 'findings', ()) or ()
+    if isinstance(raw, (str, bytes)):
+        raise TypeError('the findings are one string, not a sequence of strings')
+    findings = list(raw)
+    if not all(type(f) is str for f in findings):
         raise TypeError('the findings are not strings')
     refusal = getattr(w, 'refusal', None)
     if refusal is not None:
@@ -239,12 +245,16 @@ def _release(root, task_id, release, fence, result, w, findings):
     raised exception leaves the result and adds a finding."""
     try:
         r = release(root, task_id, fence)
-        state = getattr(r, 'result', None)
-        done = isinstance(state, str) and state == 'done'
-        lease = getattr(r, 'value', None) if done else None
     except Exception as exc:  # AC6
         return _result(result, None, findings + ['store: the release raised %s; the lease was not released, and it '
                                                  'expires by its own expiry' % type(exc).__name__], w)
+    try:
+        state = getattr(r, 'result', None)
+        done = type(state) is str and state == 'done'
+        lease = getattr(r, 'value', None) if done else None
+    except Exception as exc:  # TASK-028 AC6: the release happened or not; its result cannot be read
+        return _result(result, None, findings + ['store: the release\'s result could not be read (%s); whether the '
+                                                 'lease was released is not known' % type(exc).__name__], w)
     if not done:
         return _result(result, None, findings + ['store: the held lease, if any, is not the commit\'s; nothing was '
                                                  'released'], w)

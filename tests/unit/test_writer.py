@@ -452,16 +452,28 @@ class R9ReleaseByToken(Case):
             with self.subTest(other=other):
                 r = writer.release_lease_token(self.root, TASK, other)
                 self.assertEqual((r.result, r.reason, r.value, len(r.findings)), ('refused', 'token', None, 1))
+                for part in (repr(token['epoch']), repr(token['counter']), repr(other['epoch']), repr(other['counter'])):
+                    self.assertIn(part, r.findings[0])
                 self.assertEqual(writer.held_lease(self.root, TASK), lease)
 
     def test_no_lease_or_no_store_changes_nothing(self):
         """TASK-028 AC1 and TASK-028 AC11: with no lease held, or no store under the root, the result is refused with
         reason "none", and no store is created."""
         r = writer.release_lease_token(self.root, TASK, {'epoch': 'epoch-1', 'counter': 1})
-        self.assertEqual((r.result, r.reason, r.value), ('refused', 'none', None))
+        self.assertEqual((r.result, r.reason, r.value, len(r.findings)), ('refused', 'none', None, 1))
         with tempfile.TemporaryDirectory() as empty:
             r = writer.release_lease_token(empty, TASK, {'epoch': 'epoch-1', 'counter': 1})
-            self.assertEqual((r.result, r.reason), ('refused', 'none'))
+            self.assertEqual((r.result, r.reason, len(r.findings)), ('refused', 'none', 1))
+            self.assertEqual(files_under(empty), [])
+
+    def test_a_malformed_token_raises_before_the_store_is_looked_at(self):
+        """TASK-028 AC2 and TASK-028 AC11: with no store under the root, a malformed token still raises ValueError (it
+        is checked before the store is looked for), and nothing is created."""
+        with tempfile.TemporaryDirectory() as empty:
+            for bad in (None, {'epoch': 'epoch-1', 'counter': True}, {'epoch': 1, 'counter': 1}):
+                with self.subTest(bad=bad):
+                    with self.assertRaises(ValueError):
+                        writer.release_lease_token(empty, TASK, bad)
             self.assertEqual(files_under(empty), [])
 
     def test_a_malformed_token_raises_and_changes_nothing(self):
