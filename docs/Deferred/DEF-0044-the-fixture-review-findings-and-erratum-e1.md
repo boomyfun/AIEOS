@@ -29,3 +29,4 @@ TASK-018's acceptance.
 
 ## Log
 - 2026-10-11: opened (decision D-472; session 38c27ccc).
+- 2026-10-11: erratum E1 recorded in docs/records/TASK-018.jsonl (its contract record) at TASK-018's acceptance (decisions D-478, D-479); the fourteen findings stay carried (session b94736f9).

@@ -118,6 +118,13 @@ Occurrences in session 2026-10-11-1439 (../History/2026-10/2026-10-11-1439-fixtu
 - **2026-10-11 (:402 to :593, :1409, :1460).** Harness-asked Vietnamese lines sent without the check in their own call first, after D-466 accepted that remedy; at :1460 the check ran after sending. All were Vietnamese; the remedy failed three times (D-467, D-472).
 - **2026-10-11 (the start report; the owner line after :778).** Two lines sent as text before tool calls have no record in the transcript; both are repeated in the session-end reply.
 
+Occurrences in session 2026-10-11-1540 (../History/2026-10/2026-10-11-1540-fixture-accepted-and-runner-tests-pushed.md):
+- **2026-10-11 (:110, :245, :383, :898, :1159, :1540, :1684).** Seven one-line English text blocks before tool calls; all but the first after D-475 C5's remedy (no text block in a message that holds a tool call, except a harness-asked Vietnamese line already checked). The remedy was a promise and failed six times; the decision agent asked for a mechanical one (D-485 C4).
+- **2026-10-11 (:90).** The first harness-asked line was sent before it was checked (D-465 C1 broken); every later Vietnamese line was checked first in its own call.
+- **2026-10-11 (the start report and later lines).** Several checked Vietnamese lines were displayed but not stored as text records, so the steps listing misses them (D-477); they are repeated in the session-end reply.
+- **Correction (D-473 C4):** the occurrence of session 2026-10-11-1439 that says the remedy "failed three times (D-467, D-472)" should read "D-466, D-467, D-472".
+- Remedy proposed (mechanical, D-485 C4): at every pre_request run, english_lines.py's output over the whole steps listing is compared with the list of English lines already reported; any new one is a stop: it goes to the decision agent before any other step. Whether a hook should block an English text block is an owner matter (hooks are the owner's, A51 item (4)).
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

@@ -146,6 +146,11 @@ Occurrences in session 2026-10-11-1318 (../History/2026-10/2026-10-11-1318-runne
 Occurrence in session 2026-10-11-1439 (../History/2026-10/2026-10-11-1439-fixture-contract-on-main-and-fixture-reviewed.md), my incorrect command, refused before it ran (decision D-466):
 - **2026-10-11 (:356).** A grep meant to check a new command file for Python's name followed by a dash held that form in its own pattern; the remedy of session 51321169 ("grep each command for those forms") put the form into the command. Remedy now: that check is done by reading, never by a pattern in a command.
 
+Occurrences in session 2026-10-11-1540 (../History/2026-10/2026-10-11-1540-fixture-accepted-and-runner-tests-pushed.md), each my incorrect command (decisions D-476, D-484):
+- **2026-10-11 (:330).** A stray Python-with-a-dash prefix in front of a sed edit; refused before it ran.
+- **2026-10-11 (:425).** A check whose own pattern held the forbidden forms (the occurrence of :356 of session 2026-10-11-1439 again); refused before it ran.
+- **2026-10-11 (:1585).** A command that began with `rm -rf` on a scratch folder that did not exist; it was not refused, nothing was removed, and the rules forbid any removal command. Remedy (D-484 C4): no removal command at all; a new scratch folder gets a new name.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
