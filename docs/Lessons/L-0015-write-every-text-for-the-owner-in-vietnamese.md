@@ -113,6 +113,11 @@ Occurrences in session 2026-10-11-0538 (../History/2026-10/2026-10-11-0538-confo
 Occurrences in session 2026-10-11-1318 (../History/2026-10/2026-10-11-1318-runner-entry-accepted-and-fixture-contract-drafted.md):
 - **2026-10-11 (:380, :606, :1476, :1548, :1613).** Five one-line English text blocks before tool calls; the rule of D-454 (no text block in a message that holds a tool call, except a Vietnamese line answering a harness prompt) did not hold four times after it was set, and the stricter rule of D-462 (no text block at all in a message that holds a tool call) did not hold at :1613.
 
+Occurrences in session 2026-10-11-1439 (../History/2026-10/2026-10-11-1439-fixture-contract-on-main-and-fixture-reviewed.md):
+- **2026-10-11 (:510, :954, :1708).** Three one-line English text blocks before tool calls, after the remedies of D-454 and D-462.
+- **2026-10-11 (:402 to :593, :1409, :1460).** Harness-asked Vietnamese lines sent without the check in their own call first, after D-466 accepted that remedy; at :1460 the check ran after sending. All were Vietnamese; the remedy failed three times (D-467, D-472).
+- **2026-10-11 (the start report; the owner line after :778).** Two lines sent as text before tool calls have no record in the transcript; both are repeated in the session-end reply.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

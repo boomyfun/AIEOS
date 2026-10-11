@@ -143,6 +143,9 @@ Occurrences in session 2026-10-11-1318 (../History/2026-10/2026-10-11-1318-runne
 - **2026-10-11 (:452).** A purposeless placeholder command with Python's name followed by a dash.
 - **2026-10-11 (:1462).** A leftover of the same form at the start of a real command, after D-453's remedy (no command without a purpose); the remedy did not hold. Remedy now: grep each command's text for those forms before sending it.
 
+Occurrence in session 2026-10-11-1439 (../History/2026-10/2026-10-11-1439-fixture-contract-on-main-and-fixture-reviewed.md), my incorrect command, refused before it ran (decision D-466):
+- **2026-10-11 (:356).** A grep meant to check a new command file for Python's name followed by a dash held that form in its own pattern; the remedy of session 51321169 ("grep each command for those forms") put the form into the command. Remedy now: that check is done by reading, never by a pattern in a command.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
