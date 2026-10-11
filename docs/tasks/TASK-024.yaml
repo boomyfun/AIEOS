@@ -1,0 +1,303 @@
+# Task contract TASK-024, the Git reader (Master Plan revision 3, §4 M4; specification 4 revision 3, section 7 item 4
+# and section 12 point 4 (o4), "the core's caller is DEF-0030's line"; constitution INV-001). Revision 0, drafted under
+# decision D-567 (Q2, Q3, C1, C2), brought for approval in its own request; whether it is approved is recorded in the
+# decision files, not in this file. Fields and value forms follow specification 2 §5.1 and the contracts of TASK-007 to
+# TASK-023. Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# Task type: implementation. What it adds: one module, src/aieos_bootstrap/gitread.py, the first piece of the core's
+# caller (DEF-0030; the row 13 note of decision D-567): INV-001's single process wrapper. Its function run starts one
+# executable, git, with one of a pinned list of read-only subcommands and fixed options, with no shell, a controlled
+# environment, a pinned working directory and a timeout, and returns bytes and an exit code; pure parsers turn a commit
+# object and a list of changed paths into values. It is the only module of the bootstrap that may import subprocess
+# (decision D-567 Q2: "it is INV-001's single process wrapper").
+# Precondition (decision D-567 C3): the CI workflow's revision 8, a decision of its own under DM A66, named as a
+# loosening of a check: the deterministic_rule step allows subprocess for exactly src/aieos_bootstrap/gitread.py (its
+# test modules reach it only through gitread, for example gitread.subprocess.TimeoutExpired), and a pattern rule pins git and the subcommands. Until revision 8 is on main, the task's
+# commits fail deterministic_rule and the task stays at INSUFFICIENT_EVIDENCE; the contract's commit C comes after
+# revision 8.
+# The constitution's text (constitution.md line 29, INV-001's tool part): "a process is started only through one wrapper
+# with a pinned list of allowed executables; and the core writes files only to the project-state directory and its
+# logs". Here the list holds one executable, git, and the module writes no file.
+# Git's own ways of starting other programs (decision D-567 C2), closed by fixed options on every call (AC2): no pager
+# (--no-pager, core.pager=cat); core.fsmonitor=false; core.hooksPath set to the null device; diff.external empty and
+# --no-ext-diff and --no-textconv where the subcommand takes them; the system and global configuration ignored
+# (GIT_CONFIG_NOSYSTEM=1, GIT_CONFIG_GLOBAL the null device); an environment built from nothing but the keys AC2 names;
+# the working directory pinned to the repository root given. The repository's own configuration is still read by git
+# and is a stated limit (AC10): the options above override the keys named, not every key a configuration can set.
+# What it does not do: no caller (TASK-025 and TASK-026, the submission and evaluation paths of the row 13 note, are
+# later tasks), no writer call, no event, no record, no Git write of any kind (no commit, ref, index, object, config or
+# fetch), no network, no file opened by the module, nothing under .github/ (revision 8 is its own decision), no policy,
+# no frozen fixture. It changes no other module of src/.
+# Readers of the changed paths (D-263 C3's practice): src/aieos_bootstrap/__init__.py is read by every module that
+# imports the package and by the CI's G1 build; its docstring and __all__ gain gitread; it must not name the Resume
+# Check fixture folder (TASK-010's assertion) nor the Risk Engine fixture folder (TASK-020's allow list). No module of
+# the repository calls gitread yet.
+# Risk: high, and change class critical_cr, each computed over the base by script (risk_class24.py and
+# gov003_class24.py of the drafting session: task risk class high; GOV-003 evaluator change, 5 of 5 paths). Profile
+# (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture [deterministic_rule], functional
+# [integration_test], security [static_security_analysis] and architecture [ai_review (cross-model)], plus the
+# evidence_required of the applicable articles.
+# Reviews (as TASK-023's): five way-2 reviews by a Claude model other than the implementer's, and the decision agent's
+# three, each brief naming for testing: the pinned subcommands and options and the refusal of anything else before any
+# process starts; each closed route of AC2 and its test; the controlled environment; the timeout; the parsers on
+# malformed bytes; purity apart from the one process; AC10's limits.
+# Naming: every test of the three new test modules names the AC ids it stands for as "TASK-024 ACn" in its own
+# docstring, following DEF-0049's convention as TASK-023 did (decision D-544 Q3), for this contract only.
+# Evaluation path (A61; as TASK-007 to TASK-023): commit C changes only docs/tasks/TASK-024.yaml and has one parent
+# equal to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-024", go to task/TASK-024 under their own
+# decisions; main receives the task only at its acceptance. The task push's CI base run is a RISK-01 conformance run
+# over the set file of DM F35, reported advisory, never MEASURED.
+# Not applicable: OPS-001 (the task changes no ref; the module runs only read-only subcommands); INV-004 and INV-009
+# (the module writes no file and no log); INV-005 to INV-008, INV-010 and INV-011 (the decision engine, the governor,
+# evidence records, the replay and the policy meet no path of the write-set); GOV-001, GOV-004 to GOV-006 and SEC-003
+# (the concept file, the bound artifacts, the decision matrix, the records and pre-genesis documents, and .github/,
+# meet no path of the write-set).
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/ in the
+# task (revision 8 is the decision agent's own decision under A66, outside this task), no Claude Code setting, no push of
+# its own; it weakens no evidence requirement (CR-002 part 4 limit 8 does not apply), so its acceptance is one delegated
+# approval of the decision agent (Master Plan section 6), for the decision agent's ruling.
+task: TASK-024
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add a standard-library Python 3 module, src/aieos_bootstrap/gitread.py, INV-001's single process wrapper and the
+  first piece of the core's caller (DEF-0030): run(repo, args, timeout) starts only git, with one of a pinned list of
+  read-only subcommands and fixed options, no shell, a controlled environment, a pinned working directory and a
+  timeout, and returns the exit code and the output as bytes; anything outside the pinned forms is refused before any
+  process starts (fail closed); pure parsers turn a commit object and a NUL-separated list of changed paths into values.
+  With unit tests on recorded byte fixtures and a stand-in for the process call, a read-only integration test over this
+  repository's history, and property tests, each test naming its AC ids as "TASK-024 ACn" in its own docstring.
+traces_to:
+  - docs/specs/spec-04-verification-and-evidence.md#7
+  - docs/specs/spec-04-verification-and-evidence.md#12
+  - docs/specs/spec-02-aieos-file-format.md#6.6
+  - docs/specs/spec-01-state-and-event-model.md#7
+  - docs/pre-genesis/constitution.md#INV-001
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-024.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id. C comes after the workflow's revision 8 is on main (decision D-567 C3).
+  base_commit: 21a696d15039001c5694f63cdbdb90cf57cad1bd
+  depends_on: [TASK-001]
+  intent_versions:
+    docs/specs/spec-04-verification-and-evidence.md: 48d4f5bf06461ad49409f21bc6ea8d511d17a84eaac15adda14277483176a8d5
+    docs/specs/spec-02-aieos-file-format.md: a517fcd7f885623aa874e1ce5920804f34a337d5650b32af4578142d30e0d8d5
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # One modified path (the package docstring and __all__); every other path is new.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/gitread.py
+    - tests/unit/test_gitread.py
+    - tests/integration/test_gitread_repo.py
+    - tests/property/test_gitread_properties.py
+read_set:
+  paths:
+    - docs/specs/spec-04-verification-and-evidence.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/Deferred/DEF-0030-event-log-writer-and-workflow-revision-6.md
+    - docs/Deferred/DEF-0049-carried-findings-of-the-test-listing-and-the-untested-criteria.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/__init__.py
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: []
+  schemas: [spec-02 commit trailers (6.6)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/writer.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_writer_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The pinned forms. run(repo, args, timeout=30) takes repo, an absolute path string of an existing directory, args,
+      a list of strings, and timeout, a number of seconds greater than 0 and at most 120. args[0] is one of exactly four
+      subcommands, each with its fixed form (the object names are 40 or 64 lowercase hex characters, or the literal
+      HEAD for rev-parse only): rev-parse: ["rev-parse", "--verify", "--end-of-options", <name>]; cat-file:
+      ["cat-file", "-p", <hex>] or ["cat-file", "-t", <hex>]; rev-list: ["rev-list", "--parents", "-n", "1", <hex>];
+      diff-tree: ["diff-tree", "--no-commit-id", "--name-only", "-r", "--no-renames", "--no-ext-diff",
+      "--no-textconv", "-z", "--root", <hex>]. Any other repo, args or timeout gives the refusal result of AC3 with an
+      error naming what failed, and no process is started (fail closed).
+  - AC2: >-
+      The process and git's own routes to other programs (decision D-567 C2). For a pinned form, run calls
+      subprocess.run once with the argument list ["git", "--no-pager", "-c", "core.fsmonitor=false", "-c",
+      "core.hooksPath=" + os.devnull, "-c", "diff.external=", "-c", "core.pager=cat", "-C", repo] + args, shell False,
+      stdin subprocess.DEVNULL, stdout and stderr captured, cwd repo, timeout the given timeout, check False, and env a
+      new mapping holding exactly: PATH (copied from os.environ, or the empty string when absent), SYSTEMROOT (copied
+      only when present, for Windows), GIT_CONFIG_NOSYSTEM "1", GIT_CONFIG_GLOBAL os.devnull, GIT_TERMINAL_PROMPT
+      "0", GIT_OPTIONAL_LOCKS "0" and LC_ALL "C"; no other key of os.environ (in particular no GIT_DIR, GIT_WORK_TREE,
+      GIT_EXEC_PATH or HOME) reaches git. --no-ext-diff and --no-textconv are in diff-tree's fixed form (AC1). The
+      executable is the name git, found by the operating system's own search (reading): on POSIX through the PATH of
+      the call; on Windows the process-creation search looks first in the Python program's own directory, the Python
+      process's current directory and the system directories, and then in the Python process's own PATH.
+  - AC3: >-
+      The result. run returns a mapping with exactly the keys exit, out, err and error: for a completed process, exit
+      its return code, out and err its output as bytes, error None; for a timeout, exit None, out b"", err b"", error
+      "timeout"; when the executable cannot be started (OSError), exit None, out b"", err b"", error a short English
+      text; for a refused form (AC1), exit None, out b"", err b"", error a short English text naming the failing part.
+      run raises nothing for these cases.
+  - AC4: >-
+      The commit parser. parse_commit(data) takes the bytes of "git cat-file -p <commit>" and returns a mapping with
+      exactly the keys tree, parents, author, committer, message, trailers and error: tree the 40 or 64 hex id; parents
+      the list of parent ids in order (empty for a root commit); author and committer the header lines' values as
+      strings; message the text after the first empty line, decoded as UTF-8; trailers the list of [key, value] pairs
+      of the message's last paragraph when every line of it has the form "<key>: <value>" with the key made of letters,
+      digits and hyphens (git's trailer form, reading), else an empty list. Bytes that are not UTF-8, a missing tree or
+      author or committer line, a header line out of form, or a missing empty line give error a short English text and
+      every other key empty (None for tree, author and committer, [] for parents and trailers, "" for message).
+  - AC5: >-
+      The paths parser. parse_paths(data) takes the bytes of the AC1 diff-tree form and returns a mapping with exactly
+      the keys paths and error: paths the list of the NUL-separated names in order, decoded as UTF-8, with the empty
+      name after the last NUL dropped; error None. Bytes that are not UTF-8, or an empty name before the last NUL, give
+      paths [] and error a short English text.
+  - AC6: >-
+      The single wrapper (INV-001; decision D-567 Q2). gitread.py is the only module of src/ that imports subprocess,
+      and run is the only place in it that calls subprocess; it calls no other process function (os.system, os.popen,
+      os.exec*, os.spawn*, pty) and no network module. Its docstring says it is INV-001's single process wrapper with the
+      pinned list [git] and the four subcommands, and that a further executable or subcommand is a change to this
+      module and to the workflow's pattern rule (revision 8).
+  - AC7: >-
+      Read only. The four subcommands of AC1 write no ref, object, index or configuration, and GIT_OPTIONAL_LOCKS "0"
+      keeps git from refreshing the index; the module opens, writes and removes no file, reads no clock, and reads the
+      environment only for AC2's PATH and SYSTEMROOT.
+  - AC8: >-
+      This repository's history, read only. tests/integration/test_gitread_repo.py finds the repository root from its
+      own path (pathlib, two parents up) and, with run and the parsers, asserts on fixed commits of main: cat-file -p
+      of 2b7bf15269c57484e3306c6a6532d4cea6b5d3e2 parses with parents [8cc5af058c1acd37b729ae7e44b6a2367a851043] and
+      trailers holding ["AIEOS-Task", "TASK-023"]; diff-tree of it gives exactly the four paths
+      src/aieos_bootstrap/stale.py, tests/integration/test_stale_records.py, tests/property/test_stale_properties.py and
+      tests/unit/test_stale.py; rev-list --parents of 8cc5af058c1acd37b729ae7e44b6a2367a851043 names
+      badd0c97ffb1f35b37d78bebf4167e05b6207304 as its parent; cat-file -t of it gives "commit"; and a refused form
+      (["commit", "-m", "x"], and ["log"]) returns the refusal result. These are data about accepted commits: they
+      reopen nothing.
+  - AC9: >-
+      Purity and the CI checks (INV-001, INV-002, INV-003). The module imports only the Python 3 standard library (os,
+      re and subprocess among the allowed); no exec, eval, compile, __import__ or importlib; no assert in src (bandit
+      B101); no string that names the project-state directory; subprocess with shell=False only (bandit B603 is
+      reported as advisory and each occurrence is justified by AC1's pinned forms, reading). At the task's commits,
+      on the base with the workflow's revision 8, the CI steps report no finding: deterministic_rule, OPS-003, SEC-001,
+      SEC-002 and bandit (bandit's subprocess findings, if any, are named in the task's report and not silenced in the
+      code, reading).
+  - AC10: >-
+      Limits, stated: git is trusted as the operating system finds it (the executable is the name, not a pinned path
+      or hash; on Windows a git program placed in one of the places searched before PATH would be found first, a stated
+      limit); the repository's own configuration (.git/config) is still read by git, and the fixed options override only the keys
+      AC2 names, so a repository whose configuration sets another program-starting key is outside what this module
+      closes; core.hooksPath has no test of effect, since none of the four subcommands runs a hook (reading); the
+      parsers check form, not that a commit exists or is reachable; no caller exists, and the submission and evaluation
+      paths are later tasks (DEF-0030). Every existing module and test not in the write set is unchanged, and if one can
+      pass only by a change the task escalates (needs_out_of_scope_change).
+  - AC11: >-
+      Its own tests and the added text. Every test function of the three new test modules names the AC ids it stands
+      for as "TASK-024 ACn" in its own docstring and names no other task's AC in qualified form there. Before each
+      commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns, and each count is 0;
+      the file names are scanned with the same patterns and the records executors' pre-push pattern (D-282).
+  - AC12: >-
+      Tests, each rule with at least one passing and one failing case: R1 AC1 (each pinned form accepted; a fifth
+      subcommand, an extra or missing option, a ref name other than HEAD, an option-like object name, a relative repo
+      and a timeout of 0 or above 120 refused, with no call to the process function, shown by a stand-in that records
+      calls); R2 AC2 (the stand-in receives exactly the argument list, the keyword arguments and the environment of AC2,
+      and no key from a planted os.environ entry such as GIT_DIR); R3 AC3 (a completed call, a non-zero exit, a timeout
+      and an OSError from the stand-in, each giving its result); R4 AC4 (recorded commit bytes with one parent, two
+      parents and none; with and without trailers; each malformed form); R5 AC5 (several paths, one, none; a non-UTF-8
+      name; an empty name); R6 AC6, AC7 and AC9 (a script check of the module's imports, of the absence of other process,
+      file, clock and network calls, and that subprocess appears in no other src module); R7 AC8 (the integration
+      test). Unit tests in tests/unit/test_gitread.py; AC8 in tests/integration/test_gitread_repo.py; property tests in
+      tests/property/test_gitread_properties.py (standard library only, fixed seeds): random argument lists outside the
+      pinned forms are always refused without a call; random well-formed commit and path bytes round-trip through the
+      parsers. tests/run_tests.py, unchanged, runs all groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC8, AC12]}
+  - {gate: G3, check: constitution, args: [AC6, AC7, AC9, AC10, AC11, INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
