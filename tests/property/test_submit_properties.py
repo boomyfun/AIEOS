@@ -1,4 +1,4 @@
-"""Property tests of aieos_bootstrap.submit (task TASK-025, rule R8's properties of AC13), standard library only, with
+"""Property tests of aieos_bootstrap.submit (task TASK-025, the properties of AC13), standard library only, with
 fixed seeds: arguments outside AC1's forms never reach the read; two-paragraph messages with a valid task and fence
 always reach the append exactly once with that fence; failing reads never reach the append. Each test names its
 criteria in its own docstring."""

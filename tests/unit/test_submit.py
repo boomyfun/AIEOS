@@ -151,6 +151,18 @@ class Reading(unittest.TestCase):
         self.assertEqual(len(reader.calls), 1)
 
 
+    def test_the_exit_code_is_checked_on_its_own(self):
+        """TASK-025 AC2 and TASK-025 AC13: a non-zero exit is refused even when the output would pass: exit 128 with
+        b"commit\\n" on cat-file -t, and exit 1 with a well-formed commit on cat-file -p (decision D-598, F7)."""
+        for reader in (Reader(t={'exit': 128, 'out': b'commit\n', 'err': b'', 'error': None}),
+                       Reader(p={'exit': 1, 'out': commit_bytes(GOOD), 'err': b'', 'error': None})):
+            with self.subTest(t=reader.t['exit'], p=reader.p['exit']):
+                r, _, calls = run(reader=reader)
+                self.assertEqual((r['result'], r['reason']), ('refused', 'git'))
+                self.assertIn('exited with', ' '.join(r['findings']))
+                self.assertEqual(calls.append_calls, [])
+
+
 class Trailers(unittest.TestCase):
     def refused_before_writer(self, message, task_id=TASK):
         r, _, calls = run(reader=Reader(message=message), task_id=task_id)
@@ -195,6 +207,36 @@ class Trailers(unittest.TestCase):
                 self.assertIn('no usable AIEOS-Fence', ' '.join(r['findings']))
                 self.assertIn('refusal record was appended', ' '.join(r['findings']))
                 self.assertEqual((calls.release_calls, calls.held_calls), ([], []))
+
+    def test_a_fence_value_naming_the_task_key_is_still_a_fence_finding(self):
+        """TASK-025 AC3, TASK-025 AC13 and decision D-598 F1: a malformed fence value that contains the text
+        "AIEOS-Task" is classed by the key its finding names first (AIEOS-Fence), so the commit reaches append once with
+        fencing_token None and the writer's refusal is returned; a finding on the task key is still refused before the
+        writer."""
+        for value in ('AIEOS-Task', 'AIEOS-Task:x', 'AIEOS-Task: TASK-025'):
+            with self.subTest(value=value):
+                calls = Calls(written=Written('refused', 'fence', ['fence: the event carries no fencing_token']))
+                r, _, calls = run(reader=Reader(message='S\n\nB.\n\nAIEOS-Task: TASK-025\nAIEOS-Fence: %s\n' % value),
+                                  calls=calls)
+                self.assertEqual((r['result'], r['reason']), ('refused', 'fence'))
+                self.assertEqual(len(calls.append_calls), 1)
+                self.assertIsNone(calls.append_calls[0][1]['fencing_token'])
+                self.assertEqual((calls.release_calls, calls.held_calls), ([], []))
+        self.assertEqual(submit._first_key("trailer: AIEOS-Fence 'AIEOS-Task' is not <epoch>:<counter>"), 'AIEOS-Fence')
+        self.assertEqual(submit._first_key("trailer: 'aieos-task' is not spelled 'AIEOS-Task'"), 'AIEOS-Task')
+        self.assertIsNone(submit._first_key('trailer: something else'))
+        r, _, calls = run(reader=Reader(message='S\n\nB.\n\naieos-task: TASK-025\nAIEOS-Fence: AIEOS-Fence:1\n'))
+        self.assertEqual((r['result'], r['reason'], calls.append_calls), ('refused', 'trailer', []))
+
+    def test_a_raising_trailer_read_is_a_refusal(self):
+        """TASK-025 AC6 and decision D-598 F4: an exception while the trailers are read gives refused, trailer, with
+        nothing appended (a stand-in for recovery.trailers raises; a str subclass cannot reach it, since parse_commit
+        decodes the commit's bytes into a plain str)."""
+        with mock.patch.object(submit.recovery, 'trailers', side_effect=RuntimeError('x')):
+            r, _, calls = run()
+        self.assertEqual((r['result'], r['reason']), ('refused', 'trailer'))
+        self.assertIn('RuntimeError', ' '.join(r['findings']))
+        self.assertEqual(calls.append_calls, [])
 
     def test_a_well_formed_message_reaches_the_writer_with_its_token(self):
         """TASK-025 AC3, TASK-025 AC4 and TASK-025 AC13: a two-paragraph message with the task and a fence reaches
@@ -297,6 +339,29 @@ class Result(unittest.TestCase):
         self.assertEqual((r['result'], r['reason']), ('refused', 'store'))
         self.assertEqual(calls.release_calls, [])
 
+    def test_a_duplicate_with_no_token_is_not_trusted(self):
+        """TASK-025 AC3, TASK-025 AC6 and decision D-598 F8: if the writer were to call an event with no token a
+        duplicate, submit refuses with reason store and calls neither held nor release."""
+        r, _, calls = run(reader=Reader(message='S\n\nB.\n\nAIEOS-Task: TASK-025\n'),
+                          calls=Calls(written=Written('duplicate'), held_lease={'fencing_token': FENCE}))
+        self.assertEqual((r['result'], r['reason']), ('refused', 'store'))
+        self.assertEqual((calls.held_calls, calls.release_calls), ([], []))
+
+    def test_an_argument_whose_methods_raise_is_a_refusal(self):
+        """TASK-025 AC1, TASK-025 AC6 and decision D-598 F4: a datetime whose tzinfo's utcoffset raises gives refused,
+        argument, and read is not called."""
+        class Bad(datetime.tzinfo):
+            def utcoffset(self, dt):
+                raise RuntimeError('no offset')
+
+            def dst(self, dt):
+                return None
+
+        r, reader, _ = run(now=datetime.datetime(2026, 10, 12, 9, 30, 0, tzinfo=Bad()))
+        self.assertEqual((r['result'], r['reason']), ('refused', 'argument'))
+        self.assertIn('RuntimeError', ' '.join(r['findings']))
+        self.assertEqual(reader.calls, [])
+
 
 class Defaults(unittest.TestCase):
     def test_the_four_defaults_are_the_real_functions(self):
@@ -317,38 +382,74 @@ class Defaults(unittest.TestCase):
         self.assertEqual(gitread.run.__module__, 'aieos_bootstrap.gitread')
 
 
+IMPORTS = {'datetime', 'json', 'os', 're', 'aieos_bootstrap.gitread', 'aieos_bootstrap.recovery', 'aieos_bootstrap.writer'}
+# Every dotted name rooted at an imported module that the module may use, followed to its end (decision D-598, F2, F6).
+CHAINS = {'writer.append_event', 'writer.release_lease', 'writer.held_lease', 'gitread.run', 'gitread.parse_commit',
+          'recovery.trailers', 'recovery.TASK_KEY', 'recovery.FENCE_KEY', 'os.path.isabs', 'datetime.datetime',
+          'datetime.timedelta', 'json.dumps', 're.compile'}
+NAMES = ('open', 'exec', 'eval', 'compile', '__import__', 'subprocess', 'environ', 'getenv', 'input', 'breakpoint')
+
+
+def chain(node):
+    """The dotted name of an attribute chain rooted at a Name (for example os.path.exists), or None."""
+    parts = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if not isinstance(node, ast.Name):
+        return None
+    return '.'.join([node.id] + parts[::-1])
+
+
+def purity_findings(source):
+    """AC8's checks over one module's source: its imports, every chain rooted at a module it imports, the bare names
+    it uses, and texts that must not occur in its code. Returns the findings (an empty list when it is pure)."""
+    tree = ast.parse(source)
+    found = []
+    imported = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(a.name for a in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            imported.update('%s.%s' % (node.module, a.name) for a in node.names)
+    found += ['import %s' % m for m in sorted(imported - IMPORTS)]
+    roots = {m.split('.')[-1] for m in imported}
+    outer = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and id(node) not in outer:
+            name = chain(node)
+            if name and name.split('.')[0] in roots and name not in CHAINS:
+                found.append('chain %s' % name)
+    found += ['name %s' % n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and n.id in NAMES]
+    doc = ast.get_docstring(tree, clean=False)
+    code = source.replace(doc, '', 1) if doc else source  # the code, without the module's docstring
+    for bad in ('utcnow', 'import time', 'os.environ', 'getenv', 'open_store', 'grant_lease', 'start_session',
+                'end_session', 'expire_leases', 'held_leases', '.aieos', 'assert '):
+        if bad in code:
+            found.append('text %s' % bad)
+    return found
+
+
 class Purity(unittest.TestCase):
     def test_imports_and_calls(self):
         """TASK-025 AC8, TASK-025 AC10 and TASK-025 AC13: the module imports only the standard library's datetime, json,
-        os and re and the package's gitread, recovery and writer; it names no process, file, clock, environment or
-        store-changing call, and calls the writer only through append, release and held."""
-        tree = ast.parse(MODULE.read_text(encoding='utf-8'))
-        imported = set()
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                imported.update(a.name for a in node.names)
-            elif isinstance(node, ast.ImportFrom):
-                imported.update('%s.%s' % (node.module, a.name) for a in node.names)
-        self.assertEqual(imported, {'datetime', 'json', 'os', 're', 'aieos_bootstrap.gitread',
-                                    'aieos_bootstrap.recovery', 'aieos_bootstrap.writer'})
-        attrs = {(n.value.id, n.attr) for n in ast.walk(tree) if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)}
-        self.assertEqual({a for m, a in attrs if m == 'writer'}, {'append_event', 'release_lease', 'held_lease'})
-        self.assertEqual({a for m, a in attrs if m == 'os'}, {'path'})
-        self.assertEqual({a for m, a in attrs if m == 'gitread'}, {'run', 'parse_commit'})
-        self.assertEqual({a for m, a in attrs if m == 'datetime'}, {'datetime', 'timedelta'})
-        names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
-        for bad in ('open', 'exec', 'eval', 'compile', '__import__', 'subprocess', 'environ', 'getenv'):
-            self.assertNotIn(bad, names)
-        text = MODULE.read_text(encoding='utf-8')
-        text = text.replace(ast.get_docstring(tree, clean=False), '', 1)  # the code, without the module's docstring
-        for bad in ('now()', 'utcnow', 'import time', 'os.environ', 'getenv', 'open_store', 'grant_lease', 'start_session',
-                    'end_session', 'expire_leases', 'held_leases', '.aieos', 'assert '):
-            self.assertFalse(bad in text, bad)
+        os and re and the package's gitread, recovery and writer; every chain rooted at those modules is one it may use
+        (the writer only through append, release and held, os only through os.path.isabs, no clock); it names no process,
+        file, environment or store-changing call."""
+        self.assertEqual(purity_findings(MODULE.read_text(encoding='utf-8')), [])
 
-    def test_a_planted_bad_import_is_seen(self):
-        """TASK-025 AC8: the import check fails on a source that imports subprocess (its failing case)."""
-        tree = ast.parse('import subprocess\n')
-        self.assertIn('subprocess', {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names})
+    def test_planted_bad_sources_are_caught(self):
+        """TASK-025 AC8 and TASK-025 AC13: the same check fails on planted sources that import subprocess, read the clock
+        through datetime.datetime.now, look at a file through os.path.exists, call another writer function, or open a
+        file (its failing cases)."""
+        head = 'import datetime\nimport os\nfrom aieos_bootstrap import writer\n'
+        for source, expected in (('import subprocess\n', 'import subprocess'),
+                                 (head + 'x = datetime.datetime.now(datetime.timezone.utc)\n', 'chain datetime.datetime.now'),
+                                 (head + 'y = os.path.exists("x")\n', 'chain os.path.exists'),
+                                 (head + 'z = writer.grant_lease\n', 'chain writer.grant_lease'),
+                                 (head + 'w = open("x")\n', 'name open')):
+            with self.subTest(source=source):
+                self.assertIn(expected, purity_findings(source))
 
 
 if __name__ == '__main__':

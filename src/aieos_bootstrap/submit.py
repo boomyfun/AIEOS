@@ -14,7 +14,8 @@
    writer.append_event with the commit's AIEOS-Fence token, or with no token when the commit carries no usable fence.
    The fence decision is the writer's (it passes the store's held lease to eventlog.append, which refuses a token that
    is not the held lease's, or a lease expired at or before ``now``, and the writer records the refusal as an
-   observation, specification 1 section 8). This module makes no fence comparison of its own.
+   observation, specification 1 section 8). This module makes no fence comparison of its own for the append: the fence
+   decision is the writer's; the only token comparison here decides the release after a duplicate (AC5).
 5. The lease (AC5): after an appended event the lease is released; after a duplicate (the same event appended
    before, for example when a run stopped between the append and the release) it is released only when the store
    still holds a lease with the commit's token, so a lease granted to another holder since is never released.
@@ -39,6 +40,10 @@ Limits (AC11):
   recovery at start is TASK-026.
 - The lease is released in a separate call after the append, so a stop between them leaves the lease until a retry
   (a duplicate, which releases it only while the store holds that same token) or its expiry.
+- The release after an appended event takes no token (writer.release_lease removes whatever lease the store holds on
+  the task): if the lease expired and a new one was granted to another holder between the append and the release,
+  that new lease would be released. v0.1 runs one task at a time (concept line 951); a release by token needs a writer
+  change (DEF-0053).
 - Recorded and not recorded refusals: a commit of the task with no usable fence is refused by the writer and recorded
   as an observation; a commit that cannot be read, has no body, or names no, a doubled or a different task is refused
   with nothing appended and no record, since it cannot be identified as this task's submission.
@@ -128,8 +133,18 @@ def _read_commit(read, repo, commit_id):
     return parsed, []
 
 
+def _first_key(finding):
+    """The key a recovery.trailers finding is about: of the two keys, the one its text names first (ignoring letter
+    case). Each finding names its subject key before any echoed value, so a value that holds the other key's name does
+    not decide it (decision D-598, F1)."""
+    text = finding.lower()
+    at = {key: text.find(key.lower()) for key in (recovery.TASK_KEY, recovery.FENCE_KEY)}
+    named = [key for key, i in at.items() if i >= 0]
+    return min(named, key=lambda key: at[key]) if named else None
+
+
 def _key_findings(findings, key):
-    return [f for f in findings if key.lower() in f.lower()]
+    return [f for f in findings if _first_key(f) == key]
 
 
 def _identify(message, task_id):
@@ -158,7 +173,10 @@ def submit(root, repo, commit_id, task_id, event_id, recorder, now, read=None, a
     release = writer.release_lease if release is None else release
     held = writer.held_lease if held is None else held
 
-    found = _argument_findings(root, repo, commit_id, task_id, event_id, recorder, now)
+    try:
+        found = _argument_findings(root, repo, commit_id, task_id, event_id, recorder, now)
+    except Exception as exc:  # AC6: an argument whose own methods raise (for example a tzinfo's utcoffset)
+        found = ['argument: checking the arguments raised %s' % type(exc).__name__]
     if found:
         return _refused('argument', found)
     try:
@@ -167,7 +185,10 @@ def submit(root, repo, commit_id, task_id, event_id, recorder, now, read=None, a
         return _refused('git', ['git: the read raised %s' % type(exc).__name__])
     if parsed is None:
         return _refused('git', found)
-    fence, not_identified, fence_found = _identify(parsed['message'], task_id)
+    try:
+        fence, not_identified, fence_found = _identify(parsed['message'], task_id)
+    except Exception as exc:  # AC6
+        return _refused('trailer', ['trailer: reading the trailers raised %s' % type(exc).__name__])
     if not_identified:
         return _refused('trailer', not_identified)
 
