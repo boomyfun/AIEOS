@@ -1,5 +1,14 @@
 """The conformance runner of gov-AIEOS (task TASK-003; docs/specs/conformance-files.md revision 2, section 6), with
-the Resume Check entry of task TASK-006 (conformance-files.md revision 4, section 9).
+the Resume Check entry of task TASK-006 (conformance-files.md revision 4, section 9) and the Risk Engine entry of task
+TASK-017 (conformance-files.md revision 7, section 10).
+
+Limits of TASK-017 (its AC15):
+- No Risk Engine fixture exists and RISK-01's set entry is null, so a run over the repository's tree gives RISK-01
+  NOT_RUN and its run record is unchanged but for the runner's own hash.
+- It checks its inputs and compares values; it never decides a classification or an acceptance. It reads the
+  policy's rules only from a fixture's values, and its path matcher reads only the pattern forms of the risk rules'
+  section 2 point 6, so a fixture with any other form is NOT_RUN, never PASS.
+- A derivation that raises on well-formed values is NOT_RUN with its reason shown, never PASS.
 
 ``run`` reads the frozen set file, its freeze approval, the fixtures and the bound scenario file from the tree it is
 given, which is the base (governor-spec.md section 4 rule 1); chooses each scenario's entry by the capability of its
@@ -52,6 +61,7 @@ RESUME_CHECK_MODULE = 'aieos_bootstrap.resume_check'
 SET_FILE = 'tests/conformance/set.py'
 FIXTURE_DIR = 'tests/conformance/fixtures'
 RC_FIXTURE_DIR = 'tests/conformance/fixtures_rc'
+RISK_FIXTURE_DIR = 'tests/conformance/fixtures_risk'
 SCENARIO_FILE = 'docs/pre-genesis/conformance-scenarios-initial.md'
 RECORDS_DIR = 'docs/records'
 RECORD_PREFIX = 'conformance-run-'
@@ -83,6 +93,17 @@ RC_INPUT_KEYS = frozenset({'task_id', 'log_seq', 'task_state', 'contract', 'cont
                            'articles', 'runtime', 'risk_rules', 'policy_version', 'budget_use'})
 RC_STATES = ('READY', 'REWORK', 'IN_PROGRESS')
 EXECUTION = records.EXECUTION_DECISIONS
+# TASK-017 (conformance-files.md section 10).
+RISK_ENGINE = 'Risk Engine'
+RISK_CASE_KEYS = frozenset({'values', 'request', 'records', 'when', 'expected'})
+RISK_VALUE_KEYS = frozenset({'contract', 'changed_paths', 'risk_rules', 'owner_kept_rules', 'articles',
+                             'default_profiles', 'requirement_profiles', 'delegation', 'evidence_comparison',
+                             'auto_accept', 'policy_version', 'level_version', 'ruleset_version'})
+RISK_EXPECTED_KEYS = frozenset({'risk_not', 'profile_excludes', 'not_fixed'})
+RISKS = ('low', 'medium', 'high', 'critical')
+LOW_PAIRS = frozenset({('functional', 'build'), ('functional', 'lint')})
+_PATTERN_NAME = re.compile(r'[A-Za-z0-9._*-]+')
+_PATH_NAME = re.compile(r'[A-Za-z0-9._-]+')
 
 _HEX64 = re.compile(r'[0-9a-f]{64}')
 _COMMIT = re.compile(r'[0-9a-f]{40}|[0-9a-f]{64}')
@@ -201,14 +222,17 @@ def module_path(scenario_id):
 
 
 def expected_path(scenario_id, capability):
-    """The fixture path the runner expects for a set entry's capability (TASK-006 AC3; conformance-files.md section 9):
-    the Verification folder for Verification, the Resume Check folder for Resume Check, None for any other capability
-    (its entry point is absent until its milestone). The module name is formed as section 2 says."""
+    """The fixture path the runner expects for a set entry's capability (TASK-006 AC3; conformance-files.md section 9;
+    TASK-017 AC2, section 10): the Verification folder for Verification, the Resume Check folder for Resume Check, the
+    Risk Engine folder for Risk Engine, None for any other capability (its entry point is absent until its
+    milestone). The module name is formed as section 2 says."""
     name = scenario_id.lower().replace('-', '_') + '.py'
     if capability == VERIFICATION:
         return FIXTURE_DIR + '/' + name
     if capability == RESUME_CHECK:
         return RC_FIXTURE_DIR + '/' + name
+    if capability == RISK_ENGINE:
+        return RISK_FIXTURE_DIR + '/' + name
     return None
 
 
@@ -577,6 +601,177 @@ def check_rc_fixture(value, entry):
     return errors
 
 
+def pattern_ok(pattern):
+    """Whether a path pattern is well formed (TASK-017 AC5; risk rules section 2 point 6): names joined by "/", none
+    empty, no leading or trailing "/", each name only ASCII letters, digits, ".", "_", "-" and "*", and "**" only as a
+    whole name."""
+    if not isinstance(pattern, str) or not pattern:
+        return False
+    for name in pattern.split('/'):
+        if not _PATTERN_NAME.fullmatch(name) or ('**' in name and name != '**'):
+            return False
+    return True
+
+
+def path_ok(path):
+    """Whether a changed path is well formed (TASK-017 AC5): the pattern rule without "*"."""
+    return isinstance(path, str) and bool(path) and all(_PATH_NAME.fullmatch(n) for n in path.split('/'))
+
+
+def path_matches(pattern, path):
+    """The runner's own matcher (TASK-017 AC5; risk rules section 2 point 6), for well-formed patterns and paths only:
+    "*" matches any part of one name and never crosses "/"; "**" as a whole name matches any sequence of names; a
+    pattern without "/" matches a file name in any folder; case-sensitive."""
+    if '/' not in pattern:
+        pattern = '**/' + pattern
+    parts, names = pattern.split('/'), path.split('/')
+    memo = {}
+
+    def step(i, j):
+        if (i, j) not in memo:
+            if i == len(parts):
+                ok = j == len(names)
+            elif parts[i] == '**' and i == len(parts) - 1:
+                # A trailing "/**" matches every file at any depth below the folder, so at least one name.
+                ok = j < len(names)
+            elif parts[i] == '**':
+                ok = any(step(i + 1, k) for k in range(j, len(names) + 1))
+            else:
+                one = re.escape(parts[i]).replace(r'\*', '[^/]*')
+                ok = j < len(names) and re.fullmatch(one, names[j]) is not None and step(i + 1, j + 1)
+            memo[(i, j)] = ok
+        return memo[(i, j)]
+    return step(0, 0)
+
+
+def _patterns_ok(patterns):
+    return isinstance(patterns, list) and bool(patterns) and all(pattern_ok(p) for p in patterns)
+
+
+def _check_values(values):
+    """The forms of a Risk Engine case's values that the runner reads, and the Given (TASK-017 AC4, AC5)."""
+    if not isinstance(values, dict) or set(values) != RISK_VALUE_KEYS:
+        return ['values is not exactly the keys of section 10']
+    errors = []
+    paths = values['changed_paths']
+    if not (isinstance(paths, list) and paths and all(path_ok(p) for p in paths)):
+        return ['changed_paths is not a non-empty list of well-formed paths']
+    rules = values['risk_rules']
+    if not (isinstance(rules, list) and all(isinstance(r, dict) and set(r) == {'match', 'class'}
+                                            and _patterns_ok(r['match']) and r['class'] in RISKS for r in rules)):
+        errors.append('risk_rules is not a list of {match, class} with well-formed patterns and a risk class')
+    elif any(path_matches(p, path) for r in rules for p in r['match'] for path in paths):
+        errors.append('the Given does not hold: a changed path matches a risk rule')
+    arts = values['articles']
+    if not (isinstance(arts, list) and all(isinstance(a, dict) and set(a) == {'id', 'scope', 'evidence_required'}
+                                           and _patterns_ok(a['scope']) for a in arts)):
+        errors.append('articles is not a list of {id, scope, evidence_required} with well-formed scopes')
+    elif any(path_matches(p, path) for a in arts for p in a['scope'] for path in paths):
+        errors.append('an article\'s scope matches a changed path')
+    if values['requirement_profiles'] != []:
+        errors.append('requirement_profiles is not the empty list')
+    return errors
+
+
+def _check_risk_expected(exp):
+    if not isinstance(exp, dict) or set(exp) != RISK_EXPECTED_KEYS:
+        return ['expected is not exactly risk_not, profile_excludes and not_fixed']
+    errors = []
+    if exp['risk_not'] != ['low']:
+        errors.append('risk_not is not ["low"]')
+    pairs = exp['profile_excludes']
+    if not (isinstance(pairs, list) and len(pairs) == 2
+            and all(isinstance(p, dict) and set(p) == {'dimension', 'evidence_type'} for p in pairs)
+            and {(p['dimension'], p['evidence_type']) for p in pairs} == LOW_PAIRS):
+        errors.append('profile_excludes is not exactly the two pairs of the low default')
+    nf = exp['not_fixed']
+    if not (isinstance(nf, list) and len(nf) == 2 and set(nf) == {'decision', 'next_state'}):
+        errors.append('not_fixed is not exactly decision and next_state')
+    return errors
+
+
+def check_risk_fixture(value, entry):
+    """The form of one Risk Engine fixture's JSON object against its set entry (TASK-017 AC4, AC5;
+    conformance-files.md section 10). Returns a list of errors."""
+    if not isinstance(value, dict) or set(value) != {'scenario', 'row_hash', 'cases'}:
+        return ['the fixture is not exactly scenario, row_hash and cases']
+    errors = []
+    if value['scenario'] != entry['id'] or value['row_hash'] != entry['row_hash']:
+        errors.append('scenario or row_hash differs from the set entry')
+    cases = value['cases']
+    if not isinstance(cases, list) or not cases:
+        return errors + ['cases is not a non-empty list']
+    for n, case in enumerate(cases, 1):
+        where = 'case %d: ' % n
+        if not isinstance(case, dict) or set(case) != RISK_CASE_KEYS:
+            errors.append(where + 'not exactly values, request, records, when and expected')
+            continue
+        errors.extend(where + e for e in _check_values(case['values']))
+        errors.extend(where + e for e in _check_request(case['request']))
+        req, values = case['request'], case['values']
+        if isinstance(req, dict) and isinstance(values, dict) and req.get('changed_paths') != values.get('changed_paths'):
+            errors.append(where + 'request changed_paths differs from values changed_paths')
+        if not (case['when'] == 'evaluate' and isinstance(req, dict) and req.get('task_state') == 'VERIFYING'):
+            errors.append(where + 'when is not evaluate with task_state VERIFYING')
+        case_records = case['records']
+        if not isinstance(case_records, list):
+            errors.append(where + 'records is not a list')
+        else:
+            seen = set()
+            for rec in case_records:
+                if records.check_record(rec):
+                    errors.append(where + 'a record with a check_record finding')
+                rid = rec.get('record_id') if isinstance(rec, dict) else None
+                if rid in seen:
+                    errors.append(where + 'a repeated record id')
+                seen.add(rid)
+        errors.extend(where + e for e in _check_risk_expected(case['expected']))
+    return errors
+
+
+def _held(entries, key, pairs):
+    """The pairs held by a list of profile entries: an entry holds a pair when its dimension equals the pair's and its
+    ``key`` list holds the pair's type."""
+    out = set()
+    for e in entries:
+        if isinstance(e, dict) and isinstance(e.get(key), list):
+            out.update((e.get('dimension'), t) for t in e[key] if (e.get('dimension'), t) in pairs)
+    return out
+
+
+def derived_problem(derived, expected):
+    """Why the derived inputs fail step (2) of section 10 (TASK-017 AC7), or '' when they pass."""
+    if not isinstance(derived, dict) or 'risk' not in derived or 'evidence_profile' not in derived:
+        return 'the derived inputs are not an object with risk and evidence_profile'
+    risk, profile = derived['risk'], derived['evidence_profile']
+    if risk is not None and risk not in RISKS:
+        return 'the derived risk is not a risk class or null'
+    if profile is not None and not (isinstance(profile, list) and all(
+            isinstance(e, dict) and set(e) == {'dimension', 'evidence_types'} and _is_str(e['dimension'])
+            and _is_str_list(e['evidence_types']) for e in profile)):
+        return 'the derived evidence_profile is not a list of {dimension, evidence_types} or null'
+    if risk in expected['risk_not']:
+        return 'the derived risk is %s' % risk
+    pairs = {(p['dimension'], p['evidence_type']) for p in expected['profile_excludes']}
+    if isinstance(profile, list) and _held(profile, 'evidence_types', pairs):
+        return 'the derived evidence_profile holds a pair of the low default'
+    return ''
+
+
+def load_derive(root):
+    """The governor's derivation (TASK-017 AC3): derive_inputs of the one governor module the runner loads by
+    load_governor's rules, or None when it is absent, failed to load or not callable."""
+    try:
+        import aieos_bootstrap.governor as governor
+    except Exception:
+        return None
+    path = getattr(governor, '__file__', None)
+    if not isinstance(path, str) or pathlib.Path(path).resolve() != (root / GOVERNOR_PATH).resolve():
+        return None
+    derive = getattr(governor, 'derive_inputs', None)
+    return derive if callable(derive) else None
+
+
 def load_governor(root):
     """The governor's entry point (AC6): (evaluate, status). The module is loaded by a plain import statement. It is
     absent when the import raises ModuleNotFoundError naming it; it is the base's only when the loaded module's file
@@ -695,11 +890,12 @@ def compare(expected, observed, case_records):
     return out
 
 
-def run_scenario(tree, entry, rows, evaluate, caps=None, check=None):
-    """One scenario's result and its reason (AC5, AC7; TASK-006 AC3 to AC6): NOT_RUN, with none of its cases run, for
-    a fixture condition; NOT_RUN for no entry point; otherwise each case is called and compared, and a failed case
-    makes it FAIL before any NOT_RUN of a call. ``caps`` is the capability the bound scenario file gives each id
-    (scenario_capabilities); ``evaluate`` is the Verification entry and ``check`` the Resume Check entry."""
+def run_scenario(tree, entry, rows, evaluate, caps=None, check=None, derive=None):
+    """One scenario's result and its reason (AC5, AC7; TASK-006 AC3 to AC6; TASK-017 AC2 to AC9): NOT_RUN, with none
+    of its cases run, for a fixture condition; NOT_RUN for no entry point; otherwise each case is called and compared,
+    and a failed case makes it FAIL before any NOT_RUN of a call. ``caps`` is the capability the bound scenario file
+    gives each id (scenario_capabilities); ``evaluate`` is the Verification entry and the Risk Engine's acceptance
+    function, ``check`` the Resume Check entry and ``derive`` the Risk Engine's derivation."""
     sid, fixture = entry['id'], entry['fixture']
     if fixture is None:
         return NOT_RUN, 'no fixture'
@@ -727,6 +923,8 @@ def run_scenario(tree, entry, rows, evaluate, caps=None, check=None):
         return NOT_RUN, 'the fixture is malformed: %s' % exc
     if capability == RESUME_CHECK:
         return _run_rc_cases(value, entry, check)
+    if capability == RISK_ENGINE:
+        return _run_risk_cases(value, entry, derive, evaluate)
     errors = check_fixture(value, entry)
     if errors:
         return NOT_RUN, 'the fixture is malformed: %s' % errors[0]
@@ -784,18 +982,62 @@ def _run_rc_cases(value, entry, check):
     return PASS, ''
 
 
+def _run_risk_cases(value, entry, derive, evaluate):
+    """The Risk Engine cases of one well-formed fixture file (TASK-017 AC4 to AC9; conformance-files.md section 10):
+    the form check and the Given; then per case (1) the derivation, (2) the derived inputs compared at once, (3) only
+    when (2) passes, the acceptance call and its profile_used. Every case is run; a failed case makes the scenario
+    FAIL before any NOT_RUN; the reason for a NOT_RUN is the scenario's reason in the runner's output."""
+    errors = check_risk_fixture(value, entry)
+    if errors:
+        return NOT_RUN, 'the fixture is malformed: %s' % errors[0]
+    if derive is None or evaluate is None:
+        return NOT_RUN, 'the entry point is absent'
+    failed, not_run = [], ''
+    for n, case in enumerate(value['cases'], 1):
+        try:
+            derived = derive(copy.deepcopy(case['values']))
+        except Exception as exc:
+            not_run = not_run or 'case %d: the derivation raised %s: %s' % (n, type(exc).__name__, exc)
+            continue
+        problem = derived_problem(derived, case['expected'])
+        if problem:
+            failed.append('case %d: %s' % (n, problem))
+            continue
+        try:
+            observed = evaluate(copy.deepcopy(case['request']), copy.deepcopy(derived), copy.deepcopy(case['records']))
+        except Exception as exc:
+            not_run = not_run or 'case %d: the call raised %s' % (n, type(exc).__name__)
+            continue
+        problem = decision_problem(observed)
+        if not problem and not (isinstance(observed.get('profile_used'), list)
+                                and all(isinstance(e, dict) for e in observed['profile_used'])):
+            problem = 'the decision record has no profile_used list'
+        if problem:
+            not_run = not_run or 'case %d: %s' % (n, problem)
+            continue
+        pairs = {(p['dimension'], p['evidence_type']) for p in case['expected']['profile_excludes']}
+        if _held(observed['profile_used'], 'required', pairs):
+            failed.append('case %d: profile_used holds a pair of the low default' % n)
+    if failed:
+        return FAIL, 'not met: ' + ', '.join(failed)
+    if not_run:
+        return NOT_RUN, not_run
+    return PASS, ''
+
+
 def outcome(counts, results, with_fixture):
     """The record's outcome (AC8): pass exactly when the run counts and every scenario with a fixture is PASS; a run
     with no scenario that has a fixture is fail (reading)."""
     return 'pass' if counts and with_fixture and all(results[i] == PASS for i in with_fixture) else 'fail'
 
 
-def run(root, commit, task, read=None, listing=None, evaluate=None, check=None):
+def run(root, commit, task, read=None, listing=None, evaluate=None, check=None, derive=None):
     """One conformance run over the tree at ``root``, the base (AC1). ``commit`` and ``task`` are only recorded.
     ``read`` and ``listing`` replace the default byte reader and records listing; ``evaluate`` is a test seam: a run
     with it never counts and its governor_identity is null (AC6). ``check`` is the Resume Check's test seam (TASK-006
-    AC4, reading): a run with it never counts, and the run record's resume_check sha256 is null. Raises ValueError for
-    a commit or task id of the wrong form."""
+    AC4, reading): a run with it never counts, and the run record's resume_check sha256 is null. ``derive`` is the
+    Risk Engine derivation's test seam (TASK-017 AC3, reading): a run with it never counts. Raises ValueError for a
+    commit or task id of the wrong form."""
     if not (isinstance(commit, str) and _COMMIT.fullmatch(commit)):
         raise ValueError('the commit is not a full lowercase hex commit id')
     if not (isinstance(task, str) and _TASK.fullmatch(task)):
@@ -871,6 +1113,15 @@ def run(root, commit, task, read=None, listing=None, evaluate=None, check=None):
         rc_record = {'path': RESUME_CHECK_PATH, 'sha256': sha256(rc_data) if rc_data is not None else None}
     rc_entry = check if rc_status in (LOADED, STAND_IN) else None
 
+    # TASK-017 AC3: the Risk Engine's derivation is the loaded governor module's derive_inputs, looked up only when at
+    # least one Risk Engine entry of the set file has a fixture; a stand-in derivation never counts. No key is added
+    # to the run record (conformance-files.md section 10).
+    if derive is not None:
+        problems.append('a stand-in derivation (reading)')
+    elif set_value is not None and any(e['capability'] == RISK_ENGINE and e['fixture'] is not None
+                                       for e in set_value['scenarios']) and status == LOADED:
+        derive = load_derive(root)
+
     entries = set_value['scenarios'] if set_value is not None else [{'id': i, 'fixture': None} for i in order]
     results, reasons, with_fixture = [], {}, []
     for entry in entries:
@@ -882,7 +1133,7 @@ def run(root, commit, task, read=None, listing=None, evaluate=None, check=None):
             result, reason = NOT_RUN, 'the run does not count: the Resume Check could not be loaded from the root (reading)'
         else:
             result, reason = run_scenario(tree, entry, rows, evaluate if status in (LOADED, STAND_IN) else None,
-                                          caps, rc_entry)
+                                          caps, rc_entry, derive)
         results.append({'id': entry['id'], 'result': result})
         reasons[entry['id']] = reason
     counts = not problems

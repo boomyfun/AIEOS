@@ -306,7 +306,7 @@ class R2EntryAndPath(Isolated):
     def test_an_unrouted_capability(self):
         files = real_files()
         value = set_value(files)
-        for sid, cap in (('RISK-01', 'Risk Engine'), ('ADV-02', 'Capability Boundaries')):
+        for sid, cap in (('ADV-02', 'Capability Boundaries'),):
             entry = next(e for e in value['scenarios'] if e['id'] == sid)
             self.assertEqual(entry['capability'], cap)
             path = conformance.module_path(sid)
@@ -315,7 +315,7 @@ class R2EntryAndPath(Isolated):
         put_set(files, value)
         asked = []
         r = go(files, check=stand_in(), asked=asked)
-        for sid, cap in (('RISK-01', 'Risk Engine'), ('ADV-02', 'Capability Boundaries')):
+        for sid, cap in (('ADV-02', 'Capability Boundaries'),):
             self.assertEqual((r.results[sid], r.reasons[sid]),
                              (conformance.NOT_RUN, 'the entry point of %s is absent until its milestone' % cap))
             self.assertNotIn(conformance.module_path(sid), asked)
@@ -323,7 +323,6 @@ class R2EntryAndPath(Isolated):
     def test_the_expected_path(self):
         self.assertEqual(conformance.expected_path('ACC-01', 'Verification'), conformance.module_path('ACC-01'))
         self.assertEqual(conformance.expected_path('RC-11', 'Resume Check'), RC_DIR + '/rc_11.py')
-        self.assertIsNone(conformance.expected_path('RISK-01', 'Risk Engine'))
         self.assertIsNone(conformance.expected_path('ADV-02', 'Capability Boundaries'))
 
 
