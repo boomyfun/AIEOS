@@ -1,0 +1,378 @@
+# Task contract TASK-027, the evaluation path (Master Plan revision 3, §4 M4; specification 1 section 5.1; specification
+# 2 sections 2, 6.1, 6.3, 6.4 and 6.5; governor-spec.md sections 3 and 4; DEF-0030, the core's caller). Revision 0,
+# drafted under decisions D-591 (Q4), D-631 (step 2) and D-633 (the scope note and its rulings), brought for approval
+# in its own request; whether it is approved is recorded in the decision files, not in this file. Fields and value
+# forms follow specification 2 §5.1 and the contracts of TASK-007 to TASK-028. Readings marked "(reading)" are the
+# worker's, for the decision agent's ruling.
+# Task type: implementation. What it adds: one module, src/aieos_bootstrap/evaluation.py, the last named piece of the
+# core's caller (DEF-0030; decision D-591 Q4): one function, evaluate_task, that evaluates one task in VERIFYING (after
+# its task.submitted) or in IN_REVIEW (re-evaluation): it reads the event log through the single writer (TASK-016,
+# TASK-026), derives from the task's own events the evaluated commit, the state, the approved contract hash and the
+# retries used, checks the contract's bytes against the approved hash, reads the task's whole change through the Git
+# reader (TASK-024), derives the governor's inputs (governor.derive_inputs, TASK-004 and TASK-015), calls
+# governor.evaluate with the task's records, and appends the decision record as decision.acceptance through the writer.
+# The changed paths (decision D-633, point 5): the union of the paths that each of the task's commits changes against
+# its first parent, without rename detection, not the evaluated commit's own diff, so that a task of several commits is
+# never classed by its last commit only. The task's commits are walked back from the evaluated commit (ruled in
+# decision D-634: the walk ends at the first commit whose trailers give no finding and name no task or another task,
+# the CI's G0 reading of a task's commits, which every pushed task commit must meet; D-633 named base_commit as the
+# end, which would also count the contract commit C and any records commit the branch was rebased onto, as TASK-026's
+# branch was (decision D-622, departure D2); a trailer finding, or this task's trailer in a message with no body,
+# refuses instead of ending the walk). Any commit of the walk with more than one parent, a walk past the bound, or any
+# read that fails refuses the evaluation with nothing appended.
+# The event id (decision D-633 (f)): derived by the module from the task, the event that set the task's current state
+# and the record ids it used, so that a rerun over the same state and records gives "duplicate" and never a second
+# decision (which, for a REWORK decision, would raise the retries used: specification 1 line 73).
+# What it does not do (decision D-633 (h) and section 3.3 of its request): no run in the CI channel and no fetch of CI
+# records (the caller gives them; no network); no reading of the policy, the constitution, the requirements or the
+# contract's fields from the repository (the governor's own limit; specification 4 §12 point 12); none of the records
+# of specification 4 §10 (profile, risk class, AC coverage, stale list) and no reconciliation (specification 4 §7);
+# no execution decision, no grant or release of a lease, no task.stale, no general projection of task state, no
+# trigger (the caller decides when to evaluate), no Git write of any kind, no process except through gitread.run, no
+# file opened except through the writer's functions, no clock read, nothing under .github/ and no workflow change (the
+# module opens no file and starts no process itself, like submit.py and startup.py, which needed none), no policy, no
+# frozen fixture. It changes no other module of src/ apart from the package's docstring and __all__.
+# The trusted PATH (DEF-0052 G1) is the caller's precondition: gitread refuses an empty or relative entry, and an
+# absolute entry is trusted as given. A trailer is trusted only in a message with a body (DEF-0052 F6).
+# Readers of the changed paths (D-263 C3's practice): src/aieos_bootstrap/__init__.py is read by every module that
+# imports the package and by the CI's G1 build; its docstring and __all__ gain evaluation. No module of the repository
+# calls evaluate_task yet.
+# Risk: high, and change class critical_cr, each computed over the base by script (risk_class27.py and
+# gov003_class27.py of the drafting session: every path matches R2 and R3's not-evaluable reading, class high; all
+# five paths are GOV-003 evaluator paths). Profile (assurance-model.md §5, gov-AIEOS, high): functional [unit_test],
+# architecture [deterministic_rule], functional [integration_test], security [static_security_analysis] and
+# architecture [ai_review (cross-model)], plus the evidence_required of the applicable articles.
+# Reviews (as TASK-025, TASK-026 and TASK-028): five way-2 reviews by a Claude model other than the implementer's, and
+# the decision agent's three, each brief naming for testing: the state derivation and its refusals; the contract hash
+# check and the task content hash; the walk of the task's commits (its end, its bound, merges, read failures) and the
+# union of their paths; that values' changed paths must equal the computed union; the records left out with a finding;
+# the derived event id and the duplicate on a rerun; that every decision record, an error record included, goes
+# through the writer once; the result form and that no exception escapes; the injected defaults; the limits of AC13.
+# Naming: every test this task adds names the AC ids it stands for as "TASK-027 ACn" in its own docstring, following
+# DEF-0049's convention.
+# Evaluation path (A61; as TASK-007 to TASK-028): commit C changes only docs/tasks/TASK-027.yaml and has one parent
+# equal to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-027", go to task/TASK-027 under their own
+# decisions; main receives the task only at its acceptance. The task push's CI base run is a RISK-01 conformance run
+# over the set file of DM F35, reported advisory, never MEASURED.
+# Not applicable: OPS-001 (the task changes no ref; gitread runs only read-only subcommands); INV-005 to INV-008,
+# INV-010 and INV-011 (the decision engine, the governor's own module, evidence records, the replay and the policy meet
+# no path of the write-set; the module calls the governor and changes it in nothing); GOV-001, GOV-004 to GOV-006 and
+# SEC-003 (the concept file, the bound artifacts, the decision matrix, the records and pre-genesis documents, and
+# .github/, meet no path of the write-set).
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting, no push of its own; it weakens no evidence requirement (CR-002 part 4 limit 8 does not apply),
+# so its acceptance is one delegated approval of the decision agent (Master Plan section 6), for the decision agent's
+# ruling.
+task: TASK-027
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add a standard-library Python 3 module, src/aieos_bootstrap/evaluation.py, the evaluation path (specification 1
+  section 5.1; DEF-0030): evaluate_task(root, repo, task_id, contract_bytes, declared, values, extra_records, recorder,
+  now) reads the event log through the writer, derives from the task's own events its state (VERIFYING or IN_REVIEW),
+  its evaluated commit, its approved contract hash and its retries used, checks the contract's bytes against that
+  hash, walks the task's commits through gitread.run within a bound and takes the union of their changed paths,
+  derives the governor's inputs with governor.derive_inputs, calls governor.evaluate with the task's records, and
+  appends the decision record once as decision.acceptance through writer.append_event under an event id derived from
+  the task, its state-setting event and the records used; any refusal appends nothing. With unit tests on injected
+  stand-ins, a read-only integration test walking this repository's history, and property tests, each test naming its
+  AC ids as "TASK-027 ACn".
+traces_to:
+  - docs/specs/spec-01-state-and-event-model.md#5.1
+  - docs/specs/spec-02-aieos-file-format.md#2
+  - docs/specs/spec-02-aieos-file-format.md#6.1
+  - docs/specs/spec-02-aieos-file-format.md#6.3
+  - docs/specs/spec-02-aieos-file-format.md#6.4
+  - docs/specs/spec-02-aieos-file-format.md#6.5
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#2
+  - docs/specs/spec-04-verification-and-evidence.md#12
+  - docs/pre-genesis/governor-spec.md#3
+  - docs/pre-genesis/governor-spec.md#4
+  - docs/pre-genesis/constitution.md#INV-001
+  - docs/pre-genesis/constitution.md#INV-004
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-027.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id.
+  base_commit: f6840a51d72980ed1c76b173a9294823463dd9a4
+  depends_on: [TASK-004, TASK-009, TASK-011, TASK-015, TASK-016, TASK-024, TASK-026]
+  intent_versions:
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: a517fcd7f885623aa874e1ce5920804f34a337d5650b32af4578142d30e0d8d5
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 05c53318cd756a3acfc13e5adaffbfaede8f05be3d00289e9fd45fef08c63c73
+    docs/specs/spec-04-verification-and-evidence.md: 48d4f5bf06461ad49409f21bc6ea8d511d17a84eaac15adda14277483176a8d5
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # One modified path (the package docstring and __all__); every other path is new.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/evaluation.py
+    - tests/unit/test_evaluation.py
+    - tests/integration/test_evaluation_repo.py
+    - tests/property/test_evaluation_properties.py
+read_set:
+  paths:
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/specs/spec-04-verification-and-evidence.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/Deferred/DEF-0030-event-log-writer-and-workflow-revision-6.md
+    - docs/Deferred/DEF-0041-the-review-findings-carried-from-task-016.md
+    - docs/Deferred/DEF-0052-the-review-findings-carried-from-task-024.md
+    - docs/Deferred/DEF-0054-the-review-findings-carried-from-task-026.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.gitread.run, aieos_bootstrap.gitread.parse_commit, aieos_bootstrap.gitread.parse_paths, aieos_bootstrap.recovery.trailers, aieos_bootstrap.records.check_log, aieos_bootstrap.records.check_record, aieos_bootstrap.governor.derive_inputs, aieos_bootstrap.governor.evaluate, aieos_bootstrap.writer.read_log, aieos_bootstrap.writer.append_event]
+  schemas: [spec-02 event envelope (6.1), spec-02 payloads (6.3), spec-02 decision contract (6.4), spec-02 evaluation request (6.5), spec-02 commit trailers (6.6)]
+forbidden:
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/writer.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_writer_properties.py
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The interface and its arguments. evaluate_task(root, repo, task_id, contract_bytes, declared, values,
+      extra_records, recorder, now, max_commits=1000, read=None, read_log=None, append=None) takes root and repo,
+      non-empty str values that are absolute paths; task_id, a str of the form TASK-<digits>; contract_bytes, bytes;
+      declared, a dict with exactly the keys intent_versions (a dict from non-empty str ids to "v" followed by
+      digits, the governor's form and specification 2 section 2's, line 20) and retries (an int that is not a bool, from 0 to 100); values, a dict (its form is
+      governor.derive_inputs's, checked in AC6); extra_records, a list; recorder, a non-empty str; now, a
+      timezone-aware datetime in UTC with whole seconds (specification 2 section 6.1); max_commits, an int that is
+      not a bool, from 1 to 10000. Any other value gives the result of AC11 with result "refused", reason "argument"
+      and a finding naming the argument, before read_log or read is called (fail closed).
+  - AC2: >-
+      The log and the task's events. read_log(root) is called once; records.check_log of its bytes must give no
+      finding, else "refused", reason "log", with the findings, and nothing read further or appended. Of the parsed
+      events whose task_id is the task: the last task.approved gives contract_hash; with none, "refused", reason
+      "state". Of the task's events after it, in log order: a task.submitted sets the state VERIFYING and the
+      evaluated commit (its payload's commit); a decision.acceptance whose payload's next_task_state is a str sets that
+      state, and one whose next_task_state is null sets nothing; record.added and decision.execution set nothing; any
+      other event type whose name begins "task." gives "refused", reason "state" (reading: a state this path does not
+      evaluate, such as STALE or BLOCKED). The state-setting event is the last event that set the state. The state must
+      be VERIFYING or IN_REVIEW and an evaluated commit must exist, else "refused", reason "state". retries used is the
+      number of the task's decision.acceptance events after the last task.approved whose next_task_state is REWORK
+      (specification 1 line 73).
+  - AC3: >-
+      The contract. The SHA-256 of contract_bytes must equal contract_hash, else "refused", reason "contract", and
+      nothing read further or appended. task_content_hash is the SHA-256 hex digest of contract_bytes followed by one
+      LF and the evaluated commit id in ASCII (specification 2 section 2, line 22).
+  - AC4: >-
+      The task's commits (decision D-633, point 5). Starting at the evaluated commit, each commit is read once as
+      read(repo, ["cat-file", "-p", id]); the result must have error None and exit 0, and gitread.parse_commit of its
+      out must give error None. A commit belongs to the task when its message has at least two paragraphs, split as
+      recovery.trailers splits them, and recovery.trailers gives the task's id as task with no finding (DEF-0052 F6).
+      A commit where recovery.trailers gives any finding, or whose message has one paragraph that holds an AIEOS-Task
+      line naming this task, gives "refused", reason "git". The evaluated commit must belong to the task, else
+      "refused", reason "git". A commit that belongs to the task must have at most one parent, else "refused", reason
+      "merge"; the walk goes on to its parent, and ends only at a commit whose trailers give no finding and name no
+      task or another task, or after a commit with no parent (decision D-634). More than max_commits commits that belong to the task give "refused", reason "bound". Any read
+      result other than the one required (a refused form or PATH, a timeout, a git that cannot be started, a non-zero
+      exit, an object that is not a commit, bytes out of form) gives "refused", reason "git", with a finding naming the
+      call and its error or exit. Nothing is appended on any refusal.
+  - AC5: >-
+      The changed paths. For each commit that belongs to the task, read is called once as read(repo, ["diff-tree",
+      "--no-commit-id", "--name-only", "-r", "--no-renames", "--no-ext-diff", "--no-textconv", "-z", "--root", id]),
+      and gitread.parse_paths of its out must give error None, else "refused", reason "git". The changed paths are the
+      union of those paths, sorted, without duplicates; an empty union gives "refused", reason "git".
+  - AC6: >-
+      The governor's inputs. values["changed_paths"] must be a list equal to the changed paths of AC5, else
+      "refused", reason "values", with a finding naming the difference (so the caller cannot give other paths).
+      governor.derive_inputs(values) is called once; a ValueError, or any other exception, gives "refused", reason
+      "values", with a finding naming its type and text. The request is exactly {task_id, task_content_hash,
+      evaluated_commit, intent_versions (declared's), task_state (AC2's state), changed_paths (AC5's), retry_count
+      {used (AC2's), limit (declared's retries)}} (specification 2 section 6.5).
+  - AC7: >-
+      The records. The payloads of the task's record.added events in the whole log, in log order, then the entries of
+      extra_records, in their order; each is kept when records.check_record of it gives no finding and its record_id
+      is a str no earlier kept record has; any other is left out and named in a finding (decision D-633 (e);
+      specification 2 line 23: a malformed input is not used). governor.evaluate(request, inputs, kept) is called
+      exactly once; an exception gives "refused", reason "governor", with a finding.
+  - AC8: >-
+      The append through the writer (INV-004). The event id is the SHA-256 hex digest of the UTF-8 text made of the
+      lines "evaluation", the task id, the state-setting event's event_id, and then the kept records' record_ids,
+      sorted, joined by LF (decision D-633 (f)). append(root, "decision.acceptance", record, event_id, now, recorder,
+      task_id=task_id) is called exactly once with the governor's record, with no fencing token (the lease was
+      released at submission: specification 1 section 5.1), also when the record carries an error and a null decision
+      (decision D-633 (g); governor-spec.md section 4 rule 7: the task stays where it is). A result whose result is
+      "appended" gives "evaluated"; "duplicate" gives "duplicate"; any other result, or an exception, gives "refused",
+      reason "store", with a finding. No event-log line is built here.
+  - AC9: >-
+      Reruns. A second evaluate_task over the same log, the same commits and the same records computes the same event
+      id, so the writer gives "duplicate" and no second decision is appended; after a decision that set a new state
+      (for example IN_REVIEW), a record added to the task changes the set of kept record ids, so a re-evaluation from
+      IN_REVIEW gets a new event id (tests with a stand-in writer that keeps a log, built with eventlog.append).
+  - AC10: >-
+      The injected functions. read, read_log and append, when None, are gitread.run, writer.read_log and
+      writer.append_event, resolved at call time; tests pass stand-ins; a test pins the three defaults (by replacing
+      the module attributes for the duration of the test and restoring them).
+  - AC11: >-
+      The result. evaluate_task returns a mapping with exactly the keys result ("evaluated", "duplicate" or
+      "refused"), reason (None, or one of argument, log, state, contract, git, merge, bound, values, governor, store),
+      findings (a list of str), event_id (the derived id, or None before it is derived), changed_paths (AC5's list, or
+      None before it is computed), decision (the record's decision, or None) and next_task_state (the record's, or
+      None). An exception raised by any injected or called function, or by reading the objects they return, is caught
+      and becomes a result with a finding naming its type; none escapes evaluate_task.
+  - AC12: >-
+      Purity apart from the calls (INV-001, INV-004). evaluation.py imports only the Python 3 standard library and
+      aieos_bootstrap's gitread, governor, records, recovery and writer; it opens, writes and removes no file itself,
+      starts no process except through read, reads no clock and no environment variable, calls of the writer only
+      read_log and append_event (through the injected names), and no open_store, grant_lease, release_lease,
+      release_lease_token, expire_leases, start_session or end_session, and builds no event-log line itself. No exec,
+      eval, compile, __import__ or importlib; no assert in src; no string that names the project-state directory;
+      deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit report no finding at the task's commits, on the base
+      with the workflow's revision 8, with no change under .github/.
+  - AC13: >-
+      Limits, stated in the module's docstring: the PATH git is found by is the caller's precondition (DEF-0052 G1);
+      declared (intent_versions and retries) and values (the contract's declared fields, the policy's rules, the
+      articles, the profiles, the delegation and the versions) are caller data, not bound to the hashed contract
+      bytes, as the governor's own limit says (decision D-633 C1); one evaluation of a task runs at a time, since the
+      writer reads the log and appends with no check that it is unchanged since this module's read; the walk has a
+      bound and reads every task commit each time; the walk ends at the first commit without the task's trailer, so a
+      task commit that lacks it would end the walk early (the CI's G0 refuses such a commit); a merge in the task's
+      commits is refused; records of the CI channel are the caller's to give (no network); the records of
+      specification 4 section 10 and its reconciliation are not made here; this repository's contracts write
+      input_state.intent_versions as path to SHA-256, not specification 2's version form, so the caller maps them
+      (decision D-634 E1; carried to this task's Deferred item); the tests use stand-ins for the writer, so
+      the real store's path is covered by the writer's tests and not end to end. Every existing module and test not
+      in the write set is unchanged, and if one can pass only by a change the task escalates
+      (needs_out_of_scope_change).
+  - AC14: >-
+      This repository's history, read only. tests/integration/test_evaluation_repo.py finds the repository root from
+      its own path (pathlib, two parents up) and calls evaluate_task with the real gitread.run for task TASK-026,
+      contract_bytes the bytes of docs/tasks/TASK-026.yaml read from the checkout, whose SHA-256 the test first
+      asserts equal to 3214886e13d348d83ca886d4e53773629879a4b4edf692525ae2da759882f21b (its hash at commit C of
+      TASK-026 and on main), values built by the test in governor.derive_inputs's form, declared built by the test with intent_versions in
+      the version form, a stand-in read_log giving a log built with eventlog.append that holds a task.approved with that hash and a
+      task.submitted naming 1f6ff6d8131b5d53a881f895aedb0dd632075ff4, and a stand-in append that records its calls and
+      gives "appended": the walk reads 1f6ff6d8… and 92e4ab140d2f311d4cb3a188f1b6e496bae5baf4 as the task's commits and
+      ends at 8aa9ed91547639d934ab88924123395ca23667da; the changed paths are exactly the seven paths of TASK-026's write
+      set; append is called once with a decision.acceptance record whose evaluated_commit is 1f6ff6d8… and whose
+      task_content_hash is AC3's. root is a path that is never written.
+  - AC15: >-
+      Tests, each rule with at least one passing and one failing case, and the added text. R1 AC1 (each argument wrong
+      in turn, a 64-hex intent version among them, read_log and read not called); R2 AC2 (a damaged log refused; no task.approved; VERIFYING after a
+      submission; IN_REVIEW after a decision; a null next_task_state setting nothing; a task.stale after the
+      submission refused; retries used counting only REWORK decisions after the last approval); R3 AC3 (a contract of
+      other bytes refused; the content hash); R4 AC4 (two task commits then a commit of another task; a merge refused;
+      the evaluated commit not the task's refused; a commit without the trailer ending the walk; a one-paragraph
+      message with this task's trailer refused; a trailer finding refused; the bound; each failing
+      read result; nothing appended on a failure); R5 AC5 (the union of two commits' paths; a failing diff-tree); R6
+      AC6 (other changed paths refused; derive_inputs raising; the exact request); R7 AC7 (a malformed record and a
+      repeated record_id left out with findings; extra_records used); R8 AC8 (the exact append call and event id; an
+      error record appended; a refused or raising append); R9 AC9 (a rerun duplicate; a new record a new id); R10 AC10
+      (the three defaults pinned); R11 AC11 (the result keys; exceptions from each injected function); R12 AC12 (a
+      script check of the module's imports and of the absence of process, file, clock, environment and store-changing
+      calls); R13 AC14 (the integration test). Unit tests in tests/unit/test_evaluation.py; AC14 in
+      tests/integration/test_evaluation_repo.py; property tests in tests/property/test_evaluation_properties.py
+      (standard library only, fixed seeds): random task histories as chains of commits always give the union of their
+      paths, and random read failures never reach append. Every test this task adds names the AC ids it stands for as
+      "TASK-027 ACn" in its own docstring; before each commit, the added text is scanned with the workflow's SEC-001,
+      SEC-002 and OPS-003 patterns, and each count is 0. tests/run_tests.py, unchanged, runs all groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 900k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9, AC10, AC11, AC14, AC15]}
+  - {gate: G3, check: constitution, args: [AC12, AC13, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
