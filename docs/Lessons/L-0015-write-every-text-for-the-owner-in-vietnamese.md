@@ -155,6 +155,9 @@ Occurrences in session 2026-10-12-0333 (../History/2026-10/2026-10-12-0333-relea
 Occurrences in session 2026-10-12-0833 (../History/2026-10/2026-10-12-0833-recovery-at-start-accepted-and-on-main.md):
 - **2026-10-12 (:1285, :1301, :1821).** English working notes in messages holding tool calls, while preparing the second review round, against the owner's item 5 of this session's prompt ("trong một lượt có chạy lệnh thì không viết chữ nào khác", 2026-10-12, :3); aid (a) stopped the next gated command until both were listed (decision D-625), and from then on any further one stops it until brought to the decision agent (D-625 C2); one more followed at :1821, while preparing the session's end, and was brought to the decision agent (decision D-629).
 
+Occurrences in session 2026-10-12-0944 (../History/2026-10/2026-10-12-0944-the-evaluation-path-accepted-and-on-main.md):
+- **2026-10-12 (:196, :545, :668, :758, :1168, :1400, :1508, :1673).** Eight short English working notes in messages holding tool calls, each right after a harness note asking what was being done, against the owner's item 5 of this session's prompt and decision D-625 C2, then D-632 C4 and D-636's rule (a); each brought to the decision agent and listed before the next gated command, and from D-636 on the owner told the running count in each turn-final reply (decisions D-632 to D-640).
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

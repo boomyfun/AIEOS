@@ -182,6 +182,10 @@ Occurrences in session 2026-10-12-0833 (../History/2026-10/2026-10-12-0833-recov
 - **2026-10-12 (:1244).** A sleep command (`sleep 1;` before a CI listing), against the standing rule; not refused by the guard, and not flagged by the filler check filler_count3.py, a gap of that tool (decision D-625).
 - **2026-10-12 (:1867).** A command written by mistake, holding a heredoc and a command with no effect (`echo skip`); refused by guard rule R1 before it ran; not retried (decision D-629).
 
+Occurrences in session 2026-10-12-0944 (../History/2026-10/2026-10-12-0944-the-evaluation-path-accepted-and-on-main.md), each my incorrect command:
+- **2026-10-12 (:158, :759, :1071).** A Python run with timeout 100 (refused by guard rule R3, re-issued with timeout 110), and two commands holding Python's name followed by a dash, one a placeholder of no effect and one at the head of a CI read (both refused by R2; not retried in that form) (decisions D-632, D-636 and D-638).
+- **2026-10-12 (:309, :638, :1113).** A guard-forbidden string inside a grep pattern, an `rm` of a scratch file the same call had made (not stopped by the guard; against the standing rule), and a no-effect grep inside a broken loop; the first and the last flagged by filler_count3.py, which matches text rather than commands run (decisions D-632, D-635 and D-638).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

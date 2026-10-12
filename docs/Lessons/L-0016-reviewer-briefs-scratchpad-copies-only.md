@@ -29,6 +29,9 @@ In session 2026-10-10-2141 (../History/2026-10/2026-10-10-2141-decision-files-d3
 One in session 2026-10-11-0333 (../History/2026-10/2026-10-11-0333-decision-files-d409-d420-and-specification-4.md):
 - **2026-10-11 (review R1 of specification 4).** The reviewer made one Bash call, a read-only sed over its own input copies, against the brief's first-line tool rule; it failed on syntax, read and wrote nothing, and the reviewer disclosed it. review_models2.py printed "slips: 1" and "cross-model and rule check: FAIL"; the output was brought to the decision agent before use and used by D-424. The next brief's rule adds that any other tool, even one that reads, breaks it.
 
+Occurrence in session 2026-10-12-0944 (../History/2026-10/2026-10-12-0944-the-evaluation-path-accepted-and-on-main.md):
+- **2026-10-12 (reviewer R3 of TASK-027).** One Read of a non-existent path outside SP/rev/in/t27/ (a truncated session id and a file "x"); it returned "File does not exist" and nothing was read; reported by review_models2.py as one slip, brought to the decision agent before the output was used, and the output weighed as valid (decision D-639).
+
 ## Why it happens
 A brief's tool rule competes with the reviewer's habit of checking things by shell, and a path into the working tree makes a read-only command able to touch it.
 
