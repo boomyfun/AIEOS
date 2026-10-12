@@ -1,0 +1,369 @@
+# Task contract TASK-031, the reconciliation caller (Master Plan revision 3, §4 M4; specification 4 revision 3, section 7
+# items 1, 3 and 4; concept lines 742-749 and 948). Revision 0, drafted under decisions D-671 (Q1 to Q3, C1 and C2) and
+# D-663, brought for approval in its own request; whether it is approved is recorded in the decision files, not in this
+# file. Fields and value forms follow specification 2 §5.1 and the contracts of TASK-007 to TASK-030. Readings marked
+# "(reading)" are the worker's, for the decision agent's ruling.
+# Task type: implementation. What it adds: one module, src/aieos_bootstrap/reconcile.py, the core's caller of the two
+# pure reconciliation computations that are on main: stale.stale (TASK-023, section 7 item 3) and drift.violations
+# (TASK-030, section 7 item 1). Its function reconcile runs at one base commit (the trigger, a commit that reached the
+# base): it reads the event log through the writer, finds every task the log shows DONE, builds stale.stale's inputs for
+# each from the log and a bounded first-parent walk of Git through gitread, builds drift.violations' inputs for the
+# trigger, and appends every returned event through the writer under the ids those functions derive. A pure helper,
+# rule_results_from_steps, turns the CI's step results for one commit into article-form rule results by a mapping the
+# caller gives (decision D-664 C4; DEF-0057). It changes no task state, grants and releases no lease, calls no governor
+# and reads no network.
+# The specification's text (spec 4 line 83): "**Where it runs** (plan o4): in the CI channel as evidence, and in the
+# core when a task is submitted, as the governor's input; the core's caller is the item carried in DEF-0030 (D-415 C3).
+# All three are pure computations; their events are appended only through the single writer (INV-004)." Line 82 (stale
+# evidence): "each base commit gives at most one `evidence.stale` event per task and reason [...], idempotent by an event
+# id derived from the task, the commit and the reason". Line 80 (constitution drift): "a failed rule on the base is a
+# `violation.detected` with the article's id in `refers_to`; its subject is the commit, no task's state changes".
+# Specification 1 line 88: an evidence.stale event's effect is that a "re-verify is scheduled; execution is not blocked; a
+# DONE task stays DONE with stale evidence".
+# What it does not do: no governor call and no change to its reads (spec 4 section 12 point 10); no evaluation (section 3
+# rule 1 stays the governor's); no lease, no state effect (DEF-0030's state effect and lease on CONTINUE stay open, before
+# M4's exit review point); no scope drift (section 7 item 2, which waits for the policy's list of non-task paths); no
+# network and no CI read (the CI's step results are the caller's values); no run of a G3 rule; no change to stale.py,
+# drift.py, evaluation.py, writer.py, gitread.py, records.py or any other existing module; nothing under .github/.
+# Readers of the changed paths (D-263 C3's practice): src/aieos_bootstrap/__init__.py is read by every module that
+# imports the package and by the CI's G1 build; its docstring and __all__ gain reconcile; it must not name the Resume
+# Check fixture folder (TASK-010's assertion) nor the Risk Engine fixture folder (TASK-020's allow list). No module of
+# the repository calls reconcile yet.
+# Source classes (decision D-671, DEF-0057, D-668 C3): a rule result or a task record reaches drift only when its
+# source_class is deterministic_tool_external_ci or deterministic_tool_local; the class is the writer's statement, not
+# checked against the channel (DEF-0051), a stated limit.
+# The task's kept G3 records (decision D-671 C1 item 1; reading): they are given to drift as they are, filtered by class;
+# the CI's G3 records in docs/records name a CI step in refers_to, not an article id, so they match no article and the
+# one-finding rule finds nothing in them: a G3 failure at a task's evaluation and the same failure on the base may then
+# be two findings, a stated limit (mapping those records would need parsing their free-text refers_to, which this task
+# does not do).
+# Risk: high, and change class critical_cr, each computed over the base by script, as for TASK-030. Profile
+# (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture [deterministic_rule], functional
+# [integration_test], security [static_security_analysis] and architecture [ai_review (cross-model)], plus the
+# evidence_required of the applicable articles.
+# Reviews (as TASK-030's): five way-2 reviews by a Claude model other than the implementer's, and the decision agent's
+# three, each brief naming for testing: the DONE-task facts taken from the log; the walk's bound and its fail-closed
+# outcome; the source-class filter; the mapping helper's form; the order of appends and a partial refusal; the derived
+# ids and "duplicate" on a rerun; purity (gitread and the writer only); AC12's limits.
+# Naming (D-544 Q3, as TASK-023 to TASK-030): every test of the new test modules names the AC ids it stands for as
+# "TASK-031 ACn" in its own docstring.
+# Evaluation path (A61; as TASK-007 to TASK-030): commit C changes only docs/tasks/TASK-031.yaml and has one parent
+# equal to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-031", go to task/TASK-031 under their own
+# decisions; main receives the task only at its acceptance.
+# Not applicable: OPS-001 (the task changes no ref); INV-005 to INV-008, INV-010 and INV-011 (the decision engine, the
+# governor, evidence records as stored, the replay and the policy meet no path of the write-set); GOV-001, GOV-004 to
+# GOV-006 and SEC-003 (the concept file, the bound artifacts, the decision matrix, the records and pre-genesis documents,
+# and .github/, meet no path of the write-set). INV-004 applies: the module appends only through writer.append_event.
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting, no push of its own; it weakens no evidence requirement (it records stale evidence and violations
+# and blocks no task; CR-002 part 4 limit 8 does not apply), so its acceptance is one delegated approval of the decision
+# agent (Master Plan section 6), for the decision agent's ruling.
+task: TASK-031
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add a standard-library Python 3 module, src/aieos_bootstrap/reconcile.py, the core's reconciliation caller of
+  specification 4 section 7 items 1, 3 and 4: reconcile(root, repo, trigger_commit, values, rule_results, recorder, now)
+  reads the event log through the writer, builds stale.stale's inputs for every task the log shows DONE from the log
+  and a bounded first-parent walk of Git through gitread, builds drift.violations' inputs for the trigger with only the
+  deterministic source classes counted, and appends every returned event through writer.append_event in a fixed order
+  under the ids those functions derive, so that a rerun gives "duplicate"; and a pure helper,
+  rule_results_from_steps(steps, step_articles, commit, recorder), turns the CI's step results for one commit into
+  article-form G3 observations by a mapping the caller gives. With unit, integration and property tests in new test
+  modules, each test naming its AC ids as "TASK-031 ACn" in its own docstring; the tests use stand-ins for gitread,
+  read_log and append, and the integration test runs a stand-in log and repository end to end with eventlog.append in
+  memory.
+traces_to:
+  - docs/specs/spec-04-verification-and-evidence.md#7
+  - docs/specs/spec-04-verification-and-evidence.md#3
+  - docs/specs/spec-02-aieos-file-format.md#6.2
+  - docs/specs/spec-02-aieos-file-format.md#6.3
+  - docs/specs/spec-01-state-and-event-model.md#5.3
+  - AIEOS-concept.md#744
+  - AIEOS-concept.md#948
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-031.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id.
+  base_commit: 7d6459336abec20f4e63da0eca6a2d892594b0c7
+  depends_on: [TASK-001, TASK-007, TASK-016, TASK-023, TASK-024, TASK-027, TASK-030]
+  intent_versions:
+    docs/specs/spec-04-verification-and-evidence.md: 48d4f5bf06461ad49409f21bc6ea8d511d17a84eaac15adda14277483176a8d5
+    docs/specs/spec-02-aieos-file-format.md: 80c91e47ef0a1dbe7f77c677cd2261d5b5ede20bcb0735cf06438bddbde85f8b
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # One modified path (the package docstring and __all__); every other path is new.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/reconcile.py
+    - tests/unit/test_reconcile.py
+    - tests/integration/test_reconcile_log.py
+    - tests/property/test_reconcile_properties.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-04-verification-and-evidence.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/Deferred/DEF-0030-event-log-writer-and-workflow-revision-6.md
+    - docs/Deferred/DEF-0051-the-derived-channel.md
+    - docs/Deferred/DEF-0052-the-review-findings-carried-from-task-024.md
+    - docs/tasks/**
+    - docs/records/**
+    - src/aieos_bootstrap/stale.py
+    - src/aieos_bootstrap/drift.py
+    - src/aieos_bootstrap/evaluation.py
+    - src/aieos_bootstrap/writer.py
+    - src/aieos_bootstrap/gitread.py
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/eventlog.py
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.stale.stale, aieos_bootstrap.drift.violations, aieos_bootstrap.writer.read_log, aieos_bootstrap.writer.append_event, aieos_bootstrap.gitread.run, aieos_bootstrap.gitread.parse_commit, aieos_bootstrap.gitread.parse_paths, aieos_bootstrap.records.check_log, aieos_bootstrap.records.check_record, aieos_bootstrap.eventlog.append]
+  schemas: [spec-02 record (6.2), spec-02 event payloads (6.3)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/writer.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The arguments. reconcile(root, repo, trigger_commit, values, rule_results, recorder, now, max_commits=1000,
+      read=None, read_log=None, append=None) checks every argument before anything is read: root and repo non-empty
+      strings; trigger_commit 40 or 64 lowercase hex characters; values a mapping with exactly the keys articles (a
+      list) and tasks (a mapping from task ids to mappings with exactly the keys intent_current, read_set and
+      read_set_estimate, in stale.stale's forms); rule_results a list of mappings; recorder a non-empty string; now a
+      timezone-aware datetime in UTC; max_commits an int from 1 to 10000. A wrong argument gives the result of AC10
+      with result "refused", reason "argument" and a finding naming it, and nothing is read or appended. read,
+      read_log and append default, at call time, to gitread.run, writer.read_log and writer.append_event.
+  - AC2: >-
+      The log and the DONE tasks. The log is read once through read_log(root) and checked by records.check_log; a log
+      with a finding gives "refused", reason "log". A task is DONE when the log holds a task.done event for it; its
+      accepted commit is the evaluated_commit of the decision.acceptance whose record_id is that task.done's
+      decision_record. A task.done whose decision record is absent, not an ACCEPT decision, or has no evaluated_commit
+      gives an uncovered entry {ref the task id, detail naming the gap} and no stale computation for that task (fail
+      closed). Its records are its record.added payloads, its earlier events its evidence.stale payloads, and its
+      submitted commits the commits of its task.submitted events, all in log order.
+  - AC3: >-
+      The walk (decision D-671 C1 item 3). From trigger_commit back along first parents, each commit is read once with
+      read(repo, ["cat-file", "-p", id]) and parsed by gitread.parse_commit, and its changed paths are read with
+      evaluation's pinned diff-tree form against its first parent (a root commit against the empty tree) and parsed by
+      gitread.parse_paths. For a DONE task the base commits are the walked commits after its accepted commit, in base
+      order (oldest first). If the walk reads more than max_commits commits, or reaches a root, before it reaches a DONE
+      task's accepted commit, that task gets no stale computation and an uncovered entry {ref the task id, detail
+      "accepted commit not reached"}; it is never treated as fresh. A read that fails or gives a parse error gives
+      "refused", reason "git", and nothing is appended. A merge (a commit with more than one parent) is followed by its
+      first parent, but its changed paths are not read: gitread's one pinned diff-tree form gives no paths for a merge.
+      So every DONE task whose base commits would include a merge gets no stale computation and an uncovered entry {ref
+      the task id, detail "merge commit on the walk"}, and when the trigger itself is a merge, drift.violations is not
+      called and an uncovered entry {ref the trigger commit, detail "trigger is a merge"} is given (fail closed).
+  - AC4: >-
+      Stale evidence. For each DONE task with values["tasks"] holding its facts, stale.stale is called once with
+      task_id, accepted_commit, trigger_commit, records, intent_current, read_set, read_set_estimate, base_commits (each
+      {commit, paths, submitted_by_task}, the last true when the commit is one of the task's submitted commits) and
+      earlier_events; a DONE task without facts in values["tasks"] gives an uncovered entry {ref the task id, detail
+      "no facts given"} and no call. stale.stale's own uncovered entries are passed on with the task id; its error, if
+      any, gives "refused", reason "stale".
+  - AC5: >-
+      The source-class filter (decision D-671 and DEF-0057). Before drift.violations is called, a rule result or a task
+      record is kept only when its source_class is "deterministic_tool_external_ci" or "deterministic_tool_local"; each
+      other entry is left out and gives an uncovered entry {ref its record_id when it is a non-empty string, otherwise
+      its list and index, detail "source class not counted"}. A left-out pass leaves the article without a result
+      (drift names it); a left-out failing task record cannot suppress a finding. The class is the writer's statement
+      (DEF-0051): a stated reading.
+  - AC6: >-
+      Constitution drift. drift.violations is called once with base_commit trigger_commit, changed_paths the trigger's
+      changed paths from the walk, articles values["articles"], rule_results the kept rule results, task_records the
+      kept records of every task whose last decision.acceptance's evaluated_commit equals trigger_commit, and recorder.
+      Its uncovered entries are passed on; its already list is in the result; its error gives "refused", reason
+      "drift".
+  - AC7: >-
+      The mapping helper (decision D-671 C1 items 2 and 5). rule_results_from_steps(steps, step_articles, commit,
+      recorder) is pure: steps is a list of {name, conclusion} with non-empty string names; step_articles a mapping from
+      step names to non-empty lists of article ids; commit 40 or 64 lowercase hex characters. For each step whose name
+      step_articles holds and whose conclusion is "success" or "failure", it returns one record per named article:
+      {record_id, fact_kind "observation", source_class "deterministic_tool_external_ci", recorder, subject commit,
+      commit, gate "G3", outcome "pass" for success and "fail" for failure, refers_to the article id}, record_id the
+      SHA-256 hex digest of "ci-rule", the commit, the step name and the article id joined by LF; records.check_record
+      finds nothing in each. A step the mapping does not name, or another conclusion, gives no record and one uncovered
+      entry {ref the step name, detail naming why}. It returns {records, uncovered, error}, error a short text for a
+      malformed argument (then no record). A step's success counts as the article's deterministic rule passing, not as
+      the article being satisfied (reading). The records are reconcile's caller's inputs; they are not appended.
+  - AC8: >-
+      The appends (decision D-671 C1 item 4). The events are appended through append(root, event_type, payload,
+      event_id, now, recorder, task_id=...) with no fencing token, in a fixed order: the evidence.stale events by task
+      id, then by reason as stale returns them, each with task_id the task; then the violation.detected events as drift
+      returns them, with no task_id. Each "appended" and "duplicate" result is listed; the first other result (a
+      refusal, a result that is not a WriteResult, or a raised exception) stops the appends and gives "refused", reason
+      "append", with the ids appended so far listed. A rerun gives "duplicate" for those and goes on; the log is
+      append-only, so nothing is undone (the writer's behaviour, stated).
+  - AC9: >-
+      What it does not do. The module calls no governor function, evaluates no task, grants, releases or expires no
+      lease, creates no store, changes no task state, makes no scope-drift finding and reads no network; its docstring
+      says so and names DEF-0030 (the state effect and the lease on CONTINUE), DEF-0051 (the class not checked against
+      the channel) and DEF-0057 (the one-finding limit). No module of src/ changes except __init__.py's docstring and
+      __all__.
+  - AC10: >-
+      The result. reconcile returns a mapping with exactly the keys result ("reconciled" or "refused"), reason (None or
+      one of "argument", "log", "git", "stale", "drift", "append"), findings (a list of texts), appended (the event ids
+      appended), duplicate (the event ids found already appended), already (drift's), and uncovered (a list of
+      {ref, detail}, sorted, without duplicates). An exception raised by a called function is caught and becomes a
+      result with the step's reason; none escapes.
+  - AC11: >-
+      Purity and the CI checks (INV-001 to INV-004). The module imports only the Python 3 standard library and
+      aieos_bootstrap's drift, gitread, records, stale and writer; it starts no process except through read, opens no
+      file except through read_log and append, reads no clock and no environment, builds no event-log line itself and
+      makes no network or model call; no exec, eval, compile, __import__ or importlib; no assert in src (bandit B101);
+      no string that names the project-state directory. At the task's commits the CI steps report no finding:
+      deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit.
+  - AC12: >-
+      Limits, stated: the DONE tasks' facts other than the log and Git (intent_current, the resolved read-set and its
+      estimate flag, the articles and the rule results) are the caller's and not checked; the source class is the
+      writer's statement (DEF-0051); the task's kept G3 records name a CI step, not an article, so they match no article
+      and a G3 failure at a task's evaluation and on the base may be two findings (DEF-0057); one run at a time (the
+      writer reads the log and appends with no check that it is unchanged since this module's read, as evaluate_task's
+      limit); the walk has a bound; a merge's changed paths are not read (gitread's pinned form), so the tasks whose
+      range holds one and a merge trigger are uncovered; the PATH git is found by is the caller's precondition (DEF-0052
+      G1). Every existing module and test not in the write set is unchanged, and if one can pass only by a change the
+      task escalates (needs_out_of_scope_change).
+  - AC13: >-
+      Its own tests and the added text. Every test function of the three new test modules names the AC ids it stands
+      for as "TASK-031 ACn" in its own docstring and names no other task's AC in qualified form there. Before each
+      commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns, and each count is 0;
+      the file names are scanned with the same patterns and the records executors' pre-push pattern (D-282).
+  - AC14: >-
+      Tests, each rule with at least one passing and one failing case, with stand-ins for read, read_log and append (no
+      process, no file): R1 AC1 (each wrong argument refused before any read); R2 AC2 (a DONE task found; each gap in
+      its decision record uncovered; a refused log); R3 AC3 (base commits after the accepted commit in base order; the
+      bound exceeded and a root reached give "accepted commit not reached"; a failing read refused; a merge followed by
+      its first parent, the tasks whose range holds it uncovered, and a merge trigger not given to drift); R4 AC4
+      (stale called with the built inputs; submitted commits flagged; no facts uncovered); R5
+      AC5 (each other class left out and named; a left-out pass and a left-out failing task record); R6 AC6 (drift
+      called with the trigger's paths and the right task records); R7 AC7 (the mapping's records, their ids and
+      check_record; an unmapped step and another conclusion uncovered; a malformed argument); R8 AC8 (the order; a
+      refusal mid-way stops with the ids so far; a rerun gives duplicates); R9 AC10 (the keys, an exception caught); R10
+      AC9 and AC11 (a script check of the imports and of the absence of open, write, subprocess and clock calls). Unit
+      tests in tests/unit/test_reconcile.py; an end-to-end run over a stand-in repository and a log appended in memory
+      with eventlog.append in tests/integration/test_reconcile_log.py; property tests in
+      tests/property/test_reconcile_properties.py (standard library only, fixed seeds): for random well-formed logs and
+      walks, a second run appends nothing new; every DONE task is either computed or uncovered; no left-out class ever
+      reaches drift. tests/run_tests.py, unchanged, runs all groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9, AC10, AC14]}
+  - {gate: G3, check: constitution, args: [AC11, AC12, AC13, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
