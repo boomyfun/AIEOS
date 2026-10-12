@@ -1,7 +1,7 @@
 """The bootstrap package of gov-AIEOS (tasks TASK-001, TASK-003, TASK-004, TASK-006, TASK-007, TASK-008, TASK-009,
-TASK-016, TASK-021, TASK-022, TASK-023, TASK-024, TASK-025, TASK-026, TASK-027 and TASK-029).
+TASK-016, TASK-021, TASK-022, TASK-023, TASK-024, TASK-025, TASK-026, TASK-027, TASK-029 and TASK-030).
 
-It holds fifteen modules:
+It holds sixteen modules:
 - ``records`` (TASK-001): a checker of the form of event-log lines, records and event payloads of specification 2
   sections 6.1 to 6.4. It reads only the text it is given, writes nothing and decides nothing.
 - ``conformance`` (TASK-003, with TASK-006's Resume Check entry and TASK-017's Risk Engine entry): the conformance runner of
@@ -53,7 +53,12 @@ It holds fifteen modules:
   derivation, and the AC coverage record of the contract version, and appends each once through the writer under an
   event id derived from its record id; the governor takes no value from them; it opens no file itself and reads no
   clock.
+- ``drift`` (TASK-030): the constitution-drift computation of specification 4 section 7 item 1. Given one base
+  commit's facts as values (its changed paths, the articles, the rule results recorded for it and the records of a
+  task evaluated at it), it returns one violation.detected event per article whose scope meets a changed path and
+  whose rule failed there, unless that task already recorded the same failure, and what it could not check; it reads
+  and writes no file and appends nothing.
 """
 
-__all__ = ['ac_coverage', 'ac_tests', 'conformance', 'evaluation', 'eventlog', 'gitread', 'governor', 'records',
-           'recovery', 'resume_check', 'stale', 'startup', 'submit', 'verification_records', 'writer']
+__all__ = ['ac_coverage', 'ac_tests', 'conformance', 'drift', 'evaluation', 'eventlog', 'gitread', 'governor',
+           'records', 'recovery', 'resume_check', 'stale', 'startup', 'submit', 'verification_records', 'writer']
