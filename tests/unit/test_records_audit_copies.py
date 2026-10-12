@@ -88,6 +88,8 @@ class Malformed(unittest.TestCase):
             self.assertFinding(copy_record(outcome=outcome), '6.2:audit_copy_forbidden')
         self.assertFinding(copy_record(outcome='blocking', blocking_kind='other'), '6.2:audit_copy_forbidden')
         self.assertFinding(copy_record(gate='G1'), '6.2:audit_copy_forbidden')
+        alone = copy_record(blocking_kind='other')
+        self.assertIn('6.2:audit_copy_forbidden', [f.rule for f in records.check_audit_copy(alone)])
         self.assertFinding(copy_record(dimension='functional'), '6.2:audit_copy_forbidden')
 
     def test_a_key_on_another_type(self):

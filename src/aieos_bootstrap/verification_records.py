@@ -5,7 +5,8 @@ item 1, 8 and 10; specification 2 revision 4, section 6.2).
 - the risk_class record: the class that the policy's risk rules give for the task's changed paths, computed with
   governor.derive_inputs on the caller's values with the contract's declared risk set to "low", so that a higher
   declared risk, which the governor also uses, does not raise it (the reading of TASK-029 AC2); null when a changed
-  path matches no rule;
+  path matches no rule; a rule that cannot be evaluated matches every path and a class that cannot be read counts as
+  critical, as derive_inputs fails closed;
 - the evidence_profile record: governor.derive_inputs on the values as given, so the profile rests on the governor's
   own risk, which a higher declared risk may raise; the two records may therefore rest on different classes; null
   when the profile cannot be derived;
@@ -17,8 +18,13 @@ or "evidence-profile", the task id, the evaluated commit and the policy version 
 
 ``record_evaluation`` appends each built record once as a record.added event through the core's single writer
 (constitution INV-004), with no fencing token, under an event id that is the SHA-256 hex digest of "record.added" and
-the record id joined by LF, so that a rerun gives the writer's "duplicate". It is called beside evaluation.evaluate_task
-with the same values; neither calls the other.
+the record id joined by LF, so that a rerun with the same content gives the writer's "duplicate"; a rerun with other
+content under the same ids (other values under the same policy version, or another recorder or source class) is
+refused by the writer as a conflict, and record_evaluation reports it as refused. It is called beside
+evaluation.evaluate_task with the same values; neither calls the other. The caller calls record_evaluation before
+evaluate_task: evaluate_task derives its event id from the task's kept records, and the audit copies are records of
+the task, so copies written after an evaluation would give a rerun of that evaluation a new event id instead of a
+duplicate.
 
 Limits (TASK-029 AC12):
 - The values are the writer's statements, not the governor's; the governor's rules and inputs are unchanged and it

@@ -348,29 +348,52 @@ class Governor(unittest.TestCase):
         return {k: v for k, v in record.items() if k not in keys}
 
     def test_well_formed_and_stale_copies_change_no_decision(self):
-        """TASK-029 AC8: over each set, current and earlier-commit copies change nothing but reverify, uncovered and
-        the derived record_id."""
+        """TASK-029 AC8: over each set, in VERIFYING and in IN_REVIEW, current and earlier-commit copies change
+        nothing but reverify, uncovered and the derived record_id; the sets reach rows 1, 2, 3 and 5 and the error
+        record (row 4 is never reached by the governor at L1)."""
         rows = set()
-        for name, rs in SETS.items():
-            base = governor.evaluate(gov_request(), gov_inputs(), copy.deepcopy(rs))
-            rows.add(base.get('table_row'))
-            for extra in (audit(), audit(OLD), audit() + audit(OLD)):
-                got = governor.evaluate(gov_request(), gov_inputs(), copy.deepcopy(rs) + extra)
-                self.assertEqual(self.without(got), self.without(base), name)
-            current = governor.evaluate(gov_request(), gov_inputs(), copy.deepcopy(rs) + audit())
-            if base.get('decision') is not None:
-                self.assertEqual(current, base, name)
-        self.assertGreaterEqual(len(rows), 4, rows)
+        decisions = set()
+        for state in ('VERIFYING', 'IN_REVIEW'):
+            for name, rs in SETS.items():
+                req = gov_request(task_state=state)
+                base = governor.evaluate(req, gov_inputs(), copy.deepcopy(rs))
+                rows.add(base.get('table_row'))
+                decisions.add((base.get('decision'), base.get('next_task_state')))
+                for extra in (audit(), audit(OLD), audit() + audit(OLD)):
+                    got = governor.evaluate(req, gov_inputs(), copy.deepcopy(rs) + extra)
+                    self.assertEqual(self.without(got), self.without(base), (state, name))
+                current = governor.evaluate(req, gov_inputs(), copy.deepcopy(rs) + audit())
+                if base.get('decision') is not None:
+                    self.assertEqual(current, base, (state, name))
+        self.assertEqual(rows, {1, 2, 3, 5, None})
+        self.assertIn(('NEEDS_REVIEW', 'ACCEPTED'), decisions)
 
     def test_malformed_copies_change_no_decision_unless_blocking(self):
-        """TASK-029 AC8: a malformed copy is not used; one that carries outcome blocking still blocks (rule 4)."""
+        """TASK-029 AC8: a malformed copy is not used and is noted; one that carries outcome blocking still blocks
+        (rule 4), with the effect its blocking_kind gives."""
         base = governor.evaluate(gov_request(), gov_inputs(), gates())
-        for change in ({'outcome': 'pass'}, {'outcome': 'fail'}, {'gate': 'G1'}, {'dimension': 'functional'},
-                       {'fact_kind': 'claim'}, {'source_class': 'agent_declared'}, {'risk_class': 'lowish'}):
-            bad = audit(**change)
+
+        def without_key(key):
+            out = audit()
+            for r in out:
+                r.pop(key if key != 'own' else r['evidence_type'], None)
+            return out
+
+        variants = [audit(**change) for change in (
+            {'outcome': 'pass'}, {'outcome': 'fail'}, {'gate': 'G1'}, {'dimension': 'functional'},
+            {'fact_kind': 'claim'}, {'source_class': 'agent_declared'}, {'blocking_kind': 'other'})]
+        variants += [without_key('own'), without_key('commit'), without_key('intent_versions')]
+        other = audit()
+        other[0]['evidence_profile'] = None
+        other[1]['risk_class'] = 'low'
+        variants.append(other)
+        for bad in variants:
+            self.assertTrue(all(records.check_audit_copy(r) for r in bad), bad)
             got = governor.evaluate(gov_request(), gov_inputs(), gates() + bad)
-            self.assertEqual(self.without(got), self.without(base), change)
-            self.assertTrue(any('not used: 6.2:audit_copy' in n for n in got['uncovered']), change)
+            self.assertEqual(self.without(got), self.without(base), bad)
+            for r in bad:
+                self.assertTrue(any(n.startswith(r['record_id'] + ': not used: ') for n in got['uncovered']),
+                                (r['record_id'], got['uncovered']))
         blocked = governor.evaluate(gov_request(), gov_inputs(), gates() + audit(outcome='blocking', blocking_kind='other'))
         self.assertNotEqual(blocked['decision'], base['decision'])
         self.assertTrue(blocked['blocking'])
@@ -379,31 +402,82 @@ class Governor(unittest.TestCase):
         self.assertEqual(rejected['decision'], 'REJECT')
 
 
+ALLOWED_IMPORTS = {'copy', 'hashlib', 'aieos_bootstrap.ac_coverage', 'aieos_bootstrap.governor',
+                   'aieos_bootstrap.records', 'aieos_bootstrap.writer'}
+BAD_NAMES = {'open', 'subprocess', 'os', 'time', 'socket', 'datetime', 'exec', 'eval', 'compile', '__import__',
+             'importlib'}
+BAD_ATTRS = {'environ', 'now', 'system', 'popen', 'run', 'import_module'}
+
+
+def purity_breaches(source):
+    """The breaches of AC10's rule in a source text: imports outside ALLOWED_IMPORTS, and refused names or attributes."""
+    tree = ast.parse(source)
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            found += ['import ' + a.name for a in node.names if a.name not in ALLOWED_IMPORTS]
+        elif isinstance(node, ast.ImportFrom):
+            found += ['import %s.%s' % (node.module, a.name) for a in node.names
+                      if '%s.%s' % (node.module, a.name) not in ALLOWED_IMPORTS]
+        elif isinstance(node, ast.Name) and node.id in BAD_NAMES:
+            found.append('name ' + node.id)
+        elif isinstance(node, ast.Attribute) and node.attr in BAD_ATTRS:
+            found.append('attribute ' + node.attr)
+    return found
+
+
 class Purity(unittest.TestCase):
 
     def test_imports_and_no_forbidden_calls(self):
         """TASK-029 AC10: the module imports only hashlib and copy and four package modules, and names no file,
-        process, clock, environment or network call."""
-        tree = ast.parse(MODULE.read_bytes().decode('utf-8'))
-        imports = set()
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                imports.update(a.name for a in node.names)
-            elif isinstance(node, ast.ImportFrom):
-                imports.update('%s.%s' % (node.module, a.name) for a in node.names)
-        self.assertEqual(imports, {'copy', 'hashlib', 'aieos_bootstrap.ac_coverage', 'aieos_bootstrap.governor',
-                                   'aieos_bootstrap.records', 'aieos_bootstrap.writer'})
-        names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
-        attrs = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
-        for bad in ('open', 'subprocess', 'os', 'time', 'socket', 'datetime', 'exec', 'eval'):
-            self.assertNotIn(bad, names)
-        for bad in ('environ', 'now', 'system', 'popen', 'run'):
-            self.assertNotIn(bad, attrs)
+        process, clock, environment, dynamic import or network call."""
+        source = MODULE.read_bytes().decode('utf-8')
+        self.assertEqual(purity_breaches(source), [])
+        self.assertIn('import hashlib', source)
 
     def test_the_check_finds_a_breach(self):
-        """TASK-029 AC10: the same walk finds an import of os in a changed source."""
-        tree = ast.parse('import os\nos.environ\n')
-        self.assertIn('os', {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names})
+        """TASK-029 AC10: the same check, purity_breaches, refuses the module's source with one breach added."""
+        source = MODULE.read_bytes().decode('utf-8')
+        for added in ('import os\n', 'from importlib import import_module\n', 'x = open\n', 'y = copy.environ\n',
+                      'z = __import__\n', 'w = datetime.now\n'):
+            self.assertTrue(purity_breaches(source + added), added)
+
+
+class FormGuards(unittest.TestCase):
+
+    def test_a_built_record_out_of_form_raises(self):
+        """TASK-029 AC5: build_records refuses when records.check_record finds a built record out of form."""
+        saved = records.check_record
+        records.check_record = lambda r: ['6.2:x: forced']
+        try:
+            with self.assertRaisesRegex(ValueError, 'out of form'):
+                build()
+        finally:
+            records.check_record = saved
+
+    def test_repeated_record_ids_raise(self):
+        """TASK-029 AC5: build_records refuses two built records with the same record_id."""
+        saved = ac_coverage.coverage_record
+        first = build()[0]
+        ac_coverage.coverage_record = lambda *a: dict(first)
+        try:
+            with self.assertRaisesRegex(ValueError, 'same record_id'):
+                build(coverage_contract=coverage(True))
+        finally:
+            ac_coverage.coverage_record = saved
+
+    def test_a_rerun_with_other_content_is_a_refused_conflict(self):
+        """TASK-029 AC6: a rerun under the same ids with another recorder is refused by the writer, reported as
+        refused, store."""
+        log = Log()
+        run(log)
+        before = log.log
+        out = run(log, recorder='other-core')
+        self.assertEqual((out['result'], out['reason']), ('refused', 'store'))
+        self.assertEqual(out['records'][0]['status'], 'not appended')
+        self.assertTrue(out['findings'][0].startswith('store: the writer gave '), out['findings'])
+        self.assertNotIn(out['findings'][0], ("store: the writer gave 'appended'", "store: the writer gave 'duplicate'"))
+        self.assertEqual(log.log, before)
 
 
 if __name__ == '__main__':
