@@ -177,6 +177,11 @@ Occurrences in session 2026-10-12-0215 (../History/2026-10/2026-10-12-0215-the-s
 Occurrences in session 2026-10-12-0333 (../History/2026-10/2026-10-12-0333-release-by-token-accepted-and-the-recovery-contract.md), the refusals each my incorrect command:
 - **2026-10-12 (:256, :516).** A command holding a heredoc (writing a helper script; guard rule R1), and a command holding Python's name followed by a dash (an import probe added to a hashing command; guard rule R2); refused before they ran; not retried in that form (decisions D-604 and D-607).
 
+Occurrences in session 2026-10-12-0833 (../History/2026-10/2026-10-12-0833-recovery-at-start-accepted-and-on-main.md), the refusals each my incorrect command:
+- **2026-10-12 (:512, :664).** A command holding Python's name followed by a dash (to run one test file), and the same form inside a grep search string looking for that line; both refused by guard rule R2 before they ran; not retried in that form (decisions D-622 and D-625).
+- **2026-10-12 (:1244).** A sleep command (`sleep 1;` before a CI listing), against the standing rule; not refused by the guard, and not flagged by the filler check filler_count3.py, a gap of that tool (decision D-625).
+- **2026-10-12 (:1867).** A command written by mistake, holding a heredoc and a command with no effect (`echo skip`); refused by guard rule R1 before it ran; not retried (decision D-629).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

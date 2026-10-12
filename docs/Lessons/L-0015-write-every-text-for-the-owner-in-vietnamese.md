@@ -152,6 +152,9 @@ Occurrences in session 2026-10-12-0215 (../History/2026-10/2026-10-12-0215-the-s
 Occurrences in session 2026-10-12-0333 (../History/2026-10/2026-10-12-0333-release-by-token-accepted-and-the-recovery-contract.md):
 - **2026-10-12 (:255, :574, :1457, :1494, :1739, :1923).** Text blocks in messages holding tool calls (English working notes, and once a Vietnamese status line), all while working between requests to the decision agent; aid (a) stopped the next gated run until each was listed (decisions D-604, D-608, D-614, D-617 and D-619). Four turn-final replies carried only a status line while I waited for background work (:1070, :1118, :1138, :1152); the decision agent ruled the practice (decision D-611 C5).
 
+Occurrences in session 2026-10-12-0833 (../History/2026-10/2026-10-12-0833-recovery-at-start-accepted-and-on-main.md):
+- **2026-10-12 (:1285, :1301, :1821).** English working notes in messages holding tool calls, while preparing the second review round, against the owner's item 5 of this session's prompt ("trong một lượt có chạy lệnh thì không viết chữ nào khác", 2026-10-12, :3); aid (a) stopped the next gated command until both were listed (decision D-625), and from then on any further one stops it until brought to the decision agent (D-625 C2); one more followed at :1821, while preparing the session's end, and was brought to the decision agent (decision D-629).
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 
