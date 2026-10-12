@@ -15,7 +15,9 @@ articles found already; and what it could not check. A malformed input gives an 
   of a constitution article: records.check_record finds nothing, fact_kind "observation", gate "G3", commit equal to
   the base commit, outcome "pass" or "fail", and refers_to equal to the article's id. An applicable article fails
   when a usable result for it fails; one with no usable result is uncovered, never passed. An entry that is not usable
-  by that form (refers_to aside) is named as uncovered and counts as no result.
+  by that form (refers_to aside), a well-formed result of another commit or gate included, is named as uncovered and
+  counts as no result. An entry usable by that form whose refers_to names no article (a CI step text, for example) is
+  counted for no article and not named; each applicable article it leaves without a result is named instead.
 - One finding, not two (AC5): a failing article gives no event when a well-formed observation among the task records
   has gate "G3", refers_to the article's id, commit equal to the base commit and outcome "fail"; a malformed record
   never suppresses a finding.
@@ -32,6 +34,11 @@ Limits (TASK-030 AC7 and AC11):
   a step in refers_to, not an article id, so they count as no result here until the caller maps them.
 - The facts are not checked against Git, the CI or the log. The one-finding rule holds only when the base commit is
   the task's evaluated commit; after a landing that is not a fast-forward the findings are two.
+- The provenance of a rule result or a task record is not judged: its source_class is checked for form only (by
+  records.check_record), so a well-formed observation of any source class counts; which channel a record came
+  through is the caller's to establish (DEF-0051).
+- The scopes come from the constitution at the base; governor.matches is recursive over a pattern's "/" parts, so a
+  pathological scope (about a thousand parts) may raise instead of giving a result.
 - It reads no file, no clock and no environment, and makes no process, network or model call (INV-001 to INV-003).
 """
 

@@ -6,8 +6,9 @@ import copy
 import hashlib
 import pathlib
 import unittest
+from unittest import mock
 
-from aieos_bootstrap import drift, records
+from aieos_bootstrap import drift, governor, records
 
 SRC = pathlib.Path(__file__).resolve().parents[2] / 'src' / 'aieos_bootstrap' / 'drift.py'
 C = 'a' * 40
@@ -56,8 +57,14 @@ class InputForm(unittest.TestCase):
     """R1."""
 
     def test_well_formed_has_no_error(self):
-        """TASK-030 AC1 and TASK-030 AC13: a well-formed input gives error None."""
+        """TASK-030 AC1 and TASK-030 AC13: a well-formed input gives error None, with a 40-character and with a
+        64-character base commit."""
         self.assertIsNone(drift.violations(inputs())['error'])
+        long_commit = 'c' * 64
+        res = drift.violations(inputs(base_commit=long_commit,
+                                      rule_results=[result('SEC-001', 'fail', commit=long_commit)]))
+        self.assertIsNone(res['error'])
+        self.assertEqual(res['events'][0]['payload']['commit'], long_commit)
 
     def test_each_malformed_form_names_its_key(self):
         """TASK-030 AC1 and TASK-030 AC8 and TASK-030 AC13: each malformed form gives an error naming its key, no event,
@@ -129,6 +136,24 @@ class Articles(unittest.TestCase):
         two = drift.violations(inputs(changed_paths=['src/a/b.py'], articles=[{'id': 'INV-001', 'scope': ['src/**']}],
                                       rule_results=[result('INV-001', 'fail')]))
         self.assertEqual((arts(one), arts(two)), ([], ['INV-001']))
+
+    def test_governor_matches_is_the_function_called(self):
+        """TASK-030 AC2 and TASK-030 AC13: the selection goes through governor.matches itself: a stand-in that matches
+        nothing removes every evaluable article, and the real function is called with (pattern, path) pairs."""
+        calls = []
+        real = governor.matches
+
+        def spy(pattern, path):
+            calls.append((pattern, path))
+            return real(pattern, path)
+
+        with mock.patch.object(governor, 'matches', spy):
+            res = drift.violations(inputs())
+        self.assertIn(('src/**', 'src/x.py'), calls)
+        self.assertEqual(arts(res), ['SEC-001'])
+        with mock.patch.object(governor, 'matches', lambda pattern, path: False):
+            none = drift.violations(inputs())
+        self.assertEqual((none['events'], none['uncovered']), ([], []))
 
     def test_other_article_keys_are_not_read(self):
         """TASK-030 AC2 and TASK-030 AC13: an applicability by task type does not stop an article from applying."""

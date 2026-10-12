@@ -56,7 +56,9 @@ class Properties(unittest.TestCase):
     def test_events_and_partition(self):
         """TASK-030 AC2 and TASK-030 AC3 and TASK-030 AC5 and TASK-030 AC6 and TASK-030 AC13: every event's article
         applies, has a usable failing result and is not in already; every applicable article falls in exactly one of
-        events, already, passed or uncovered by "no rule result"."""
+        events, already, passed or uncovered by "no rule result"; already is exactly the failing articles that a
+        well-formed failing task record matches, the events exactly the others; and the samples give both."""
+        seen = {'events': 0, 'already': 0}
         for seed in SEEDS:
             rng = random.Random(seed)
             for _ in range(ROUNDS):
@@ -79,6 +81,13 @@ class Properties(unittest.TestCase):
                 for a in app:
                     groups = [a in ev, a in res['already'], a in passed, a in none]
                     self.assertEqual(sum(groups), 1, (seed, a, groups))
+                failing = {a for a in app if 'fail' in outcomes.get(a, set())}
+                matched = {r['refers_to'] for r in i['task_records'] if usable(r, c) and r['outcome'] == 'fail'}
+                self.assertEqual(res['already'], sorted(failing & matched))
+                self.assertEqual(ev, failing - matched)
+                seen['events'] += len(ev)
+                seen['already'] += len(res['already'])
+        self.assertTrue(seen['events'] > 0 and seen['already'] > 0, seen)
 
     def test_order_does_not_matter(self):
         """TASK-030 AC8 and TASK-030 AC13: shuffling the articles, the rule results and the task records gives the same
