@@ -23,8 +23,9 @@
    writer.expire_leases.
 
 The result (AC10) is a mapping with exactly the keys result ("recovered", "partial" or "refused"), reason, findings,
-appended, released, expired and left_out. An exception raised by an injected function, or by reading what it returns,
-is caught and becomes a result; none escapes.
+appended, released, expired and left_out; ``appended`` lists the event_ids the writer gave "appended" or "duplicate"
+for, so an event a stopped earlier run already appended is listed too. An exception raised by an injected function, or
+by reading what it returns, is caught and becomes a result; none escapes.
 
 ``read``, ``read_log``, ``append``, ``leases``, ``release`` and ``expire`` default, at call time, to gitread.run,
 writer.read_log, writer.append_event, writer.held_leases, writer.release_lease_token and writer.expire_leases (AC9);
@@ -34,7 +35,7 @@ Purity (AC12): this module starts no process except through ``read``, opens no f
 environment variable, grants no lease, creates no store (it never calls open_store, so DEF-0041 (c), never giving an
 earlier store's epoch to a recreated store, does not apply), and builds no event-log line itself.
 
-Readings (the implementer's, for the decision agent's ruling, not the contract's own words):
+Readings (the implementer's, not the contract's own words; approved by the decision agent in decision D-622):
 - A commit or parent id that is not 40 lowercase hexadecimal characters (a SHA-256 repository) is refused as a read
   that fails, reason "git", since recovery.reconcile takes 40-hex commit ids only.
 - A read of the log or of the leases that raises, or a reconcile that raises, gives "refused" with reason "store";
@@ -327,8 +328,13 @@ def recover(root, repo, recorder, now, head=None, max_commits=DEFAULT_MAX_COMMIT
     except Exception as exc:  # AC10
         return ended('partial', 'store', ['store: reading the log\'s submissions raised %s' % type(exc).__name__])
     for lease in held:
-        task_id, token = lease['task_id'], lease['fencing_token']
-        if (task_id, _token_text(token)) not in named:
+        try:
+            task_id, token = lease['task_id'], lease['fencing_token']
+            if (task_id, _token_text(token)) not in named:
+                continue
+        except Exception as exc:  # AC10: a lease whose task cannot be compared (for example an unhashable task_id)
+            out['findings'].append('store: a held lease could not be compared with the logged submissions (%s); it '
+                                   'is not released' % type(exc).__name__)
             continue
         try:
             rel = release(root, task_id, token)

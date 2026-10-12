@@ -6,12 +6,12 @@ the caller gives, it touches exactly two files (AC1):
 
 - ``<root>/.aieos/events.jsonl``, the event log: ``append_event`` reads its bytes, lets ``eventlog.append`` (TASK-007,
   as TASK-015 left it) decide the one line to append, appends exactly that line, flushes and syncs it, and reads the
-  file back (AC2); a fence refusal is recorded as its own ``record.added`` event (AC3);
+  file back (AC2); a fence refusal is recorded as its own ``record.added`` event (AC3); ``read_log`` returns the
+  log's bytes, or empty bytes when it is absent, and creates nothing (TASK-026);
 - ``<root>/.aieos/local/state.sqlite``, the local store of the fence's epoch and counter, the leases and the sessions
   (AC4 to AC7), with SQLite's own rollback journal ``state.sqlite-journal`` beside it, which SQLite creates and removes
   during a transaction (the default rollback journal mode; no WAL); ``release_lease_token`` releases a lease only for
-  its own fencing token (TASK-028). ``read_log`` returns the log's bytes, or empty bytes when it is absent, and
-  creates nothing (TASK-026).
+  its own fencing token (TASK-028).
 
 Every time is an argument, a timezone-aware datetime in UTC with whole seconds; the clock is read nowhere. The store's
 times are ISO 8601 text with "Z" as specification 2 section 6.1 writes them.

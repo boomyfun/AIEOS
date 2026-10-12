@@ -268,6 +268,7 @@ class R2Walk(unittest.TestCase):
         store = Store()
         r, _ = run(table, cid(2), store)
         self.assertEqual((r['result'], r['reason']), ('refused', 'git'))
+        self.assertTrue(any('parent that is not 40' in f for f in r['findings']), r['findings'])
         self.assertEqual(store.calls, [])
 
     def test_bound(self):
@@ -286,7 +287,7 @@ class R2Walk(unittest.TestCase):
 class R3OrderAndBody(unittest.TestCase):
     """TASK-026's R3: AC3."""
 
-    def given(self, table, head):
+    def given(self, table, head, store=None):
         seen = []
 
         def spy(log, commits, leases, now, recorder):
@@ -295,7 +296,7 @@ class R3OrderAndBody(unittest.TestCase):
         original = recovery.reconcile
         recovery.reconcile = spy
         try:
-            r, _ = run(table, head, Store())
+            r, _ = run(table, head, store if store is not None else Store())
         finally:
             recovery.reconcile = original
         return r, seen[0]
@@ -320,7 +321,7 @@ class R3OrderAndBody(unittest.TestCase):
             with self.subTest(message=message):
                 table = {cid(1): ([], message)}
                 store = Store()
-                r, commits = self.given(table, cid(1))
+                r, commits = self.given(table, cid(1), store)
                 self.assertEqual(commits, [])
                 self.assertEqual(r['left_out'], [cid(1)])
                 self.assertTrue(any(cid(1) in f and f.startswith('left out: ') for f in r['findings']))
@@ -447,12 +448,13 @@ class R6Release(unittest.TestCase):
         self.assertEqual(r['released'], [LEASE])
 
     def test_other_token_or_task_not_released(self):
-        """TASK-026 AC6 and TASK-026 AC15: a held lease of another token, or of a task no task.submitted names, is not
-        released; no release for an observation."""
+        """TASK-026 AC6 and TASK-026 AC15: a held lease of another token, of a task no task.submitted names, or of
+        another task with the submitted token, is not released; no release for an observation."""
         other_token = {'task_id': TASK, 'fencing_token': {'epoch': 'e0', 'counter': 4}, 'expires_at': NOW + H1}
         other_task = {'task_id': 'TASK-099', 'fencing_token': {'epoch': 'e0', 'counter': 5}, 'expires_at': NOW + H1}
+        same_token = {'task_id': 'TASK-098', 'fencing_token': FENCE, 'expires_at': NOW + H1}
         table, head = line_history(PLAIN, UNFENCED)
-        store = Store(log=submitted_line(cid(9)), leases=[other_token, other_task])
+        store = Store(log=submitted_line(cid(9)), leases=[other_token, other_task, same_token])
         r, _ = run(table, head, store)
         self.assertEqual(r['result'], 'recovered')
         self.assertNotIn('release', store.names())
@@ -641,8 +643,28 @@ class R10Result(unittest.TestCase):
         store = Store(leases=[LEASE])
         r = startup.recover(FS_ROOT, REPO, REC, NOW, read=Repo(table, head), read_log=store.read_log,
                             append=lambda *a, **k: object(), leases=store.held, release=store.release,
+                            expire=store.expire)
+        self.assertEqual((r['result'], r['reason']), ('partial', 'store'))
+        self.assertNotIn('expire', store.names())
+        store = Store(leases=[LEASE])
+        r = startup.recover(FS_ROOT, REPO, REC, NOW, read=Repo(table, head), read_log=store.read_log,
+                            append=store.append, leases=store.held, release=store.release,
                             expire=lambda root, now: 7)
         self.assertEqual((r['result'], r['reason']), ('partial', 'store'))
+        self.assertTrue(any('expiry raised TypeError' in f for f in r['findings']), r['findings'])
+
+    def test_a_lease_whose_task_cannot_be_compared_does_not_escape(self):
+        """TASK-026 AC10 and TASK-026 AC15 (decision D-622, F1): a held lease whose task_id cannot be hashed (a list)
+        gives a finding and is not released, the other lease is still released, and no exception escapes."""
+        odd = {'task_id': ['TASK-026'], 'fencing_token': FENCE, 'expires_at': NOW + H1}
+        table, head = line_history(PLAIN, FENCED)
+        store = Store(leases=[odd, LEASE])
+        r, _ = run(table, head, store)
+        self.assertEqual(set(r), startup.RESULT_KEYS)
+        self.assertEqual(r['result'], 'recovered')
+        self.assertTrue(any('could not be compared' in f and 'TypeError' in f for f in r['findings']), r['findings'])
+        self.assertEqual([c for c in store.calls if c[0] == 'release'], [('release', TASK, FENCE)])
+        self.assertEqual(r['released'], [LEASE])
 
     def test_bad_leases_from_the_store_refused(self):
         """TASK-026 AC10 and TASK-026 AC15: leases out of form make reconcile raise; the result is refused, reason
