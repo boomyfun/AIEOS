@@ -158,6 +158,10 @@ Occurrences in session 2026-10-12-0833 (../History/2026-10/2026-10-12-0833-recov
 Occurrences in session 2026-10-12-0944 (../History/2026-10/2026-10-12-0944-the-evaluation-path-accepted-and-on-main.md):
 - **2026-10-12 (:196, :545, :668, :758, :1168, :1400, :1508, :1673).** Eight short English working notes in messages holding tool calls, each right after a harness note asking what was being done, against the owner's item 5 of this session's prompt and decision D-625 C2, then D-632 C4 and D-636's rule (a); each brought to the decision agent and listed before the next gated command, and from D-636 on the owner told the running count in each turn-final reply (decisions D-632 to D-640).
 
+Occurrences in session 2026-10-12-1122 (../History/2026-10/2026-10-12-1122-the-audit-copies-accepted-and-on-main.md):
+- **2026-10-12 (:170, :182, :274, :1062, :1229, :1437, :1595, :1615).** Eight short English working notes in messages holding tool calls, each right after a harness note asking what was being done, :1595 written while waiting for a reviewer, against the owner's item 5 of this session's prompt ("kể cả khi đang chờ hay khi được nhắc báo đang làm gì") and decision D-632 C4's carried rule; each brought to the decision agent and listed before the next gated command, the owner told the running count; decision D-656 C4's check before every tool call did not hold for the last two (decisions D-644 to D-657).
+- **2026-10-12 (before :1230).** Turn-final progress replies sent without a draft_check2 run (decisions D-575 and D-577); all were in Vietnamese; from decision D-655 C3 on, every turn-final reply was checked and confirmed by line_sent.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

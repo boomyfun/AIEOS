@@ -186,6 +186,10 @@ Occurrences in session 2026-10-12-0944 (../History/2026-10/2026-10-12-0944-the-e
 - **2026-10-12 (:158, :759, :1071).** A Python run with timeout 100 (refused by guard rule R3, re-issued with timeout 110), and two commands holding Python's name followed by a dash, one a placeholder of no effect and one at the head of a CI read (both refused by R2; not retried in that form) (decisions D-632, D-636 and D-638).
 - **2026-10-12 (:309, :638, :1113).** A guard-forbidden string inside a grep pattern, an `rm` of a scratch file the same call had made (not stopped by the guard; against the standing rule), and a no-effect grep inside a broken loop; the first and the last flagged by filler_count3.py, which matches text rather than commands run (decisions D-632, D-635 and D-638).
 
+Occurrences in session 2026-10-12-1122 (../History/2026-10/2026-10-12-1122-the-audit-copies-accepted-and-on-main.md):
+- **2026-10-12 (:319).** The app's safety classifier stopped a response while I wrote a request file for the decision agent; the file was left cut off. I did not retry or reword it and asked the owner, who answered "có" (:329) to bringing it to the decision agent; the agent chose short inline requests and its own reading of the built files (decision D-644). No further stop followed.
+- **2026-10-12 (:1155, :1251).** A `git fetch` of origin main inside a CI read, run without a decision (it wrote FETCH_HEAD and changed no branch ref; decision D-655 C2: the remote is read with `git ls-remote` only), and a command of no effect holding Python's name followed by a dash, refused by guard rule R2 and not retried (decision D-655).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
