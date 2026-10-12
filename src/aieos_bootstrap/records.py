@@ -38,6 +38,14 @@ Limits (TASK-001 AC7):
   - of delta, signatures, uncovered and state_effect only that each is a list, and of read_set, dependencies,
     constitution, runtime and budgets only that each is an object, is checked, not the forms inside.
   No Resume Check exists until TASK-008, so no real execution record is checked by this module yet.
+- The audit copies of specification 2 revision 4 (TASK-029 AC7): the record keys risk_class and evidence_profile, and
+  the form rules of a record whose evidence_type is risk_class or evidence_profile: fact_kind observation; source_class
+  deterministic_tool_local or deterministic_tool_external_ci; its own key, whose value is null or, for risk_class, one
+  of low, medium, high and critical, or, for evidence_profile, a list of objects with exactly dimension (a non-empty
+  string) and evidence_types (a list of non-empty strings); not the other key; commit and intent_versions present; no
+  outcome, gate, blocking_kind or dimension. A record of any other evidence_type that carries either key is out of
+  form too. These findings all begin "6.2:audit_copy", and a record that carries neither key and neither name gets
+  none of them. The values are the writer's statements and are not checked beyond their form.
 - record_id is checked as a non-empty string; whether it is unique across a log is not checked. evidence_type and
   dimension are open vocabularies, checked as non-empty strings only.
 - An ignored duplicate is reported as such whether or not the line it repeats has findings of its own.
@@ -70,7 +78,12 @@ BINDING_KINDS = frozenset({'contract', 'acceptance', 'change_request', 'baseline
 RECORD_REQUIRED = ('record_id', 'fact_kind', 'source_class', 'recorder', 'subject')
 RECORD_KEYS = frozenset(RECORD_REQUIRED + (
     'evidence_type', 'dimension', 'gate', 'outcome', 'blocking_kind', 'commit', 'intent_versions', 'approval_binding',
-    'decision_ref', 'models', 'basis', 'stands_for', 'refers_to'))
+    'decision_ref', 'models', 'basis', 'stands_for', 'refers_to', 'risk_class', 'evidence_profile'))
+# The audit copies of specification 2 revision 4 (TASK-029 AC7).
+AUDIT_COPY_TYPES = ('risk_class', 'evidence_profile')
+AUDIT_COPY_SOURCES = frozenset({'deterministic_tool_local', 'deterministic_tool_external_ci'})
+AUDIT_COPY_FORBIDDEN = ('outcome', 'gate', 'blocking_kind', 'dimension')
+RISK_CLASSES = frozenset({'low', 'medium', 'high', 'critical'})
 ACCEPTANCE_DECISIONS = frozenset({'ACCEPT', 'NEEDS_REVIEW', 'INSUFFICIENT_EVIDENCE', 'NEEDS_REWORK', 'REJECT'})
 EXECUTION_DECISIONS = frozenset({
     'CONTINUE', 'CONTINUE_WITH', 'REPLAN', 'STOP: scope invalid', 'STOP: runtime insufficient', 'STOP: violation',
@@ -285,6 +298,49 @@ def check_record(record, extra_keys=frozenset(), where='record', section='6.2'):
     for key in ('evidence_type', 'dimension', 'refers_to'):
         if key in record and not _is_str(record[key]):
             findings.append(Finding('6.2:' + key, '%s %r is not a non-empty string' % (where, key)))
+    findings.extend(check_audit_copy(record, where))
+    return findings
+
+
+def _is_audit_value(kind, value):
+    if value is None:
+        return True
+    if kind == 'risk_class':
+        return _in(RISK_CLASSES, value)
+    return isinstance(value, list) and all(
+        isinstance(e, dict) and set(e) == {'dimension', 'evidence_types'} and _is_str(e['dimension'])
+        and _is_str_list(e['evidence_types']) for e in value)
+
+
+def check_audit_copy(record, where='record'):
+    """The audit-copy rules of specification 2 revision 4 (TASK-029 AC7), for one record (a dict). Every finding's rule
+    begins "6.2:audit_copy"; a record that carries neither key and neither evidence_type name gets none."""
+    findings = []
+    kind = record.get('evidence_type')
+    if not _in(frozenset(AUDIT_COPY_TYPES), kind):
+        for key in AUDIT_COPY_TYPES:
+            if key in record:
+                findings.append(Finding('6.2:audit_copy_key', '%s carries %r, but its evidence_type is not %r'
+                                        % (where, key, key)))
+        return findings
+    other = AUDIT_COPY_TYPES[1] if kind == AUDIT_COPY_TYPES[0] else AUDIT_COPY_TYPES[0]
+    if record.get('fact_kind') != 'observation':
+        findings.append(Finding('6.2:audit_copy_fact_kind', '%s is an audit copy whose fact_kind is not observation' % where))
+    if not _in(AUDIT_COPY_SOURCES, record.get('source_class')):
+        findings.append(Finding('6.2:audit_copy_source_class', '%s is an audit copy whose source_class is neither '
+                                'deterministic_tool_local nor deterministic_tool_external_ci' % where))
+    if kind not in record:
+        findings.append(Finding('6.2:audit_copy_key', '%s is a %s audit copy that lacks its key %r' % (where, kind, kind)))
+    elif not _is_audit_value(kind, record[kind]):
+        findings.append(Finding('6.2:audit_copy_value', '%s %r is not null or a value of its form' % (where, kind)))
+    if other in record:
+        findings.append(Finding('6.2:audit_copy_key', '%s is a %s audit copy that carries %r' % (where, kind, other)))
+    for key in ('commit', 'intent_versions'):
+        if key not in record:
+            findings.append(Finding('6.2:audit_copy_binding', '%s is an audit copy that lacks %r' % (where, key)))
+    for key in AUDIT_COPY_FORBIDDEN:
+        if key in record:
+            findings.append(Finding('6.2:audit_copy_forbidden', '%s is an audit copy that carries %r' % (where, key)))
     return findings
 
 

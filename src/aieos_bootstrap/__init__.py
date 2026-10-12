@@ -1,7 +1,7 @@
 """The bootstrap package of gov-AIEOS (tasks TASK-001, TASK-003, TASK-004, TASK-006, TASK-007, TASK-008, TASK-009,
-TASK-016, TASK-021, TASK-022, TASK-023, TASK-024, TASK-025, TASK-026 and TASK-027).
+TASK-016, TASK-021, TASK-022, TASK-023, TASK-024, TASK-025, TASK-026, TASK-027 and TASK-029).
 
-It holds fourteen modules:
+It holds fifteen modules:
 - ``records`` (TASK-001): a checker of the form of event-log lines, records and event payloads of specification 2
   sections 6.1 to 6.4. It reads only the text it is given, writes nothing and decides nothing.
 - ``conformance`` (TASK-003, with TASK-006's Resume Check entry and TASK-017's Risk Engine entry): the conformance runner of
@@ -48,7 +48,12 @@ It holds fourteen modules:
   bytes against the approved hash, walks the task's commits through gitread and takes the union of their paths, calls
   the governor, and appends its decision through the writer under a derived event id; it opens no file itself and
   reads no clock.
+- ``verification_records`` (TASK-029): the audit copies of specification 4 section 10. For one task at an evaluated
+  commit it builds the risk_class and evidence_profile records of specification 2 revision 4 with the governor's own
+  derivation, and the AC coverage record of the contract version, and appends each once through the writer under an
+  event id derived from its record id; the governor takes no value from them; it opens no file itself and reads no
+  clock.
 """
 
 __all__ = ['ac_coverage', 'ac_tests', 'conformance', 'evaluation', 'eventlog', 'gitread', 'governor', 'records',
-           'recovery', 'resume_check', 'stale', 'startup', 'submit', 'writer']
+           'recovery', 'resume_check', 'stale', 'startup', 'submit', 'verification_records', 'writer']
