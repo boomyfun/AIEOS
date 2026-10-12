@@ -1,0 +1,337 @@
+# Task contract TASK-029, the audit copies of specification 4 section 10 (Master Plan revision 3, §4 M4; specification
+# 4 sections 4, 6, 8 and 10; specification 2 revision 4, section 6.2). Revision 0, drafted under decisions D-646 (the
+# choice of the step), D-647 (the scope note, its order and its rulings), D-652 (C4) and the approval of specification 2
+# revision 4 (DM F37), brought for approval in its own request; whether it is approved is recorded in the decision
+# files, not in this file. Fields and value forms follow specification 2 §5.1 and the contracts of TASK-021 to
+# TASK-028. Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# Task type: implementation. What it adds:
+# - one module, src/aieos_bootstrap/verification_records.py: a pure builder, build_records, of the audit copies that
+#   specification 4 section 10 asks to be written at an evaluated commit (the risk class of section 8 and the evidence
+#   profile of section 4 item 1, in specification 2 revision 4's form) and of the AC coverage record of section 6
+#   item 1 for the contract version (ac_coverage.coverage_record, unchanged); and a small caller, record_evaluation,
+#   that appends each built record once as a record.added event through the single writer (INV-004), under an event
+#   id derived from the record id, so that a rerun gives the writer's "duplicate";
+# - in src/aieos_bootstrap/records.py, the two keys of specification 2 revision 4 and its audit-copy form rules in
+#   check_record, so that revision 4's "once a task extends it" is met (decision D-652 C4);
+# - the package docstring and __all__.
+# The values come from accepted modules, computed again on the caller's values: the risk class from
+# governor.derive_inputs with the contract's declared risk set to low (reading: the class the policy's rules give,
+# without a higher declared risk, which is the governor's, specification 2 revision 4 section 6.2); the profile from
+# governor.derive_inputs on the values as given; the AC coverage from ac_coverage.check and coverage_record. The caller
+# of evaluate_task calls record_evaluation beside it with the same values (decision D-647 C2); neither calls the other.
+# What it does not do (decisions D-647 and D-652): no change to governor.py or evaluation.py, so the governor reads and
+# counts as before and takes no value from these keys (specification 4 §12 point 10 stays open); no evidence.stale
+# event and no reconciliation (specification 4 §3 and §7: a later task, with §7 item 1); no constitution or scope
+# drift; no lease, no state effect, no task state change (DEF-0030 stays open); no run or write in the CI channel; no
+# Git read or write; no file opened except through the writer's functions; no process, network, clock, environment or
+# model call; nothing under .github/ and no workflow change; no policy; no frozen fixture.
+# Revision 3's keys (decision D-647 C3): records.py does not gain session, ci_run and acs in this task. Allowing them
+# would make records that carry them usable before specification 2 section 10 point 11 (how a record's class is
+# checked against its channel) is settled; DEF-0051 puts their use after the core's submission path and a specification
+# 2 revision that settles point 11, then "a later task implements the check"
+# (docs/Deferred/DEF-0051-the-derived-channel.md:24). A limit, stated in AC12.
+# Readers of the changed paths (D-263 C3's practice): records.check_record is called by records.check_log (every
+# record.added, violation.detected and decision event of a log), by the governor's record sort, by evaluation.py's
+# kept records and by ac_coverage.coverage_record; the new rules apply only to records that carry either key or either
+# reserved evidence_type name, which no record at the base carries (checked by script over docs/records/ in the
+# contract request), so every earlier record's findings stay as they were (AC7). src/aieos_bootstrap/__init__.py is
+# read by every module that imports the package and by the CI's G1 build. No module of the repository calls
+# record_evaluation yet.
+# Risk: high, and change class critical_cr, each computed over the base by script (risk_class29.py and
+# gov003_class29.py of the drafting session: every path matches R2 and R3's not-evaluable reading, class high; all six
+# paths are GOV-003 evaluator paths). Profile (assurance-model.md §5, gov-AIEOS, high): functional [unit_test],
+# architecture [deterministic_rule], functional [integration_test], security [static_security_analysis] and
+# architecture [ai_review (cross-model)], plus the evidence_required of the applicable articles.
+# Reviews (as TASK-025 to TASK-028): five way-2 reviews by a Claude model other than the implementer's, and the
+# decision agent's three, each brief naming for testing: the two values and their reading (the declared risk set to
+# low); the record forms against specification 2 revision 4; the record ids and the event ids; the AC coverage record
+# unchanged; that the governor's decision is the same with and without the audit copies; the records.py rules and that
+# no earlier record's findings change; the caller's results, duplicates and refusals; that no exception escapes the
+# caller; the limits of AC12.
+# Naming: every test this task adds names the AC ids it stands for as "TASK-029 ACn" in its own docstring, following
+# DEF-0049's convention.
+# Evaluation path (A61; as TASK-007 to TASK-028): commit C changes only docs/tasks/TASK-029.yaml and has one parent
+# equal to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-029", go to task/TASK-029 under their own
+# decisions; main receives the task only at its acceptance. The task push's CI base run is a RISK-01 conformance run
+# over the set file of DM F35, reported advisory, never MEASURED.
+# Not applicable: OPS-001 (the task changes no ref and reads no Git); INV-005 to INV-008, INV-010 and INV-011 (the
+# decision engine, the governor's module, evidence records, the replay and the policy meet no path of the write-set;
+# records.py is the record checker, not an evidence record); GOV-001, GOV-004 to GOV-006 and SEC-003 (the concept
+# file, the bound artifacts, the decision matrix, the records and pre-genesis documents, and .github/, meet no path of
+# the write-set).
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting, no push of its own; it weakens no evidence requirement (CR-002 part 4 limit 8 does not apply:
+# the governor's rules and inputs are unchanged, and the new records satisfy no entry), so its acceptance is one
+# delegated approval of the decision agent (Master Plan section 6), for the decision agent's ruling.
+task: TASK-029
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add a standard-library Python 3 module, src/aieos_bootstrap/verification_records.py, with build_records, a pure
+  builder of the audit copies of specification 4 section 10 at an evaluated commit (a risk_class record and an
+  evidence_profile record, in specification 2 revision 4's form, their values computed with governor.derive_inputs)
+  and of the AC coverage record of the contract version (ac_coverage.check and coverage_record, unchanged), and
+  record_evaluation, which appends each built record once as record.added through writer.append_event under an event
+  id derived from its record id; extend records.check_record with the two keys and the audit-copy form rules of
+  specification 2 revision 4; with unit and property tests, each naming its AC ids as "TASK-029 ACn".
+traces_to:
+  - docs/specs/spec-04-verification-and-evidence.md#4
+  - docs/specs/spec-04-verification-and-evidence.md#6
+  - docs/specs/spec-04-verification-and-evidence.md#8
+  - docs/specs/spec-04-verification-and-evidence.md#10
+  - docs/specs/spec-02-aieos-file-format.md#2
+  - docs/specs/spec-02-aieos-file-format.md#6.2
+  - docs/specs/spec-02-aieos-file-format.md#6.3
+  - docs/pre-genesis/governor-spec.md#4
+  - docs/pre-genesis/constitution.md#INV-001
+  - docs/pre-genesis/constitution.md#INV-004
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-029.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id.
+  base_commit: c517afe8dc56a8d5c067bf34d7debeedf8c97be5
+  depends_on: [TASK-004, TASK-011, TASK-015, TASK-016, TASK-021, TASK-027]
+  intent_versions:
+    docs/specs/spec-02-aieos-file-format.md: 80c91e47ef0a1dbe7f77c677cd2261d5b5ede20bcb0735cf06438bddbde85f8b
+    docs/specs/spec-04-verification-and-evidence.md: 48d4f5bf06461ad49409f21bc6ea8d511d17a84eaac15adda14277483176a8d5
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # Two modified paths (records.py, and the package docstring and __all__); every other path is new.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/verification_records.py
+    - tests/unit/test_records_audit_copies.py
+    - tests/unit/test_verification_records.py
+    - tests/property/test_verification_records_properties.py
+read_set:
+  paths:
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-04-verification-and-evidence.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/Deferred/DEF-0030-event-log-writer-and-workflow-revision-6.md
+    - docs/Deferred/DEF-0051-the-derived-channel.md
+    - docs/Deferred/DEF-0055-the-review-findings-and-limits-carried-from-task-027.md
+    - docs/records/**
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/unit/**
+    - tests/property/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.governor.derive_inputs, aieos_bootstrap.governor.evaluate, aieos_bootstrap.ac_coverage.check, aieos_bootstrap.ac_coverage.coverage_record, aieos_bootstrap.records.check_record, aieos_bootstrap.records.check_log, aieos_bootstrap.writer.append_event, aieos_bootstrap.eventlog.append]
+  schemas: [spec-02 records (6.2), spec-02 event envelope (6.1), spec-02 payloads (6.3)]
+forbidden:
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/writer.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_writer_properties.py
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The builder's interface. build_records(task_id, contract_version, evaluated_commit, intent_versions, values,
+      coverage_contract, recorder, source_class='deterministic_tool_local') takes task_id, a str of the form
+      TASK-<digits>; contract_version, "v" followed by digits; evaluated_commit, a full lowercase hex commit id (40 or
+      64 digits); intent_versions, a non-empty dict from non-empty str ids to "v" followed by digits (the form
+      records.check_record accepts); values, a dict in governor.derive_inputs's form whose policy_version is a
+      non-empty str; coverage_contract, the contract mapping ac_coverage.check reads; recorder, a non-empty str;
+      source_class, deterministic_tool_local or deterministic_tool_external_ci. It returns a list of records in the
+      order risk_class, evidence_profile, then the AC coverage record when there is one. Any other value, or
+      governor.derive_inputs raising, raises ValueError naming the argument or the step, and nothing is returned. It
+      reads no file, clock or environment and changes none of its arguments.
+  - AC2: >-
+      The risk_class record. Its value is governor.derive_inputs(values with the contract's risk set to "low")["risk"]
+      (reading: the class the policy's rules give, without a higher declared risk), one of low, medium, high and
+      critical, or None where derive_inputs gives none. The record has exactly the keys record_id, fact_kind
+      "observation", source_class, recorder, subject (task_id), evidence_type "risk_class", risk_class (the value, None
+      written as null), commit (evaluated_commit) and intent_versions (a copy of the argument); record_id is the
+      SHA-256 hex digest of "risk-class", task_id, evaluated_commit and values["policy_version"] joined by LF.
+  - AC3: >-
+      The evidence_profile record. Its value is governor.derive_inputs(values)["evidence_profile"], a list of
+      {dimension, evidence_types} copied so that changing the record changes nothing else, or None where derive_inputs
+      gives none. The record has exactly the keys of AC2 with evidence_type "evidence_profile" and the key
+      evidence_profile in place of risk_class; record_id is the SHA-256 hex digest of "evidence-profile", task_id,
+      evaluated_commit and values["policy_version"] joined by LF.
+  - AC4: >-
+      The AC coverage record. ac_coverage.check(coverage_contract) gives the findings, and
+      ac_coverage.coverage_record(task_id, contract_version, findings, recorder, source_class) the record, both
+      called unchanged; it is in the list only when that record is not None (there are findings). Its record_id is
+      coverage_record's own (once per task and contract version, specification 4 §10).
+  - AC5: >-
+      Form. Every record build_records returns gives no finding from records.check_record as extended by AC7, and the
+      record ids in one list are distinct.
+  - AC6: >-
+      The caller. record_evaluation(root, task_id, contract_version, evaluated_commit, intent_versions, values,
+      coverage_contract, recorder, now, source_class='deterministic_tool_local', append=None) calls build_records
+      with its arguments; a ValueError from it gives result "refused", reason "argument", with a finding, and append
+      is not called. Otherwise, for each record in order, it calls append(root, "record.added", record, event_id,
+      now, recorder, task_id=task_id), with no fencing token, where event_id is the SHA-256 hex digest of
+      "record.added" and the record_id joined by LF; a writer result "appended" is reported as appended and
+      "duplicate" as already written; any other result, a result whose "result" is not a str, or append raising,
+      stops the loop with result "refused", reason "store" and the writer's findings, and the records after it are
+      not appended. append defaults, at call time, to writer.append_event. It returns a dict with exactly the keys
+      result ("written" when every record was appended or already written, else "refused"), reason (None, "argument"
+      or "store"), records (per record, its record_id, event_id and "appended", "duplicate" or "not appended") and
+      findings (a list of str); no exception escapes it. now is passed through as the writer takes it.
+  - AC7: >-
+      records.py. RECORD_KEYS gains risk_class and evidence_profile. check_record gives a finding, under rule names
+      beginning "6.2:audit_copy", for a record whose evidence_type is risk_class or evidence_profile and whose
+      fact_kind is not observation; whose source_class is neither deterministic_tool_local nor
+      deterministic_tool_external_ci; that lacks its own key, or carries the other one; whose key's value is not
+      null or, for risk_class, one of low, medium, high and critical, or, for evidence_profile, a list of mappings
+      with exactly the keys dimension (a non-empty str) and evidence_types (a list of non-empty str); that lacks
+      commit or intent_versions; or that carries outcome, gate, blocking_kind or dimension. A record of any other
+      evidence_type, or with none, that carries risk_class or evidence_profile gets a finding too. The new rules are
+      one helper whose findings all begin "6.2:audit_copy" and which gives none for a record that carries neither key
+      and neither name, so check_record's findings for such a record are those of the rules it had at base_commit: the
+      existing tests pass unchanged, and a test runs the helper over every record of every docs/records/*.jsonl file
+      (read with Path.read_bytes, as the existing tests read repository files) and finds none.
+  - AC8: >-
+      The governor is unchanged in what it decides. For records given to governor.evaluate together with the audit
+      copies build_records returns for the same task and evaluated commit, the decision record equals the record
+      given without them in every key except reverify and uncovered, which may name them; tested over request, input
+      and record sets reaching each table row the governor's own tests reach, including the INSUFFICIENT_EVIDENCE and
+      error records, with audit copies well formed, bound to an earlier commit, and malformed in each AC7 way (a
+      malformed one that carries outcome blocking still blocks, as rule 4 says: the test shows its effect and that a
+      well-formed one has none).
+  - AC9: >-
+      No repeated record (decision D-652 C4, reviewer Y4's finding Y4-7(b)). Each audit copy is appended under an
+      event id derived from its record id, so a second record_evaluation for the same task, evaluated commit and
+      policy version gives "duplicate" for each record and appends nothing; a test drives record_evaluation twice with
+      an append stand-in that keeps an in-memory log and appends through eventlog.append (the writer's own append
+      rule, which gives "duplicate" for a repeated event id; no file and no temporary directory, which the CI's
+      deterministic_rule refuses outside the writer's own tests), and shows that the log then holds one record.added
+      per record_id and passes records.check_log, so a later evaluate_task, which takes the task's records from the
+      log, is given no repeated record_id by them.
+  - AC10: >-
+      Purity and imports. verification_records.py imports only hashlib (and copy if used) from the standard library
+      and governor, ac_coverage, records and writer from the package; it starts no process, opens no file, reads no
+      clock or environment and makes no network or model call; the only call that can write is append. A script check
+      in the tests parses the module (ast) and asserts the imports and the absence of open, subprocess, os, time,
+      datetime.now, socket and environ.
+  - AC11: >-
+      Tests and the added text. Each AC has tests with at least one passing and one failing case: AC1 (each argument
+      wrong in turn; derive_inputs raising); AC2 and AC3 (the exact records and ids for a classified change, an
+      unmatched path giving null, a higher declared risk not raising the risk_class value, an underivable profile
+      giving null); AC4 (a contract with findings, one without); AC5; AC6 (the exact append calls and event ids;
+      appended, duplicate, a refused result, a non-str result and a raising append, each stopping the loop; a build
+      failure); AC7 (each finding and its absence; the base records); AC8; AC9; AC10. Unit tests in
+      tests/unit/test_verification_records.py and tests/unit/test_records_audit_copies.py; property tests in
+      tests/property/test_verification_records_properties.py (standard library only, fixed seeds): random changed
+      paths and policies give a risk_class record whose value is never lower than any matching rule's class and is
+      null exactly when a path matches no rule, and random audit copies never change governor.evaluate's decision.
+      Every test this task adds names the AC ids it stands for as "TASK-029 ACn" in its own docstring; before each
+      commit the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns, and each count is 0.
+      tests/run_tests.py, unchanged, runs all groups.
+  - AC12: >-
+      The module's docstring states what it builds and appends, the reading of AC2 and that the evidence_profile value
+      rests on the governor's own risk, which a higher declared risk may raise, so the two records may rest on
+      different classes, and its limits: the values are the
+      writer's statements and not the governor's, whose rules and inputs are unchanged (specification 4 §12 point 10
+      stays open); the policy version is not on the record (specification 2 revision 4); at most one record of each
+      name per task and evaluated commit is the caller's duty; no evidence.stale event, reconciliation or drift; no
+      lease, state effect or Git read; records.py does not gain session, ci_run and acs (DEF-0051, line 24).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 900k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9, AC11]}
+  - {gate: G3, check: constitution, args: [AC10, AC12, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
