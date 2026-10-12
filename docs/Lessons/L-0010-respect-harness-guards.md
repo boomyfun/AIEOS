@@ -190,6 +190,10 @@ Occurrences in session 2026-10-12-1122 (../History/2026-10/2026-10-12-1122-the-a
 - **2026-10-12 (:319).** The app's safety classifier stopped a response while I wrote a request file for the decision agent; the file was left cut off. I did not retry or reword it and asked the owner, who answered "có" (:329) to bringing it to the decision agent; the agent chose short inline requests and its own reading of the built files (decision D-644). No further stop followed.
 - **2026-10-12 (:1155, :1251).** A `git fetch` of origin main inside a CI read, run without a decision (it wrote FETCH_HEAD and changed no branch ref; decision D-655 C2: the remote is read with `git ls-remote` only), and a command of no effect holding Python's name followed by a dash, refused by guard rule R2 and not retried (decision D-655).
 
+Occurrences in session 2026-10-12-1245 (../History/2026-10/2026-10-12-1245-constitution-drift-accepted-and-the-reconciliation-contract.md):
+- **2026-10-12 (:359).** A command of no effect holding a heredoc, Python's name followed by a dash and a discard redirect, refused by guard rules R1 and R2 before it ran; not retried (decision D-662).
+- **2026-10-12 (556c :2076, found at the next session's start).** In session 556c5dd4, a command holding a heredoc while assembling the archive script, refused by guard rule R1 and not retried (rewritten through a file the Write tool made); recorded here under decision D-660 C4 (decision D-662).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
