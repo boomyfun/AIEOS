@@ -10,7 +10,8 @@ the caller gives, it touches exactly two files (AC1):
 - ``<root>/.aieos/local/state.sqlite``, the local store of the fence's epoch and counter, the leases and the sessions
   (AC4 to AC7), with SQLite's own rollback journal ``state.sqlite-journal`` beside it, which SQLite creates and removes
   during a transaction (the default rollback journal mode; no WAL); ``release_lease_token`` releases a lease only for
-  its own fencing token (TASK-028).
+  its own fencing token (TASK-028). ``read_log`` returns the log's bytes, or empty bytes when it is absent, and
+  creates nothing (TASK-026).
 
 Every time is an argument, a timezone-aware datetime in UTC with whole seconds; the clock is read nowhere. The store's
 times are ISO 8601 text with "Z" as specification 2 section 6.1 writes them.
@@ -155,6 +156,13 @@ def _digest(kind, event_id):
 def log_path(root):
     """The event log's path under the root."""
     return os.path.join(root, STATE_DIR, LOG_NAME)
+
+
+def read_log(root):
+    """The bytes of the root's event log, or b"" when it does not exist (TASK-026 AC11). It creates and writes
+    nothing."""
+    _check_root(root)
+    return _read_log(log_path(root))
 
 
 def store_path(root):

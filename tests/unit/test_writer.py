@@ -512,5 +512,32 @@ class R9ReleaseByToken(Case):
         self.assertEqual(writer.held_lease(self.root, TASK), second)
 
 
+class R10ReadLog(Case):
+    """TASK-026's R11 on the writer: read_log."""
+
+    def test_an_absent_log_is_empty_bytes_and_nothing_is_created(self):
+        """TASK-026 AC11 and TASK-026 AC15: with no log under the root, read_log gives b"" and creates nothing."""
+        self.assertEqual(writer.read_log(self.root), b'')
+        self.assertEqual(files_under(self.root), [])
+
+    def test_a_log_with_lines_is_its_bytes(self):
+        """TASK-026 AC11 and TASK-026 AC15: with a log of two lines, read_log gives its bytes and changes nothing."""
+        self.draft('ev-1')
+        self.draft('ev-2')
+        before = files_under(self.root)
+        data = read(writer.log_path(self.root))
+        self.assertEqual(data.count(b'\n'), 2)
+        self.assertEqual(writer.read_log(self.root), data)
+        self.assertEqual(files_under(self.root), before)
+        self.assertEqual(read(writer.log_path(self.root)), data)
+
+    def test_a_root_out_of_form_raises(self):
+        """TASK-026 AC11 and TASK-026 AC15: the root is checked as the writer's other functions check it."""
+        with self.assertRaises(TypeError):
+            writer.read_log('')
+        with self.assertRaises(ValueError):
+            writer.read_log(os.path.join(self.root, 'missing'))
+
+
 if __name__ == '__main__':
     unittest.main()

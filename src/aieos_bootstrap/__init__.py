@@ -1,7 +1,7 @@
 """The bootstrap package of gov-AIEOS (tasks TASK-001, TASK-003, TASK-004, TASK-006, TASK-007, TASK-008, TASK-009,
-TASK-016, TASK-021, TASK-022, TASK-023, TASK-024 and TASK-025).
+TASK-016, TASK-021, TASK-022, TASK-023, TASK-024, TASK-025 and TASK-026).
 
-It holds twelve modules:
+It holds thirteen modules:
 - ``records`` (TASK-001): a checker of the form of event-log lines, records and event payloads of specification 2
   sections 6.1 to 6.4. It reads only the text it is given, writes nothing and decides nothing.
 - ``conformance`` (TASK-003, with TASK-006's Resume Check entry and TASK-017's Risk Engine entry): the conformance runner of
@@ -39,7 +39,11 @@ It holds twelve modules:
 - ``submit`` (TASK-025): the submission path of the core's caller. It reads one commit through gitread, takes its
   AIEOS-Task and AIEOS-Fence trailers with recovery's rules, appends the task.submitted event through the writer, whose
   fence check decides and records any refusal, and releases the lease; it opens no file itself and reads no clock.
+- ``startup`` (TASK-026): recovery at start, the third piece of the core's caller. It walks the commits reachable from
+  HEAD through gitread within a bound, lets ``recovery`` decide every event, appends those events through the writer,
+  releases by token the leases that logged submissions name, and then expires the leases past their expiry; it opens
+  no file itself and reads no clock.
 """
 
 __all__ = ['ac_coverage', 'ac_tests', 'conformance', 'eventlog', 'gitread', 'governor', 'records', 'recovery',
-           'resume_check', 'stale', 'submit', 'writer']
+           'resume_check', 'stale', 'startup', 'submit', 'writer']
