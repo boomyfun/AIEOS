@@ -1,0 +1,334 @@
+# Task contract TASK-030, constitution drift (Master Plan revision 3, §4 M4; specification 4 revision 3, section 7
+# item 1; concept lines 742-749 and 948). Revision 0, drafted under decisions D-663 (Q1 and C1 to C3) and D-646 C1,
+# brought for approval in its own request; whether it is approved is recorded in the decision files, not in this file.
+# Fields and value forms follow specification 2 §5.1 and the contracts of TASK-007 to TASK-029. Readings marked
+# "(reading)" are the worker's, for the decision agent's ruling; the four readings of D-663 C1 are the decision agent's,
+# marked proposed, not the specification's own words.
+# Task type: implementation. What it adds: one pure module, src/aieos_bootstrap/drift.py. Its function violations takes,
+# as values, one base commit's facts (the commit, its changed paths, the constitution's articles at the base, the rule
+# results recorded for that commit, and the records of a task whose evaluated commit is that commit) and returns the
+# violation.detected events of specification 4 section 7 item 1, one per article whose scope meets a changed path and
+# whose rule failed on that commit, each with an event id and a record id derived from the commit and the article; the
+# articles it could not check (uncovered); and the articles already found at that task's evaluation (one finding, not
+# two). It reads no Git, no file and no log, and appends nothing: reading the facts and appending the events through the
+# core's single writer (TASK-016) are TASK-031's, the reconciliation caller (decision D-663), not built here.
+# The specification's text (spec 4 line 80): "**Constitution drift:** after a commit reaches the base, the
+# deterministic rules of every article whose scope meets the commit's changed paths are run (the CI's G3 steps are those
+# rules); a failed rule on the base is a `violation.detected` with the article's id in `refers_to`; its subject is the
+# commit, no task's state changes, and it is handled as a record by the decision agent or the owner (proposed). A G3
+# failure at a task's evaluation and the same failure found later on the base are one finding, not two." Line 83: "All
+# three are pure computations; their events are appended only through the single writer (INV-004)." Specification 2
+# line 163: `refers_to` is, "for a check observation of a constitution article, that article's id"; line 191 (the
+# event table): `violation.detected` is "one `observation` record with `outcome` `blocking` and `blocking_kind`
+# `violation`".
+# What it does not do: it runs no rule (the CI's G3 steps run them; the governor "runs no test or checker", and this
+# module reads results only); no scope drift (section 7 item 2, which waits for the policy's list of non-task paths,
+# section 12 point 11); no stale evidence (TASK-023's); no lease, no state effect, no governor rule (a violation.detected
+# about a base commit has no task_id, so no evaluation reads it); no Git read, no file read, no writer call, no caller,
+# nothing under .github/, no policy, no frozen fixture. It changes no governor, writer, records, eventlog, resume_check,
+# stale, evaluation or other existing module.
+# Readers of the changed paths (D-263 C3's practice): src/aieos_bootstrap/__init__.py is read by every module that
+# imports the package and by the CI's G1 build; its docstring and __all__ gain drift; it must not name the Resume Check
+# fixture folder (TASK-010's assertion) nor the Risk Engine fixture folder (TASK-020's allow list). No module of the
+# repository calls drift yet.
+# Rule results (reading): the CI's G3 records in docs/records name a CI step in refers_to, not an article id; this
+# module reads a rule result only in specification 2's form for a check observation of an article (refers_to the
+# article's id); mapping CI steps to articles is the caller's (TASK-031), and a result in another form is no result
+# (D-663 C1). So, until the caller maps them, the one-finding rule matches no record of the earlier tasks (a limit).
+# Risk: high, and change class critical_cr, each computed over the base by script, as for TASK-029. Profile
+# (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture [deterministic_rule], functional
+# [integration_test], security [static_security_analysis] and architecture [ai_review (cross-model)], plus the
+# evidence_required of the applicable articles.
+# Reviews (as TASK-029's): five way-2 reviews by a Claude model other than the implementer's, and the decision agent's
+# three, each brief naming for testing: the selection of articles (governor.matches called, a scope that cannot be
+# evaluated applies); the one-finding rule and its limit; uncovered articles, never passed; a malformed rule result
+# counted as no result; the derived ids; the payload's form under records.check_payload; purity; AC11's limits.
+# Naming (D-544 Q3, as TASK-023 to TASK-029): every test of the three new test modules names the AC ids it stands for
+# as "TASK-030 ACn" in its own docstring.
+# Evaluation path (A61; as TASK-007 to TASK-029): commit C changes only docs/tasks/TASK-030.yaml and has one parent
+# equal to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-030", go to task/TASK-030 under their own
+# decisions; main receives the task only at its acceptance.
+# Not applicable: OPS-001 (the task changes no ref); INV-004 and INV-009 (the module writes no file and no log; the
+# events are returned, not appended); INV-005 to INV-008, INV-010 and INV-011 (the decision engine, the governor,
+# evidence records as stored, the replay and the policy meet no path of the write-set: the module returns events and
+# stores none); GOV-001, GOV-004 to GOV-006 and SEC-003 (the concept file, the bound artifacts, the decision matrix,
+# the records and pre-genesis documents, and .github/, meet no path of the write-set).
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting, no push of its own; it weakens no evidence requirement (it reports violations and blocks no
+# task; CR-002 part 4 limit 8 does not apply), so its acceptance is one delegated approval of the decision agent
+# (Master Plan section 6), for the decision agent's ruling.
+task: TASK-030
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add a standard-library Python 3 module, src/aieos_bootstrap/drift.py, the constitution-drift computation of
+  specification 4 section 7 item 1: violations(inputs) takes one base commit's facts as values (the commit, its changed
+  paths, the articles at the base, the rule results recorded for that commit and the records of a task evaluated at
+  that commit) and returns one violation.detected event per article whose scope meets a changed path and whose rule
+  failed on that commit, unless that task's own records already hold the same failure (one finding, not two), each with
+  an event id and a record id derived from the commit and the article; the articles it could not check; and, for a
+  malformed input, an error and no event (fail closed). It reads and writes nothing. With unit, integration and
+  property tests in new test modules, each test naming its AC ids as "TASK-030 ACn" in its own docstring; the
+  integration test appends the returned events to an in-memory log with aieos_bootstrap.eventlog.append.
+traces_to:
+  - docs/specs/spec-04-verification-and-evidence.md#7
+  - docs/specs/spec-02-aieos-file-format.md#6.2
+  - docs/specs/spec-02-aieos-file-format.md#6.3
+  - docs/specs/spec-01-state-and-event-model.md#5.3
+  - AIEOS-concept.md#744
+  - AIEOS-concept.md#948
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-030.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id.
+  base_commit: ff1e737a73d3b791ab90b157889a8fb70c35c614
+  depends_on: [TASK-001, TASK-004, TASK-007, TASK-011]
+  intent_versions:
+    docs/specs/spec-04-verification-and-evidence.md: 48d4f5bf06461ad49409f21bc6ea8d511d17a84eaac15adda14277483176a8d5
+    docs/specs/spec-02-aieos-file-format.md: 80c91e47ef0a1dbe7f77c677cd2261d5b5ede20bcb0735cf06438bddbde85f8b
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # One modified path (the package docstring and __all__); every other path is new.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/drift.py
+    - tests/unit/test_drift.py
+    - tests/integration/test_drift_log.py
+    - tests/property/test_drift_properties.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-04-verification-and-evidence.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/Deferred/DEF-0030-event-log-writer-and-workflow-revision-6.md
+    - docs/Deferred/DEF-0042-specification-4-open-points-and-the-risk-01-route.md
+    - docs/tasks/**
+    - docs/records/**
+    - src/aieos_bootstrap/governor.py
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/eventlog.py
+    - src/aieos_bootstrap/stale.py
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.governor.matches, aieos_bootstrap.records.check_record, aieos_bootstrap.records.check_payload, aieos_bootstrap.eventlog.append]
+  schemas: [spec-02 record (6.2), spec-02 event payloads (6.3)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/writer.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The input. violations(inputs) takes a mapping with exactly the keys base_commit, changed_paths, articles,
+      rule_results, task_records and recorder: base_commit 40 or 64 lowercase hex characters; changed_paths a list of
+      strings; articles a list of mappings, each with a non-empty string id (unique in the list) and a key scope, other
+      keys ignored; rule_results and task_records each a list of mappings; recorder a non-empty string. Any other form
+      gives the result of AC8 with error naming the first key that fails, in the order above, and no event (fail
+      closed). A malformed entry inside rule_results or task_records is not an input error: AC4 and AC5 say what it
+      counts as.
+  - AC2: >-
+      The articles that apply (D-663 C1, second reading, proposed). An article applies when its scope meets a changed
+      path: scope is a non-empty list of non-empty strings and aieos_bootstrap.governor.matches(pattern, path) is true
+      for some pattern and some changed path (called, not copied, so it follows the risk rules' section 2 point 6, as
+      the governor's own article selection does). A scope in any other form cannot be evaluated, so the article applies
+      (fail closed, as the governor's derive_inputs reads it) and it is also named in an uncovered entry {ref the
+      article id, detail "scope cannot be evaluated"}. An article's other keys (for example applicability by task type)
+      are not read: a base commit has no task type (reading). An empty changed_paths meets no evaluable scope.
+  - AC3: >-
+      Rule results (D-663 C1, third reading, proposed). A rule result is usable for an article when
+      aieos_bootstrap.records.check_record finds nothing in it and it has fact_kind "observation", gate "G3", commit
+      equal to base_commit, outcome "pass" or "fail", and refers_to equal to the article's id. An applicable article
+      fails when some usable result for it has outcome "fail"; it passes when it has a usable result and none fails. An
+      applicable article with no usable result gives an uncovered entry {ref the article id, detail "no rule result"}
+      and is never reported as passed. A rule result for an article that does not apply is not read.
+  - AC4: >-
+      Results that cannot be used. An entry of rule_results that is not usable for any article by AC3's form (all but
+      the refers_to condition) gives an uncovered entry {ref its record_id when it is a non-empty string, otherwise
+      "rule_results[i]" with its index, detail "not a usable rule result"} and counts as no result.
+  - AC5: >-
+      One finding, not two (D-663 C1, first reading, proposed). A failing applicable article gives no event when some
+      entry of task_records has gate "G3", refers_to equal to the article's id, commit equal to base_commit and outcome
+      "fail" (an entry missing any of these, one in which aieos_bootstrap.records.check_record finds anything, or one
+      whose fact_kind is not "observation", is not a match: a malformed record never suppresses a finding, fail
+      closed); the article's id is then listed in already. task_records are the kept records of a task whose
+      evaluated commit is base_commit (the caller's facts). When the commit that
+      reaches the base is not the task's evaluated commit (for example a landing that is not a fast-forward), no
+      record matches and the findings are two: a stated limit.
+  - AC6: >-
+      The events (D-663 C1, fourth reading, proposed). Each failing applicable article not in already gives one event
+      {event_id, event_type "violation.detected", payload}, with payload exactly {record_id, fact_kind "observation",
+      source_class "deterministic_tool_local", recorder, subject base_commit, commit base_commit, outcome "blocking",
+      blocking_kind "violation", refers_to the article id}; record_id is the SHA-256 hex digest of the UTF-8 text
+      "violation", base_commit and the article id joined by LF, and event_id the SHA-256 hex digest of
+      "violation.detected", base_commit and the article id joined by LF (as the writer's _digest joins its parts).
+      aieos_bootstrap.records.check_payload("violation.detected", payload) finds nothing. The event carries no task_id
+      (the subject is a commit; specification 4 line 80: no task's state changes). Events are sorted by article id;
+      the same inputs always give the same ids.
+  - AC7: >-
+      What it does not decide. The module runs no rule, changes no task state, blocks no task and appends nothing; it
+      makes no scope-drift or stale-evidence finding; its docstring says so, names the caller as TASK-031 (decision
+      D-663) and states that mapping CI steps to articles is the caller's. No module of src/ changes except
+      __init__.py's docstring and __all__.
+  - AC8: >-
+      The result. violations returns a mapping with exactly the keys events, already, uncovered and error: events the
+      list of AC6; already the sorted article ids of AC5; uncovered a list of mappings with exactly the keys ref and
+      detail, sorted by (ref, detail), without duplicates; error None, or for a malformed input a short English text,
+      with events [], already [] and uncovered []. violations is a pure function: the same input gives the same
+      output, and the input is not changed.
+  - AC9: >-
+      Purity and the CI checks (INV-001, INV-002, INV-003). The module imports only the Python 3 standard library
+      (hashlib and re among the allowed) and aieos_bootstrap.governor and aieos_bootstrap.records; it opens, writes and
+      removes no file, reads no clock and no environment, and makes no process, network or model call; no exec, eval,
+      compile, __import__ or importlib; no assert in src (bandit B101); no string that names the project-state
+      directory. At the task's commits the CI steps report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002
+      and bandit.
+  - AC10: >-
+      The events in a log (integration). tests/integration/test_drift_log.py builds, in the test, a base commit with
+      three articles (one failing, one passing, one with no result) and a task record that matches a fourth failing
+      one, runs violations, and appends each returned event in order to an empty in-memory log with
+      aieos_bootstrap.eventlog.append (fixed appended_at, no fencing token, no task_id): each result is "appended", the
+      final log has records.check_log findings none, and appending the same events again to that log gives "duplicate"
+      each time. No file is opened.
+  - AC11: >-
+      Limits, stated: the facts are the caller's and are not checked against Git, the CI or the log; the rule results
+      count only in the article-id form, and mapping CI steps to articles is the caller's; the one-finding rule holds
+      only when the base commit is the task's evaluated commit (AC5); a scope that cannot be evaluated applies; the
+      event's appending, the writer and the caller are TASK-031's (DEF-0030). Every existing module and test not in the
+      write set is unchanged, and if one can pass only by a change the task escalates (needs_out_of_scope_change).
+  - AC12: >-
+      Its own tests and the added text. Every test function of the three new test modules names the AC ids it stands
+      for as "TASK-030 ACn" in its own docstring and names no other task's AC in qualified form there. Before each
+      commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns, and each count is 0;
+      the file names are scanned with the same patterns and the records executors' pre-push pattern (D-282).
+  - AC13: >-
+      Tests, each rule with at least one passing and one failing case: R1 AC1 (each malformed form, the first one
+      named; no event on error); R2 AC2 (a scope met; a scope not met; a scope that cannot be evaluated applies and is
+      uncovered; an empty changed_paths); R3 AC3 (a failing result gives an event; a passing one does not; pass and
+      fail together fail; no result is uncovered; a result for another commit, gate or article is no result); R4 AC4
+      (each unusable form, named by record_id or index); R5 AC5 (a matching task record gives no event and is listed
+      in already; a record differing in gate, article, commit or outcome does not match; a record otherwise matching
+      but malformed, or not an observation, does not match and the event is given); R6 AC6 (the payload's keys and
+      values; the two ids' values; check_payload finds nothing; no task_id; the sorting); R7 AC8 (the keys, the
+      sorting, no duplicates, purity: the input unchanged, a second call equal); R8 AC7 and AC9 (a script check of the
+      module's imports and of the absence of open, write and clock calls). Unit tests in tests/unit/test_drift.py;
+      AC10 in tests/integration/test_drift_log.py; property tests in tests/property/test_drift_properties.py
+      (standard library only, fixed seeds): for random well-formed inputs, every event's article applies and has a
+      usable failing result and is not in already; every applicable article is in exactly one of the events, already,
+      the passing set or the uncovered refs; the result never depends on the order of articles, rule_results or
+      task_records. tests/run_tests.py, unchanged, runs all groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC10, AC13]}
+  - {gate: G3, check: constitution, args: [AC9, AC11, AC12, INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
