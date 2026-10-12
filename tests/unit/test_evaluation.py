@@ -188,6 +188,24 @@ class R2State(unittest.TestCase):
         r, _, repo = run(log)
         self.assertEqual((r['result'], r['reason'], repo.calls), ('refused', 'log', []))
 
+    def test_other_tasks_events_and_ignored_duplicates_are_left_out(self):
+        """TASK-027 AC2 and TASK-027 AC7: another task's task.approved, task.stale and record.added change nothing for
+        this task, and are not given to the governor."""
+        log = base_log()
+        log.add('task.approved', {'contract_version': 'v1', 'contract_hash': 'f' * 64, 'approval_record': 'x'}, 'o-1',
+                task_id='TASK-099')
+        log.add('task.stale', {'cause': 'intent_change', 'refers_to': 'CHG-001'}, 'o-2', task_id='TASK-099')
+        log.add('record.added', record('r-other', subject='TASK-099'), 'o-3', task_id='TASK-099')
+        seen = []
+        real = governor.evaluate
+        governor.evaluate = lambda q, i, rs: seen.append(rs) or real(q, i, rs)
+        try:
+            r = run(log)[0]
+        finally:
+            governor.evaluate = real
+        self.assertEqual(r['result'], 'evaluated')
+        self.assertEqual(seen[0], [])
+
     def test_no_approval_is_refused(self):
         """TASK-027 AC2: with no task.approved of the task, "refused", reason "state"."""
         log = submitted(Log(), cid(3))
@@ -330,8 +348,11 @@ class R4Walk(unittest.TestCase):
                {'exit': 128, 'out': b'', 'err': b'x', 'error': None},
                ok(b'not a commit'), {'out': b''}, OSError('no git')]
         for given in bad:
-            r, log, _ = run(git=Repo(chain(), {('cat-file', cid(2)): given}))
-            self.assertEqual((r['result'], r['reason'], log.appends), ('refused', 'git', []), given)
+            for key in (('cat-file', cid(2)), ('cat-file', cid(3)), ('cat-file', cid(1)), ('diff-tree', cid(3))):
+                if key[0] == 'diff-tree' and isinstance(given, dict) and given.get('exit') == 0:
+                    continue  # bytes that parse as a path are R5's case (other changed paths), not a failed read
+                r, log, _ = run(git=Repo(chain(), {key: given}))
+                self.assertEqual((r['result'], r['reason'], log.appends), ('refused', 'git', []), (key, given))
 
 
 class R5Paths(unittest.TestCase):
@@ -348,6 +369,29 @@ class R5Paths(unittest.TestCase):
 
 
 class R6Inputs(unittest.TestCase):
+    def test_a_list_subclass_is_refused_and_the_governor_gets_the_computed_paths(self):
+        """TASK-027 AC6: changed_paths given as a list subclass, even one equal to the union, give "refused", reason
+        "values"; with a plain list, derive_inputs receives the computed list, not the caller's object."""
+        class Rigged(list):
+            pass
+
+        self.assertEqual(run(values=values(changed_paths=Rigged(PATHS)))[0]['reason'], 'values')
+        seen = []
+        real = governor.derive_inputs
+
+        def spy(v):
+            seen.append(v['changed_paths'])
+            return real(v)
+
+        given = values()
+        governor.derive_inputs = spy
+        try:
+            self.assertEqual(run(values=given)[0]['result'], 'evaluated')
+        finally:
+            governor.derive_inputs = real
+        self.assertEqual(seen[0], PATHS)
+        self.assertIsNot(seen[0], given['changed_paths'])
+
     def test_other_changed_paths_are_refused(self):
         """TASK-027 AC6: values whose changed_paths differ from the task's change give "refused", reason "values"."""
         for given in (['src/x.py'], PATHS[::-1], 'src/x.py'):
@@ -407,6 +451,15 @@ class R7Records(unittest.TestCase):
 
 
 class R8Append(unittest.TestCase):
+    def test_the_event_id_uses_the_sorted_kept_record_ids_only(self):
+        """TASK-027 AC8: with two kept records and one left out, the event id is derived from the two kept record ids,
+        sorted, and not from the left-out one."""
+        log = base_log().add('record.added', record('r-z'), 'ra-z')
+        r = run(log, extra_records=[record('r-a'), {'record_id': 'r-bad'}])[0]
+        want = hashlib.sha256('\n'.join(['evaluation', TASK, 'submitted-1', 'r-a', 'r-z']).encode()).hexdigest()
+        self.assertEqual(r['event_id'], want)
+        self.assertEqual(log.appends[0][3], want)
+
     def test_the_exact_append(self):
         """TASK-027 AC8: one append of decision.acceptance with the governor's record, the derived event id, the
         time, the recorder and the task, and no fencing token."""
@@ -558,6 +611,10 @@ class R12Purity(unittest.TestCase):
         for bad in ('open', 'exec', 'eval', 'compile', '__import__', 'subprocess', 'importlib'):
             self.assertNotIn(bad, ids, bad)
         self.assertFalse(any(isinstance(n, ast.Assert) for n in ast.walk(tree)))
+        os_attrs = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)
+                    and n.value.id == 'os'}
+        self.assertEqual(os_attrs, {'path'})
+        self.assertNotIn('.aieos', MODULE.read_text(encoding='utf-8'))
 
 
 if __name__ == '__main__':

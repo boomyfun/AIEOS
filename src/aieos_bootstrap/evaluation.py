@@ -17,12 +17,14 @@ task in VERIFYING (after its task.submitted) or in IN_REVIEW (re-evaluation):
 4. The task's commits (AC4, decisions D-633 point 5 and D-634): walked back from the evaluated commit through
    gitread.run, each read once with "cat-file -p" and parsed by gitread.parse_commit. A commit belongs to the task
    when its message has a body and recovery.trailers names the task with no finding (DEF-0052 F6). A trailer finding,
-   or this task's AIEOS-Task line in a message with no body, refuses; a merge refuses; the walk ends at the first
+   or this task's AIEOS-Task line in a message with no body, refuses; a merge among the task's commits refuses; the
+   walk ends at the first
    commit whose trailers give no finding and name no task or another task, or after a commit with no parent.
 5. The changed paths (AC5): the union of the paths each task commit changes against its first parent, read with the
    pinned diff-tree form and parsed by gitread.parse_paths.
-6. The inputs (AC6): values["changed_paths"] must equal that union; governor.derive_inputs(values) gives the inputs;
-   the request is specification 2 section 6.5's.
+6. The inputs (AC6): values["changed_paths"] must be a list equal to that union; governor.derive_inputs is given a copy
+   of values holding the computed list, so no object of the caller's stands for the paths; the request is
+   specification 2 section 6.5's.
 7. The records (AC7): the task's record.added payloads in log order, then extra_records; a record that
    records.check_record finds out of form, or whose record_id an earlier kept record has, is left out with a finding.
 8. The decision (AC7, AC8): governor.evaluate is called once and its record, an error record included, is appended
@@ -49,7 +51,16 @@ Limits (AC13):
   since this module's read.
 - The walk has a bound and reads every task commit each time. It ends at the first commit without the task's trailer,
   so a task commit that lacked it would end the walk early (the CI's G0 refuses such a commit). A merge in the task's
-  commits is refused.
+  commits is refused. The first commit below the task's commits is read by the same trailer rule, so a trailer
+  finding there (an AIEOS-Task line in another case, or outside its message's last paragraph) refuses every
+  evaluation of the task (fail closed).
+- State transitions are not checked: the state is the last state-setting event's, so a log that the writer let
+  through out of the state machine's order (for example a decision with next_task_state IN_REVIEW after one with
+  REWORK and no new submission) is evaluated on the last submission's commit. By erratum E1, two REWORK decisions with
+  no other state between them count once in the retries used.
+- The event id does not cover declared or values: a rerun over the same state-setting event and records with other
+  declared, values or policy gives "duplicate", and the result's decision and next_task_state are then those of the
+  record just computed, not of the record stored before.
 - Records of the CI channel are the caller's to give (no network). The records of specification 4 section 10 and its
   reconciliation are not made here.
 - The tests use stand-ins for the writer, so the real store's path is covered by the writer's tests and not end to
@@ -287,11 +298,11 @@ def evaluate_task(root, repo, task_id, contract_bytes, declared, values, extra_r
         paths = _changed_paths(read, repo, commits)
         step = 'values'
         given = values.get('changed_paths')
-        if not (isinstance(given, list) and given == paths):
+        if not (type(given) is list and given == paths):
             raise _Stop('values', ['values: changed_paths differ from the task\'s change: computed %r, given %r'
                                    % (paths, given)])
         try:
-            inputs = governor.derive_inputs(values)
+            inputs = governor.derive_inputs(dict(values, changed_paths=list(paths)))
         except Exception as exc:  # AC6
             raise _Stop('values', ['values: derive_inputs raised %s: %s' % (type(exc).__name__, exc)])
         request = {'task_id': task_id, 'task_content_hash': content_hash, 'evaluated_commit': commit,
