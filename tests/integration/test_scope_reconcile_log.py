@@ -29,7 +29,7 @@ CONTRACT = b'task: TASK-095\n'
 
 
 def oid(*parts):
-    return hashlib.sha1('\n'.join(parts).encode('utf-8')).hexdigest()
+    return hashlib.sha256('\n'.join(parts).encode('utf-8')).hexdigest()
 
 
 class Repo:

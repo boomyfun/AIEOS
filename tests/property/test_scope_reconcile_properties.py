@@ -26,7 +26,7 @@ TASKS = ['TASK-090', 'TASK-091']
 
 
 def oid(*parts):
-    return hashlib.sha1('\n'.join(parts).encode('utf-8')).hexdigest()
+    return hashlib.sha256('\n'.join(parts).encode('utf-8')).hexdigest()
 
 
 class Repo:

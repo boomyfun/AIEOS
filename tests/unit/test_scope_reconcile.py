@@ -36,7 +36,7 @@ CONTRACT = b'task: TASK-090\nwrite_set: [src/x.py]\n'
 
 
 def oid(*parts):
-    return hashlib.sha1('\n'.join(parts).encode('utf-8')).hexdigest()
+    return hashlib.sha256('\n'.join(parts).encode('utf-8')).hexdigest()
 
 
 class Repo:
