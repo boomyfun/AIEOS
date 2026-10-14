@@ -18,6 +18,7 @@ FENCE = {'epoch': 'e2', 'counter': 5}
 CLASSES = ['deterministic_tool_external_ci', 'deterministic_tool_local', 'agent_declared', 'same_lineage_review']
 PATHS = ['src/a.py', 'src/b.py', 'docs/c.md', 'tests/d.py']
 ARTICLES = ['SEC-001', 'INV-001', 'OPS-003']
+COUNTED_LITERAL = ('deterministic_tool_external_ci', 'deterministic_tool_local')
 SEEDS = range(6)
 ROUNDS = 25
 
@@ -140,16 +141,27 @@ class Properties(unittest.TestCase):
 
     def test_every_done_task_is_computed_or_uncovered(self):
         """TASK-031 AC2, AC3, AC4, AC14: every task the log shows DONE is either given to stale or named as
-        uncovered."""
+        uncovered; a task given to stale has its accepted commit within the bound on the first-parent chain, with no
+        merge after it (ground truth from the world's own table), and each way of being uncovered occurs."""
         seen = computed_any = 0
+        kinds = {'accepted commit not reached': 0, 'merge commit on the walk': 0, 'no facts given': 0}
         for seed in SEEDS:
             rnd = random.Random(seed)
             for _ in range(ROUNDS):
                 table, trigger, mem, values, results = world(rnd)
+                bound = rnd.randint(1, 10)
                 with mock.patch.object(stale, 'stale', wraps=stale.stale) as spy:
-                    res = run(table, trigger, mem, values, results, rnd.randint(1, 10))
+                    res = run(table, trigger, mem, values, results, bound)
                 computed = {c[0][0]['task_id'] for c in spy.call_args_list}
                 computed_any += len(computed)
+                n = len(table)
+                for c in spy.call_args_list:
+                    k = int(c[0][0]['accepted_commit'], 16)
+                    self.assertTrue(1 <= k <= n and n - k < bound, (seed, k, n, bound))
+                    self.assertFalse(any(len(table[cid(j)][0]) > 1 for j in range(k + 1, n + 1)), (seed, k))
+                for u in res['uncovered']:
+                    if u['detail'] in kinds:
+                        kinds[u['detail']] += 1
                 named = {u['ref'] for u in res['uncovered']}
                 for task in done_ids(mem):
                     seen += 1
@@ -159,6 +171,8 @@ class Properties(unittest.TestCase):
                                                              'no facts given') for u in res['uncovered']))
         self.assertGreater(seen, 0)
         self.assertGreater(computed_any, 0)
+        for kind, count in kinds.items():
+            self.assertGreater(count, 0, kind)
 
     def test_no_class_left_out_reaches_drift(self):
         """TASK-031 AC5, AC6, AC14: drift's rule results and task records are only of the counted classes, and each
@@ -174,10 +188,10 @@ class Properties(unittest.TestCase):
                     calls += 1
                     given = c[0][0]
                     for r in given['rule_results'] + given['task_records']:
-                        self.assertIn(r['source_class'], reconcile.COUNTED)
+                        self.assertIn(r['source_class'], COUNTED_LITERAL)
                 named = {u['ref'] for u in res['uncovered'] if u['detail'] == 'source class not counted'}
                 for r in results:
-                    if r['source_class'] not in reconcile.COUNTED and spy.called:
+                    if r['source_class'] not in COUNTED_LITERAL and spy.called:
                         self.assertIn(r['record_id'], named)
         self.assertGreater(calls, 0)
 

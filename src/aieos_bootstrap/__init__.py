@@ -60,9 +60,9 @@ It holds seventeen modules:
   and writes no file and appends nothing.
 - ``reconcile`` (TASK-031): the reconciliation caller of specification 4 section 7 items 1, 3 and 4. At one base
   commit it reads the event log through the writer and a bounded first-parent walk of Git through gitread, calls
-  ``stale`` for every task the log shows done and ``drift`` for the commit with only the deterministic source classes
-  counted, and appends their events through the writer under the ids they derive; it changes no task state, grants no
-  lease, opens no file itself and reads no clock.
+  ``stale`` for every task the log shows done that it can cover, naming the others as uncovered, and ``drift`` for the
+  commit with only the deterministic source classes counted, and appends their events through the writer under the
+  ids they derive; it changes no task state, grants no lease, opens no file itself and reads no clock.
 """
 
 __all__ = ['ac_coverage', 'ac_tests', 'conformance', 'drift', 'evaluation', 'eventlog', 'gitread', 'governor',

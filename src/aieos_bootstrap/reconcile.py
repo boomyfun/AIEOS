@@ -21,8 +21,11 @@ and drift.violations (TASK-030).
    deterministic_tool_local rule results and task records reach drift.violations, which is called once for the
    trigger with the records of every task whose last decision.acceptance evaluated the trigger.
 6. The appends (AC8): every returned event through writer.append_event, with no fencing token, in a fixed order (the
-   evidence.stale events by task id, then the violation.detected events), under the ids those functions derive, so a
-   rerun gives "duplicate". The first other result stops the appends; the log is append-only, so nothing is undone.
+   evidence.stale events by task id, then the violation.detected events), under the ids those functions derive. A
+   rerun at the same trigger appends nothing new: a violation.detected event comes back as "duplicate", and the stale
+   records already listed by an earlier evidence.stale event are not given again (stale.stale's own rule), so no
+   evidence.stale event is made for them. The first other result stops the appends; the log is append-only, so
+   nothing is undone.
 
 The result (AC10) is a mapping with exactly the keys result ("reconciled" or "refused"), reason, findings, appended,
 duplicate, already and uncovered. An exception raised by a called function is caught and becomes a result; none
@@ -41,6 +44,9 @@ Readings (the implementer's, not the contract's own words):
   the same record_id, the last one counts. When a task has several task.done events, the last one counts.
 - stale.stale's own uncovered entries are passed on as {ref the task id, detail "<rule>, <its ref>: <its detail>"}.
 - A left-out task record is named by its record_id, or by "task_records[i]", its index in the list given to drift.
+- An append's result counts by its ``result`` text, as evaluation and submit read the writer's result: an object
+  without a string ``result`` stops the appends; a stand-in whose ``result`` is "appended" is taken at its word.
+- The argument check takes "now" with any tzinfo whose offset is zero, and task ids as TASK- followed by digits.
 
 What it does not do (AC9): it calls no governor function, evaluates no task, grants, releases or expires no lease,
 creates no store, changes no task state (an evidence.stale event schedules a re-verify and a DONE task stays DONE, by
@@ -56,6 +62,19 @@ Limits (AC12):
 - One run at a time: the writer reads the log and appends with no check that it is unchanged since this module's read.
 - The walk has a bound. A merge's changed paths are not read (gitread's one pinned form gives none for a merge), so
   the tasks whose range holds one, and a merge trigger, are uncovered.
+- An error of stale.stale for one task refuses the whole run with reason "stale" (AC4), so drift and every other task
+  go unchecked in that run: for example a DONE task whose id has four or more digits (stale.stale takes exactly
+  three) or whose record.added payloads repeat a record_id. A failure inside the source-class filter is also
+  reported under "stale", the step it runs in.
+- An evidence.stale event's id is derived from the task, the trigger and the reason only (TASK-023): a record added to
+  a DONE task after a run at the same trigger makes the rerun's event differ from the stored one under the same id,
+  which the writer refuses as a conflict, so that rerun stops at that append and the events after it are not
+  appended.
+- A decision record whose record_id is repeated among the task's decision.acceptance events counts by its last
+  match, whatever the earlier ones say (record ids are not checked for uniqueness by the record checker).
+- The mapping helper names a step that the mapping does not name, but not a mapped step that is absent from the steps
+  given; duplicate step names give duplicate record ids (a failure among them makes the article fail at drift), and
+  a step's keys other than name and conclusion are not read.
 - The PATH git is found by is the caller's precondition (DEF-0052 G1).
 - It starts no process except through ``read``, opens no file except through ``read_log`` and ``append``, reads no
   clock and no environment, and builds no event-log line itself (INV-001 to INV-004).
@@ -412,17 +431,18 @@ def reconcile(root, repo, trigger_commit, values, rule_results, recorder, now, m
             uncovered.extend(out['uncovered'])
             already = list(out['already'])
             drift_events = out['events']
+        step = 'append'
+        plan = ([(e['event_type'], e['payload'], e['event_id'], e['task_id']) for e in stale_events]
+                + [(e['event_type'], e['payload'], e['event_id'], None) for e in drift_events])
     except _Stop as stop:
         return _result('refused', stop.reason, stop.findings, uncovered=uncovered)
     except Exception as exc:  # AC10: no exception escapes
         return _result('refused', step, ['%s: a step raised %s' % (step, type(exc).__name__)], uncovered=uncovered)
 
     appended, duplicate = [], []
-    plan = [(e, e['task_id']) for e in stale_events] + [(e, None) for e in drift_events]
-    for e, task_id in plan:
-        eid = e['event_id']
+    for event_type, payload, eid, task_id in plan:
         try:
-            w = append(root, e['event_type'], e['payload'], eid, now, recorder, task_id=task_id)
+            w = append(root, event_type, payload, eid, now, recorder, task_id=task_id)
             outcome = getattr(w, 'result', None)
             if type(outcome) is not str:
                 raise TypeError('the result is not a string')

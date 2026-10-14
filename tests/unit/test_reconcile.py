@@ -485,6 +485,23 @@ class R7Mapping(unittest.TestCase):
             self.assertEqual((r['fact_kind'], r['source_class'], r['gate'], r['subject'], r['commit'], r['recorder']),
                              ('observation', 'deterministic_tool_external_ci', 'G3', cid(3), cid(3), 'ci'))
         self.assertEqual(out['records'][3]['record_id'], digest('ci-rule', cid(3), 'SEC-001', 'SEC-001'))
+        name = 'deterministic_rule (INV-001, INV-002, INV-004)'
+        self.assertEqual([r['record_id'] for r in out['records'][:3]],
+                         [digest('ci-rule', cid(3), name, a) for a in ('INV-001', 'INV-002', 'INV-004')])
+        self.assertEqual(len({r['record_id'] for r in out['records']}), 4)
+
+    def test_duplicate_step_names_and_extra_keys(self):
+        """TASK-031 AC7 (a stated limit): duplicate step names give duplicate record ids, a failure among them still
+        reaching drift as a fail; a step's other keys are not read."""
+        steps = [{'name': 'SEC-001', 'conclusion': 'success', 'extra': 1},
+                 {'name': 'SEC-001', 'conclusion': 'failure'}]
+        out = reconcile.rule_results_from_steps(steps, self.MAP, cid(3), 'ci')
+        self.assertIsNone(out['error'])
+        self.assertEqual([r['outcome'] for r in out['records']], ['pass', 'fail'])
+        self.assertEqual(out['records'][0]['record_id'], out['records'][1]['record_id'])
+        log = Log()
+        run(log, vals=values(tasks={}), results=out['records'])
+        self.assertEqual([a[1] for a in log.appends], [digest('violation.detected', cid(3), 'SEC-001')])
 
     def test_an_unmapped_step_and_another_conclusion_are_uncovered(self):
         """TASK-031 AC7: a step the mapping does not name, or a conclusion other than success or failure, gives no
@@ -520,10 +537,11 @@ class R8Appends(unittest.TestCase):
 
     def test_the_order_and_the_ids(self):
         """TASK-031 AC8: the evidence.stale events by task id and reason, with the task id, then the
-        violation.detected events with no task id and no fencing token, under the derived ids."""
+        violation.detected events with no task id and no fencing token, under the derived ids; the log holds TASK-102
+        before TASK-101, so the order is by task id, not by log order."""
         table = dict(chain())
-        log = done_task(Log())
-        done_task(log, TASK2, cid(2))
+        log = done_task(Log(), TASK2, cid(2))
+        done_task(log, TASK)
         vals = values(tasks={TASK: facts(), TASK2: facts()})
         res = run(log, repo=Repo(table), vals=vals)
         self.assertEqual(res['result'], 'reconciled', res)
@@ -622,36 +640,158 @@ class R9Result(unittest.TestCase):
         self.assertEqual((res['result'], res['reason']), ('refused', 'argument'))
 
 
+class R11EdgePoints(unittest.TestCase):
+
+    def test_a_four_digit_done_task_refuses_the_whole_run(self):
+        """TASK-031 AC4, AC12 (a stated limit): a DONE task whose id stale.stale does not take refuses the whole run
+        with "stale", and nothing is appended, not even drift's events."""
+        task = 'TASK-1001'
+        log = done_task(Log(), task)
+        res = run(log, vals=values(tasks={task: facts()}))
+        self.assertEqual((res['result'], res['reason']), ('refused', 'stale'))
+        self.assertEqual(log.appends, [])
+
+    def test_repeated_record_ids_refuse_the_whole_run(self):
+        """TASK-031 AC4, AC12 (a stated limit): a DONE task whose record.added payloads repeat a record_id makes
+        stale.stale give an error, so the run is refused with "stale"."""
+        log = done_task(Log())
+        log.add('record.added', record('r-' + TASK, cid(2)), 'rec-again')
+        res = run(log)
+        self.assertEqual((res['result'], res['reason']), ('refused', 'stale'))
+        self.assertEqual(log.appends, [])
+
+    def test_any_zero_offset_tzinfo_and_the_largest_values_are_accepted(self):
+        """TASK-031 AC1 (a stated reading): "now" with a tzinfo other than datetime.timezone.utc but offset zero is
+        accepted, and so are a 64-character trigger and max_commits 10000."""
+        zero = datetime.timezone(datetime.timedelta(0), 'Z0')
+        log = done_task(Log())
+        res = reconcile.reconcile(FS_ROOT, REPO, cid(3), values(), [], REC, NOW.replace(tzinfo=zero),
+                                  max_commits=10000, read=Repo(chain()), read_log=log.read_log, append=log.append)
+        self.assertEqual(res['result'], 'reconciled', res)
+        res = reconcile.reconcile(FS_ROOT, REPO, 'e' * 64, values(), [], REC, NOW, read=Repo(chain()),
+                                  read_log=Log().read_log, append=Log().append)
+        self.assertNotEqual(res['reason'], 'argument')
+
+    def test_a_failure_inside_the_filter_is_reported_as_stale(self):
+        """TASK-031 AC5, AC10, AC12 (a stated limit): an exception inside the source-class filter gives "refused" under
+        the reason of the step it runs in, "stale", and nothing is appended."""
+        log = done_task(Log())
+        with mock.patch.object(reconcile, '_counted', side_effect=RuntimeError('x')):
+            res = run(log)
+        self.assertEqual((res['result'], res['reason']), ('refused', 'stale'))
+        self.assertEqual(log.appends, [])
+
+    def test_a_malformed_event_from_a_computation_refuses_before_any_append(self):
+        """TASK-031 AC8, AC10: an event that lacks a key when the appends are planned gives "refused", reason "append",
+        with nothing appended; no exception escapes."""
+        log = done_task(Log())
+        bad = {'stale': {}, 'events': [{'event_id': 'x', 'event_type': 'evidence.stale', 'payload': {}}],
+               'uncovered': [], 'error': None}
+        with mock.patch.object(stale, 'stale', return_value=bad):
+            res = run(log)
+        self.assertEqual((res['result'], res['reason']), ('refused', 'append'))
+        self.assertEqual(log.appends, [])
+
+    def test_another_tasks_submissions_and_events_are_not_used(self):
+        """TASK-031 AC2, AC4: another task's submitted commits and evidence.stale events do not reach this task's
+        stale inputs."""
+        log = done_task(Log())
+        log.add('task.submitted', {'commit': cid(3), 'compensating': False}, 'sub-other', task_id=TASK2,
+                fencing_token=FENCE, lease={'task_id': TASK2, 'fencing_token': FENCE, 'expires_at': NOW + H1})
+        log.add('evidence.stale', {'records': ['r-' + TASK], 'reason': 'commit'}, 'stale-other', task_id=TASK2)
+        with mock.patch.object(stale, 'stale', wraps=stale.stale) as spy:
+            run(log)
+        given = spy.call_args[0][0]
+        self.assertEqual(given['base_commits'][0]['submitted_by_task'], False)
+        self.assertEqual(given['earlier_events'], [])
+
+    def test_the_last_matching_decision_counts(self):
+        """TASK-031 AC2 (a stated reading): among a task's decision.acceptance events with the same record_id, the
+        last one counts, either way."""
+        log = done_task(Log(), rid='dec-x')
+        log.add('decision.acceptance', decision('dec-x', cid(2), TASK, 'NEEDS_REWORK'), 'acc-later')
+        res = run(log)
+        self.assertIn((TASK, 'decision record dec-x is not an ACCEPT decision'), unc(res))
+        log = Log()
+        log.add('decision.acceptance', decision('dec-y', cid(2), TASK, 'NEEDS_REWORK'), 'acc-first')
+        done_task(log, rid='dec-y')
+        res = run(log)
+        self.assertNotIn(TASK, {u['ref'] for u in res['uncovered']})
+
+    def test_an_accepted_commit_equal_to_the_trigger(self):
+        """TASK-031 AC3, AC4: a task accepted at the trigger itself gets stale with no base commit."""
+        log = done_task(Log(), commit=cid(3))
+        with mock.patch.object(stale, 'stale', wraps=stale.stale) as spy:
+            res = run(log)
+        self.assertEqual(res['result'], 'reconciled', res)
+        self.assertEqual(spy.call_args[0][0]['base_commits'], [])
+
+    def test_a_record_added_after_a_run_makes_the_rerun_conflict(self):
+        """TASK-031 AC8, AC12 (a stated limit): a record added to a DONE task after a run at the same trigger makes
+        the rerun's evidence.stale event differ from the stored one under the same id; the writer refuses it, and the
+        rerun stops there with "refused", reason "append"."""
+        log = done_task(Log())
+        first = run(log)
+        self.assertEqual(first['result'], 'reconciled', first)
+        log.add('record.added', record('r-late', cid(2)), 'rec-late')
+        second = run(log)
+        self.assertEqual((second['result'], second['reason']), ('refused', 'append'))
+        self.assertEqual(second['appended'], [])
+        self.assertTrue(any('with another event' in f for f in second['findings']), second['findings'])
+
+
+FORBIDDEN_NAMES = ('open', 'exec', 'eval', 'compile', '__import__', 'subprocess', 'os', 'governor', 'time')
+FORBIDDEN_ATTRS = ('now', 'utcnow', 'today', 'time', 'environ', 'getenv', 'open', 'write', 'run_task', 'evaluate',
+                   'grant_lease', 'release_lease', 'release_lease_token', 'expire_leases', 'open_store')
+ALLOWED_IMPORTS = {'datetime', 'hashlib', 're', 'aieos_bootstrap.drift', 'aieos_bootstrap.gitread',
+                   'aieos_bootstrap.records', 'aieos_bootstrap.stale', 'aieos_bootstrap.writer'}
+
+
+def purity_findings(src):
+    """The purity check of AC9 and AC11 over a source text: the imports outside the allowed set, the forbidden names
+    and attributes used, asserts, and a project-state directory string, each as a short text."""
+    tree = ast.parse(src)
+    found = []
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Import):
+            found.extend('import ' + a.name for a in n.names if a.name not in ALLOWED_IMPORTS)
+        elif isinstance(n, ast.ImportFrom):
+            found.extend('import %s.%s' % (n.module, a.name) for a in n.names
+                         if '%s.%s' % (n.module, a.name) not in ALLOWED_IMPORTS)
+        elif isinstance(n, ast.Name) and n.id in FORBIDDEN_NAMES:
+            found.append('name ' + n.id)
+        elif isinstance(n, ast.Attribute) and n.attr in FORBIDDEN_ATTRS:
+            found.append('attribute ' + n.attr)
+        elif isinstance(n, ast.Assert):
+            found.append('assert')
+    if '.aie' + 'os' in src:
+        found.append('project-state directory')
+    return found
+
+
 class R10Purity(unittest.TestCase):
 
     def test_imports_and_calls(self):
         """TASK-031 AC9, AC11: the module imports only the standard library and drift, gitread, records, stale and
         writer; it calls no open, process, clock or governor function, has no assert and names no project-state
         directory."""
-        tree = ast.parse(MODULE.read_text(encoding='utf-8'))
-        mods = set()
-        for n in ast.walk(tree):
-            if isinstance(n, ast.Import):
-                mods.update(a.name for a in n.names)
-            elif isinstance(n, ast.ImportFrom):
-                mods.update('%s.%s' % (n.module, a.name) for a in n.names)
-        self.assertEqual(mods, {'datetime', 'hashlib', 're', 'aieos_bootstrap.drift', 'aieos_bootstrap.gitread',
-                                'aieos_bootstrap.records', 'aieos_bootstrap.stale', 'aieos_bootstrap.writer'})
-        names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
-        attrs = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
-        for bad in ('open', 'exec', 'eval', 'compile', '__import__', 'subprocess', 'os', 'governor', 'time'):
-            self.assertNotIn(bad, names)
-        for bad in ('now', 'utcnow', 'today', 'time', 'environ', 'getenv', 'open', 'write', 'run_task', 'evaluate',
-                    'grant_lease', 'release_lease', 'release_lease_token', 'expire_leases', 'open_store'):
-            self.assertNotIn(bad, attrs)
-        self.assertFalse(any(isinstance(n, ast.Assert) for n in ast.walk(tree)))
-        self.assertNotIn('.aie' + 'os', MODULE.read_text(encoding='utf-8'))
+        src = MODULE.read_text(encoding='utf-8')
+        self.assertEqual(purity_findings(src), [])
+        tree = ast.parse(src)
+        mods = {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
+        mods |= {'%s.%s' % (n.module, a.name) for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)
+                 for a in n.names}
+        self.assertEqual(mods, ALLOWED_IMPORTS)
 
-    def test_the_purity_check_catches_a_seeded_call(self):
-        """TASK-031 AC11: the same check finds an open call seeded into the source."""
-        src = MODULE.read_text(encoding='utf-8') + '\nopen("x")\n'
-        names = {n.id for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Name)}
-        self.assertIn('open', names)
+    def test_the_purity_check_catches_seeded_calls(self):
+        """TASK-031 AC11: the same check reports an open call, a clock call, a governor import, an assert and a
+        project-state directory string seeded into the module's source."""
+        base = MODULE.read_text(encoding='utf-8')
+        seeds = {'\nopen("x")\n': 'name open', '\ndatetime.datetime.now()\n': 'attribute now',
+                 '\nfrom aieos_bootstrap import governor\n': 'import aieos_bootstrap.governor',
+                 '\nassert True\n': 'assert', '\nX = "' + '.aie' + 'os/x"\n': 'project-state directory'}
+        for seed, want in seeds.items():
+            self.assertIn(want, purity_findings(base + seed), seed)
 
     def test_the_docstring_names_what_it_does_not_do(self):
         """TASK-031 AC9: the docstring says what the module does not do and names DEF-0030, DEF-0051 and DEF-0057."""
