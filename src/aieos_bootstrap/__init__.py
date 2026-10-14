@@ -1,7 +1,7 @@
 """The bootstrap package of gov-AIEOS (tasks TASK-001, TASK-003, TASK-004, TASK-006, TASK-007, TASK-008, TASK-009,
-TASK-016, TASK-021, TASK-022, TASK-023, TASK-024, TASK-025, TASK-026, TASK-027, TASK-029 and TASK-030).
+TASK-016, TASK-021, TASK-022, TASK-023, TASK-024, TASK-025, TASK-026, TASK-027, TASK-029, TASK-030 and TASK-031).
 
-It holds sixteen modules:
+It holds seventeen modules:
 - ``records`` (TASK-001): a checker of the form of event-log lines, records and event payloads of specification 2
   sections 6.1 to 6.4. It reads only the text it is given, writes nothing and decides nothing.
 - ``conformance`` (TASK-003, with TASK-006's Resume Check entry and TASK-017's Risk Engine entry): the conformance runner of
@@ -58,7 +58,13 @@ It holds sixteen modules:
   task evaluated at it), it returns one violation.detected event per article whose scope meets a changed path and
   whose rule failed there, unless that task already recorded the same failure, and what it could not check; it reads
   and writes no file and appends nothing.
+- ``reconcile`` (TASK-031): the reconciliation caller of specification 4 section 7 items 1, 3 and 4. At one base
+  commit it reads the event log through the writer and a bounded first-parent walk of Git through gitread, calls
+  ``stale`` for every task the log shows done and ``drift`` for the commit with only the deterministic source classes
+  counted, and appends their events through the writer under the ids they derive; it changes no task state, grants no
+  lease, opens no file itself and reads no clock.
 """
 
 __all__ = ['ac_coverage', 'ac_tests', 'conformance', 'drift', 'evaluation', 'eventlog', 'gitread', 'governor',
-           'records', 'recovery', 'resume_check', 'stale', 'startup', 'submit', 'verification_records', 'writer']
+           'reconcile', 'records', 'recovery', 'resume_check', 'stale', 'startup', 'submit', 'verification_records',
+           'writer']
