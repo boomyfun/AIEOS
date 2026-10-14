@@ -168,6 +168,9 @@ Occurrences in session 2026-10-12-1245 (../History/2026-10/2026-10-12-1245-const
 Occurrences in session 2026-10-14-2219 (../History/2026-10/2026-10-14-2219-the-reconciliation-caller-accepted-and-on-main.md):
 - **2026-10-14 (:792, :1081, :1150).** Three short English working notes in messages holding tool calls, the first two right after a harness note, each announcing the next file or step, against the owner's item 5 of this session's prompt; each caught by the textblock check before the next gated command, brought to the decision agent and listed, the owner told (decisions D-678 and D-680).
 
+Occurrences in session 2026-10-14-2320 (../History/2026-10/2026-10-14-2320-the-execution-path-accepted-and-on-main.md):
+- **2026-10-14 to 2026-10-15 (:529, :689, :1229, :1497, :1800).** Five English text blocks before tool calls ("Now update the writer WANT values and rebuild the command.", "Now the pause-reply draft.", "Now the readings file.", "Applying the test-side fixes.", "Writing the session-end work builder now."), none right after a harness note; each caught by the textblock check before the next gated command, brought to the decision agent, listed, and told to the owner.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

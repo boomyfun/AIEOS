@@ -148,6 +148,9 @@ Occurrences in session 2026-10-14-2219 (../History/2026-10/2026-10-14-2219-the-r
 - **2026-10-14 (D-676, D-677).** Four transcript line numbers written in requests to the decision agent without a grep: :175 for :195, and :595, :354 and :621 for :466, :367 and :642; each corrected by a grep before the decision used it (decisions D-676 and D-677).
 - **2026-10-14 (:857 to :861).** The five reviewer prompts were pasted from the roles file, so each carried the role label "R<n>|" (3 characters) that the built briefs do not; found by prompts_vs_briefs after the launch; the reviews kept and the difference recorded, and from then on a prompt is pasted only from its built brief and every launch shows "exact True" (decision D-679).
 
+Occurrences in session 2026-10-14-2320 (../History/2026-10/2026-10-14-2320-the-execution-path-accepted-and-on-main.md):
+- **2026-10-14 to 2026-10-15 (D-687, D-690, D-691).** Four transcript line numbers written in requests to the decision agent without a grep: :599 for :607 (D-687), :911-:912 for :928 and :1113 for :1109 (D-690), :1203 for :1207 (D-691), and the clone's line left unnamed (D-690, then :974); each corrected by a grep in a short message before the decision used it.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

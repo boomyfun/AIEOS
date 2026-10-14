@@ -198,6 +198,10 @@ Occurrences in session 2026-10-14-2219 (../History/2026-10/2026-10-14-2219-the-r
 - **2026-10-14 (:233, :515).** Two placeholder commands of no effect, one holding a heredoc (refused by guard rule R1), one holding Python's name followed by a dash (refused by guard rule R2); neither retried (decisions D-676 and D-677).
 - **2026-10-14 (:657, :661, :1130).** Three real commands each holding a part of no effect (`sed ... > /dev/null` twice, `find ... | head -1 > /dev/null` once); not refused and not flagged by filler_count3.py, found by my own grep (decisions D-677 and D-680).
 
+Occurrences in session 2026-10-14-2320 (../History/2026-10/2026-10-14-2320-the-execution-path-accepted-and-on-main.md), each my incorrect command:
+- **2026-10-14 (:584, :1030, :1136).** Three commands refused by the owner's guard before they ran: a here-string (rule R1), and twice Python's name followed by a dash (rule R2), once as a test run and once inside a grep's search pattern; :1136 also held a part of no effect. None retried in that form; :584 rewritten under D-686 C2.
+- **2026-10-14 to 2026-10-15 (:1182, :1186, :1213, :1441).** Parts of no effect or that fail inside real commands: `git diff --no-index /dev/null /dev/null` (:1182), a grep for that string (:1186, flagged by filler_count3.py), an assignment `sleep_ok=0;` (:1213), and a grep naming a folder that does not exist (:1441).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
