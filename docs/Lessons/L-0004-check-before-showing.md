@@ -159,6 +159,12 @@ Occurrences in session 2026-10-15-0229 (../History/2026-10/2026-10-15-0229-the-s
 - **2026-10-15 (D-716).** The first push request showed an executor diff made from an earlier build (manifest b47748b0...) while the dry run had bound a later build (eb5cfb8c...); the decision agent asked for the account, and the final executor and manifest were bound and shown before the push.
 - **2026-10-15 (D-716 addendum).** A new naming test read its own test file, against AC14 (the tests open only the package's own sources); found while building the review briefs and fixed before the push.
 
+Occurrences in session 2026-10-15-0422 (../History/2026-10/2026-10-15-0422-the-scope-drift-callers-hardening-accepted-and-on-main.md):
+- **2026-10-15 (D-725).** A request named the gated run as ":427" before the number was checked; by grep it was :431 (the other record holding the command text was the request itself, :410); corrected before the decision.
+- **2026-10-15 (D-729).** The gate check's output "owner records (plain-text search): 3" was read as a count, so a request proposed that gated commands expect "4" after the owner's second message; the tool prints the records' line numbers (its line 62), so the exact form is "3 759". Found while building the first push and corrected before any run; the first build was never run.
+- **2026-10-15 (D-731).** A scratch clone was made from another scratch clone that lacked the task head, so its checkout failed; cloned again from the repository. No effect.
+- **2026-10-15 (found at this session's start; D-722's confirmations, D-723 C2, D-724).** In session 9a3d9254: the executor diff shown at D-722 was stale (a second occurrence after D-716's); the memory texts were shown at 9a3d :1881 before the confirmation that the order named (accepted); the line number ":1882" was written unchecked; and the owner text of D-722's first confirmation is in no turn-final reply verbatim: the session-end relay check (D-312) covered handbacks, not confirmations. The relay check now runs over every handback and confirmation (D-724 C2).
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

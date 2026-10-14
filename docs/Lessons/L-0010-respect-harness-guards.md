@@ -208,6 +208,9 @@ Occurrences in session 2026-10-15-0028 (../History/2026-10/2026-10-15-0028-the-p
 Occurrences in session 2026-10-15-0229 (../History/2026-10/2026-10-15-0229-the-scope-drift-caller-accepted-and-on-main.md), each my incorrect command:
 - **2026-10-15.** :208 a heredoc and Python's name followed by a dash, refused by guard rules R1 and R2 (the form the memory's rule names); :645 an `rm -f` of a scratch draft, against the memory's rule "no rm"; :872 a Python run under `timeout 590`, refused by rule R3 and rewritten at :876 (as in session c5a72bcd); :1348 a part with no effect (a stray variable assignment), which filler_count3 did not flag; :1663 a sed into /dev/null, a part with no effect; :1670 the records dry run given its arguments in the wrong order (as in session c5a72bcd), its checkout failing on long paths inside the scratchpad, rerun in order; :1761 a head into /dev/null, again a part with no effect. None was retried in a refused form.
 
+Occurrences in session 2026-10-15-0422 (../History/2026-10/2026-10-15-0422-the-scope-drift-callers-hardening-accepted-and-on-main.md), each my incorrect command:
+- **2026-10-15.** :271 a grep of /dev/null inside a read (a part of no effect); :307 a heredoc with an `echo skip` placeholder, refused by guard rule R1; :737 a stray assignment `sleep_none=;` (the form of 9a3d :1348); :909 Python's name followed by a dash for a module run, refused by rule R2 and not retried in that form (the check then ran through a script written with the Write tool); :1436 `echo waiting-free;`, a part of no effect. filler_count3 flagged :271, :307 and :909, not :737 or :1436.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
