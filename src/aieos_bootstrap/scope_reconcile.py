@@ -1,6 +1,6 @@
-"""The scope-drift caller of gov-AIEOS (task TASK-034; specification 4 revision 3, section 7 items 2 and 4; the risk
-rules' revision 4, policy version v3, section 2 point 7; concept lines 745 and 948; DEF-0030 and DEF-0060): the core's
-caller of scope_drift.claims (TASK-033).
+"""The scope-drift caller of gov-AIEOS (task TASK-034, hardened by task TASK-035; specification 4 revision 3, section 7
+items 2 and 4; the risk rules' revision 4, policy version v3, section 2 point 7; concept lines 745 and 948; DEF-0030,
+DEF-0060 and DEF-0061): the core's caller of scope_drift.claims (TASK-033).
 
 ``reconcile_scope(root, repo, commit, values, recorder, now, read=None, read_log=None, append=None)`` runs for one base
 commit:
@@ -14,8 +14,12 @@ commit:
    trailer task is passed (so the commit is detected) and the commit is named uncovered ("trailer out of form").
 3. The base read (AC3): the policy (docs/specs/risk-rules-gov-aieos.md) and the CI workflow
    (.github/workflows/aieos-checks.yml) are read at the commit's first parent, never at the commit judged, by a walk of
-   Git trees with the pinned "cat-file -p <id>" form only (``read_base``). A listing line out of form, a missing path
-   element, a type other than the one expected, a failed read or bytes that do not decode stop the run.
+   Git trees with the pinned "cat-file -p <id>" form only (``read_base``). A listing line out of form (a name holding
+   "/", NUL or any other control character included; TASK-035 AC2), a name listed twice in one listing (TASK-035 AC1),
+   a missing path element, a type other than the one expected, a walked element whose mode does not fit its type
+   (040000 for a tree, 100644 or 100755 for the blob; TASK-035 AC3), a failed read or bytes that do not decode stop the
+   run. A name beginning with a double quote (Git's C-quoted form) is kept as an entry under its quoted text, so it
+   never equals a walked element.
 4. The policy's facts (AC4): the list by scope_drift.non_task_list; the rules translated into the governor's form
    {match, class} only (component_tags read as src/** and tests/**, rule R3 by tags; an entry out of form passed on as
    the refused rule {"match": [], "class": None}, so that no path is non-task); the evaluator list from the workflow's
@@ -23,9 +27,12 @@ commit:
    path is non-task).
 5. The contract (AC5): the log is read once through ``read_log`` and checked by records.check_log; a trailer task's
    write-set is passed to claims only when the SHA-256 of the caller's contract bytes equals the contract_hash of the
-   task's last task.approved event in the log.
+   task's last task.approved event in the log; a task with no task.approved event, no value given or another hash gets
+   no entry (claims names it "no contract"), and only facts.contracts says which (TASK-035 AC5).
 6. The call (AC6): claims once; a result whose error is not None stops the run (never "no claim").
-7. The append (AC7): the returned event, if any, once through ``append`` with no task_id and no fencing token.
+7. The append (AC7): the returned event, if any, once through ``append`` with no task_id and no fencing token; the
+   event id is taken inside the append's guard, so a returned event out of form is a refusal "append" with no append
+   call (TASK-035 AC4).
 
 The result (AC9) is a mapping with exactly the keys result ("reconciled" or "refused"), reason, findings, appended,
 duplicate, detected, exempt, uncovered and facts (AC8 as amended by erratum E1 to AC8, decision D-716: facts is None
@@ -43,11 +50,20 @@ names (its contract_hash), not "the version the task's lease named" (specificati
 specification 2 carries a contract hash. The facts name the hash used.
 Limit L1 (decision D-713 P3): a merge commit is not read against its first parent (gitread pins no diff form for it);
 it is named uncovered, with no event.
+Limit L2 (TASK-035; DEF-0061 m1): a reader that gives a raw newline inside a name (a stand-in, or a Git that does not
+quote) can make a line in form naming a path element no other line names; the parser cannot tell such a line apart.
+It is bounded by the refusal of a name listed twice, by reading R1 for the pinned read, and by the parent being
+governed history.
 
 Readings (the implementer's, not the contract's own words):
 - A literal's item is out of form when it is not a single-quoted text without a quote or a line break; whether an item
   is of the risk rules' point 6 form is left to claims, which then makes no path non-task (the same outcome).
-- A tree listing's name is taken as UTF-8; Git's "cat-file -p" prints names unquoted.
+- A tree listing's name is taken as UTF-8.
+- Reading R1 (the implementer's, unprobed; TASK-035, decision D-725 C2): "git cat-file -p <tree>" prints a tree as
+  ls-tree does, so a name holding a control character, a double quote or a backslash (and, under the default
+  core.quotePath, any non-ASCII name) comes C-quoted in double quotes; a raw tab or newline therefore never reaches the
+  parser from the pinned read. The refusals of a name listed twice and of a control character hold whether or not R1
+  is right.
 - An append's result counts by its ``result`` text, as reconcile reads the writer's result.
 
 What it does not do (AC10): it closes no claim, classifies and proposes nothing, changes no task state, grants,
@@ -90,7 +106,8 @@ _RISK = re.compile(r'    risk: (\S+)')
 _QUOTED = re.compile(r'"[^"\n,\]]+"(?:, "[^"\n,\]]+")*')
 _TAGS = re.compile(r'[A-Za-z0-9_-]+(?:, [A-Za-z0-9_-]+)*')
 _LITERAL = re.compile(r"'[^'\n]+'(?:,\s*'[^'\n]+')*,?")
-_LISTING = re.compile(r'([0-7]+) (blob|tree|commit) ([0-9a-f]{40}|[0-9a-f]{64})\t([^/\x00]+)')
+_LISTING = re.compile(r'([0-7]+) (blob|tree|commit) ([0-9a-f]{40}|[0-9a-f]{64})\t([^/\x00-\x1f\x7f]+)')
+MODES = {'tree': ('040000',), 'blob': ('100644', '100755')}
 _ZERO = datetime.timedelta(0)
 
 
@@ -170,7 +187,8 @@ def _cat(read, repo, oid, reason):
 
 
 def _listing(data, oid):
-    """AC3: the entries {name: (type, id)} of a tree's "cat-file -p" output; any line out of form stops."""
+    """AC3: the entries {name: (mode, type, id)} of a tree's "cat-file -p" output; any line out of form (a control
+    character in a name included, TASK-035 AC2) and a name listed twice (TASK-035 AC1) stop."""
     try:
         text = data.decode('utf-8')
     except UnicodeDecodeError:
@@ -183,22 +201,27 @@ def _listing(data, oid):
         m = _LISTING.fullmatch(line)
         if m is None:
             raise _Stop('base', ['base: a line of the listing of tree %s is out of form' % oid])
-        out[m.group(4)] = (m.group(2), m.group(3))
+        if m.group(4) in out:
+            raise _Stop('base', ['base: the listing of tree %s names %s twice' % (oid, m.group(4))])
+        out[m.group(4)] = (m.group(1), m.group(2), m.group(3))
     return out
 
 
 def _blob_at(read, repo, tree, path):
-    """AC3: (the blob's id, its text) for path in the tree; a missing element or a wrong type stops."""
+    """AC3: (the blob's id, its text) for path in the tree; a missing element, a wrong type or a walked element's mode
+    that does not fit its type (TASK-035 AC3) stops."""
     parts = path.split('/')
     current = tree
     for k, name in enumerate(parts):
         entries = _listing(_cat(read, repo, current, 'base'), current)
         if name not in entries:
             raise _Stop('base', ['base: %s: the element %s is missing' % (path, name)])
-        kind, oid = entries[name]
+        mode, kind, oid = entries[name]
         want = 'blob' if k == len(parts) - 1 else 'tree'
         if kind != want:
             raise _Stop('base', ['base: %s: the element %s is a %s, not a %s' % (path, name, kind, want)])
+        if mode not in MODES[want]:
+            raise _Stop('base', ['base: %s: the element %s has the mode %s, not a %s mode' % (path, name, mode, want)])
         current = oid
     data = _cat(read, repo, current, 'base')
     try:
@@ -391,10 +414,19 @@ def reconcile_scope(root, repo, commit, values, recorder, now, read=None, read_l
                        facts=facts)
 
     appended, duplicate = [], []
+    out_of_form = ['append: the returned event is out of form; nothing was appended for it']
+    if type(events_out) is not list:  # TASK-035 AC4
+        return _result('refused', 'append', out_of_form, appended, duplicate, detected, exempt, uncovered, facts)
     for e in events_out:
-        eid = e['event_id']
+        eid = None
         try:
-            w = append(root, EVENT_TYPE, e['payload'], eid, now, recorder)
+            # TASK-035 AC4: the event id and the payload are taken inside the guard; an event out of form is refused
+            # before any append call.
+            if type(e) is not dict or 'event_id' not in e or 'payload' not in e:
+                return _result('refused', 'append', out_of_form, appended, duplicate, detected, exempt, uncovered,
+                               facts)
+            eid, payload = e['event_id'], e['payload']
+            w = append(root, EVENT_TYPE, payload, eid, now, recorder)
             outcome = getattr(w, 'result', None)
             if type(outcome) is not str:
                 raise TypeError('the result is not a string')

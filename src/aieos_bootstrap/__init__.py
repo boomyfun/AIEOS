@@ -1,6 +1,6 @@
 """The bootstrap package of gov-AIEOS (tasks TASK-001, TASK-003, TASK-004, TASK-006, TASK-007, TASK-008, TASK-009,
 TASK-016, TASK-021, TASK-022, TASK-023, TASK-024, TASK-025, TASK-026, TASK-027, TASK-029, TASK-030, TASK-031,
-TASK-032, TASK-033 and TASK-034).
+TASK-032, TASK-033, TASK-034 and TASK-035).
 
 It holds twenty modules:
 - ``records`` (TASK-001): a checker of the form of event-log lines, records and event payloads of specification 2

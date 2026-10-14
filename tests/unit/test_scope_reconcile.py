@@ -537,18 +537,190 @@ class Purity(unittest.TestCase):
         self.assertEqual({a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}, {'os'})
 
 
+def tree_of(repo, cid):
+    """The root tree id of a stand-in commit."""
+    return repo.objects[cid].decode('utf-8').split('\n')[0].split()[1]
+
+
+def sub(repo, tid, name):
+    """The id of the entry name in the stand-in tree tid."""
+    return [x for x in repo.objects[tid].decode('utf-8').split('\n') if x.endswith('\t' + name)][0].split()[2]
+
+
+def edit(repo, tid, fn):
+    """Replace the listing of the stand-in tree tid by fn(its text); the id stays (the stand-in answers by id)."""
+    repo.objects[tid] = fn(repo.objects[tid].decode('utf-8')).encode('utf-8')
+
+
+def refused_base(test, repo, c, label):
+    out, mem = run(repo, c)
+    test.assertEqual((out['result'], out['reason'], mem.calls), ('refused', 'base', []), (label, out))
+    return out
+
+
+class Hardening(unittest.TestCase):
+    """TASK-035 (DEF-0061): the stricter base read and append."""
+
+    def test_a_name_listed_twice_is_refused_base(self):
+        """TASK-035 AC1: a walked element listed twice, and a sibling listed twice, in one listing are refused "base";
+        distinct names run as before."""
+        repo, p, c = world(['src/x.py'])
+        root = tree_of(repo, p)
+        line = [x for x in repo.objects[root].decode('utf-8').split('\n') if x.endswith('\tdocs')][0]
+        edit(repo, root, lambda t: t + line + '\n')
+        out = refused_base(self, repo, c, 'walked twice')
+        self.assertIn('twice', out['findings'][0])
+        repo2, p2, c2 = world(['src/x.py'])
+        root2 = tree_of(repo2, p2)
+        readme = [x for x in repo2.objects[root2].decode('utf-8').split('\n') if x.endswith('\tREADME.md')][0]
+        edit(repo2, root2, lambda t: t + readme + '\n')
+        refused_base(self, repo2, c2, 'sibling twice')
+        repo3, p3, c3 = world(['src/x.py'])
+        self.assertEqual(len(run(repo3, c3)[0]['appended']), 1)
+
+    def test_control_characters_are_refused_and_quoted_names_kept(self):
+        """TASK-035 AC2: a tab and another control character inside a name are refused "base"; a C-quoted non-ASCII
+        sibling leaves the run as before; a quoted name never equals a walked element."""
+        for bad in ('re\tad.md', 're\x01ad.md', 're\x7fad.md'):
+            repo, p, c = world(['src/x.py'])
+            root = tree_of(repo, p)
+            edit(repo, root, lambda t, b=bad: t + '100644 blob %s\t%s\n' % (oid('x'), b))
+            refused_base(self, repo, c, repr(bad))
+        repo, p, c = world(['src/x.py'])
+        root = tree_of(repo, p)
+        edit(repo, root, lambda t: t + '100644 blob %s\t"\\303\\244.md"\n' % oid('y'))
+        out, mem = run(repo, c)
+        self.assertEqual((out['result'], len(out['appended'])), ('reconciled', 1), out)
+        repo2, p2, c2 = world(['src/x.py'])
+        root2 = tree_of(repo2, p2)
+        edit(repo2, root2, lambda t: t.replace('\tdocs\n', '\t"docs"\n'))
+        out2 = refused_base(self, repo2, c2, 'quoted walked element')
+        self.assertIn('missing', out2['findings'][0])
+
+    def test_a_walked_elements_mode_must_fit_its_type(self):
+        """TASK-035 AC3: a symbolic link at the policy's path, a tree element with a blob's mode, a submodule mode and a
+        legacy 100664 are refused "base"; 100755 for the blob and a sibling symbolic link run as before."""
+        def specs(repo, p):
+            return sub(repo, sub(repo, tree_of(repo, p), 'docs'), 'specs')
+        cases = (('symbolic link', lambda r, p: edit(r, specs(r, p), lambda t: t.replace('100644 blob', '120000 blob'))),
+                 ('tree with a blob mode', lambda r, p: edit(r, tree_of(r, p), lambda t: t.replace(
+                     '040000 tree', '100644 tree', 1))),
+                 ('submodule mode', lambda r, p: edit(r, tree_of(r, p), lambda t: t.replace(
+                     '040000 tree', '160000 tree', 1))),
+                 ('legacy 100664', lambda r, p: edit(r, specs(r, p), lambda t: t.replace('100644 blob', '100664 blob'))))
+        for label, change in cases:
+            repo, p, c = world(['src/x.py'])
+            change(repo, p)
+            out = refused_base(self, repo, c, label)
+            self.assertIn('mode', out['findings'][0], label)
+        repo, p, c = world(['src/x.py'])
+        edit(repo, specs(repo, p), lambda t: t.replace('100644 blob', '100755 blob'))
+        self.assertEqual(run(repo, c)[0]['result'], 'reconciled')
+        repo2, p2, c2 = world(['src/x.py'])
+        edit(repo2, tree_of(repo2, p2), lambda t: t.replace('100644 blob', '120000 blob'))
+        self.assertTrue(repo2.objects[tree_of(repo2, p2)].count(b'120000 blob'))
+        self.assertEqual(run(repo2, c2)[0]['result'], 'reconciled')
+
+    def test_a_returned_event_out_of_form_is_refused_append(self):
+        """TASK-035 AC4: claims returning an event that is not a mapping, an event without event_id, one without payload,
+        or events that are not a list, gives a refusal "append" and no append call."""
+        repo, p, c = world(['src/x.py'])
+        orig = scope_drift.claims
+        for events in (['not a mapping'], [{'payload': {}}], [{'event_id': 'e1'}], 'not a list'):
+            try:
+                scope_drift.claims = lambda inputs, ev=events: {'events': ev, 'detected': True, 'exempt': False,
+                                                                'uncovered': [], 'error': None}
+                out, mem = run(repo, c)
+            finally:
+                scope_drift.claims = orig
+            self.assertEqual((out['result'], out['reason'], mem.calls), ('refused', 'append', []), events)
+            self.assertIn('out of form', out['findings'][0])
+
+    def test_the_docstring_states_r1_and_l2(self):
+        """TASK-035 AC5: the docstring states reading R1 (unprobed), limit L2, B1, D1, L1 and DEF-0030's caller, and no
+        longer says that Git prints names unquoted."""
+        doc = ast.get_docstring(ast.parse(SRC.read_text(encoding='utf-8')))
+        for s in ('Reading R1 (the implementer\'s, unprobed', 'whether or not R1', 'Limit L2', 'Reading B1 (proposed',
+                  'Departure D1', 'Limit L1', "DEF-0030's caller", 'listed twice'):
+            self.assertIn(s, doc)
+        self.assertNotIn('prints names unquoted', doc)
+
+    def test_forty_hex_object_ids(self):
+        """TASK-035 AC6 (DEF-0061 t4): a stand-in repository whose object ids are 40 hex characters (the form of this
+        repository) runs as one with 64-hex ids: a change under src/ is a claim."""
+        global oid
+        old = oid
+        try:
+            oid = lambda *parts: old(*parts)[:40]  # noqa: E731
+            repo, p, c = world(['src/x.py'])
+        finally:
+            oid = old
+        self.assertEqual((len(p), len(c)), (40, 40))
+        out, mem = run(repo, c)
+        self.assertEqual((out['result'], len(out['appended'])), ('reconciled', 1), out)
+        self.assertEqual(len(out['facts']['policy_blob']), 40)
+
+    def test_matching_bytes_with_a_path_outside_the_write_set_is_a_claim(self):
+        """TASK-035 AC6 (DEF-0061 t3): contract bytes whose hash matches, with a changed path outside the write-set,
+        give a detected commit and one appended event."""
+        repo, p, c = world(['src/y.py'], trailer='AIEOS-Task: TASK-090')
+        mem = Memory()
+        approve(mem, 'TASK-090', CONTRACT)
+        out, _ = run(repo, c, mem, {'TASK-090': {'contract_bytes': CONTRACT, 'write_set': ['src/x.py']}})
+        self.assertEqual(out['facts']['contracts'], {'TASK-090': hashlib.sha256(CONTRACT).hexdigest()})
+        self.assertEqual((out['detected'], len(out['appended'])), (True, 1), out)
+
+    def test_a_mixed_trailer_passes_no_trailer_task(self):
+        """TASK-035 AC6 (DEF-0061 t5): one trailer in form and one out of form pass no trailer task: the commit is
+        detected and named "trailer out of form"."""
+        repo, p, c = world(['src/x.py'], trailer='AIEOS-Task: TASK-090\nAIEOS-Task: nonsense')
+        seen = []
+        orig = scope_drift.claims
+        try:
+            scope_drift.claims = lambda inputs: seen.append(inputs) or orig(inputs)
+            out, _ = run(repo, c)
+        finally:
+            scope_drift.claims = orig
+        self.assertEqual(seen[0]['trailer_tasks'], [])
+        self.assertTrue(out['detected'])
+        self.assertIn({'ref': c, 'detail': 'trailer out of form'}, out['uncovered'])
+
+    def test_facts_are_a_mapping_after_a_claims_or_an_append_refusal(self):
+        """TASK-035 AC6 (DEF-0061 t5; TASK-034 AC8 as amended by erratum E1): after a claims refusal and after an append
+        refusal, facts is the mapping of the facts used."""
+        repo, p, c = world(['src/x.py'])
+        orig = scope_drift.claims
+        try:
+            scope_drift.claims = lambda inputs: {'events': [], 'detected': False, 'exempt': False, 'uncovered': [],
+                                                 'error': 'an exception: X'}
+            out, _ = run(repo, c)
+        finally:
+            scope_drift.claims = orig
+        self.assertEqual(out['reason'], 'scope_drift')
+        self.assertEqual(tuple(out['facts']), scope_reconcile.FACT_KEYS)
+
+        def raises(*a, **k):
+            raise RuntimeError('x')
+        o = scope_reconcile.reconcile_scope('/state', '/repo', c, {'contracts': {}}, REC, NOW, read=repo,
+                                            read_log=Memory().read_log, append=raises)
+        self.assertEqual(o['reason'], 'append')
+        self.assertEqual(tuple(o['facts']), scope_reconcile.FACT_KEYS)
+        self.assertEqual(o['facts']['parent'], p)
+
+
 class Naming(unittest.TestCase):
     def test_every_test_names_its_criteria(self):
-        """TASK-034 AC14: every test function of this module names "TASK-034 ACn" in its own docstring, and no other
-        task's AC in qualified form."""
+        """TASK-034 AC14 and TASK-035 AC7: every test function of this module names "TASK-034 ACn" or "TASK-035 ACn"
+        (at least one) in its own docstring, and no other task's AC in qualified form."""
         # The loaded classes' docstrings are read, not this file (TASK-034 AC14: the tests open only package sources).
         tests = [(cls.__name__, name, getattr(cls, name).__doc__ or '') for cls in list(globals().values())
                  if isinstance(cls, type) and issubclass(cls, unittest.TestCase) for name in vars(cls)
                  if name.startswith('test_')]
         self.assertGreater(len(tests), 20)
         for cls_name, name, doc in tests:
-            self.assertIn('TASK-034 AC', doc, (cls_name, name))
-            self.assertEqual(set(re.findall(r'(TASK-\d+) AC', doc)), {'TASK-034'}, (cls_name, name))
+            named = set(re.findall(r'(TASK-\d+) AC', doc))
+            self.assertTrue(named, (cls_name, name))
+            self.assertLessEqual(named, {'TASK-034', 'TASK-035'}, (cls_name, name))
 
 
 if __name__ == '__main__':

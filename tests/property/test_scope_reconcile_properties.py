@@ -6,6 +6,7 @@ Each test names its criteria in its own docstring."""
 import datetime
 import hashlib
 import random
+import re
 import unittest
 
 from aieos_bootstrap import eventlog, gitread, scope_drift, scope_reconcile
@@ -151,6 +152,21 @@ class Properties(unittest.TestCase):
                                                      read_log=mem.read_log, append=mem.append)
             self.assertEqual(mem.log, log)
             self.assertEqual((second['appended'], second['duplicate']), ([], first['appended']))
+
+
+class Naming(unittest.TestCase):
+    def test_every_test_names_its_criteria(self):
+        """TASK-035 AC7: every test function of this module names "TASK-034 ACn" or "TASK-035 ACn" (at least one) in
+        its own docstring, and no other task's AC in qualified form; the loaded classes' docstrings are read, not this
+        file."""
+        tests = [(cls.__name__, name, getattr(cls, name).__doc__ or '') for cls in list(globals().values())
+                 if isinstance(cls, type) and issubclass(cls, unittest.TestCase) for name in vars(cls)
+                 if name.startswith('test_')]
+        self.assertGreater(len(tests), 3)
+        for cls_name, name, doc in tests:
+            named = set(re.findall(r'(TASK-\d+) AC', doc))
+            self.assertTrue(named, (cls_name, name))
+            self.assertLessEqual(named, {'TASK-034', 'TASK-035'}, (cls_name, name))
 
 
 if __name__ == '__main__':

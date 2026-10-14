@@ -7,6 +7,7 @@ does). No file is opened or written. Each test names its criteria in its own doc
 import datetime
 import hashlib
 import pathlib
+import re
 import unittest
 
 from aieos_bootstrap import eventlog, gitread, records, scope_reconcile
@@ -148,6 +149,21 @@ class RepositoryHistory(unittest.TestCase):
                                      '**/pyproject.toml', '**/setup.cfg', '**/setup.py', '**/requirements*.txt'])
         r2 = gitread.run(ROOT, ['cat-file', '-t', base['policy_blob']])
         self.assertEqual(r2['out'].strip(), b'blob')
+
+
+class Naming(unittest.TestCase):
+    def test_every_test_names_its_criteria(self):
+        """TASK-035 AC7: every test function of this module names "TASK-034 ACn" or "TASK-035 ACn" (at least one) in
+        its own docstring, and no other task's AC in qualified form; the loaded classes' docstrings are read, not this
+        file."""
+        tests = [(cls.__name__, name, getattr(cls, name).__doc__ or '') for cls in list(globals().values())
+                 if isinstance(cls, type) and issubclass(cls, unittest.TestCase) for name in vars(cls)
+                 if name.startswith('test_')]
+        self.assertGreater(len(tests), 2)
+        for cls_name, name, doc in tests:
+            named = set(re.findall(r'(TASK-\d+) AC', doc))
+            self.assertTrue(named, (cls_name, name))
+            self.assertLessEqual(named, {'TASK-034', 'TASK-035'}, (cls_name, name))
 
 
 if __name__ == '__main__':
