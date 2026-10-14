@@ -202,6 +202,9 @@ Occurrences in session 2026-10-14-2320 (../History/2026-10/2026-10-14-2320-the-e
 - **2026-10-14 (:584, :1030, :1136).** Three commands refused by the owner's guard before they ran: a here-string (rule R1), and twice Python's name followed by a dash (rule R2), once as a test run and once inside a grep's search pattern; :1136 also held a part of no effect. None retried in that form; :584 rewritten under D-686 C2.
 - **2026-10-14 to 2026-10-15 (:1182, :1186, :1213, :1441).** Parts of no effect or that fail inside real commands: `git diff --no-index /dev/null /dev/null` (:1182), a grep for that string (:1186, flagged by filler_count3.py), an assignment `sleep_ok=0;` (:1213), and a grep naming a folder that does not exist (:1441).
 
+Occurrences in session 2026-10-15-0028 (../History/2026-10/2026-10-15-0028-the-policy-list-and-scope-drift-accepted-and-on-main.md), each my incorrect command:
+- **2026-10-15.** :248 a heredoc with parts of no effect, refused by guard rule R1; :428 a grep pattern with unbalanced backticks, which failed to parse; :624 a Python run under `timeout 590`, refused by rule R3 and rewritten to the rule's form at :628; :1123 a needless `python3 -c` part, refused by rules R2 and R3; :1170 the same guard-forbidden form inside a grep pattern, refused by R2 (the form the memory's rule already names); a records dry run given its arguments in the wrong order, whose checkout failed on long paths inside the scratchpad. None was retried in its refused form.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

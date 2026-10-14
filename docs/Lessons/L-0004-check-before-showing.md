@@ -151,6 +151,10 @@ Occurrences in session 2026-10-14-2219 (../History/2026-10/2026-10-14-2219-the-r
 Occurrences in session 2026-10-14-2320 (../History/2026-10/2026-10-14-2320-the-execution-path-accepted-and-on-main.md):
 - **2026-10-14 to 2026-10-15 (D-687, D-690, D-691).** Four transcript line numbers written in requests to the decision agent without a grep: :599 for :607 (D-687), :911-:912 for :928 and :1113 for :1109 (D-690), :1203 for :1207 (D-691), and the clone's line left unnamed (D-690, then :974); each corrected by a grep in a short message before the decision used it.
 
+Occurrences in session 2026-10-15-0028 (../History/2026-10/2026-10-15-0028-the-policy-list-and-scope-drift-accepted-and-on-main.md):
+- **2026-10-15 (D-698, D-700).** Two transcript line numbers written in requests to the decision agent without a grep: ":445" for :403 (D-698) and ":778" for :779 (D-700); each corrected by a short message before the decision used it.
+- **2026-10-15 (D-704).** Commit C's first message said "No governor call", against the contract's AC3, AC4 and AC9 (the module calls governor.matches); the decision agent caught it before the push, and the message was corrected with a second executor naming the corrected file.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

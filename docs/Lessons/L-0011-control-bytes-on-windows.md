@@ -69,6 +69,9 @@ Two incidents in session 2026-10-09-0637 (../History/2026-10/2026-10-09-0637-fix
 - **2026-10-09 (:697, :792).** Filler commands against D-135 C3: a `cmp` of a file that does not exist, which ran and changed nothing, and the refused `python -c ""`.
 - **2026-10-09 (the D-206 request).** One line number filled with `sed -i.bak` instead of the Edit tool; disclosed in the request, the copy before it kept.
 
+Occurrences in session 2026-10-15-0028 (../History/2026-10/2026-10-15-0028-the-policy-list-and-scope-drift-accepted-and-on-main.md):
+- **2026-10-15.** A sed replacement holding an escaped "\r" wrote a carriage return into line 77 of a scratch builder (t033b1/build_b1.py), which broke it with a SyntaxError; repaired by a small script writing that line LF only. Nothing outside the scratchpad was touched.
+
 ## Why it happens
 - Git Bash heredocs interpret quotes and backslashes.
 - Python text mode on Windows writes CRLF.
