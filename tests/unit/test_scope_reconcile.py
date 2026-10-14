@@ -579,9 +579,9 @@ class Hardening(unittest.TestCase):
         self.assertEqual(len(run(repo3, c3)[0]['appended']), 1)
 
     def test_control_characters_are_refused_and_quoted_names_kept(self):
-        """TASK-035 AC2: a tab and another control character inside a name are refused "base"; a C-quoted non-ASCII
-        sibling leaves the run as before; a quoted name never equals a walked element."""
-        for bad in ('re\tad.md', 're\x01ad.md', 're\x7fad.md'):
+        """TASK-035 AC2: a tab, NUL, a carriage return and other control characters inside a name are refused "base"; a
+        C-quoted non-ASCII sibling leaves the run as before; a quoted name never equals a walked element."""
+        for bad in ('re\tad.md', 're\x01ad.md', 're\x7fad.md', 're\x00ad.md', 're\rad.md'):
             repo, p, c = world(['src/x.py'])
             root = tree_of(repo, p)
             edit(repo, root, lambda t, b=bad: t + '100644 blob %s\t%s\n' % (oid('x'), b))
@@ -598,15 +598,24 @@ class Hardening(unittest.TestCase):
         self.assertIn('missing', out2['findings'][0])
 
     def test_a_walked_elements_mode_must_fit_its_type(self):
-        """TASK-035 AC3: a symbolic link at the policy's path, a tree element with a blob's mode, a submodule mode and a
-        legacy 100664 are refused "base"; 100755 for the blob and a sibling symbolic link run as before."""
+        """TASK-035 AC3: a symbolic link at the policy's path and at the workflow's path, the docs tree element with a
+        blob's mode or a submodule mode, and a legacy 100664 are refused "base"; 100755 for the blob and a sibling
+        symbolic link run as before."""
         def specs(repo, p):
             return sub(repo, sub(repo, tree_of(repo, p), 'docs'), 'specs')
+
+        def workflows(repo, p):
+            return sub(repo, sub(repo, tree_of(repo, p), '.github'), 'workflows')
+
+        def docs_mode(mode):
+            # the docs line by name, whatever the listing's order (review finding P6)
+            return lambda t: '\n'.join(x.replace('040000 tree', mode + ' tree', 1) if x.endswith('\tdocs') else x
+                                       for x in t.split('\n'))
         cases = (('symbolic link', lambda r, p: edit(r, specs(r, p), lambda t: t.replace('100644 blob', '120000 blob'))),
-                 ('tree with a blob mode', lambda r, p: edit(r, tree_of(r, p), lambda t: t.replace(
-                     '040000 tree', '100644 tree', 1))),
-                 ('submodule mode', lambda r, p: edit(r, tree_of(r, p), lambda t: t.replace(
-                     '040000 tree', '160000 tree', 1))),
+                 ('workflow symbolic link', lambda r, p: edit(r, workflows(r, p), lambda t: t.replace(
+                     '100644 blob', '120000 blob'))),
+                 ('tree with a blob mode', lambda r, p: edit(r, tree_of(r, p), docs_mode('100644'))),
+                 ('submodule mode', lambda r, p: edit(r, tree_of(r, p), docs_mode('160000'))),
                  ('legacy 100664', lambda r, p: edit(r, specs(r, p), lambda t: t.replace('100644 blob', '100664 blob'))))
         for label, change in cases:
             repo, p, c = world(['src/x.py'])
@@ -635,6 +644,22 @@ class Hardening(unittest.TestCase):
                 scope_drift.claims = orig
             self.assertEqual((out['result'], out['reason'], mem.calls), ('refused', 'append', []), events)
             self.assertIn('out of form', out['findings'][0])
+
+    def test_a_good_event_then_one_out_of_form(self):
+        """TASK-035 AC4 (review finding P1; TASK-034 AC7 and AC9): claims returning a good event and then one out of form
+        gives a refusal "append" after exactly one append call, with the good event's id in appended."""
+        repo, p, c = world(['src/x.py'])
+        orig = scope_drift.claims
+        try:
+            scope_drift.claims = lambda inputs: (lambda r: dict(r, events=list(r['events']) + [{'payload': {}}]))(
+                orig(inputs))
+            out, mem = run(repo, c)
+        finally:
+            scope_drift.claims = orig
+        good = hashlib.sha256('\n'.join(('drift.detected', 'scope', c)).encode('utf-8')).hexdigest()
+        self.assertEqual((out['result'], out['reason'], len(mem.calls)), ('refused', 'append', 1), out)
+        self.assertEqual(out['appended'], [good])
+        self.assertIn('out of form', out['findings'][0])
 
     def test_the_docstring_states_r1_and_l2(self):
         """TASK-035 AC5: the docstring states reading R1 (unprobed), limit L2, B1, D1, L1 and DEF-0030's caller, and no
