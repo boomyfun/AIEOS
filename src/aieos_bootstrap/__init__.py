@@ -1,8 +1,8 @@
 """The bootstrap package of gov-AIEOS (tasks TASK-001, TASK-003, TASK-004, TASK-006, TASK-007, TASK-008, TASK-009,
 TASK-016, TASK-021, TASK-022, TASK-023, TASK-024, TASK-025, TASK-026, TASK-027, TASK-029, TASK-030, TASK-031,
-TASK-032 and TASK-033).
+TASK-032, TASK-033 and TASK-034).
 
-It holds nineteen modules:
+It holds twenty modules:
 - ``records`` (TASK-001): a checker of the form of event-log lines, records and event payloads of specification 2
   sections 6.1 to 6.4. It reads only the text it is given, writes nothing and decides nothing.
 - ``conformance`` (TASK-003, with TASK-006's Resume Check entry and TASK-017's Risk Engine entry): the conformance runner of
@@ -75,8 +75,13 @@ It holds nineteen modules:
   trailers, its changed paths, the named contracts' write-sets, the list, the policy's rules and the evaluator list),
   returns one drift.detected event when the commit is a scope-drift claim, whether it was detected and exempt, and
   what it could not check; it reads and writes no file and appends nothing.
+- ``scope_reconcile`` (TASK-034): the scope-drift caller of specification 4 section 7 items 2 and 4. For one base
+  commit it reads the commit's parents, trailers and changed paths from Git through gitread, reads the policy and the
+  CI workflow's evaluator list at the commit's first parent by a walk of Git trees, checks the trailer task's contract
+  bytes against the log's approved contract hash, calls ``scope_drift`` once and appends the event it returns through
+  the writer, naming the facts it used; it changes no task state, opens no file itself and reads no clock.
 """
 
 __all__ = ['ac_coverage', 'ac_tests', 'conformance', 'drift', 'evaluation', 'eventlog', 'execution', 'gitread',
-           'governor', 'reconcile', 'records', 'recovery', 'resume_check', 'scope_drift', 'stale', 'startup', 'submit',
-           'verification_records', 'writer']
+           'governor', 'reconcile', 'records', 'recovery', 'resume_check', 'scope_drift', 'scope_reconcile', 'stale',
+           'startup', 'submit', 'verification_records', 'writer']
