@@ -1,0 +1,311 @@
+# Task contract TASK-035, hardening of the scope-drift caller (Master Plan revision 3, §4 M4; specification 4
+# revision 3, section 7 items 2 and 4; DEF-0061; decisions D-719 C2, D-720 and D-723 C3).
+# Revision 0, drafted under decisions D-723 (Q3, C3) and D-725 (P1 to P7, C1 to C4), from the scope note approved by
+# decision D-725; brought for approval in its own request; whether it is approved is recorded in the decision files,
+# not in this file. Fields and value forms follow specification 2 §5.1 and the contracts of TASK-007 to TASK-034.
+# Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# Task type: implementation (hardening). What it changes: src/aieos_bootstrap/scope_reconcile.py (TASK-034, accepted
+# at 427e71a2, decision D-720) and its three test modules, closing DEF-0061's m1 to m4 and t4, with t3 and part of t5;
+# the tree listing becomes stricter (a name listed twice, a raw control character in a name, a walked element's mode
+# that does not fit its type each stop the run, reason "base"), the event id is taken inside the append's try, and the
+# docstring states the new refusals and reading R1. Nothing else changes: not the function's signature, the result's
+# keys, the order of steps, the events appended, nor any other module.
+# Reading R1 (the implementer's, unprobed; decision D-725 C2): "git cat-file -p <tree>" prints a tree as ls-tree does,
+# so a name holding a control character, a double quote or a backslash (and, under the default core.quotePath, any
+# non-ASCII name) comes C-quoted in double quotes; a raw tab or newline therefore never reaches the parser from the
+# pinned read. The refusals of AC1 and AC2 hold whether or not R1 is right; it was not probed on this machine.
+# Limit L2, stated (DEF-0061 m1 (c); decision D-725 P1): a reader that gives a raw newline inside a name (a stand-in,
+# or a Git that does not quote) can make a line in form naming a path element no other line names; the parser cannot
+# tell such a line apart. Bounded by AC1 for an element that exists, by R1 for the pinned read, and by the parent being
+# governed history (decision D-719's reason).
+# A change to an accepted task's test, stated (decision D-725 P5): TASK-034's unit naming test (Naming.
+# test_every_test_names_its_criteria, TASK-034 AC14) is widened so that each test's docstring names "TASK-034 ACn" or
+# "TASK-035 ACn" (at least one) and no other task's AC in qualified form. TASK-034's other criteria are unchanged, and
+# AC3 of TASK-034 holds as made stricter by AC1 to AC3 below.
+# Placed, not done here (decision D-725 P4; carried to DEF-0061's log at acceptance): t1 (an independent property
+# oracle, a differing hash, coverage counters, the rerun test's vacuity, "reconciled" in the base-read test) and t2
+# (each of the eleven real rules' match lists) and the rest of t5 (contracts and risk_rules in the claims input
+# asserted directly; the tautological negative control) go to M4's exit review point; L1 (a merge not read against its
+# first parent) stays a named limit of TASK-034 and this task.
+# Readers of the changed paths (D-263 C3's practice): src/aieos_bootstrap/__init__.py is read by every module that
+# imports the package and by the CI's G1 build; only its docstring's task list gains TASK-035. No module of the
+# repository calls scope_reconcile yet; its stricter refusals change no caller.
+# Risk: high, and change class critical_cr, each computed over the base by script (the scripts of TASK-034, the
+# write-set being the same five paths), as for TASK-034.
+# Profile (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture [deterministic_rule],
+# functional [integration_test], security [static_security_analysis] and architecture [ai_review (cross-model)], plus
+# the evidence_required of the applicable articles.
+# Review points (for the five way-2 reviews and the decision agent's three): every listing line's form (AC1, AC2); the
+# walked elements' modes (AC3); the event id inside the try (AC4); the docstring's R1 and L2 (AC5); no other behaviour
+# changed (AC8); the widened naming rule (AC7); the new tests' oracles (AC6, AC10).
+# Naming (D-544 Q3, as TASK-023 to TASK-034, widened by decision D-725 P5): every test this task adds names the AC ids
+# it stands for as "TASK-035 ACn" in its own docstring.
+# Evaluation path (A61; as TASK-007 to TASK-034): commit C changes only docs/tasks/TASK-035.yaml and has one parent
+# equal to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-035", go to task/TASK-035 under their own
+# decisions; main receives the task only at its acceptance.
+# Not applicable: OPS-001 (the task changes no ref); INV-005 to INV-008, INV-010 and INV-011 (the decision engine, the
+# governor, evidence records as stored, the replay and the policy meet no path of the write-set); GOV-001, GOV-004 to
+# GOV-006 and SEC-003 (the concept file, the bound artifacts, the decision matrix, the records and pre-genesis
+# documents, and .github/, meet no path of the write-set; the workflow is read, not changed). INV-004 applies: the
+# module still appends only through writer.append_event.
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting, no push of its own; it weakens no evidence requirement (its refusals are stricter; CR-002 part 4
+# limit 8 does not apply), so its acceptance is one delegated approval of the decision agent (Master Plan section 6),
+# for the decision agent's ruling.
+task: TASK-035
+contract_version: v1
+task_type: implementation
+objective: >-
+  Harden src/aieos_bootstrap/scope_reconcile.py (TASK-034) without changing its signature, its result's keys, its
+  order of steps or the events it appends: in the base read's tree listings, a name listed twice, a raw control
+  character in a name, and a walked element whose mode does not fit its type each stop the run with reason "base",
+  while a C-quoted name is kept as an entry that never matches a walked element; the event id is taken inside the
+  append's try; the docstring states the new refusals, reading R1 and limit L2. With unit tests for each change, a
+  40-hex stand-in case, a direct case of matching contract bytes with a path outside the write-set, a mixed trailer
+  case, the facts after a claims and an append refusal, naming tests in the integration and property modules, and
+  TASK-034's naming test widened to TASK-034 or TASK-035 criteria.
+traces_to:
+  - docs/specs/spec-04-verification-and-evidence.md#7
+  - docs/specs/risk-rules-gov-aieos.md#2
+  - docs/Deferred/DEF-0061-the-review-findings-and-limits-carried-from-task-034.md
+  - docs/tasks/TASK-034.yaml
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-035.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C.
+  base_commit: 73b3ec7281770d68f081df2b6bdbbbf4af8c3cef
+  depends_on: [TASK-024, TASK-033, TASK-034]
+  intent_versions:
+    docs/specs/spec-04-verification-and-evidence.md: 48d4f5bf06461ad49409f21bc6ea8d511d17a84eaac15adda14277483176a8d5
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 97caafbd78b4d503112d1e32c445bce188a4af2f3c29ad88093989d5abbceb76
+write_set:
+  # Five modified paths; no new path. __init__.py: its docstring's task list only; the integration and property
+  # modules: a naming test only.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/scope_reconcile.py
+    - tests/unit/test_scope_reconcile.py
+    - tests/integration/test_scope_reconcile_log.py
+    - tests/property/test_scope_reconcile_properties.py
+read_set:
+  paths:
+    - docs/specs/spec-04-verification-and-evidence.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/Deferred/DEF-0061-the-review-findings-and-limits-carried-from-task-034.md
+    - docs/tasks/**
+    - docs/records/**
+    - src/aieos_bootstrap/scope_reconcile.py
+    - src/aieos_bootstrap/scope_drift.py
+    - src/aieos_bootstrap/gitread.py
+    - src/aieos_bootstrap/writer.py
+    - src/aieos_bootstrap/records.py
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.scope_reconcile.reconcile_scope, aieos_bootstrap.scope_reconcile.read_base, aieos_bootstrap.scope_drift.claims, aieos_bootstrap.gitread.run, aieos_bootstrap.gitread.parse_commit]
+  schemas: [Git's cat-file -p output for trees (reading R1)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/writer.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      A name listed twice (DEF-0061 m1 (a); decision D-725 P1). In every tree listing the base read parses (every line
+      of every tree it walks, not only the walked element's), a name that appears on two lines gives result "refused",
+      reason "base", a finding naming the tree and the name, and no event; the last line no longer wins.
+  - AC2: >-
+      Control characters and quoted names (DEF-0061 m1 (b); decision D-725 C1). In every listing line parsed, a name
+      holding a raw control character (U+0000 to U+001F or U+007F; a tab inside the name included) is out of form and
+      gives result "refused", reason "base", and no event. A name beginning with a double quote (Git's C-quoted form,
+      reading R1) is kept as an entry under its quoted text, so it never equals a walked element and does not stop the
+      run; a quoted non-ASCII name beside a walked element leaves the run as it was. The rest of TASK-034 AC3's line
+      form is unchanged.
+  - AC3: >-
+      Modes (DEF-0061 m2; decision D-725 P2 and C1). For each walked element only (a sibling's mode is not checked: a
+      repository may hold symbolic links and submodules beside the walked path), a directory element must have mode
+      040000 and the final blob mode 100644 or 100755; any other mode (a symbolic link 120000, a submodule 160000, a
+      legacy 100664 or any other) gives result "refused", reason "base", a finding naming the file, the element and
+      the mode, and no event.
+  - AC4: >-
+      The event id inside the try (DEF-0061 m3). The event id is taken inside the append's try: a returned event that
+      is not a mapping, or that lacks event_id or payload, gives result "refused", reason "append", a finding that the
+      returned event is out of form, and no append call; so TASK-034 AC9's "no exception escapes" holds by the
+      module's own form, not only through claims' form.
+  - AC5: >-
+      The docstring (DEF-0061 m4; decision D-725 C2). Points 3 and 5 of the module docstring state AC1 to AC3's
+      refusals and that a task with no task.approved event, no value given or another hash gets no entry (claims names
+      it "no contract") and only facts.contracts says which; the reading "Git's "cat-file -p" prints names unquoted"
+      is replaced by reading R1, labelled as the implementer's unprobed reading, with the sentence that the refusals
+      hold whether or not R1 is right; limit L2 is stated; B1, D1, L1 and DEF-0030's caller stay stated.
+  - AC6: >-
+      Tests added (DEF-0061 t3, t4 and part of t5; decision D-725 P4). Unit tests show: a stand-in repository whose
+      object ids are 40 hex characters gives the same outcome as one with 64-hex ids (a change under src/ is a claim,
+      facts.policy_blob 40 characters) (t4); contract bytes whose hash matches with a changed path outside the
+      write-set give a detected commit and one appended event (t3); a commit with one trailer in form and one out of
+      form passes no trailer task, is detected and names "trailer out of form" (t5); facts is a mapping after a claims
+      refusal and after an append refusal (t5, TASK-034 AC8 as amended by erratum E1).
+  - AC7: >-
+      Naming (decision D-725 P5). Every test function of the three test modules names "TASK-034 ACn" or "TASK-035
+      ACn" (at least one) in its own docstring and no other task's AC in qualified form; the unit module's naming test
+      is widened to this rule, and the integration and property modules each gain a naming test of the same rule that
+      reads the loaded TestCase classes' docstrings, not the file.
+  - AC8: >-
+      Nothing else changes. reconcile_scope's and read_base's signatures, the result's keys and values, the order of
+      steps, the events appended and every other behaviour of TASK-034 AC1 to AC13 are unchanged except as AC1 to AC4
+      make the base read and the append stricter; TASK-034's tests pass unchanged except the naming test (AC7); no
+      module of src/ changes except scope_reconcile.py and __init__.py's docstring task list; every other module and
+      test is unchanged, and if one can pass only by a change the task escalates (needs_out_of_scope_change).
+  - AC9: >-
+      Purity and the CI checks (INV-001 to INV-004). The module's imports stay exactly datetime, hashlib, re and
+      aieos_bootstrap.gitread, records, scope_drift and writer (TASK-034 AC11); the tests use the standard library only
+      (unittest.mock.patch of scope_drift.claims in the unit module allowed, restored after its test, decision D-725
+      P3). At the task's commits the CI steps report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and
+      bandit ("bandit reports no finding in CI"). Before the first push, the added and changed lines of the write-set
+      are scanned for the patterns of bandit's tests that the CI applies (decision D-725 P6): B324 (hashlib md5 or sha1
+      without usedforsecurity=False), B404, B602 to B607 (subprocess and shell use), B605 (os.system, os.popen), B307
+      (eval), B102 (exec), B301 and B403 (pickle, marshal), B506 (yaml.load), B306 (tempfile.mktemp), B101 (assert, in
+      src only), B311 (random, in src only), B104 (a bind to 0.0.0.0), B105 to B107 (password-like names), B310
+      (urllib urlopen), B313 to B320 and B405 to B411 (xml parsers); every count is 0 or the hit is brought to the
+      decision agent before the push. The scan is a stated limit, not bandit; the CI's bandit run is the evidence.
+  - AC10: >-
+      Its own tests and the added text. The tests write and remove no file and open none except the package's own
+      source files (TASK-034 AC14's rule). Before each commit, the added text is scanned with the workflow's SEC-001,
+      SEC-002 and OPS-003 patterns, and each count is 0; the file names are scanned with the same patterns and the
+      records executors' pre-push pattern (D-282). Tests, each rule with at least one passing and one failing case:
+      R1 AC1 (a name listed twice in the walked element's tree and in a tree whose sibling is listed twice: refused
+      "base"; distinct names: as before); R2 AC2 (a tab and another control character inside a name: refused "base";
+      a quoted non-ASCII sibling: the run as before; a quoted name never matches a walked element); R3 AC3 (a symbolic
+      link at the policy's path, a tree element with a blob mode, a submodule mode and a legacy 100664: refused
+      "base"; 100755 for the blob: as before; a sibling symbolic link: as before); R4 AC4 (claims patched to return a
+      non-mapping event and an event without event_id: refused "append", no append call); R5 AC5 (a script check of
+      the docstring's R1, L2, B1, D1, L1 and DEF-0030 sentences and of the absence of the replaced reading); R6 AC6;
+      R7 AC7 (the three naming tests). tests/run_tests.py, unchanged, runs all groups.
+  - AC11: >-
+      The placements (decision D-725 P4 and C3). t1, t2 and the rest of t5 are carried to M4's exit review point, and
+      L1 stays a named limit; the acceptance records name them and DEF-0061's log carries them at acceptance (a
+      records change of its own, outside this write-set).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC6, AC8, AC10]}
+  - {gate: G3, check: constitution, args: [AC5, AC7, AC9, AC11, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
