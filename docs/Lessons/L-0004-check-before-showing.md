@@ -144,6 +144,10 @@ Two in session 2026-10-11-0013 (../History/2026-10/2026-10-11-0013-decision-file
 Occurrences in session 2026-10-11-2233 (../History/2026-10/2026-10-11-2233-stale-evidence-computation-accepted-and-on-main.md):
 - **2026-10-11 (D-550, D-551).** The review briefs stated "Ran 683 tests" after the fix had made it 684; found before launch by checking the common text against its input file, corrected and rebuilt. My own naming check for TASK-023's tests required one qualified criterion per docstring, while TASK-022's listing counts only qualified ones; a reviewer's question led me to run the listing itself, which found a criterion named by no test. A check written for a rule must use the rule's own implementation where one exists.
 
+Occurrences in session 2026-10-14-2219 (../History/2026-10/2026-10-14-2219-the-reconciliation-caller-accepted-and-on-main.md):
+- **2026-10-14 (D-676, D-677).** Four transcript line numbers written in requests to the decision agent without a grep: :175 for :195, and :595, :354 and :621 for :466, :367 and :642; each corrected by a grep before the decision used it (decisions D-676 and D-677).
+- **2026-10-14 (:857 to :861).** The five reviewer prompts were pasted from the roles file, so each carried the role label "R<n>|" (3 characters) that the built briefs do not; found by prompts_vs_briefs after the launch; the reviews kept and the difference recorded, and from then on a prompt is pasted only from its built brief and every launch shows "exact True" (decision D-679).
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

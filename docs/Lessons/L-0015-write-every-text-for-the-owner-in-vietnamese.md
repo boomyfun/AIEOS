@@ -165,6 +165,9 @@ Occurrences in session 2026-10-12-1122 (../History/2026-10/2026-10-12-1122-the-a
 Occurrences in session 2026-10-12-1245 (../History/2026-10/2026-10-12-1245-constitution-drift-accepted-and-the-reconciliation-contract.md):
 - **2026-10-12 (:375, :651, :898, :962, :1357).** Five short English working notes in messages holding tool calls, none after a harness note, each announcing the next file to write, against the owner's item 5 of this session's prompt and decision D-666 C1's rule; each caught by the textblock check before the next gated command, brought to the decision agent and listed, the owner told the count (decisions D-662, D-664, D-666 and D-668).
 
+Occurrences in session 2026-10-14-2219 (../History/2026-10/2026-10-14-2219-the-reconciliation-caller-accepted-and-on-main.md):
+- **2026-10-14 (:792, :1081, :1150).** Three short English working notes in messages holding tool calls, the first two right after a harness note, each announcing the next file or step, against the owner's item 5 of this session's prompt; each caught by the textblock check before the next gated command, brought to the decision agent and listed, the owner told (decisions D-678 and D-680).
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

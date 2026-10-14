@@ -194,6 +194,10 @@ Occurrences in session 2026-10-12-1245 (../History/2026-10/2026-10-12-1245-const
 - **2026-10-12 (:359).** A command of no effect holding a heredoc, Python's name followed by a dash and a discard redirect, refused by guard rules R1 and R2 before it ran; not retried (decision D-662).
 - **2026-10-12 (556c :2076, found at the next session's start).** In session 556c5dd4, a command holding a heredoc while assembling the archive script, refused by guard rule R1 and not retried (rewritten through a file the Write tool made); recorded here under decision D-660 C4 (decision D-662).
 
+Occurrences in session 2026-10-14-2219 (../History/2026-10/2026-10-14-2219-the-reconciliation-caller-accepted-and-on-main.md), each my incorrect command:
+- **2026-10-14 (:233, :515).** Two placeholder commands of no effect, one holding a heredoc (refused by guard rule R1), one holding Python's name followed by a dash (refused by guard rule R2); neither retried (decisions D-676 and D-677).
+- **2026-10-14 (:657, :661, :1130).** Three real commands each holding a part of no effect (`sed ... > /dev/null` twice, `find ... | head -1 > /dev/null` once); not refused and not flagged by filler_count3.py, found by my own grep (decisions D-677 and D-680).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
