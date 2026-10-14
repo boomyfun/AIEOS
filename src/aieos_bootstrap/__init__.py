@@ -1,7 +1,8 @@
 """The bootstrap package of gov-AIEOS (tasks TASK-001, TASK-003, TASK-004, TASK-006, TASK-007, TASK-008, TASK-009,
-TASK-016, TASK-021, TASK-022, TASK-023, TASK-024, TASK-025, TASK-026, TASK-027, TASK-029, TASK-030 and TASK-031).
+TASK-016, TASK-021, TASK-022, TASK-023, TASK-024, TASK-025, TASK-026, TASK-027, TASK-029, TASK-030, TASK-031 and
+TASK-032).
 
-It holds seventeen modules:
+It holds eighteen modules:
 - ``records`` (TASK-001): a checker of the form of event-log lines, records and event payloads of specification 2
   sections 6.1 to 6.4. It reads only the text it is given, writes nothing and decides nothing.
 - ``conformance`` (TASK-003, with TASK-006's Resume Check entry and TASK-017's Risk Engine entry): the conformance runner of
@@ -63,8 +64,14 @@ It holds seventeen modules:
   ``stale`` for every task the log shows done that it can cover, naming the others as uncovered, and ``drift`` for the
   commit with only the deterministic source classes counted, and appends their events through the writer under the
   ids they derive; it changes no task state, grants no lease, opens no file itself and reads no clock.
+- ``execution`` (TASK-032): the execution path of specification 3 sections 1, 9 and 10, the core's caller of
+  ``resume_check``. It reads the event log through the writer, projects the task's state from its own events and the
+  store's held lease, checks that the Resume Check's inputs agree with the log, calls the Resume Check once, appends
+  its record and state effect through the writer under the ids the record stores, grants the lease through the
+  writer only on CONTINUE or CONTINUE_WITH, and releases a held lease by its token, before any append, on every other
+  outcome; it opens no file itself and reads no clock.
 """
 
-__all__ = ['ac_coverage', 'ac_tests', 'conformance', 'drift', 'evaluation', 'eventlog', 'gitread', 'governor',
-           'reconcile', 'records', 'recovery', 'resume_check', 'stale', 'startup', 'submit', 'verification_records',
-           'writer']
+__all__ = ['ac_coverage', 'ac_tests', 'conformance', 'drift', 'evaluation', 'eventlog', 'execution', 'gitread',
+           'governor', 'reconcile', 'records', 'recovery', 'resume_check', 'stale', 'startup', 'submit',
+           'verification_records', 'writer']
