@@ -1,0 +1,398 @@
+# Task contract TASK-034, the scope-drift caller (Master Plan revision 3, §4 M4; specification 4 revision 3, section 7
+# items 2 and 4; the risk rules' revision 4, policy version v3, section 2 point 7; concept lines 745 and 948).
+# Revision 0, drafted under decisions D-711 (Q3) and D-713 (P1 to P5, C1 to C4), from the scope note approved by
+# decision D-713; brought for approval in its own request; whether it is approved is recorded in the decision files,
+# not in this file. Fields and value forms follow specification 2 §5.1 and the contracts of TASK-007 to TASK-033.
+# Readings marked "(reading)" or "(proposed)" are the worker's, for the decision agent's ruling.
+# Task type: implementation. What it adds: one module, src/aieos_bootstrap/scope_reconcile.py, the core's caller of
+# scope_drift.claims (TASK-033, accepted, decision D-708). Its function reconcile_scope runs for one base commit: it
+# reads the commit's parents, AIEOS-Task trailers and changed paths from Git through gitread's pinned forms; reads the
+# policy (docs/specs/risk-rules-gov-aieos.md) and the CI workflow's EVALUATOR list (.github/workflows/aieos-checks.yml)
+# at the commit's first parent by a walk of Git trees with the pinned "cat-file -p <id>" form only, never from the
+# commit judged; translates the policy's rules into the governor's form {match, class}; checks the trailer task's
+# contract bytes against the contract_hash of the task's last task.approved event in the log (read through the
+# writer); calls scope_drift.claims once; and appends the drift.detected event it returns through the core's single
+# writer (TASK-016), naming the facts the run used. It is the scope-drift half of DEF-0030's reconciliation line;
+# reconcile.py (TASK-031, the constitution and stale-evidence half) is not changed.
+# The specification's text (spec 4 line 81): "**Scope drift:** the concept's "Commit sửa file không thuộc task nào"
+# [...] So (proposed): a base commit with no `AIEOS-Task` trailer, or with a trailer whose contract (the version the
+# task's lease named) does not hold a changed path, is detected. A detected commit is not a claim when all its changed
+# paths lie in a list of non-task paths that the approved policy at the base names; never by its message or trailer
+# alone. A commit that touches the constitution, the policy, the evaluator paths or `.github/` is always a claim. Every
+# other detected commit is a `drift.detected` claim, which changes no state [...] and is closed by an authority record
+# [...]. A merge commit is read by its changes against its first parent, as specification 3 reads commits." Line 83
+# (item 4): "All three are pure computations; their events are appended only through the single writer (INV-004)." The
+# policy (line 18): "Rules are read from the base or a pinned ref, never from the change they classify".
+# Reading B1 (proposed; decision D-713 P1): "the base" at which the policy and the evaluator list are read, for one base
+# commit, is that commit's first parent, read from Git by the tree walk.
+# Departure D1, stated (decision D-713 C2): the contract version used is the one the task's last task.approved event in
+# the log names (its contract_hash), not "the version the task's lease named" (spec 4 line 81): no lease event of
+# specification 2 carries a contract hash. The facts record names the hash used.
+# Limit L1, stated (decision D-713 P3): a merge commit is not read against its first parent (gitread pins no diff form
+# for it); it is named uncovered, with no event (DEF-0058's and DEF-0060's merge limit).
+# What it does not do: no closing of a claim (an authority's record), no classification or proposal, no task state, no
+# lease, no evaluation, no governor call except through scope_drift (governor.matches), no constitution or stale
+# finding, no walk over a range of commits (one commit per call; the range is DEF-0030's caller's, decision D-713 P5),
+# nothing under .github/, no policy change, no frozen fixture. It changes no scope_drift, reconcile, gitread, writer,
+# records, eventlog, governor or other existing module.
+# Readers of the changed paths (D-263 C3's practice): src/aieos_bootstrap/__init__.py is read by every module that
+# imports the package and by the CI's G1 build; its docstring and __all__ gain scope_reconcile; it must not name the
+# Resume Check fixture folder (TASK-010's assertion) nor the Risk Engine fixture folder (TASK-020's allow list). No
+# module of the repository calls scope_reconcile yet.
+# Risk: high, and change class critical_cr, each computed over the base by script, as for TASK-031 and TASK-033.
+# Profile (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture [deterministic_rule],
+# functional [integration_test], security [static_security_analysis] and architecture [ai_review (cross-model)], plus
+# the evidence_required of the applicable articles.
+# Review points (for the five way-2 reviews and the decision agent's three): the order of checks (AC2, decision D-713
+# C1); the tree walk and its fail-closed cases (AC3, C3); the rule translation and the evaluator literals (AC4); the
+# contract hash check (AC5) and D1; claims' error as a stop (AC6); the append and a rerun (AC7); the facts record
+# (AC8); purity (gitread and the writer only); AC13's limits.
+# Naming (D-544 Q3, as TASK-023 to TASK-033): every test of the three new test modules names the AC ids it stands for
+# as "TASK-034 ACn" in its own docstring.
+# Evaluation path (A61; as TASK-007 to TASK-033): commit C changes only docs/tasks/TASK-034.yaml and has one parent
+# equal to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-034", go to task/TASK-034 under their own
+# decisions; main receives the task only at its acceptance.
+# Not applicable: OPS-001 (the task changes no ref); INV-005 to INV-008, INV-010 and INV-011 (the decision engine, the
+# governor, evidence records as stored, the replay and the policy meet no path of the write-set: the module reads the
+# policy and changes none); GOV-001, GOV-004 to GOV-006 and SEC-003 (the concept file, the bound artifacts, the decision
+# matrix, the records and pre-genesis documents, and .github/, meet no path of the write-set; the workflow is read, not
+# changed). INV-004 applies: the module appends only through writer.append_event.
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting, no push of its own; it weakens no evidence requirement (it records claims and blocks no task;
+# CR-002 part 4 limit 8 does not apply), so its acceptance is one delegated approval of the decision agent (Master Plan
+# section 6), for the decision agent's ruling.
+task: TASK-034
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add a standard-library Python 3 module, src/aieos_bootstrap/scope_reconcile.py, the core's caller of
+  scope_drift.claims (specification 4 section 7 items 2 and 4): reconcile_scope(root, repo, commit, values, recorder,
+  now) reads one base commit's parents, trailers and changed paths from Git through gitread, reads the policy and the
+  CI workflow's EVALUATOR list at the commit's first parent by a tree walk with the pinned cat-file form, translates the
+  policy's rules into the governor's form, checks the trailer task's contract bytes against the log's last task.approved
+  contract_hash, calls scope_drift.claims once, appends the returned drift.detected event through writer.append_event,
+  and returns what it appended, what it could not check and the facts it used; any malformed argument, failed read or
+  claims error is a refusal with no event (fail closed). With unit, integration and property tests in new test modules,
+  each test naming its AC ids as "TASK-034 ACn" in its own docstring.
+traces_to:
+  - docs/specs/spec-04-verification-and-evidence.md#7
+  - docs/specs/risk-rules-gov-aieos.md#2
+  - docs/specs/spec-02-aieos-file-format.md#6.3
+  - docs/specs/spec-01-state-and-event-model.md#5.3
+  - AIEOS-concept.md#745
+  - AIEOS-concept.md#948
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-034.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id.
+  base_commit: fc5c4e5ca8bf27e7ce205d633f4bd4d5b7894ef8
+  depends_on: [TASK-001, TASK-007, TASK-011, TASK-016, TASK-024, TASK-033]
+  intent_versions:
+    docs/specs/spec-04-verification-and-evidence.md: 48d4f5bf06461ad49409f21bc6ea8d511d17a84eaac15adda14277483176a8d5
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 80c91e47ef0a1dbe7f77c677cd2261d5b5ede20bcb0735cf06438bddbde85f8b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 97caafbd78b4d503112d1e32c445bce188a4af2f3c29ad88093989d5abbceb76
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # One modified path (the package docstring and __all__); every other path is new.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/scope_reconcile.py
+    - tests/unit/test_scope_reconcile.py
+    - tests/integration/test_scope_reconcile_log.py
+    - tests/property/test_scope_reconcile_properties.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-04-verification-and-evidence.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/Deferred/DEF-0030-event-log-writer-and-workflow-revision-6.md
+    - docs/Deferred/DEF-0052-the-review-findings-carried-from-task-024.md
+    - docs/Deferred/DEF-0058-the-review-findings-and-limits-carried-from-task-031.md
+    - docs/Deferred/DEF-0060-the-review-findings-and-limits-carried-from-task-033.md
+    - docs/tasks/**
+    - docs/records/**
+    - src/aieos_bootstrap/scope_drift.py
+    - src/aieos_bootstrap/reconcile.py
+    - src/aieos_bootstrap/evaluation.py
+    - src/aieos_bootstrap/governor.py
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/eventlog.py
+    - src/aieos_bootstrap/writer.py
+    - src/aieos_bootstrap/gitread.py
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.scope_drift.claims, aieos_bootstrap.scope_drift.non_task_list, aieos_bootstrap.gitread.run, aieos_bootstrap.gitread.parse_commit, aieos_bootstrap.gitread.parse_paths, aieos_bootstrap.writer.read_log, aieos_bootstrap.writer.append_event, aieos_bootstrap.records.check_log, aieos_bootstrap.eventlog.append]
+  schemas: [spec-02 event payloads (6.3), the risk rules' section 3 block (policy v3), Git's cat-file -p output for commits, trees and blobs]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/writer.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The arguments. reconcile_scope(root, repo, commit, values, recorder, now, read=None, read_log=None, append=None)
+      checks every argument before anything is read: root and repo non-empty strings; commit 40 or 64 lowercase hex
+      characters; values a mapping with exactly the key contracts, a mapping from task ids ("TASK-" followed by digits)
+      to mappings with exactly the keys contract_bytes (bytes) and write_set (a list of strings); recorder a non-empty
+      string; now a timezone-aware datetime whose offset is zero. Any other form gives the result of AC9 with result
+      "refused", reason "argument" and one finding per wrong argument, and nothing is read or appended. read, read_log
+      and append default, at call time, to gitread.run, writer.read_log and writer.append_event (tests pass stand-ins).
+  - AC2: >-
+      The commit and the order of checks (decision D-713 C1). The commit is read once with read(repo, ["cat-file",
+      "-p", commit]) and parsed by gitread.parse_commit; its trailer tasks are the values of its "AIEOS-Task" trailers
+      (gitread.parse_commit's trailers), in order; when any such value is not "TASK-" followed by digits, no trailer
+      task is passed (so the commit is detected, fail closed) and the uncovered entry {ref the commit, detail "trailer
+      out of form"} is added (reading). The parent count is checked first: a commit with other than one
+      parent (a merge, L1, or a root commit) gives result "reconciled", no event, no further read, no call of claims,
+      and the uncovered entry {ref the commit, detail "not one parent"}. Otherwise the changed paths are read once with
+      read(repo, gitread.DIFF_TREE + [commit]) and parsed by gitread.parse_paths; a one-parent commit with no changed
+      path gives result "reconciled", no event, no call of claims and the uncovered entry {ref the commit, detail "no
+      changed path"}. A read whose result is not of gitread.run's form, whose error is not None or whose exit is not 0,
+      and a parse error, give result "refused", reason "git", with a finding naming the read, and no event.
+  - AC3: >-
+      The base read (decision D-713 P1 and C3; reading B1). For a one-parent commit with changed paths, the files
+      docs/specs/risk-rules-gov-aieos.md and .github/workflows/aieos-checks.yml are read at the commit's first parent
+      P, never at the commit judged, with the pinned form read(repo, ["cat-file", "-p", id]) only: P is parsed by
+      gitread.parse_commit for its tree id; each path element is looked up in the listing of the current tree, parsed
+      line by line, each line exactly "<mode> <type> <id>" TAB "<name>" (mode octal digits, type one of blob, tree and
+      commit, id 40 or 64 lowercase hex characters, name non-empty without "/" or NUL); a directory element must be a
+      tree entry and the last element a blob entry; the blob's bytes must decode as UTF-8. A listing line out of form,
+      a missing element, a type other than the one expected, a failed read or a text that does not decode gives result
+      "refused", reason "base", a finding naming the file and the cause, and no event.
+  - AC4: >-
+      The policy's facts (decision D-713 P2; DEF-0060 point 1). The list is scope_drift.non_task_list(policy text) (None
+      is passed on). The rules are read from section 3's yaml block (as AC2 of TASK-033 finds it): each entry under
+      "risk_rules:" is one line "- match: { paths: [...] }" or "- match: { component_tags: [...] }" followed by one line
+      "risk: <class>" (comment lines skipped), and is translated into a mapping with exactly the keys match and class:
+      paths gives match the quoted patterns; component_tags gives match ["src/**", "tests/**"] (R3 read by tags as
+      every path under src/** and tests/**, TASK-033 AC11); risk gives class. An entry out of this form, an unknown
+      match key or an unreadable class is passed on as the mapping {"match": [], "class": null}, which claims (TASK-033
+      AC4) reads as a rule out of form, so no path is non-task (fail closed; the run goes on, and a detected commit is a
+      claim); a block that cannot be found gives the same single refused rule. The evaluator list is read from the
+      workflow's literals "EVALUATOR = [...]" (from a line whose stripped text starts "EVALUATOR = [" to the line that
+      closes it with "]"), each item a single-quoted pattern: when there is at least one literal and every literal
+      gives the same non-empty list, that list; otherwise (no literal, literals that differ, an unclosed literal or an
+      item out of form) the empty list, which claims reads as out of form, so no path is non-task. constitution_path
+      is "docs/pre-genesis/constitution.md" and policy_path "docs/specs/risk-rules-gov-aieos.md", fixed in the module.
+  - AC5: >-
+      The contract (decision D-713 P4; departure D1). When the commit has trailer tasks, the log is read once with
+      read_log(root) and checked by records.check_log; a result that is not bytes or a log with findings gives result
+      "refused", reason "log", and no event. For each distinct trailer task T, its contract hash is the contract_hash
+      of the last task.approved event of T in the log; T's entry in the contracts given to claims is
+      values["contracts"][T]["write_set"] only when values["contracts"] has T and the SHA-256 of its contract_bytes
+      equals that hash; otherwise T has no entry (no task.approved event, no value given, or a hash that differs), so
+      claims names it "no contract" and the commit is detected (fail closed). The write-set list is caller data not
+      bound to the bytes, as evaluation's limit (decision D-633 C1). Values for other tasks are not read.
+  - AC6: >-
+      The call. claims is called once with exactly: the commit, parents 1, the trailer tasks, the changed paths, the
+      contracts of AC5, the list, the rules and the evaluator list of AC4, and the two fixed paths. A result whose error
+      is not None gives result "refused", reason "scope_drift", a finding holding the error text, and no event (DEF-0060
+      point 2: never read as "no claim"). Otherwise detected, exempt and uncovered are taken from claims' result.
+  - AC7: >-
+      The append (INV-004). The returned event, when there is one, is appended once with append(root,
+      "drift.detected", payload, event_id, now, recorder) with no task_id and no fencing token, under claims' event id.
+      A result whose result text is "appended" or "duplicate" counts (a rerun with the same facts gives "duplicate");
+      any other result text (a conflict included: a rerun with other facts, DEF-0060 point 3), an object without a
+      string result, or an exception, gives result "refused", reason "append", with the writer's findings when given.
+  - AC8: >-
+      The facts used (DEF-0060 point 3). The result's facts is null when the run stops before the base read, and
+      otherwise a mapping with exactly the keys commit, parent, policy_blob, workflow_blob, non_task (the list or null),
+      rules (the number of rules passed), evaluator (the list passed) and contracts (a mapping from each trailer task
+      to the contract_hash matched, or to one of the texts "no task.approved event", "no value given" and "hash
+      differs").
+  - AC9: >-
+      The result. reconcile_scope returns a mapping with exactly the keys result ("reconciled" or "refused"), reason
+      (None or one of "argument", "git", "base", "log", "scope_drift", "append"), findings (a list of short English
+      texts), appended and duplicate (lists of event ids), detected and exempt (bools), uncovered (a list of mappings
+      with exactly the keys ref and detail, sorted, without duplicates) and facts (AC8). No exception escapes; an
+      exception raised by a called function becomes a refused result naming the step.
+  - AC10: >-
+      What it does not do. It closes no claim, classifies and proposes nothing, changes no task state, grants, releases
+      or expires no lease, evaluates no task, calls no governor function except through scope_drift, makes no
+      constitution or stale-evidence finding and walks no range of commits; its docstring says so, states B1, D1 and L1,
+      and names DEF-0030's caller as the one that chooses the commits. No module of src/ changes except __init__.py's
+      docstring and __all__.
+  - AC11: >-
+      Purity and the CI checks (INV-001 to INV-004). The module imports only the Python 3 standard library (datetime,
+      hashlib and re among the allowed) and aieos_bootstrap.gitread, records, scope_drift and writer; it starts no
+      process except through read, opens no file except through read_log and append, reads no clock and no environment,
+      and makes no network or model call; no exec, eval, compile, __import__ or importlib; no assert in src (bandit
+      B101); no string that names the project-state directory; it builds no event-log line itself. At the task's
+      commits the CI steps report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit.
+  - AC12: >-
+      End to end (integration). tests/integration/test_scope_reconcile_log.py runs reconcile_scope over a stand-in
+      repository (commits, trees and blobs answered in gitread.run's result form, holding a policy text in policy v3's
+      form and a workflow text with two equal EVALUATOR literals) and an event log kept in memory, read by a stand-in
+      read_log and appended by aieos_bootstrap.eventlog.append, with scope_drift as it is: a claim commit gives one
+      appended event and a log with records.check_log findings none; a rerun gives "duplicate"; an exempt commit, a task
+      commit held by its approved contract and a merge give no event. No git starts and no file is opened in those
+      cases. One further case (decision D-714 C1) runs the module's base read with read = gitread.run over this
+      repository's own history, at the fixed one-parent commit fc5c4e5ca8bf27e7ce205d633f4bd4d5b7894ef8 of main, whose
+      first parent 57bbe3780ef4108c5d3acf39ac184555c689b9aa holds policy v3: the policy and workflow blobs are read and
+      decode, the rules number eleven, and the evaluator list equals the workflow's literal at that parent; nothing is
+      appended and no file is written (it needs the repository's full history, as TASK-024's integration test does).
+  - AC13: >-
+      Limits, stated: B1 is a reading; D1 is a departure; L1 (a merge not read against its first parent) is a limit;
+      the write-set is caller data bound only by the contract bytes' hash; the rules' translation reads R3 by tags as
+      src/** and tests/**; one run at a time (the writer reads the log and appends with no check that it is unchanged);
+      the PATH git is found by is the caller's precondition (DEF-0052 G1); the event id depends on the commit only, so a
+      rerun with other facts is refused as a conflict. Every existing module and test not in the write set is
+      unchanged, and if one can pass only by a change the task escalates (needs_out_of_scope_change).
+  - AC14: >-
+      Its own tests and the added text. Every test function of the three new test modules names the AC ids it stands
+      for as "TASK-034 ACn" in its own docstring and names no other task's AC in qualified form there. The tests write
+      and remove no file, and open none except the package's own source files, read for AC15 R10's script checks (as
+      TASK-033 reads its AC12). Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and
+      OPS-003 patterns, and each count is 0; the file names are scanned with the same patterns and the records
+      executors' pre-push pattern (D-282).
+  - AC15: >-
+      Tests, each rule with at least one passing and one failing case: R1 AC1 (each malformed argument; nothing read);
+      R2 AC2 (a merge and a root: uncovered, no further read, claims not called; no changed path: uncovered, claims not
+      called; each failed read and parse error refused "git"); R3 AC3 (the files read at the first parent, never at
+      the commit, shown by a stand-in that answers the commit's tree differently; each fail-closed case: a listing line
+      out of form, a missing element, a blob where a tree is expected and a tree where a blob is expected, a failed
+      read, bytes that do not decode; the real-Git case of AC12 at fc5c4e5c over this repository's history); R4 AC4
+      (the translation of every rule of the policy at the base, R3 by tags; an entry out of form passed on as the
+      refused rule and no path non-task; one literal, two equal literals, two that differ, none, an unclosed one, an
+      item out of form); R5 AC5 (a matching hash; no task.approved event, no value
+      and a hash that differs: "no contract" and detected; the last task.approved counts; a log with findings refused
+      "log"); R6 AC6 (claims' error refused "scope_drift", no append); R7 AC7 (appended; duplicate; a conflict, an
+      object without a result and an exception refused "append"); R8 AC8 and AC9 (the keys, the facts, the sorting, no
+      exception for any input); R9 AC10 and AC11 (a script check of the imports and of the absence of open, write,
+      clock and process calls, and of the docstring's B1, D1, L1 and DEF-0030 sentences); R10 AC14 (the naming). Unit
+      tests in tests/unit/test_scope_reconcile.py; AC12 in tests/integration/test_scope_reconcile_log.py; property
+      tests in tests/property/test_scope_reconcile_properties.py (standard library only, fixed seeds): for random
+      well-formed stand-in repositories and logs, the result equals what claims gives on the facts read (the event
+      appended exactly when claims returns one), the files are read only at the first parent, and a second run appends
+      nothing new. tests/run_tests.py, unchanged, runs all groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9, AC12, AC15]}
+  - {gate: G3, check: constitution, args: [AC10, AC11, AC13, AC14, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
