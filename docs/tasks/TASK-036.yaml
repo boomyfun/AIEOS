@@ -1,0 +1,316 @@
+# Task contract TASK-036, autonomy L1 to L2 as a product feature (Master Plan revision 3, §4 M4; specification 4
+# revision 3, section 9; decisions D-736 C3 and D-738).
+# Revision 0, drafted under decisions D-736 (C3) and D-738 (P1 to P6; the first handback's C1 to C4 and the second's
+# C1 to C7), from the scope note approved by decision D-738; brought for approval in its own request; whether it is
+# approved is recorded in the decision files, not in this file. Fields and value forms follow specification 2 §5.1
+# and the contracts of TASK-007 to TASK-035. Readings marked "(reading)" are the worker's, for the decision agent's
+# ruling.
+# Task type: implementation. What it adds: one pure module, src/aieos_bootstrap/autonomy.py, with one function,
+# auto_accept_allowed(levels, allowance, risk, status, touches), that states the product's rule for L1 and L2 of
+# specification 4 §9: whether the policy's half of the governor's row 4 allows auto-accept for a task's risk class.
+# What it is not (decision D-738 second C1): `allowed` is neither an acceptance, nor a gate result, nor a ruling on
+# "sufficient assurance" (concept line 622); it is only the policy's half of row 4, whose other half (every gate
+# passed, the profile complete) stays the governor's. The caller must take the levels and the allowance only from an
+# approved, versioned policy and the statuses only from pinned values (assurance-model.md §6; INV-011). The module
+# defines no level, allowance or status for any project, and nothing in this task names gov-AIEOS's levels, allowance
+# or statuses. Connecting it to the governor is a separate governor change, not made here: governor.py is forbidden,
+# LEVEL_AT_LEAST_L2 stays False and row 4 stays unreachable. No module of the repository calls the new function.
+# Reading R1 (the implementer's; decision D-738 P2 and second C2): the function fails closed when P-CRED is not
+# exactly "PASS", as it does for C13. Whether L2 may be used while P-CRED or C13 is not PASS is the owner's
+# (master-plan.md §9 item 5; assurance-model.md §10 point 2); failing closed decides nothing in the permissive
+# direction, and only the owner may loosen it. R1 is stricter than §9, which names only C13.
+# The L2 entry (decision D-738 P3 and first C3): a check of form only. The module checks that an L2 entry names a
+# change request and metrics; whether the change request is approved and whether the metrics suffice are the caller's
+# and the approver's. Any bound above L2 is not expressible: any level other than "L1" or "L2" fails closed.
+# Owner points not touched (decision D-738 Q2): the auto-accept policy, "sufficient assurance", any bound above L2,
+# and L2 while P-CRED or C13 is not PASS are the owner's (master-plan.md §9 item 5; A54 point 2); none is set, changed
+# or used. Raising a low or medium class of gov-AIEOS to L2 (the decision agent's under A54 point 2) is not proposed.
+# Limit, stated (decision D-738 P5): no integration test, since the function has no caller.
+# Readers of the changed paths (D-263 C3's practice): src/aieos_bootstrap/__init__.py is read by every module that
+# imports the package and by the CI's G1 build; only its docstring changes (TASK-036 in the task list, "twenty-one
+# modules" and one entry for the new module). The new module is read by nothing.
+# Risk: high, and change class critical_cr, each computed over the base by script (risk_class36.py and
+# gov003_class36.py: the scripts of TASK-035 with only the write-set and the header line changed): every path R2
+# medium and R3 high by component tags; every path an evaluator path (GOV-003, 4 of 4).
+# Profile (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture [deterministic_rule],
+# functional [integration_test], security [static_security_analysis] and architecture [ai_review (cross-model)], plus
+# the evidence_required of the applicable articles. (reading) The integration_test entry is met by the CI's
+# integration step over the whole suite at the task's commits; no integration test of this task exists (the limit
+# above).
+# Review points (for the five way-2 reviews and the decision agent's three): the rule of AC2 against its sources; the
+# strict checks by type and identity (AC3); never raising (AC4); the docstring's statements (AC5); no caller, no
+# gov-AIEOS value, the governor untouched (AC6); the positive case and the facts case (AC7); purity (AC9).
+# Naming (D-544 Q3, as TASK-023 to TASK-035): every test this task adds names the AC ids it stands for as
+# "TASK-036 ACn" in its own docstring, and no other task's AC in qualified form.
+# Evaluation path (A61; as TASK-007 to TASK-035): commit C changes only docs/tasks/TASK-036.yaml and has one parent
+# equal to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-036", go to task/TASK-036 under their own
+# decisions; main receives the task only at its acceptance.
+# Not applicable: OPS-001 (the task changes no ref); INV-004 (the module appends nothing and calls no writer);
+# INV-005 to INV-008 and INV-010 (the decision engine, the governor, evidence records as stored and the replay meet no
+# path of the write-set); INV-011 (reading: its check is a policy rule over the self-build's policy, which this task
+# neither changes nor reads; the module states the product's rule, never looser than INV-011 for the self-build);
+# GOV-001, GOV-004 to GOV-006 and SEC-003 (the concept file, the bound artifacts, the decision matrix, the records and
+# pre-genesis documents, and .github/, meet no path of the write-set).
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting, no push of its own; it weakens no evidence requirement (CR-002 part 4 limit 8 does not apply),
+# and it sets no autonomy level or auto-accept policy; so its acceptance is one delegated approval of the decision
+# agent (Master Plan section 6), for the decision agent's ruling.
+task: TASK-036
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add src/aieos_bootstrap/autonomy.py, a pure module with one function auto_accept_allowed(levels, allowance, risk,
+  status, touches) that returns a new mapping with exactly the keys allowed, level and reasons, never raises, and
+  fails closed: allowed is True only when the risk class is low or medium, its level entry is L2 in form, the
+  allowance for the class is exactly True, C13 and P-CRED are each exactly "PASS" and touches is exactly False. With
+  unit and property tests, including one positive case on made-up values and a case of the self-build's present
+  facts that gives allowed False for every class; the package docstring names the module. No caller, no change to the
+  governor, no level, allowance or status for any project.
+traces_to:
+  - docs/specs/spec-04-verification-and-evidence.md#9
+  - docs/pre-genesis/assurance-model.md#6
+  - docs/pre-genesis/constitution.md#INV-011
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-036.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C.
+  base_commit: 8ea8368d309fba863729b02104c51ee452a7656c
+  depends_on: [TASK-004]
+  intent_versions:
+    docs/specs/spec-04-verification-and-evidence.md: 48d4f5bf06461ad49409f21bc6ea8d511d17a84eaac15adda14277483176a8d5
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 97caafbd78b4d503112d1e32c445bce188a4af2f3c29ad88093989d5abbceb76
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+    docs/plan/master-plan.md: 154234d539e140688425f067c9be4c2e0350ebcc48a4e92cdab9275fb86e0de2
+write_set:
+  # One modified path (__init__.py: its docstring only) and three added paths.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/autonomy.py
+    - tests/unit/test_autonomy.py
+    - tests/property/test_autonomy_properties.py
+read_set:
+  paths:
+    - docs/specs/spec-04-verification-and-evidence.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/plan/master-plan.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/governor.py
+    - tests/unit/**
+    - tests/property/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.autonomy.auto_accept_allowed (new), aieos_bootstrap.governor (read only: LEVEL_AT_LEAST_L2 and the auto_accept values' form)]
+  schemas: []
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/writer.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The function and its result. src/aieos_bootstrap/autonomy.py defines auto_accept_allowed(levels, allowance,
+      risk, status, touches). It returns a new dict with exactly the keys "allowed" (a bool), "level" ("L1" or "L2")
+      and "reasons" (a new list of str in the fixed order of AC2); "allowed" is True if and only if "reasons" is
+      empty.
+  - AC2: >-
+      The rule, fail closed (specification 4 §9; assurance-model.md §6; concept lines 622 and 626; INV-011; risk rules
+      point 2). The reasons, each added when its condition holds, in this order: "risk" when risk is not a str among
+      low, medium, high and critical; "level" when risk is one of them and levels is not a dict, or holds no entry for
+      the class, or the entry is neither exactly {"level": "L1"} nor a dict with exactly the keys level, change_request
+      and metrics where level is "L2" and change_request and metrics are non-empty str (the level is then "L1"; with
+      risk not one of the four the level is "L1" and "level" is not added); "L1" when the level is "L1"; "risk above
+      medium" when the level is "L2" and risk is high or critical; "policy" unless allowance is a dict and its value
+      for risk is True; "C13" unless status is a dict whose value for "C13" is a str equal to "PASS" (a missing value
+      counts as not PASS); "P-CRED" likewise for "P-CRED" (reading R1); "touches policy" unless touches is False.
+  - AC3: >-
+      Strict checks by type and identity, never by truthiness (decision D-738 second C3). The allowance value must be
+      True itself (1, "true" and other truthy values fail); a status must be a str exactly equal to "PASS" ("pass",
+      " PASS" and a non-str fail); touches must be False itself (0, None, "False" and an empty value fail); risk must
+      be a str among the four (True, a list, a dict and a str of another class fail); the level strings, the keys and
+      the entry form must be exact; a dict subclass is treated by its type as not a dict (reading). A unit test covers
+      each strict case.
+  - AC4: >-
+      Never raising (decision D-738 first C1). For every parameter, a test passes odd values: unhashable values (a
+      list, a dict, a set) as risk and as a level entry's fields, non-str level values, levels, allowance and status as
+      a list, a str, None, an int and a tuple, a dict with non-str keys, and touches as 0, None and "False"; each call
+      returns a result in AC1's form with the reasons AC2 gives and raises nothing. The module tests membership only
+      after checking a value's type, so it never hashes a value of unknown type.
+  - AC5: >-
+      The docstring (decision D-738 first C2 and C3, second C1 and C2). The module docstring states: allowed is a
+      necessary condition only, the policy's half of row 4, not an acceptance, a gate result or a ruling on
+      "sufficient assurance"; the caller supplies the levels and the allowance only from an approved, versioned
+      policy and the statuses only from pinned values; the module defines no level, allowance or status for any
+      project and does not read gov-AIEOS's; the L2 entry check is a check of form only, approval of the change
+      request and sufficiency of the metrics being the caller's and the approver's; any bound above L2 is not
+      expressible; reading R1, labelled as the implementer's, stricter than §9, which only the owner may loosen;
+      connecting the function to the governor is a separate governor change, not made here.
+  - AC6: >-
+      No caller, no project value, the governor untouched (decision D-738 second C4 and C5). No module of src/
+      imports or calls autonomy (a test scans the package's own source files); no file of the write-set holds a level
+      table, allowance or status value for gov-AIEOS or names gov-AIEOS's levels; governor.py and every other path
+      outside the write-set are unchanged.
+  - AC7: >-
+      The positive case and the self-build's facts (decision D-738 P4). A unit test whose docstring says its values are
+      made up shows allowed True and level "L2" for risk low and for risk medium with a made-up L2 entry, an allowance
+      of True, both statuses "PASS" and touches False; and that changing any one of these conditions alone makes
+      allowed False with that condition's reason. A unit test of the self-build's present facts (no level table, an
+      empty allowance, C13 and P-CRED not PASS, touches False) gives allowed False for every one of the four classes,
+      with reasons "level", "L1", "policy", "C13" and "P-CRED".
+  - AC8: >-
+      Properties. Over generated inputs (the standard library's random with a fixed seed, in the test module only):
+      allowed is True only when every condition of AC2 holds; adding any failing condition never makes allowed True;
+      the function is deterministic for equal inputs and leaves its inputs unchanged (compared with deep copies); each
+      call returns a new result and a new reasons list.
+  - AC9: >-
+      Purity and the CI checks (INV-001 to INV-003). The module imports nothing beyond the standard library and does
+      no I/O: it reads no file, clock, environment or network and writes nothing (a test scans its source for open,
+      eval, exec, compile, __import__ and for imports of os, sys, subprocess, socket, time, datetime, random, io and
+      pathlib). The tests use the standard library only. At the task's commits the CI steps report no finding:
+      deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit ("bandit reports no finding in CI"). Before the first
+      push, the added and changed lines of the write-set are scanned for the patterns of bandit's tests that the CI
+      applies (decision D-738 P6, as decision D-725 P6): B324 (hashlib md5 or sha1 without usedforsecurity=False),
+      B404, B602 to B607 (subprocess and shell use), B605 (os.system, os.popen), B307 (eval), B102 (exec), B301 and
+      B403 (pickle, marshal), B506 (yaml.load), B306 (tempfile.mktemp), B101 (assert, in src only), B311 (random, in
+      src only), B104 (a bind to 0.0.0.0), B105 to B107 (password-like names), B310 (urllib urlopen), B313 to B320 and
+      B405 to B411 (xml parsers); every count is 0 or the hit is brought to the decision agent before the push. The
+      scan is a stated limit, not bandit; the CI's bandit run is the evidence.
+  - AC10: >-
+      Naming and the package docstring. Every test function of the two test modules names "TASK-036 ACn" (at least
+      one) in its own docstring and no other task's AC in qualified form; each module has a naming test that reads the
+      loaded TestCase classes' docstrings, not the file. src/aieos_bootstrap/__init__.py changes only in its
+      docstring: "TASK-036" in the task list, "twenty-one modules" in place of "twenty modules", and one entry for
+      ``autonomy``.
+  - AC11: >-
+      Its own tests and the added text. The tests write and remove no file and open none except the package's own
+      source files. Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003
+      patterns, and each count is 0; the file names are scanned with the same patterns and the records executors'
+      pre-push pattern (D-282). tests/run_tests.py, unchanged, runs all groups, and every earlier test passes
+      unchanged; if one can pass only by a change outside the write-set the task escalates (needs_out_of_scope_change).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC6, AC7, AC8, AC11]}
+  - {gate: G3, check: constitution, args: [AC5, AC9, AC10, INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
