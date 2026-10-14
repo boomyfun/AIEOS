@@ -174,6 +174,9 @@ Occurrences in session 2026-10-14-2320 (../History/2026-10/2026-10-14-2320-the-e
 Occurrences in session 2026-10-15-0028 (../History/2026-10/2026-10-15-0028-the-policy-list-and-scope-drift-accepted-and-on-main.md):
 - **2026-10-15.** Nine English text blocks before tool calls, by the textblock check: :347, :517, :623, :1379, :1431, :1529, :1605, :1875 and :2079, each a short line announcing the next step. The decision agent's instruction after the third (D-698 C3: re-read this lesson before each turn that calls tools and write no text) did not hold. Each was listed before the next gated command and brought to the decision agent, and the owner was told. (The decision agent's running count reached "eleven" at D-708; the check lists nine.)
 
+Occurrences in session 2026-10-15-0229 (../History/2026-10/2026-10-15-0229-the-scope-drift-caller-accepted-and-on-main.md):
+- **2026-10-15.** Eight English text blocks before tool calls, by the textblock check: :169, :222, :765, :965, :1060, :1167, :1369 and :1736, each a short line announcing the next step; each listed before the next gated command and brought to the decision agent, and the owner was told.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

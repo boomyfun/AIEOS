@@ -1,6 +1,6 @@
 # DEF-0060: the review findings and limits carried from TASK-033, scope drift
 
-- Status: open
+- Status: done
 - Opened: 2026-10-15 (decision D-707)
 - Deferred by: decision agent (A41), D-707 (the dispositions P1 to P17 of the five way-2 reviews; the points carried to TASK-034) and D-708 (C3).
 - Decision group: A (limits of the scope-drift computation within the self-build).
@@ -23,3 +23,4 @@ TASK-033 (accepted, decision D-708); TASK-031 (reconcile.py); TASK-016 and TASK-
 
 ## Log
 - 2026-10-15: opened (decisions D-707 and D-708; session c5a72bcd).
+- 2026-10-15 (session 9a3d9254): done. TASK-034 (decision D-720) met its points: the policy's rules translated into {match, class} with every other key stripped (R3 by tags as src/** and tests/**); an error of claims is a stop, never "no claim"; the facts a run used are named in its result (the commit-only id's rerun conflict is traced through them). Moved to DEF-0061: the merge limit (L1) and the narrow tests. ../History/2026-10/2026-10-15-0229-the-scope-drift-caller-accepted-and-on-main.md

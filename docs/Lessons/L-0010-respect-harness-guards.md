@@ -205,6 +205,9 @@ Occurrences in session 2026-10-14-2320 (../History/2026-10/2026-10-14-2320-the-e
 Occurrences in session 2026-10-15-0028 (../History/2026-10/2026-10-15-0028-the-policy-list-and-scope-drift-accepted-and-on-main.md), each my incorrect command:
 - **2026-10-15.** :248 a heredoc with parts of no effect, refused by guard rule R1; :428 a grep pattern with unbalanced backticks, which failed to parse; :624 a Python run under `timeout 590`, refused by rule R3 and rewritten to the rule's form at :628; :1123 a needless `python3 -c` part, refused by rules R2 and R3; :1170 the same guard-forbidden form inside a grep pattern, refused by R2 (the form the memory's rule already names); a records dry run given its arguments in the wrong order, whose checkout failed on long paths inside the scratchpad. None was retried in its refused form.
 
+Occurrences in session 2026-10-15-0229 (../History/2026-10/2026-10-15-0229-the-scope-drift-caller-accepted-and-on-main.md), each my incorrect command:
+- **2026-10-15.** :208 a heredoc and Python's name followed by a dash, refused by guard rules R1 and R2 (the form the memory's rule names); :645 an `rm -f` of a scratch draft, against the memory's rule "no rm"; :872 a Python run under `timeout 590`, refused by rule R3 and rewritten at :876 (as in session c5a72bcd); :1348 a part with no effect (a stray variable assignment), which filler_count3 did not flag; :1663 a sed into /dev/null, a part with no effect; :1670 the records dry run given its arguments in the wrong order (as in session c5a72bcd), its checkout failing on long paths inside the scratchpad, rerun in order; :1761 a head into /dev/null, again a part with no effect. None was retried in a refused form.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

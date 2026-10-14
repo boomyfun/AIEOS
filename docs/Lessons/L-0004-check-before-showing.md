@@ -155,6 +155,10 @@ Occurrences in session 2026-10-15-0028 (../History/2026-10/2026-10-15-0028-the-p
 - **2026-10-15 (D-698, D-700).** Two transcript line numbers written in requests to the decision agent without a grep: ":445" for :403 (D-698) and ":778" for :779 (D-700); each corrected by a short message before the decision used it.
 - **2026-10-15 (D-704).** Commit C's first message said "No governor call", against the contract's AC3, AC4 and AC9 (the module calls governor.matches); the decision agent caught it before the push, and the message was corrected with a second executor naming the corrected file.
 
+Occurrences in session 2026-10-15-0229 (../History/2026-10/2026-10-15-0229-the-scope-drift-caller-accepted-and-on-main.md):
+- **2026-10-15 (D-716).** The first push request showed an executor diff made from an earlier build (manifest b47748b0...) while the dry run had bound a later build (eb5cfb8c...); the decision agent asked for the account, and the final executor and manifest were bound and shown before the push.
+- **2026-10-15 (D-716 addendum).** A new naming test read its own test file, against AC14 (the tests open only the package's own sources); found while building the review briefs and fixed before the push.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.
