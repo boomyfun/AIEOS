@@ -23,7 +23,7 @@ no reason is added):
    four, the level is "L1" and "level" is not added.
 3. "L1": the level is "L1" (at L1 acceptance ends at NEEDS_REVIEW).
 4. "risk above medium": the level is "L2" and risk is high or critical (concept line 622).
-5. "policy": unless allowance is a dict and its value for risk is True itself.
+5. "policy": unless risk is one of the four classes, allowance is a dict, and its value for that class is True itself.
 6. "C13": unless status is a dict whose value for "C13" is a str equal to "PASS"; a missing value counts as not PASS.
 7. "P-CRED": likewise for "P-CRED".
 8. "touches policy": unless touches is False itself (a change to the policy, the risk rules, the default profiles,

@@ -70,6 +70,8 @@ class Properties(unittest.TestCase):
             elif k == 2:
                 args[2] = rng.choice(['high', 'critical', None, 'Low'])
                 args[0][args[2]] = L2 if type(args[2]) is str else None
+                if type(args[2]) is str:
+                    args[1][args[2]] = True
             elif k == 3:
                 args[3][rng.choice(['C13', 'P-CRED'])] = rng.choice(STATUS[1:])
             else:

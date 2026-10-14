@@ -206,12 +206,16 @@ class NeverRaises(unittest.TestCase):
                frozenset(), True, False, object(), Hostile('low'), [{'level': 'L2'}], {'low': [1]},
                {'low': {'level': ['L2']}}, {'low': {1: 'L2'}}, {'low': {'level': {}}}]
         for v in odd:
-            for args in ((v, {'low': True}, 'low', PASS, False), ({'low': L2}, v, 'low', PASS, False),
-                         ({'low': L2}, {'low': True}, v, PASS, False), ({'low': L2}, {'low': True}, 'low', v, False),
-                         ({'low': L2}, {'low': True}, 'low', PASS, v)):
+            cases = (((v, {'low': True}, 'low', PASS, False), ['level', 'L1']),
+                     (({'low': L2}, v, 'low', PASS, False), ['policy']),
+                     (({'low': L2}, {'low': True}, v, PASS, False), ['risk', 'L1', 'policy']),
+                     (({'low': L2}, {'low': True}, 'low', v, False), ['C13', 'P-CRED']),
+                     (({'low': L2}, {'low': True}, 'low', PASS, v), [] if v is False else ['touches policy']))
+            for args, want in cases:
                 r = autonomy.auto_accept_allowed(*args)
                 self.assertEqual(set(r), KEYS)
                 self.assertEqual(r['allowed'], r['reasons'] == [])
+                self.assertEqual(r['reasons'], want, (args, want))
 
     def test_dict_with_non_str_keys(self):
         """TASK-036 AC4: dicts whose keys are not str, or are str subclasses that raise, are read without hashing."""
