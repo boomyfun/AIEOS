@@ -1,8 +1,8 @@
 """The bootstrap package of gov-AIEOS (tasks TASK-001, TASK-003, TASK-004, TASK-006, TASK-007, TASK-008, TASK-009,
 TASK-016, TASK-021, TASK-022, TASK-023, TASK-024, TASK-025, TASK-026, TASK-027, TASK-029, TASK-030, TASK-031,
-TASK-032, TASK-033, TASK-034 and TASK-035).
+TASK-032, TASK-033, TASK-034, TASK-035 and TASK-036).
 
-It holds twenty modules:
+It holds twenty-one modules:
 - ``records`` (TASK-001): a checker of the form of event-log lines, records and event payloads of specification 2
   sections 6.1 to 6.4. It reads only the text it is given, writes nothing and decides nothing.
 - ``conformance`` (TASK-003, with TASK-006's Resume Check entry and TASK-017's Risk Engine entry): the conformance runner of
@@ -80,6 +80,9 @@ It holds twenty modules:
   CI workflow's evaluator list at the commit's first parent by a walk of Git trees, checks the trailer task's contract
   bytes against the log's approved contract hash, calls ``scope_drift`` once and appends the event it returns through
   the writer, naming the facts it used; it changes no task state, opens no file itself and reads no clock.
+- ``autonomy`` (TASK-036): autonomy L1 to L2 as a product feature, specification 4 section 9. One pure function says
+  whether the policy's half of the governor's row 4 allows auto-accept for a risk class, failing closed; it is not an
+  acceptance, it has no caller, and it defines no level, allowance or status for any project.
 """
 
 __all__ = ['ac_coverage', 'ac_tests', 'conformance', 'drift', 'evaluation', 'eventlog', 'execution', 'gitread',
