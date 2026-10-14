@@ -1,0 +1,405 @@
+# Task contract TASK-032, the execution path (Master Plan revision 3, §4 M3 and M4; specification 3 revision 4,
+# sections 1, 9 and 10; specification 1 revision 2, sections 5.1 and 5.2; concept lines 489, 506, 541 and 876).
+# Revision 1, drafted under decisions D-683 (Q2, C1) and D-685 (Q3, C3), from the scope note approved in D-683, with
+# decision D-687's changes M1 to M5 and its rulings R1 to R8; brought for approval in its own request; whether it is approved is recorded in the decision files, not in this file. Fields
+# and value forms follow specification 2 §5.1 and the contracts of TASK-007 to TASK-031. Readings marked "(reading)"
+# are the worker's, for the decision agent's ruling.
+# Task type: implementation. What it adds: one module, src/aieos_bootstrap/execution.py, the core's caller of the
+# Resume Check (resume_check.check, TASK-008), as evaluation.py is the governor's (TASK-027). It closes the two parts of
+# DEF-0030 that decision D-415 C3 left open at M3's exit: the execution decision's state effect, appended through the
+# writer, and the lease granted on CONTINUE. Its function execute reads the event log through the writer, projects the
+# task's state from its own events and the store's held lease, checks that the Resume Check's inputs agree with the log
+# on that state, the log's last sequence number and the approved contract hash, calls the Resume Check once, appends the
+# returned record as decision.execution and then each event of its state_effect under the ids the record stores, and
+# grants, keeps or releases the lease as specification 3 sections 1 and 10 say.
+# The specification's text (spec 3 section 1): "Only CONTINUE and CONTINUE_WITH let the lease be granted and the Context
+# Compiler run (line 506). Every other decision grants no lease." and "On IN_PROGRESS, any decision other than CONTINUE
+# or CONTINUE_WITH releases the lease (proposed)." Section 9: the record_id and the event_id of every event section 10
+# appends with it are "computed once when the check runs and stored in the record. A retried append of the same record
+# reuses the stored ids and has no effect". Specification 1 line 60: IN_PROGRESS is not a log event; "a task that the
+# log has in READY or REWORK is IN_PROGRESS while the local store holds an unexpired lease on it (proposed)".
+# Point (i) of the scope note, a stated limit (decision D-683 Q2): specification 1 revision 2 (line 70) allows READY ->
+# STALE when the Resume Check gives REPLAN on a READY task, while resume_check.py's READY branch (_effect: "if
+# inp['task_state'] == 'READY': return [conflict]") gives no task.stale for it, as specification 3 section 10's older
+# text says. This task appends exactly what resume_check.check returns and does not change resume_check.py; the
+# alignment of the Resume Check is carried as its own later item (DEF-0030's log line of 2026-10-14). The outcome fails
+# safe: no lease is granted on REPLAN, the task stays READY, and the next Resume Check gives REPLAN again.
+# The order (scope note point (iii), as decision D-683 accepted it, with one change, the worker's reading R1, accepted
+# by decision D-687): a lease is granted only after the record and its state effect are in the log; a held lease that the
+# decision ends is released before the record is appended, as specification 1 section 5.1 says for task.blocked ("a
+# lease on the task is released first (proposed)") and for task.stale ("the lease of a task in IN_PROGRESS is
+# released"), so that no lease is ever held on a task the log has already moved to BLOCKED or STALE (reading). A crash
+# between the steps leaves either a record with no lease, or a released lease with no record; both are repaired by the
+# next Resume Check under a new log_seq and new ids.
+# What it does not do: no Resume Check input gathering (Git, the files at HEAD, the architecture entities, the runtime's
+# max_risk and telemetry, the observed read-set are the caller's values; only task_state, log_seq and
+# approved_contract_hash are checked against the log); no Work Order and no Context Compiler (spec 3 sections 1 and
+# 11); no decision taken while a session runs (section 8: STOP: violation and a running ESCALATE are specification 5's
+# runtime's); no task.unblocked (section 10's BLOCKED row needs a trigger over all blocked tasks, a later piece); no
+# task.replanned; no store creation, no session start or end, and no lease expiry (open_store, start_session,
+# end_session and expire_leases stay the caller's; D-414's requirement on epochs stays with the caller that opens the
+# store, DEF-0041 (c)); no governor call and no acceptance; no network; no change to resume_check.py, writer.py,
+# eventlog.py, records.py or any other existing module; nothing under .github/.
+# Readers of the changed paths (D-263 C3's practice): src/aieos_bootstrap/__init__.py is read by every module that
+# imports the package and by the CI's G1 build; its docstring and __all__ gain execution; tests/unit/test_gitread.py
+# and tests/unit/test_ac_tests.py assert that __all__'s text holds 'gitread' and 'ac_tests', which stay; it must not
+# name the Resume Check fixture folder (TASK-010's assertion) nor the Risk Engine fixture folder (TASK-020's allow
+# list). No module of the repository calls execute yet; its next caller is the session start of specification 3
+# section 1, in the adapter or CLI milestones (M5, M7).
+# The projection (scope note point 2 (b); DEF-0055 P6): the task's state is read from its own events after its last
+# task.approved, as evaluation's _task_events reads them; the transitions are not checked against specification 1's
+# state machine (a stated limit).
+# Risk: high, and change class critical_cr, each computed over the base by script, as for TASK-027 to TASK-031. Profile
+# (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture [deterministic_rule], functional
+# [integration_test], security [static_security_analysis] and architecture [ai_review (cross-model)], plus the
+# evidence_required of the applicable articles.
+# Reviews (as TASK-031's): five way-2 reviews by a Claude model other than the implementer's, and the decision agent's
+# three, each brief naming for testing: the projection (a task.drafted after the last task.approved, and a task.* type
+# it does not name) and the agreement of the inputs with the log; the record's form check before any append; the order
+# of the release, the appends and the grant; the ids and "duplicate" on a second append, and a rerun refused "inputs";
+# each decision's lease effect from READY, REWORK and IN_PROGRESS; the kept lease on IN_PROGRESS, whose holder is not
+# checked; an error record; a store refusal; the stand-ins bound to the real signatures; purity (the writer and the
+# Resume Check only); point (i) and AC10's limits.
+# Naming (D-544 Q3, as TASK-023 to TASK-031): every test of the new test modules names the AC ids it stands for as
+# "TASK-032 ACn" in its own docstring.
+# Evaluation path (A61; as TASK-007 to TASK-031): commit C changes only docs/tasks/TASK-032.yaml and has one parent
+# equal to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-032", go to task/TASK-032 under their own
+# decisions; main receives the task only at its acceptance.
+# Not applicable: OPS-001 (the task changes no ref); INV-006 to INV-008, INV-010 and INV-011 (acceptance, evidence and
+# the policy meet no path of the write-set); GOV-001, GOV-004 to GOV-006 and SEC-003 (the concept file, the bound
+# artifacts, the decision matrix, the records and pre-genesis documents, and .github/, meet no path of the write-set).
+# INV-004 applies: the module appends only through writer.append_event and changes the store only through
+# writer.grant_lease and writer.release_lease_token. INV-005 applies: the decision.execution payload is the decision
+# contract of specification 2 section 6.4 as resume_check.check returns it, appended unchanged. INV-009 applies through
+# the writer (append-only), which this task does not change.
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting, no push of its own; a lease in the local store is not an owner-kept act; it weakens no evidence
+# requirement (CR-002 part 4 limit 8 does not apply), so its acceptance is one delegated approval of the decision agent
+# (Master Plan section 6), for the decision agent's ruling.
+task: TASK-032
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add a standard-library Python 3 module, src/aieos_bootstrap/execution.py, the core's execution path of specification
+  3 sections 1, 9 and 10: execute(root, task_id, inputs, code_sha256, grant_request, recorder, now) reads the event log
+  through the writer, projects the task's state from its own events and the store's held lease, checks that the Resume
+  Check's inputs agree with the log, calls resume_check.check once, appends the returned execution decision record as
+  decision.execution and then each event of its state_effect through writer.append_event under the ids the record
+  stores, so that a rerun gives "duplicate", and grants the lease through writer.grant_lease only on CONTINUE or
+  CONTINUE_WITH for a task in READY or REWORK, keeps a held lease on those decisions for a task IN_PROGRESS, and
+  releases it by its token through writer.release_lease_token on every other outcome. With unit, integration and
+  property tests in new test modules, each test naming its AC ids as "TASK-032 ACn" in its own docstring; the tests use
+  stand-ins for the writer's functions and for the check, and the integration test runs the real resume_check.check
+  over a log appended in memory with eventlog.append and an in-memory stand-in store.
+traces_to:
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#1
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#9
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#10
+  - docs/specs/spec-01-state-and-event-model.md#5.1
+  - docs/specs/spec-01-state-and-event-model.md#5.2
+  - docs/specs/spec-02-aieos-file-format.md#6.3
+  - docs/specs/spec-02-aieos-file-format.md#6.4
+  - AIEOS-concept.md#506
+  - AIEOS-concept.md#541
+  - AIEOS-concept.md#876
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-032.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id.
+  base_commit: c5b1b2ecb3a4729d2946287f9f0bef4f61374d33
+  depends_on: [TASK-001, TASK-007, TASK-008, TASK-016, TASK-028]
+  intent_versions:
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 05c53318cd756a3acfc13e5adaffbfaede8f05be3d00289e9fd45fef08c63c73
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 80c91e47ef0a1dbe7f77c677cd2261d5b5ede20bcb0735cf06438bddbde85f8b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 79021d4c1a6ef506343e78c3bc045273f19efa1c2ac4f517de855ec015ebfbc7
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # One modified path (the package docstring and __all__); every other path is new.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/execution.py
+    - tests/unit/test_execution.py
+    - tests/integration/test_execution_store.py
+    - tests/property/test_execution_properties.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/conformance-files.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/Deferred/DEF-0030-event-log-writer-and-workflow-revision-6.md
+    - docs/Deferred/DEF-0041-the-review-findings-carried-from-task-016.md
+    - docs/Deferred/DEF-0055-the-review-findings-and-limits-carried-from-task-027.md
+    - docs/tasks/**
+    - docs/records/**
+    - src/aieos_bootstrap/resume_check.py
+    - src/aieos_bootstrap/writer.py
+    - src/aieos_bootstrap/eventlog.py
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/evaluation.py
+    - src/aieos_bootstrap/reconcile.py
+    - tests/conformance/**
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.resume_check.check, aieos_bootstrap.writer.read_log, aieos_bootstrap.writer.append_event, aieos_bootstrap.writer.grant_lease, aieos_bootstrap.writer.release_lease_token, aieos_bootstrap.writer.held_lease, aieos_bootstrap.records.check_log, aieos_bootstrap.eventlog.append]
+  schemas: [spec-02 event payloads (6.3), spec-02 decision contract (6.4), spec-03 execution decision record (9)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/writer.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-005, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The arguments. execute(root, task_id, inputs, code_sha256, grant_request, recorder, now, read_log=None,
+      append=None, grant=None, release=None, held=None, check=None) checks every argument before anything is read:
+      root a non-empty string; task_id "TASK-" followed by digits; inputs a mapping whose task_id equals task_id (its
+      other keys are resume_check.check's to judge); code_sha256 64 lowercase hex characters; grant_request a mapping
+      with exactly the keys holder (a non-empty string), session_id (a non-empty string) and expires_at (a
+      timezone-aware datetime in UTC with whole seconds); recorder a non-empty string; now a timezone-aware datetime in
+      UTC with whole seconds. A wrong argument gives the result of AC9 with result "refused", reason "argument" and a
+      finding naming it, and nothing is read, appended or changed in the store. read_log, append, grant, release, held
+      and check default, at call time, to writer.read_log, writer.append_event, writer.grant_lease,
+      writer.release_lease_token, writer.held_lease and resume_check.check.
+  - AC2: >-
+      The log and the task's state. The log is read once through read_log(root) and checked by records.check_log; a
+      result that is not bytes, or a log with a finding, gives "refused", reason "log". The task's events are its own
+      (task_id equal), duplicates of an earlier line left out; with no task.approved among them the result is
+      "refused", reason "state". From its last task.approved the state is READY, and each later event of the task sets
+      it in log order: task.drafted DRAFT, task.blocked BLOCKED, task.unblocked READY, task.submitted VERIFYING,
+      decision.acceptance its payload's next_task_state when that is a string, task.stale STALE, task.done DONE,
+      task.replanned DRAFT; a task.* type this list does not name gives "refused", reason "state" (decision D-687 M1);
+      other types leave it (reading; the transitions are not checked, DEF-0055 P6). held(root, task_id) is read once: a
+      lease whose expires_at is after now, on a task the log has in READY or REWORK, makes the state IN_PROGRESS
+      (specification 1 line 60); a held lease whose expires_at is at or before now gives "refused", reason "lease"
+      (its expiry is the caller's, writer.expire_leases); a lease held on a task the log has in another state gives
+      "refused", reason "state". A state other than READY, REWORK or IN_PROGRESS gives "refused", reason "state", and
+      nothing is appended.
+  - AC3: >-
+      The inputs agree with the log. Before the check is called, inputs' task_state must equal the projected state,
+      inputs' log_seq the seq of the log's last line, and inputs' approved_contract_hash the contract_hash of the
+      task's last task.approved; each difference is a finding, and any gives "refused", reason "inputs", with nothing
+      appended (no decision on a stale view of the log is recorded). The other inputs are the caller's and are not
+      checked here (AC10).
+  - AC4: >-
+      The check. check(inputs, code_sha256) is called once. Its result must be a mapping whose record_id is a
+      non-empty string, whose subject equals task_id, which has a decision key, and whose state_effect is a list of
+      mappings with exactly the keys event_id (a non-empty string), type, payload and task_id (equal to task_id); a
+      result in another form, or a raised exception, gives "refused", reason "check", before anything is released or
+      appended. A record with decision null and an error is the record of a failed check: it is appended as AC6 says,
+      no state effect follows, and its lease effect is AC7's "any other outcome".
+  - AC5: >-
+      The release first (reading R1, accepted by decision D-687; specification 1 section 5.1). When the state is
+      IN_PROGRESS and the record's decision is not CONTINUE or CONTINUE_WITH (an error record included), the held lease
+      is released once through release(root, task_id, its fencing_token) before anything is appended; a result other
+      than a StoreResult with result "done", or a raised exception, gives "refused", reason "lease", and nothing is
+      appended.
+  - AC6: >-
+      The state effect (specification 3 sections 9 and 10). The record is appended through append(root,
+      "decision.execution", record, record["record_id"], now, recorder, task_id=task_id) with no fencing token, then
+      each event of its state_effect in its order through append(root, its type, its payload, its event_id, now,
+      recorder, task_id=task_id), the plan built inside the guarded step. Each "appended" and "duplicate" result is
+      listed; the first other result (a refusal, a result that is not a WriteResult, or a raised exception) stops the
+      appends and gives "refused", reason "append", with the ids appended so far listed, and no lease is granted. The
+      ids are the record's, so a second append of the same record or event gives "duplicate" (the writer's
+      behaviour); a rerun of execute with the same inputs after any append is refused with reason "inputs" by AC3,
+      since the log's last seq has moved, and it appends nothing (decision D-687 M2). The log is append-only, so
+      nothing is undone. The record and its events are appended as check returns them, unchanged.
+  - AC7: >-
+      The lease (specification 3 sections 1 and 10). After every append is "appended" or "duplicate": on CONTINUE or
+      CONTINUE_WITH for a task in READY or REWORK, grant(root, task_id, the state, holder, session_id, now, expires_at)
+      is called once with grant_request's values; a StoreResult with result "done" gives the lease in the result, and a
+      refusal (held, session, expiry or state) or a raised exception gives "refused", reason "lease", with the store's
+      reason and findings named, the record staying in the log. On CONTINUE or CONTINUE_WITH for a task IN_PROGRESS,
+      the held lease is kept and given in the result, and no store function is called; the kept lease is the store's
+      held lease, and whether grant_request's holder and session_id hold it is not checked (AC10). On any other outcome for a task
+      in READY or REWORK (STOP: runtime insufficient, STOP: scope invalid, REPLAN, BLOCKED, ESCALATE, an error record),
+      no store function is called and no lease exists after the call; for IN_PROGRESS, AC5's release has happened.
+  - AC8: >-
+      The limits of the Resume Check, stated (scope note points (i) and (ii); decision D-683): a READY task given
+      REPLAN gets the conflict.detected that check returns and no task.stale, though specification 1 revision 2 line 70
+      allows READY -> STALE then; a check-4 REPLAN gives no task.stale; every conflict.detected has tasks []. Each is
+      appended as returned and named in the result's uncovered from the record's own uncovered entries; resume_check.py
+      is not changed.
+  - AC9: >-
+      The result. execute returns a mapping with exactly the keys result ("decided" or "refused"), reason (None or one
+      of "argument", "log", "state", "lease", "inputs", "check", "append"), findings (a list of texts), decision (the
+      record's decision, or None when no record was made), record_id (the record's, or None), appended (the event ids
+      appended), duplicate (the event ids found already appended), lease (the lease granted or kept, in
+      eventlog.LEASE_KEYS' form, or None), released (the lease released, or None) and uncovered (the record's
+      uncovered entries, sorted, without duplicates). An exception raised by a called function is caught and becomes a
+      result with the step's reason; none escapes.
+  - AC10: >-
+      Limits, stated: the Resume Check's inputs other than task_state, log_seq and approved_contract_hash are the
+      caller's and not checked (as TASK-031's facts); the projection does not check transitions (DEF-0055 P6); one run
+      at a time (the log is read, then appended to, with no check that it is unchanged since; the store's own
+      transaction is the only lock, as the writer's limit); a crash between the release, the appends and the grant
+      leaves a state the next Resume Check repairs under new ids; the store, its epoch, sessions and expiry are the
+      caller's (D-414's requirement stays with the caller that opens the store); on CONTINUE or CONTINUE_WITH for a
+      task IN_PROGRESS the lease kept is the store's held lease, and that grant_request's holder and session_id are
+      the ones holding it is not checked, since writer.held_lease gives no holder and writer.py is not changed here
+      (specification 3 section 1: "a lease it still holds"; carried to the caller, decision D-687 M4); no
+      task.unblocked, no task.replanned,
+      no Work Order, no decision while a session runs, and no STOP: violation (check never returns it). Every existing
+      module and test not in the write set is unchanged, and if one can pass only by a change the task escalates
+      (needs_out_of_scope_change).
+  - AC11: >-
+      Purity and the CI checks (INV-001 to INV-004). The module imports only the Python 3 standard library and
+      aieos_bootstrap's records, resume_check and writer; it starts no process, opens no file except through read_log,
+      append, grant, release and held, reads no clock and no environment, builds no event-log line itself and makes no
+      network or model call; no exec, eval, compile, __import__ or importlib; no assert in src (bandit B101); no string
+      that names the project-state directory. Its docstring names what it does not do (AC10), DEF-0030 (the two parts
+      it closes), point (i) and DEF-0055 P6. No module of src/ changes except __init__.py's docstring and __all__. At
+      the task's commits the CI steps report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit.
+  - AC12: >-
+      Its own tests and the added text. Every test function of the three new test modules names the AC ids it stands
+      for as "TASK-032 ACn" in its own docstring and names no other task's AC in qualified form there. Before each
+      commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns, and each count is 0;
+      the file names are scanned with the same patterns and the records executors' pre-push pattern (D-282). The tests
+      open, write and remove no file (the deterministic_rule step's exemption covers only the writer's tests).
+  - AC13: >-
+      Tests, each rule with at least one passing and one failing case, with stand-ins for read_log, append, grant,
+      release, held and check (no process, no file): R1 AC1 (each wrong argument refused before any read; each
+      default is, at call time, the named function of writer or resume_check; every call a stand-in records binds to
+      the real function's signature, by inspect.signature(...).bind for read_log, append_event, grant_lease,
+      release_lease_token and held_lease (decision D-687 M3)); R2 AC2 (the projection from each event type; a
+      task.drafted after the last task.approved gives DRAFT and is refused; a task.* type the list does not name is
+      refused; no task.approved; an expired lease; a lease on a task in another state; a refused log); R3 AC3 (each of the three differences refused with nothing appended); R4 AC4 (each malformed
+      record form and a raising check refused before any release or append; an error record appended alone); R5 AC5
+      (the release before the appends for each non-continue decision from IN_PROGRESS; a refused release stops with
+      nothing appended); R6 AC6 (the order of the record and its events; a refusal mid-way stops with the ids so far and
+      no grant; a second append of the same record or event gives "duplicate" at the stand-in append; a rerun of
+      execute with the same inputs after an append is refused "inputs" and appends nothing); R7 AC7 (a grant on CONTINUE and CONTINUE_WITH from READY and REWORK, after
+      the appends; a store refusal named; a kept lease on IN_PROGRESS; no store call for any other decision from READY
+      or REWORK); R8 AC8 (REPLAN on READY appends conflict.detected only and names it uncovered); R9 AC9 (the keys; an
+      exception caught at each step); R10 AC10 and AC11 (a script check of the imports and of the absence of open,
+      write, subprocess, clock and environment calls, and of the docstring's words). Unit tests in
+      tests/unit/test_execution.py; an end-to-end run of the real resume_check.check over inputs built in the test,
+      with a log appended in memory through eventlog.append and an in-memory stand-in store, in
+      tests/integration/test_execution_store.py; property tests in tests/property/test_execution_properties.py
+      (standard library only, fixed seeds): for random decisions, states and store answers, a second run appends
+      nothing new, and is refused "inputs" when the first appended anything; a lease exists after the call only on CONTINUE or CONTINUE_WITH, and is granted only after the
+      record is in the log; no lease survives any other outcome on a task IN_PROGRESS. tests/run_tests.py, unchanged,
+      runs all groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9, AC13]}
+  - {gate: G3, check: constitution, args: [AC10, AC11, AC12, INV-001, INV-002, INV-003, INV-004, INV-005, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
