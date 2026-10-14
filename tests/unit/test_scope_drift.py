@@ -133,6 +133,9 @@ class TheList(unittest.TestCase):
             POLICY_TEXT.replace(line, 'non_task_paths: []'),
             POLICY_TEXT.replace(line, line.replace(', ', ',')),
             POLICY_TEXT.replace(line, line + ' '),
+            POLICY_TEXT.replace(line + '\n', '').replace('## 4. Why', '```yaml\n' + line + '\n```\n## 4. Why'),
+            POLICY_TEXT.replace(line + '\nrisk_rules:', 'risk_rules:').replace('```\n', '```\n' + line + '\n', 1),
+            POLICY_TEXT.split('```\n')[0],
         ]
         for text in cases:
             self.assertIsNone(scope_drift.non_task_list(text), text)
@@ -208,6 +211,10 @@ class Detection(unittest.TestCase):
             scope_drift.claims(inputs(trailer_tasks=['TASK-1'], contracts={'TASK-1': ['src/**']},
                                       changed_paths=['src/x.py', 'docs/History/a.md']))
             self.assertTrue(m.called)
+        with mock.patch.object(governor, 'matches', return_value=True):
+            res = scope_drift.claims(inputs(trailer_tasks=['TASK-1'], contracts={'TASK-1': ['nothing/**']},
+                                            changed_paths=['src/x.py']))
+        self.assertEqual((res['detected'], res['events']), (False, []))
 
 
 class NonTask(unittest.TestCase):
@@ -239,6 +246,18 @@ class NonTask(unittest.TestCase):
                                        risk_rules=[{'match': ['**'], 'class': 'low'}], evaluator=['src/**']))
         self.assertTrue(ok['exempt'])
 
+    def test_only_exactly_low_is_non_task(self):
+        """TASK-033 AC4 and TASK-033 AC13: a listed path of class medium, of class high, or of no class (no rule
+        matches it) is not non-task; the same path of class low is."""
+        for rules in ([{'match': ['other/**'], 'class': 'medium'}], [{'match': ['other/**'], 'class': 'high'}],
+                      [{'match': ['src/**'], 'class': 'low'}]):
+            res = scope_drift.claims(inputs(changed_paths=['other/x.md'], non_task=['other/**'], risk_rules=rules,
+                                            evaluator=['src/**']))
+            self.assertEqual((res['exempt'], res['events'][0]['payload']['paths']), (False, ['other/x.md']), rules)
+        low = scope_drift.claims(inputs(changed_paths=['other/x.md'], non_task=['other/**'],
+                                        risk_rules=[{'match': ['other/**'], 'class': 'low'}], evaluator=['src/**']))
+        self.assertTrue(low['exempt'])
+
     def test_out_of_form_inputs_make_no_path_non_task(self):
         """TASK-033 AC4 and TASK-033 AC13: no list, a list item out of form, a rule out of form (an extra key, a bad
         class, an empty match), an empty or malformed evaluator list: no path is non-task."""
@@ -268,6 +287,11 @@ class NonTask(unittest.TestCase):
                {'match': ['src/**'], 'class': 'unknown'}]
         for path in ('docs/a.md', 'src/b.py', 'z'):
             self.assertEqual(scope_drift._path_class(odd, path), gov_class(path, odd), path)
+        surrogate = [{'match': ['docs/**'], 'class': 'low'}, {'match': ['\ud800/**'], 'class': 'high'}]
+        for path in ('docs/a.md', 'z'):
+            self.assertEqual(scope_drift._path_class(surrogate, path), gov_class(path, surrogate), path)
+        self.assertEqual(scope_drift._path_class(surrogate, 'docs/a.md'), 'high')
+        self.assertTrue(scope_drift.claims(inputs(changed_paths=['docs/History/\ud800.md']))['error'])
 
 
 class ClaimOrExempt(unittest.TestCase):
@@ -319,7 +343,7 @@ class TheEvent(unittest.TestCase):
         """TASK-033 AC6 and TASK-033 AC8 and TASK-033 AC13: when check_payload finds something, no event is given."""
         with mock.patch.object(records, 'check_payload', return_value=['x']):
             res = scope_drift.claims(inputs(changed_paths=['src/x.py']))
-        self.assertEqual(res['events'], [])
+        self.assertEqual((res['events'], res['detected'], res['exempt'], res['uncovered']), ([], False, False, []))
         self.assertTrue(res['error'])
 
 

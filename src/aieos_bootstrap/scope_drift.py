@@ -23,8 +23,10 @@ malformed input gives an error and no event (fail closed).
   and it is not the constitution, the policy or a path under ".github/". The class is computed by ``_path_class``, a
   copy of the per-path derivation in governor.derive_inputs (the highest class of the rules whose match holds the
   path; a rule whose match cannot be evaluated matches every path, one whose class cannot be read gives critical; a
-  path no rule matches has no class); a rule out of the form {match, class}, an evaluator list out of form or a list
-  item out of form makes no path non-task (fail closed).
+  path no rule matches has no class); a rule out of the form {match, class} (a rule with any other key, such as the
+  governor's "id", included; reading (a) of decision D-705), an evaluator list out of form or a list item out of form
+  makes no path non-task (fail closed). The ".github/" test is a case-sensitive prefix of the root-relative path, as
+  Git gives it.
 - Claim or exempt (AC5; reading R1, proposed, decision D-702): specification 4 line 81's sentence "A commit that
   touches the constitution, the policy, the evaluator paths or `.github/` is always a claim" is read, by its place
   between "A detected commit is not a claim when ..." and "Every other detected commit ...", as a limit on the
@@ -41,9 +43,14 @@ Limits (TASK-033 AC7 and AC11):
   task state, blocks no task, appends nothing, and makes no constitution or stale-evidence finding. Reading the facts
   at the base and appending the event through the core's single writer are the caller's, TASK-034 (decision D-702),
   which also translates the policy's rules (R3 by tags, read as every path under src/** and tests/**) into the
-  governor's form.
+  governor's form and strips any key other than match and class from them.
+- A result whose error is not None says nothing about drift: the caller must treat it as a stop, never as "no claim".
+- The event id depends on the commit only: a rerun for the same commit with other facts gives the same id with
+  another payload, which the writer refuses as a conflict.
 - The facts are not checked against Git, the contracts or the policy at the base; the write-sets are the caller's
-  (the version the task's last task.approved names). Several equal trailer task ids count as one.
+  (the version the task's last task.approved names). Several equal trailer task ids count as one. An empty
+  changed_paths is an input error, not an uncovered entry; paths and patterns are compared case-sensitively as given.
+  The caller and the appending are the open item of DEF-0030's reconciliation line, carried to TASK-034.
 - governor.matches is recursive over a pattern's "/" parts, so a pathological pattern may raise; claims and
   non_task_list catch any exception and return it as an error, and no exception escapes.
 - It reads no file, no clock and no environment, and makes no process, network or model call (INV-001 to INV-003).
@@ -67,7 +74,14 @@ _LIST_LINE = re.compile(r'non_task_paths: \[("[^"\n,\]]+"(?:, "[^"\n,\]]+")*)\]'
 
 
 def _text(value):
-    return isinstance(value, str) and value != ''
+    """A non-empty string that UTF-8 can encode (a lone surrogate cannot), as governor._text reads one."""
+    if not isinstance(value, str) or value == '':
+        return False
+    try:
+        value.encode('utf-8')
+    except UnicodeEncodeError:
+        return False
+    return True
 
 
 def _texts(value):
@@ -240,7 +254,7 @@ def _claims(inputs):
         return _result([], True, True, uncovered, None)
     payload = {'paths': rest, 'entities': sorted(set(inputs['trailer_tasks']))}
     if records.check_payload(EVENT_TYPE, payload):
-        return _result([], True, False, uncovered, 'the payload is not of specification 2\'s drift.detected form')
+        return _result([], False, False, set(), 'the payload is not of specification 2\'s drift.detected form')
     event = {'event_id': _digest(EVENT_TYPE, 'scope', commit), 'event_type': EVENT_TYPE, 'payload': payload}
     return _result([event], True, False, uncovered, None)
 
@@ -249,8 +263,9 @@ def claims(inputs):
     """The scope-drift computation for one base commit (TASK-033 AC1 to AC8): a mapping with exactly the keys events
     (one drift.detected event when the commit is a claim, else none), detected and exempt (exempt only when
     detected), uncovered (sorted {ref, detail} entries, without duplicates) and error (None, or a short text for a
-    malformed input, which gives no event, detected and exempt false and no entry). The input is not changed and no
-    exception escapes."""
+    malformed input, which gives no event, detected and exempt false and no entry). A payload that
+    records.check_payload refuses, and an exception inside the computation, give the same error form (fail closed;
+    the caller treats any error as a stop). The input is not changed and no exception escapes."""
     try:
         return _claims(inputs)
     except Exception as exc:  # noqa: BLE001 - fail closed (AC8)
