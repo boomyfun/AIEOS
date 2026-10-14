@@ -1,0 +1,367 @@
+# Task contract TASK-033, scope drift (Master Plan revision 3, §4 M4; specification 4 revision 3, section 7 item 2,
+# with section 12 point 11 closed by the risk rules' revision 4, policy version v3, DM F38; concept lines 745 and 948).
+# Revision 0, drafted under decisions D-696 (Q3), D-702 (Q2, Q3, C1 to C3) and D-701, from the scope note approved by
+# decision D-702; brought for approval in its own request; whether it is approved is recorded in the decision files,
+# not in this file. Fields and value forms follow specification 2 §5.1 and the contracts of TASK-007 to TASK-032.
+# Readings marked "(reading)" are the worker's, for the decision agent's ruling; R1 and R2 are the scope note's
+# readings, accepted by decision D-702 as stated readings, not the specification's own words.
+# Task type: implementation. What it adds: one pure module, src/aieos_bootstrap/scope_drift.py. Its function
+# non_task_list reads the risk rules' `non_task_paths` line from the policy's text, fail closed; its function claims
+# takes, as values, one base commit's facts (the commit, its parent count, its task trailers, its changed paths, the
+# write-sets of the named tasks' contracts, the non-task list, the policy's rules in the governor's form, the evaluator
+# list and the constitution's and the policy's paths) and returns the drift.detected event of specification 4 section 7
+# item 2 when the commit is a claim, with an event id derived from the commit; whether the commit was detected and
+# exempt; and what it could not check (uncovered). It reads no Git, no file and no log, and appends nothing: reading the
+# facts at the base and appending the event through the core's single writer (TASK-016) are TASK-034's, the caller
+# (decision D-702 Q2), not built here.
+# The specification's text (spec 4 line 81): "**Scope drift:** the concept's "Commit sửa file không thuộc task nào"
+# [...] So (proposed): a base commit with no `AIEOS-Task` trailer, or with a trailer whose contract (the version the
+# task's lease named) does not hold a changed path, is detected. A detected commit is not a claim when all its changed
+# paths lie in a list of non-task paths that the approved policy at the base names; never by its message or trailer
+# alone. A commit that touches the constitution, the policy, the evaluator paths or `.github/` is always a claim. Every
+# other detected commit is a `drift.detected` claim, which changes no state [...] and is closed by an authority
+# record". The policy's section 2 point 7 (revision 4) fixes the list's meaning and form.
+# Reading R1 (proposed; decision D-702): the sentence "A commit that touches the constitution, the policy, the
+# evaluator paths or `.github/` is always a claim" is read as a limit on the exemption of a detected commit, by its
+# place in spec 4 line 81 (between "A detected commit is not a claim when ..." and "Every other detected commit ..."):
+# a detected commit that touches such a path is never exempt. A task commit whose contract holds every changed path is
+# not detected, so it is no claim, although its paths are evaluator paths (those are judged as evaluator changes under
+# GOV-003 at the task's own evaluation). Reading R2 (proposed; decision D-702): the event's payload is {paths, entities}
+# (specification 2 line 190): paths the sorted changed paths that are not non-task, entities the sorted trailer task
+# ids; the event id is derived from the commit only, so a rerun gives the same id.
+# What it does not do: no Git read, no file read, no policy-file read (the caller gives the text), no writer call, no
+# caller, no classification or proposal (specification 4 section 7: DETECT, CLASSIFY, PROPOSE; the last two are
+# records of an authority), no closing of a claim, no task state, no lease, no governor rule, no constitution or stale
+# finding, nothing under .github/, no policy change, no frozen fixture. It changes no governor, writer, records,
+# eventlog, drift, reconcile or other existing module.
+# Readers of the changed paths (D-263 C3's practice): src/aieos_bootstrap/__init__.py is read by every module that
+# imports the package and by the CI's G1 build; its docstring and __all__ gain scope_drift; it must not name the
+# Resume Check fixture folder (TASK-010's assertion) nor the Risk Engine fixture folder (TASK-020's allow list). No
+# module of the repository calls scope_drift yet.
+# Risk: high, and change class critical_cr, each computed over the base by script, as for TASK-030 and TASK-032.
+# Profile (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture [deterministic_rule],
+# functional [integration_test], security [static_security_analysis] and architecture [ai_review (cross-model)], plus
+# the evidence_required of the applicable articles.
+# Review points (for the five way-2 reviews and the decision agent's three): the list's reading and every fail-closed
+# case of AC2; detection (AC3) and its uncovered cases; the four conditions of non-task (AC4), the class computed equal
+# to the governor's and compared by test; R1's consequence (AC5); R2's payload and the derived id (AC6); a parent
+# count other than one (AC3); purity; AC11's limits.
+# Naming (D-544 Q3, as TASK-023 to TASK-032): every test of the three new test modules names the AC ids it stands for
+# as "TASK-033 ACn" in its own docstring.
+# Evaluation path (A61; as TASK-007 to TASK-032): commit C changes only docs/tasks/TASK-033.yaml and has one parent
+# equal to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-033", go to task/TASK-033 under their own
+# decisions; main receives the task only at its acceptance.
+# Not applicable: OPS-001 (the task changes no ref); INV-004 and INV-009 (the module writes no file and no log; the
+# event is returned, not appended); INV-005 to INV-008, INV-010 and INV-011 (the decision engine, the governor,
+# evidence records as stored, the replay and the policy meet no path of the write-set: the module returns an event and
+# stores none); GOV-001, GOV-004 to GOV-006 and SEC-003 (the concept file, the bound artifacts, the decision matrix,
+# the records and pre-genesis documents, and .github/, meet no path of the write-set).
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting, no push of its own; it weakens no evidence requirement (it reports claims and blocks no task;
+# CR-002 part 4 limit 8 does not apply), so its acceptance is one delegated approval of the decision agent (Master Plan
+# section 6), for the decision agent's ruling.
+task: TASK-033
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add a standard-library Python 3 module, src/aieos_bootstrap/scope_drift.py, the scope-drift computation of
+  specification 4 section 7 item 2: non_task_list(policy_text) reads the risk rules' non-task list, fail closed, and
+  claims(inputs) takes one base commit's facts as values (the commit, its parent count, its task trailers, its changed
+  paths, the named contracts' write-sets, the non-task list, the policy's rules, the evaluator list and the
+  constitution's and the policy's paths) and returns, when the commit is a scope-drift claim, one drift.detected event
+  with an event id derived from the commit; whether it was detected and exempt; what it could not check; and, for a
+  malformed input, an error and no event (fail closed). It reads and writes nothing. With unit, integration and property
+  tests in new test modules, each test naming its AC ids as "TASK-033 ACn" in its own docstring; the integration test
+  appends the returned event to an in-memory log with aieos_bootstrap.eventlog.append.
+traces_to:
+  - docs/specs/spec-04-verification-and-evidence.md#7
+  - docs/specs/risk-rules-gov-aieos.md#2
+  - docs/specs/spec-02-aieos-file-format.md#6.3
+  - docs/specs/spec-01-state-and-event-model.md#5.3
+  - AIEOS-concept.md#745
+  - AIEOS-concept.md#948
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-033.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id.
+  base_commit: 7e0ed325df073414430f43ccd536cc49c84cc2cd
+  depends_on: [TASK-001, TASK-004, TASK-007, TASK-011]
+  intent_versions:
+    docs/specs/spec-04-verification-and-evidence.md: 48d4f5bf06461ad49409f21bc6ea8d511d17a84eaac15adda14277483176a8d5
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 80c91e47ef0a1dbe7f77c677cd2261d5b5ede20bcb0735cf06438bddbde85f8b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 97caafbd78b4d503112d1e32c445bce188a4af2f3c29ad88093989d5abbceb76
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # One modified path (the package docstring and __all__); every other path is new.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/scope_drift.py
+    - tests/unit/test_scope_drift.py
+    - tests/integration/test_scope_drift_log.py
+    - tests/property/test_scope_drift_properties.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-04-verification-and-evidence.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/Deferred/DEF-0030-event-log-writer-and-workflow-revision-6.md
+    - docs/Deferred/DEF-0052-the-review-findings-carried-from-task-024.md
+    - docs/Deferred/DEF-0058-the-review-findings-and-limits-carried-from-task-031.md
+    - docs/tasks/**
+    - docs/records/**
+    - src/aieos_bootstrap/governor.py
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/eventlog.py
+    - src/aieos_bootstrap/drift.py
+    - src/aieos_bootstrap/gitread.py
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.governor.matches, aieos_bootstrap.governor.derive_inputs, aieos_bootstrap.records.check_payload, aieos_bootstrap.eventlog.append]
+  schemas: [spec-02 event payloads (6.3), the risk rules' section 3 block (policy v3)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/writer.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The input of claims. claims(inputs) takes a mapping with exactly the keys commit, parents, trailer_tasks,
+      changed_paths, contracts, non_task, risk_rules, evaluator, constitution_path and policy_path: commit 40 or 64
+      lowercase hex characters; parents an int (not a bool) of 0 or more; trailer_tasks a list of strings, each
+      "TASK-" followed by digits; changed_paths a non-empty list of non-empty strings (a rename given under both its old
+      and its new path by the caller, the risk rules' section 2 point 5); contracts a mapping from task id to a value
+      (AC3 reads it); non_task a list of strings or None (AC2's result); risk_rules a list (AC4 reads it); evaluator a
+      list of strings; constitution_path and policy_path non-empty strings. Any other form gives the result of AC8 with
+      error naming the first key that fails, in the order above, and no event (fail closed).
+  - AC2: >-
+      The list (the risk rules' section 2 point 7). non_task_list(policy_text) takes a string and returns a list of
+      patterns or None. It reads section 3's yaml block (the text between the "```yaml" line after "## 3. The rules" and
+      the next "```" line) and in it the lines that start "non_task_paths:". Exactly one such line, after the
+      "policy_version:" line, of the form `non_task_paths: ["p1", "p2", ...]` (one or more items, ", " between them),
+      each item holding no `"`, `,` or `]` and of point 6's form (names of letters, digits, ".", "_", "-" and "*", a
+      name holding "**" only as the whole name "**", no empty, "." or ".." name), gives the items in order. Anything
+      else gives None: a text that is not a string, no block, no line, a repeated line, a line out of form, an item
+      out of form, the line before "policy_version:". None means no path is non-task (fail closed).
+  - AC3: >-
+      Detection (specification 4 line 81). A commit with parents other than 1 gives no event and an uncovered entry
+      {ref commit, detail "not one parent"} (a merge's paths are read against its first parent by the caller, who marks
+      a merge uncovered, TASK-034; reading). Otherwise, with no trailer task the commit is detected. With exactly one
+      trailer task T, the commit is detected when some changed path is matched by no pattern of contracts[T]
+      (aieos_bootstrap.governor.matches, called, not copied); contracts[T] must be a non-empty list of strings of
+      point 6's form. With more than one trailer task, with T not a key of contracts, or with contracts[T] out of form,
+      the commit is detected and an uncovered entry names the case ({ref the commit, detail "several trailers"}, {ref T,
+      detail "no contract"} or {ref T, detail "write set cannot be evaluated"}). A commit that is not detected gives no
+      event and is not exempt.
+  - AC4: >-
+      Non-task paths (the risk rules' section 2 point 7). A changed path is non-task only when all four hold: (1)
+      non_task is a list and some pattern of it matches the path (governor.matches); (2) the path's class under
+      risk_rules is exactly "low", computed by a function equal to the governor's per-path derivation in derive_inputs
+      (the highest class among the rules whose match holds the path; a rule whose match cannot be evaluated matches
+      every path, and one whose class cannot be read gives "critical"; a path no rule matches has no class), and every
+      rule is a mapping
+      with exactly the keys match and class, match a non-empty list of strings and class one of low, medium, high and
+      critical (any other rule: no path is non-task); (3) evaluator is a non-empty list of strings of point 6's form
+      and no pattern of it matches the path (otherwise no path is non-task); (4) the path is not constitution_path, not
+      policy_path and not under ".github/". A unit test compares the class function with
+      aieos_bootstrap.governor.derive_inputs on the same rules and single paths, for every rule of the policy at the
+      base and paths that hit each rule.
+  - AC5: >-
+      Claim or exempt (reading R1, proposed, decision D-702). A detected commit is exempt (no event) when every changed
+      path is non-task by AC4; otherwise it is a claim and gives one event. A detected commit that touches
+      constitution_path, policy_path, a path under ".github/" or an evaluator path is therefore never exempt; a commit
+      that is not detected (AC3) is no claim whatever its paths. The module's docstring states R1 as a reading of
+      specification 4 line 81 by the sentence's place, not as the specification's words.
+  - AC6: >-
+      The event (reading R2, proposed, decision D-702). A claim gives exactly one event {event_id, event_type
+      "drift.detected", payload}, payload exactly {paths: the sorted changed paths that are not non-task, without
+      duplicates, entities: the sorted trailer task ids, without duplicates}; event_id is the SHA-256 hex digest of the
+      UTF-8 text "drift.detected", "scope" and the commit joined by LF (as drift's _digest joins its parts), so it
+      depends on the commit only and a second call gives the same id. aieos_bootstrap.records.check_payload
+      ("drift.detected", payload) finds nothing. The event carries no task_id (the subject is a commit; no task's state
+      changes, specification 1 line 86).
+  - AC7: >-
+      What it does not decide. The module classifies and proposes nothing, closes no claim, changes no task state,
+      blocks no task, appends nothing, reads no file and makes no constitution or stale-evidence finding; its docstring
+      says so and names the caller as TASK-034 (decision D-702). No module of src/ changes except __init__.py's
+      docstring and __all__.
+  - AC8: >-
+      The result. claims returns a mapping with exactly the keys events, detected, exempt, uncovered and error: events
+      the list of AC6 (empty or one event); detected and exempt bools (exempt true only when detected); uncovered a list
+      of mappings with exactly the keys ref and detail, sorted by (ref, detail), without duplicates; error None, or for
+      a malformed input a short English text, with events [], detected false, exempt false and uncovered []. claims and
+      non_task_list are pure functions: the same input gives the same output, and the input is not changed; no
+      exception escapes either.
+  - AC9: >-
+      Purity and the CI checks (INV-001, INV-002, INV-003). The module imports only the Python 3 standard library
+      (hashlib and re among the allowed) and aieos_bootstrap.governor and aieos_bootstrap.records; it opens, writes and
+      removes no file, reads no clock and no environment, and makes no process, network or model call; no exec, eval,
+      compile, __import__ or importlib; no assert in src (bandit B101); no string that names the project-state
+      directory. At the task's commits the CI steps report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002
+      and bandit.
+  - AC10: >-
+      The event in a log (integration). tests/integration/test_scope_drift_log.py builds, in the test, a policy text
+      in policy v3's form, reads its list with non_task_list, runs claims for a claim commit, an exempt commit and a
+      commit that is not detected, and appends each returned event in order to an empty in-memory log with
+      aieos_bootstrap.eventlog.append (fixed appended_at, no fencing token, no task_id): each result is "appended", the
+      final log has records.check_log findings none, and appending the same event again gives "duplicate". No file is
+      opened.
+  - AC11: >-
+      Limits, stated: the facts are the caller's and are not checked against Git, the contracts or the policy at the
+      base; the write-sets are the caller's (the version the task's last task.approved names); a commit with other than
+      one parent is uncovered; R1 and R2 are readings; the event's appending, reading the base and the caller are
+      TASK-034's (DEF-0030). Every existing module and test not in the write set is unchanged, and if one can pass only
+      by a change the task escalates (needs_out_of_scope_change).
+  - AC12: >-
+      Its own tests and the added text. Every test function of the three new test modules names the AC ids it stands
+      for as "TASK-033 ACn" in its own docstring and names no other task's AC in qualified form there. The tests write
+      and remove no file, and open none except the package's own source files, read for AC13 R9's script checks (as
+      TASK-032's erratum E1 reads its AC12). Before each commit, the added text is scanned with the workflow's SEC-001,
+      SEC-002 and OPS-003 patterns, and each count is 0; the file names are scanned with the same patterns and the
+      records executors' pre-push pattern (D-282).
+  - AC13: >-
+      Tests, each rule with at least one passing and one failing case: R1 AC1 (each malformed form, the first one
+      named; no event on error); R2 AC2 (the list read; each None case: no block, no line, two lines, a line before
+      policy_version, an item with `"`, `,` or `]`, an item out of point 6's form, an empty list); R3 AC3 (no trailer
+      detected; a trailer whose contract holds every path not detected; a path outside it detected; several trailers,
+      no contract and a write set that cannot be evaluated, each detected and uncovered; parents 0 and 2 uncovered and
+      no event); R4 AC4 (each of the four conditions failing alone; R5's "**/contracts/**" under a listed folder not
+      non-task; an evaluator build-file name under a listed folder not non-task; a malformed rule or evaluator list: no
+      path non-task; the class function equal to governor.derive_inputs's per-path class on the policy's rules); R5
+      AC5 (exempt; claim; a detected commit touching each always-claim kind is a claim; a task commit on evaluator paths
+      held by its contract is not detected); R6 AC6 (the payload's keys and values; the id's value; a second call the
+      same id; check_payload finds nothing; no task_id); R7 AC8 (the keys, the sorting, no duplicates, purity: the input
+      unchanged, a second call equal; no exception for any input form); R8 AC7 and AC9 (a script check of the module's
+      imports and of the absence of open, write and clock calls, and of the docstring's R1 and TASK-034 sentences); R9
+      AC12 (the naming). Unit tests in tests/unit/test_scope_drift.py; AC10 in
+      tests/integration/test_scope_drift_log.py; property tests in tests/property/test_scope_drift_properties.py
+      (standard library only, fixed seeds): for random well-formed inputs, an event is given exactly when the commit
+      is detected and some changed path is not non-task; exempt implies detected and no event; the payload's paths are
+      exactly the changed paths that are not non-task; the result never depends on the order of changed_paths,
+      trailer_tasks, non_task or evaluator. tests/run_tests.py, unchanged, runs all groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC10, AC13]}
+  - {gate: G3, check: constitution, args: [AC9, AC11, AC12, INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
