@@ -180,6 +180,9 @@ Occurrences in session 2026-10-15-0229 (../History/2026-10/2026-10-15-0229-the-s
 Occurrences in session 2026-10-15-0422 (../History/2026-10/2026-10-15-0422-the-scope-drift-callers-hardening-accepted-and-on-main.md):
 - **2026-10-15.** Seven English text blocks before tool calls, by the textblock check: :184, :293, :382, :780, :947, :1587 and :1675, each a short line announcing the next step; each listed before the next gated command and brought to the decision agent, and the owner was told.
 
+Occurrences in session 2026-10-15-0531 (../History/2026-10/2026-10-15-0531-the-autonomy-levels-feature-accepted-and-on-main.md):
+- **2026-10-15.** Nine English text blocks before tool calls, by the textblock check: :162, :309, :560, :573, :797, :994, :1454, :1561 and :1653, each a short line announcing the next step; each listed before the next gated command and brought to the decision agent, and the owner was told.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

@@ -165,6 +165,11 @@ Occurrences in session 2026-10-15-0422 (../History/2026-10/2026-10-15-0422-the-s
 - **2026-10-15 (D-731).** A scratch clone was made from another scratch clone that lacked the task head, so its checkout failed; cloned again from the repository. No effect.
 - **2026-10-15 (found at this session's start; D-722's confirmations, D-723 C2, D-724).** In session 9a3d9254: the executor diff shown at D-722 was stale (a second occurrence after D-716's); the memory texts were shown at 9a3d :1881 before the confirmation that the order named (accepted); the line number ":1882" was written unchecked; and the owner text of D-722's first confirmation is in no turn-final reply verbatim: the session-end relay check (D-312) covered handbacks, not confirmations. The relay check now runs over every handback and confirmation (D-724 C2).
 
+Occurrences in session 2026-10-15-0531 (../History/2026-10/2026-10-15-0531-the-autonomy-levels-feature-accepted-and-on-main.md):
+- **2026-10-15 (D-737).** The decision-file builder quoted the first-push request of 043a without its first word "no", so the quote in D-726's file said the opposite of its source; the decision agent caught it before the write, and the builder now asserts that a quoted fragment begins at the clause start of its source.
+- **2026-10-15 (D-738).** A request named the gated run as ":437" before the number was checked; by grep it was :439; corrected inline before the decision (a repeat of 043a's ":427").
+- **2026-10-15 (D-742).** The first-push request named four lines (:704, :713, :759, :890) from memory; checked against the steps listing and corrected before it was sent. The gh failure of :119 was named ":120", its result record, in D-736 and D-737.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

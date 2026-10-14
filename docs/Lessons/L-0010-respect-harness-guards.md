@@ -211,6 +211,9 @@ Occurrences in session 2026-10-15-0229 (../History/2026-10/2026-10-15-0229-the-s
 Occurrences in session 2026-10-15-0422 (../History/2026-10/2026-10-15-0422-the-scope-drift-callers-hardening-accepted-and-on-main.md), each my incorrect command:
 - **2026-10-15.** :271 a grep of /dev/null inside a read (a part of no effect); :307 a heredoc with an `echo skip` placeholder, refused by guard rule R1; :737 a stray assignment `sleep_none=;` (the form of 9a3d :1348); :909 Python's name followed by a dash for a module run, refused by rule R2 and not retried in that form (the check then ran through a script written with the Write tool); :1436 `echo waiting-free;`, a part of no effect. filler_count3 flagged :271, :307 and :909, not :737 or :1436.
 
+Occurrences in session 2026-10-15-0531 (../History/2026-10/2026-10-15-0531-the-autonomy-levels-feature-accepted-and-on-main.md), each my incorrect command:
+- **2026-10-15.** :119 `gh run list` from the scratchpad (no effect); :248 `python -c` without the timeout, refused by guard rules R2 and R3; :367 an `rm -f` of a scratch copy and a sed reconstruction that did not match; :753 `python -m unittest`, refused by rule R2; :836 `timeout 300 python`, refused by rule R3 and rerun with the rule's own `timeout 110` at :840 (accepted, D-742: a guard refusal goes to the decision agent before any changed rerun); :869 a folder made and never used; :1058 a stray assignment `sleep_free=1;`; :1427 a copied file never used; :1603 a tool run with no argument and its output discarded. Ten in all.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

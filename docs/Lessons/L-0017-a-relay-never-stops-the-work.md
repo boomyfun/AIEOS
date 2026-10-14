@@ -15,6 +15,9 @@ Three in session 2026-10-10-1810 (../History/2026-10/2026-10-10-1810-decision-fi
 - **2026-10-10 (:1668).** A second turn ended only to report TASK-012's contract, with the same sentence.
 - **2026-10-10 (:1672).** The owner, verbatim: "tại sao cứ phải chờ tôi nhắn để đi tiếp, agent quyết định không quyết định làm gì tiếp à? Việc này đã nói từ những phiên trước, việc đi tiếp, làm tiếp do agent quyết định, không dừng lại mà". The decision agent withdrew its waiting conditions (D-340).
 
+Occurrences in session 2026-10-15-0531 (../History/2026-10/2026-10-15-0531-the-autonomy-levels-feature-accepted-and-on-main.md):
+- **2026-10-15 (D-741).** The notice before code (:702) was sent as a turn-final reply after the decision agent's handback, with no request then pending, so nothing resumed the work; the owner asked why it stopped (:706, "tại sao lại dừng rồi? Tại sao không làm tiếp?"). Practice since D-741 C2: a turn-final reply goes out only while a decision request is pending, or with a question only the owner can answer.
+
 ## Why it happens
 "Tell me before" was read as "wait for my answer", and a condition written by the decision agent was followed without checking it against the owner's standing words.
 
