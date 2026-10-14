@@ -1,8 +1,12 @@
 """Property tests of aieos_bootstrap.execution (task TASK-032 AC13): standard library only, fixed seeds. For random
-decisions, task states and store answers, with stand-in records and a log appended in memory by eventlog.append: a
-second run appends nothing new and is refused "inputs" when the first appended anything; a lease exists after a call
-only on CONTINUE or CONTINUE_WITH, and is granted only after the record is in the log; no lease survives any other
-outcome whose record is appended for a task IN_PROGRESS. Each test names its criteria in its own docstring."""
+decisions, task states, store answers and refused appends, with stand-in records and a log appended in memory by
+eventlog.append: a second run appends nothing new and is refused "inputs" when the first appended anything; when a
+call has appended anything, a lease exists after it only on CONTINUE or CONTINUE_WITH, and a lease is granted only
+after the record is in the log and never after a refused append; no lease survives any other outcome whose record is
+appended for a task IN_PROGRESS. The oracles use literal decision and state names, not the module's constants (review
+R3). Each test names its criteria in its own docstring."""
+
+CONTINUING = ('CONTINUE', 'CONTINUE_WITH')
 
 import datetime
 import random
@@ -67,6 +71,8 @@ class World:
         self.rec = record(rng.choice(DECISIONS), n)
         self.grant_ok = rng.random() < 0.8
         self.release_ok = rng.random() < 0.8
+        self.appends = 0
+        self.refuse_at = rng.choice((None, None, None, None, None, 1, 2))
         self.order = []
 
     def add(self, event_type, payload, eid):
@@ -84,6 +90,10 @@ class World:
 
     def append(self, root, event_type, payload, event_id, appended_at, recorder, task_id=None):
         self.order.append(('append', event_id))
+        self.appends += 1
+        if self.appends == self.refuse_at:
+            self.order.append(('refused', event_id))
+            return writer.WriteResult(eventlog.AppendResult('refused', 'event', findings=('stand-in refusal',)))
         r = eventlog.append(self.log, event_type, payload, event_id, appended_at, task_id=task_id, recorder=recorder)
         if r.result == 'appended':
             self.log += r.line
@@ -127,14 +137,20 @@ class Properties(unittest.TestCase):
     def test_a_second_run_appends_nothing_new(self):
         """TASK-032 AC3, AC6 (decision D-687 M2): a second run with the same inputs appends nothing, and is refused
         "inputs" when the first appended anything."""
+        reruns = 0
         for w, inp in worlds(3201):
+            start = w.log
             first = w.run(inp)
+            if w.log == start:
+                continue  # nothing was appended (a refusal before or at the first append): a rerun may append
+            reruns += 1
+            self.assertTrue(first['appended'])
             before = w.log
             second = w.run(inp)
             self.assertEqual(w.log, before)
             self.assertEqual(second['appended'], [])
-            if first['appended']:
-                self.assertEqual((second['result'], second['reason']), ('refused', 'inputs'))
+            self.assertEqual((second['result'], second['reason']), ('refused', 'inputs'))
+        self.assertGreater(reruns, RUNS // 2)
 
     def test_a_lease_only_on_continue_and_only_after_the_record(self):
         """TASK-032 AC5, AC7: after a call a lease is held only when the decision is CONTINUE or CONTINUE_WITH (or the
@@ -144,25 +160,32 @@ class Properties(unittest.TestCase):
             grants = [flag for kind, flag in w.order if kind == 'grant']
             self.assertTrue(all(grants))
             self.assertLessEqual(len(grants), 1)
+            if any(kind == 'refused' for kind, _ in w.order):
+                self.assertEqual(grants, [])
+                self.assertEqual((r['result'], r['reason']), ('refused', 'append'))
             if w.lease is not None and r['appended']:
-                self.assertIn(r['decision'], execution.CONTINUING)
+                self.assertIn(r['decision'], CONTINUING)
             if grants:
-                self.assertIn(r['decision'], execution.CONTINUING)
-                self.assertIn(w.state, execution.GRANT_STATES)
+                self.assertIn(r['decision'], CONTINUING)
+                self.assertIn(w.state, ('READY', 'REWORK'))
 
     def test_no_lease_survives_another_outcome_on_in_progress(self):
         """TASK-032 AC5: for a task IN_PROGRESS, whenever the record of an outcome other than CONTINUE or
         CONTINUE_WITH is in the log after the call, no lease is held, and the release came before every append."""
         for w, inp in worlds(3203):
             r = w.run(inp)
-            if w.state != 'IN_PROGRESS' or r['decision'] in execution.CONTINUING:
+            if w.state != 'IN_PROGRESS' or r['decision'] in CONTINUING:
                 continue
             if w.rec['record_id'] in w.ids_in_log():
                 self.assertIsNone(w.lease)
                 kinds = [kind for kind, _ in w.order]
                 self.assertEqual(kinds[0], 'release')
+            elif r['reason'] == 'lease':
+                self.assertEqual([k for k, _ in w.order], ['release'])
             else:
-                self.assertEqual((r['reason'], [k for k, _ in w.order]), ('lease', ['release']))
+                self.assertEqual(r['reason'], 'append')
+                self.assertIsNone(w.lease)
+                self.assertEqual([k for k, _ in w.order][:3], ['release', 'append', 'refused'])
 
     def test_every_outcome_is_reached(self):
         """TASK-032 AC13: the random worlds reach every decision, every state and both store answers."""

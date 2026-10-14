@@ -1,7 +1,8 @@
 """Integration test of aieos_bootstrap.execution (task TASK-032 AC13): end-to-end runs of the real resume_check.check
 over inputs built in the test, with the event log kept in memory and appended by eventlog.append, as the writer
-decides it, and an in-memory stand-in store that grants, releases and holds leases by the writer's rules. No process
-starts and no file is opened. Each test names its criteria in its own docstring."""
+decides it, and an in-memory stand-in store that grants, releases and holds leases by writer.grant_lease's refusals
+(state, expiry, held, session) and release_lease_token's token check and comparison; it keeps no session end. No
+process starts and no file is opened. Each test names its criteria in its own docstring."""
 
 import datetime
 import unittest
@@ -75,6 +76,7 @@ class Store:
         return writer.StoreResult('done', value=dict(self.leases[task_id]))
 
     def release(self, root, task_id, fencing_token):
+        writer._check_token(fencing_token)  # the writer's own token check, which raises ValueError
         lease = self.leases.get(task_id)
         if lease is None:
             return writer.StoreResult('refused', 'none', ['no lease is held'])

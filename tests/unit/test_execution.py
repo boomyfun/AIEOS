@@ -1,6 +1,8 @@
 """Unit tests of the execution path (task TASK-032 AC13, rules R1 to R10): every log is built in memory with
-eventlog.append, and the writer's functions and the Resume Check are stand-ins that record their calls. No process
-starts and no file is opened. Each test names its criteria in its own docstring."""
+eventlog.append, and the writer's functions are stand-ins that record their calls, as is the Resume Check except in R8,
+which calls the real one (the stand-in release applies the writer's own token check). No process
+starts and no file is written; the only files read are the package's own sources, for R10's script checks (erratum E1
+to AC12, decision D-690). Each test names its criteria in its own docstring."""
 
 import ast
 import datetime
@@ -123,6 +125,7 @@ class World:
 
     def release(self, root, task_id, fencing_token):
         self.calls.append(('release_lease_token', (root, task_id, fencing_token), {}))
+        writer._check_token(fencing_token)  # the writer's own token check, which raises ValueError
         if self.release_answer is not None:
             return self.release_answer
         gone, self.lease = self.lease, None
@@ -531,6 +534,72 @@ class R7Lease(unittest.TestCase):
             self.assertIsNone(w.lease)
 
 
+class R11ReviewEdges(unittest.TestCase):
+    """The edge points the five reviews raised (decision D-690 C3 and the dispositions)."""
+
+    def test_a_log_that_gives_in_progress_is_refused(self):
+        """TASK-032 AC2: a decision.acceptance whose next_task_state is IN_PROGRESS gives "state", with or without a
+        held lease, before the lease is read or the check called (review R2)."""
+        for lease in (None, dict(HELD)):
+            w = World(lease=lease)
+            w.log.add('decision.acceptance', acceptance('IN_PROGRESS'), 'acc-ip')
+            r = w.run(inputs=w.inputs(state='IN_PROGRESS'))
+            self.assertEqual((r['result'], r['reason']), ('refused', 'state'), lease)
+            self.assertIn('only a held lease gives', r['findings'][0])
+            self.assertEqual(w.names(), ['read_log'], lease)
+
+    def test_a_token_out_of_the_writers_form_is_refused_before_any_release(self):
+        """TASK-032 AC2, AC5: a held lease whose token the writer's own check would refuse (a bool or negative counter,
+        an empty epoch) gives "lease" before the check, and nothing is released or appended (reviews R2 to R5)."""
+        for token in ({'epoch': 'e1', 'counter': True}, {'epoch': 'e1', 'counter': -1}, {'epoch': '', 'counter': 4}):
+            w = in_progress(record('BLOCKED', effect_for('BLOCKED')))
+            w.lease = dict(HELD, fencing_token=token)
+            r = w.run()
+            self.assertEqual((r['result'], r['reason']), ('refused', 'lease'), token)
+            self.assertEqual(w.names(), ['read_log', 'held_lease'], token)
+
+    def test_a_record_the_writer_would_refuse_is_refused_before_the_release(self):
+        """TASK-032 AC4: a record or an event that records.check_decision or records.check_payload would refuse, an
+        unknown decision, a string uncovered, a repeated id, or an effect whose type or payload is out of form gives
+        "check" before anything is released or appended (reviews R2, R4, R5)."""
+        good = record('BLOCKED', effect_for('BLOCKED'))
+        blocked = good['state_effect'][0]
+        cases = [dict(good, decision='GO'), dict(good, uncovered='abc'),
+                 dict(good, state_effect=[dict(blocked, event_id='rec-1')]),
+                 dict(good, state_effect=[blocked, dict(blocked)]),
+                 dict(good, state_effect=[dict(blocked, type=7)]), dict(good, state_effect=[dict(blocked, payload=[])]),
+                 dict(good, state_effect=[dict(blocked, payload={'reason': 'dependency'})]),
+                 {k: v for k, v in good.items() if k != 'fact_kind'}]
+        for rec in cases:
+            w = in_progress(rec)
+            r = w.run()
+            self.assertEqual((r['result'], r['reason']), ('refused', 'check'), rec)
+            self.assertEqual(w.names(), ['read_log', 'held_lease', 'check'], rec)
+            self.assertEqual(w.lease, HELD)
+
+    def test_an_events_duplicate_through_execute(self):
+        """TASK-032 AC6: an effect event whose id the log already holds is listed as "duplicate" and the appends go on
+        (review R3)."""
+        w = World(rec=record('STOP: scope invalid', effect_for('STOP: scope invalid')))
+        w.log.add('conflict.detected', {'tasks': [], 'paths': ['src/x.py']}, 'eff-conflict')
+        r = w.run()
+        self.assertEqual((r['result'], r['appended'], r['duplicate']),
+                         ('decided', ['rec-1', 'eff-blocked'], ['eff-conflict']))
+
+    def test_the_grant_comes_after_every_event_and_after_a_duplicate_record(self):
+        """TASK-032 AC6, AC7: a CONTINUE record with a state effect is granted only after every event; a record the log
+        already holds ("duplicate") is still followed by the grant (review R3)."""
+        effect = [effect_event('conflict.detected', {'tasks': [], 'paths': ['src/y.py']}, 'eff-c')]
+        w = World(rec=record('CONTINUE', effect))
+        r = w.run()
+        self.assertEqual(w.names()[-3:], ['append_event', 'append_event', 'grant_lease'])
+        self.assertEqual(r['appended'], ['rec-1', 'eff-c'])
+        w = World(rec=record('CONTINUE'))
+        w.log.add('decision.execution', w.rec, 'rec-1')
+        r = w.run()
+        self.assertEqual((r['result'], r['duplicate'], w.names()[-1]), ('decided', ['rec-1'], 'grant_lease'))
+
+
 BASE = '1' * 40
 HEAD = '2' * 40
 COMMIT = '3' * 40
@@ -612,7 +681,9 @@ class R9Result(unittest.TestCase):
         w = World()
         results.append(w.run(inputs=w.inputs(log_seq=99)))
         for r in results:
-            self.assertEqual(tuple(r), execution.RESULT_KEYS)
+            # literal keys, not execution.RESULT_KEYS, so that the oracle is not the code under test (review R3)
+            self.assertEqual(tuple(r), ('result', 'reason', 'findings', 'decision', 'record_id', 'appended',
+                                        'duplicate', 'lease', 'released', 'uncovered'))
 
     def test_an_exception_at_each_step_is_caught(self):
         """TASK-032 AC9: an exception raised by read_log or held becomes a result with the step's reason."""

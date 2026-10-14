@@ -2,9 +2,10 @@
 revision 2, sections 5.1 and 5.2; concept lines 489, 506, 541 and 876; DEF-0030): the core's caller of the Resume
 Check (resume_check.check, TASK-008), as evaluation is the governor's.
 
-``execute(root, task_id, inputs, code_sha256, grant_request, recorder, now)`` decides whether one task may go on, and
-closes the two parts of DEF-0030 left open at M3's exit (decision D-415 C3): the execution decision's state effect,
-appended through the writer, and the lease granted on CONTINUE. In order:
+``execute(root, task_id, inputs, code_sha256, grant_request, recorder, now)`` decides whether one task may go on. It is
+the function for the two parts of DEF-0030 left open at M3's exit (decision D-415 C3): the execution decision's state
+effect, appended through the writer, and the lease granted on CONTINUE; no module calls it yet (its caller is the
+session start of specification 3 section 1, in a later milestone). In order:
 
 1. Arguments (AC1): every argument is checked before anything is read; a wrong one gives a refusal result.
 2. The log and the task's state (AC2): the log is read once through writer.read_log and checked by records.check_log.
@@ -18,7 +19,9 @@ appended through the writer, and the lease granted on CONTINUE. In order:
    projected state, the seq of the log's last line and the contract_hash of the task's last task.approved, so that no
    decision on a stale view of the log is recorded.
 4. The check (AC4): resume_check.check(inputs, code_sha256) once; its record's form is checked before anything is
-   released or appended. A record with decision null and an error is the record of a failed check.
+   released or appended, the record by records.check_decision and each event of its state effect by
+   records.check_payload, as the writer will check them, with no id repeated. A record with decision null and an
+   error is the record of a failed check.
 5. The release first (AC5; reading R1, accepted by decision D-687): for a task IN_PROGRESS on any outcome other than
    CONTINUE or CONTINUE_WITH (an error record included), the held lease is released by its own fencing token through
    writer.release_lease_token before anything is appended, as specification 1 section 5.1 releases it first for
@@ -26,8 +29,8 @@ appended through the writer, and the lease granted on CONTINUE. In order:
 6. The state effect (AC6; specification 3 sections 9 and 10): the record is appended as decision.execution under its
    record_id, then each event of its state_effect in its order under its stored event_id, through
    writer.append_event, with task_id the task and no fencing token. A second append of the same record or event gives
-   "duplicate" (the writer's behaviour); a rerun of execute after any append is refused by step 3, since the log's
-   last seq has moved, and appends nothing (decision D-687 M2).
+   "duplicate" (the writer's behaviour); a rerun of execute after any append that added a line is refused by step 3,
+   since the log's last seq has moved, and appends nothing (decision D-687 M2).
 7. The lease (AC7; specification 3 sections 1 and 10): on CONTINUE or CONTINUE_WITH for a task in READY or REWORK,
    writer.grant_lease once, after every append, with the holder, session and expiry of grant_request; for a task
    IN_PROGRESS the held lease is kept. No other outcome grants a lease.
@@ -43,9 +46,13 @@ Readings (the implementer's, not the contract's own words):
 - The task's events are those whose task_id is the task, ignored duplicate lines left out; the seq compared with the
   inputs' log_seq is that of the log's last line, duplicate or not.
 - A held lease is in form only as eventlog.LEASE_KEYS' mapping whose task_id is the task, whose fencing_token is
-  {epoch, counter} and whose expires_at is a timezone-aware datetime; anything else is refused with reason "lease".
-- The result's uncovered keeps the record's uncovered entries that are strings; the record's form check (AC4) does not
-  look at them.
+  {epoch: a non-empty string, counter: an int, not a bool, at least 0}, the writer's own token form, and whose
+  expires_at is a timezone-aware datetime; anything else is refused with reason "lease", before anything is released.
+- The result's uncovered keeps the record's uncovered entries that are strings when uncovered is a list, and is empty
+  otherwise; the record's form check (AC4) does not look at them.
+- A log that gives the task the state IN_PROGRESS (a decision.acceptance with that next_task_state) is refused with
+  reason "state" before the held lease is read: IN_PROGRESS is only ever the store's lease (specification 1 section
+  5.1), so it is never taken as a held session without one.
 - The argument check takes "now" and expires_at with any tzinfo whose offset is zero, as reconcile does.
 - The inputs are compared with the log (step 3) before a state other than READY, REWORK or IN_PROGRESS is refused, so
   that a rerun after any append is always refused with reason "inputs" (the log's last seq has moved), whatever
@@ -56,7 +63,9 @@ The limits of the Resume Check, appended as returned (AC8; scope note points (i)
 - Point (i): specification 1 revision 2 (line 70) allows READY -> STALE when the Resume Check gives REPLAN on a READY
   task, but resume_check.py's READY branch returns the conflict.detected only, as specification 3 section 10's older
   text says. This module appends what check returns and does not change resume_check.py: such a task stays READY
-  with no lease, and the next Resume Check gives REPLAN again (it fails safe). The alignment is carried (DEF-0030).
+  with no lease, and, while its inputs are unchanged, the next Resume Check gives REPLAN again (it fails safe). The
+  record names no uncovered entry for point (i) itself; the caller sees the decision REPLAN and no lease. The
+  alignment is carried (DEF-0030).
 - A check-4 REPLAN gives no task.stale, and every conflict.detected has tasks []; the record names both in its
   uncovered entries, which the result passes on.
 
@@ -75,8 +84,11 @@ Limits (AC10):
   holder (specification 3 section 1, "a lease it still holds"; carried to the caller, decision D-687 M4).
 - One run at a time: the log is read, then appended to, with no check that it is unchanged since; the store's own
   transaction is the only lock, as the writer's limit.
-- A crash between the release, the appends and the grant leaves either a released lease with no record or a record
-  with no lease; the next Resume Check repairs both under a new log_seq and new ids.
+- A crash, or a refused or raising append or grant, between the release, the appends and the grant leaves a released
+  lease with no record, a record with no lease, or a record with only part of its state effect (for example
+  decision.execution and its conflict.detected without its task.blocked). The next Resume Check decides again under
+  a new log_seq and appends a new record and its whole effect under new ids; the earlier partial effect stays in the
+  log, which is append-only (review R4).
 - It starts no process, opens no file except through read_log, append, grant, release and held, reads no clock and no
   environment, and builds no event-log line itself (INV-001 to INV-004).
 """
@@ -201,11 +213,16 @@ def _lease_form(lease, task_id):
     expires = lease.get('expires_at') if isinstance(lease, dict) else None
     return (isinstance(lease, dict) and set(lease) == {'task_id', 'fencing_token', 'expires_at'}
             and lease['task_id'] == task_id and isinstance(token, dict) and set(token) == {'epoch', 'counter'}
+            and _text(token['epoch']) and type(token['counter']) is int and token['counter'] >= 0
             and isinstance(expires, datetime.datetime) and expires.tzinfo is not None)
 
 
 def _state(held, root, task_id, log_state, now):
     """AC2: (the state, the held lease or None) with the store's held lease."""
+    if log_state == 'IN_PROGRESS':
+        # IN_PROGRESS is the store's lease, never a state the log gives (specification 1 section 5.1): a log that
+        # gives it (a decision.acceptance with that next_task_state) is refused, never taken as a held session.
+        raise _Stop('state', ['state: the log gives %s the state IN_PROGRESS, which only a held lease gives' % task_id])
     lease = held(root, task_id)
     if lease is None:
         state = log_state
@@ -248,11 +265,20 @@ def _record_findings(record, task_id):
     if not isinstance(effect, list):
         found.append('check: state_effect is not a list')
         return found
+    ids = [record.get('record_id')]
     for i, e in enumerate(effect):
-        if not (isinstance(e, dict) and set(e) == EFFECT_KEYS and _text(e['event_id']) and e['task_id'] == task_id):
+        if not (isinstance(e, dict) and set(e) == EFFECT_KEYS and _text(e['event_id']) and e['task_id'] == task_id
+                and _text(e['type']) and isinstance(e['payload'], dict)):
             found.append('check: state_effect[%d] is not {event_id, type, payload, task_id} for %s' % (i, task_id))
+            continue
+        if e['event_id'] in ids:
+            found.append('check: state_effect[%d] repeats the id %s' % (i, e['event_id']))
+        ids.append(e['event_id'])
+        # review R5: every event is checked as the writer will check it, before anything is released or appended
+        found.extend('check: state_effect[%d]: %s' % (i, f) for f in records.check_payload(e['type'], e['payload']))
     if 'decision' in record and record['decision'] is None and effect:
         found.append('check: a record with decision null has a state effect')
+    found.extend('check: the record: %s' % f for f in records.check_decision(EVENT_TYPE, record))
     return found
 
 
@@ -307,7 +333,8 @@ def execute(root, task_id, inputs, code_sha256, grant_request, recorder, now, re
             raise _Stop('check', found)
         decision = record['decision']
         record_id = record['record_id']
-        uncovered = [u for u in (record.get('uncovered') or []) if isinstance(u, str)]
+        listed = record.get('uncovered')
+        uncovered = [u for u in listed if isinstance(u, str)] if isinstance(listed, list) else []
         effect = record['state_effect'] if decision is not None else []
         plan = [(EVENT_TYPE, record, record_id)] + [(e['type'], e['payload'], e['event_id']) for e in effect]
     except _Stop as stop:
