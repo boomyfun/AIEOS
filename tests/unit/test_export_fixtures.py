@@ -403,14 +403,24 @@ RUST_STEP = ('          if [ -d bench/rust ]; then\n'
              '            cargo clippy --version\n'
              '            (cd bench/rust && cargo fmt --check && cargo clippy --locked --offline --release -- -D warnings'
              ' && cargo build --locked --offline --release)\n'
-             '            (cd bench/rust && cargo run --locked --offline --release --quiet -- "$RUNNER_TEMP/fixtures.json")'
+             '            (cd bench/rust && cargo run --locked --offline --release --quiet --bin port -- "$RUNNER_TEMP/fixtures.json")'
              ' > "$RUNNER_TEMP/rust.json"\n'
              '            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/reference.json" "$RUNNER_TEMP/rust.json"\n'
              '            p="$RUNNER_TEMP/rust/release/port"; if [ -f "$p.exe" ]; then p="$p.exe"; fi\n'
              '            if "$p" > "$RUNNER_TEMP/rust-noarg.txt"; then echo "rust: the port exits 0 with no argument"; false; fi\n'
              '            test ! -s "$RUNNER_TEMP/rust-noarg.txt"\n'
-             '            (cd bench/rust && cargo test --locked --offline --release -- "$RUNNER_TEMP/fixtures.json"'
+             '            (cd bench/rust && cargo test --locked --offline --release --test port_test -- "$RUNNER_TEMP/fixtures.json"'
              ' "$RUNNER_TEMP/reference.json")\n'
+             '            (cd bench/rust && cargo run --locked --offline --release --quiet --bin port2 --'
+             ' "$RUNNER_TEMP/round2-input.json") > "$RUNNER_TEMP/rust2.json"\n'
+             '            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/round2-reference.json"'
+             ' "$RUNNER_TEMP/rust2.json"\n'
+             '            (cd bench/rust && cargo test --locked --offline --release --test port2_test --'
+             ' "$RUNNER_TEMP/round2-input.json" "$RUNNER_TEMP/round2-reference.json")\n'
+             '            p2="$RUNNER_TEMP/rust/release/port2"; if [ -f "$p2.exe" ]; then p2="$p2.exe"; fi\n'
+             '            if "$p2" > "$RUNNER_TEMP/rust2-noarg.txt"; then echo "rust: port2 exits 0 with no argument";'
+             ' false; fi\n'
+             '            test ! -s "$RUNNER_TEMP/rust2-noarg.txt"\n'
              '          else\n'
              '            echo "no port in bench/rust"\n'
              '          fi\n')
@@ -430,8 +440,13 @@ CARGO_TOML = (b'[package]\nname = "aieos-bench-port"\nversion = "0.1.0"\nedition
               b'autobins = false\nautoexamples = false\nautotests = false\nautobenches = false\n\n'
               b'[lib]\npath = "src/lib.rs"\ntest = false\ndoctest = false\n\n'
               b'[[bin]]\nname = "port"\npath = "src/main.rs"\ntest = false\n\n'
-              b'[[test]]\nname = "port_test"\npath = "tests/port_test.rs"\nharness = false\n')
+              b'[[bin]]\nname = "port2"\npath = "src/round2_main.rs"\ntest = false\n\n'
+              b'[[test]]\nname = "port_test"\npath = "tests/port_test.rs"\nharness = false\n\n'
+              b'[[test]]\nname = "port2_test"\npath = "tests/port2_test.rs"\nharness = false\n')
 BENCH_RUST = REPO / 'bench' / 'rust'
+# TASK-048 AC8: each cargo verb's count per job after round 2's lines (one clippy and one build; two runs and two
+# tests, one per round).
+RUST_VERB_COUNT = {'clippy': 1, 'build': 1, 'run': 2, 'test': 2}
 
 
 class RustStepTests(unittest.TestCase):
@@ -445,8 +460,9 @@ class RustStepTests(unittest.TestCase):
             self.assertEqual(job.count(name + RUST_STEP), 1)
             self.assertLess(job.index('export CARGO_NET_OFFLINE=true CARGO_TARGET_DIR='), job.index('cargo --version'))
             for verb in ('clippy', 'build', 'run', 'test'):
-                self.assertEqual(job.count('cargo %s --locked --offline --release' % verb), 1, verb)
-                self.assertEqual(job.count('cargo %s ' % verb) - job.count('cargo %s --version' % verb), 1, verb)
+                self.assertEqual(job.count('cargo %s --locked --offline --release' % verb), RUST_VERB_COUNT[verb], verb)
+                self.assertEqual(job.count('cargo %s ' % verb) - job.count('cargo %s --version' % verb),
+                                 RUST_VERB_COUNT[verb], verb)
         text = workflow()
         for word in ('cargo install', 'cargo add', 'cargo update', 'cargo fetch', 'cargo generate-lockfile', 'rustup',
                      'RUSTFLAGS', 'RUSTC_WRAPPER', '--target-dir', '--config'):
@@ -474,7 +490,8 @@ class RustStepTests(unittest.TestCase):
         self.assertIn('version = "0.1.0"', lock)
         self.assertFalse([ln for ln in lock if ln.startswith(('source', 'checksum', 'dependencies'))])
         files = sorted(p.relative_to(BENCH_RUST).as_posix() for p in BENCH_RUST.rglob('*') if p.is_file())
-        allowed = [f for f in files if f in ('Cargo.toml', 'Cargo.lock', 'tests/port_test.rs', 'README.md')
+        allowed = [f for f in files if f in ('Cargo.toml', 'Cargo.lock', 'tests/port_test.rs', 'tests/port2_test.rs',
+                                             'README.md')
                    or (f.startswith('src/') and f.endswith('.rs') and f.count('/') == 1)]
         self.assertEqual(files, allowed)
         self.assertIn('src/lib.rs', files)
@@ -573,6 +590,48 @@ class HardeningTests(unittest.TestCase):
         """TASK-046 AC10: every test of this class names the AC it stands for in its docstring."""
         for name in unittest.TestLoader().getTestCaseNames(HardeningTests):
             self.assertRegex(getattr(HardeningTests, name).__doc__ or '', r'^TASK-046 AC\d+', name)
+
+
+# TASK-048 AC8: round 2's pins (decisions D-921 B3, B4; D-926 C2): bench/rust's exact file set after round 2, and in
+# each job the rust step's lines in their order, each binary and test target named once.
+RUST_FILES = ['Cargo.lock', 'Cargo.toml', 'src', 'src/document.rs', 'src/eventlog.rs', 'src/governor.rs', 'src/json.rs',
+              'src/lib.rs', 'src/main.rs', 'src/pyval.rs', 'src/records.rs', 'src/records2.rs', 'src/recovery.rs',
+              'src/resume_check.rs', 'src/round2.rs', 'src/round2_main.rs', 'src/sha256.rs', 'tests', 'tests/port2_test.rs',
+              'tests/port_test.rs']
+
+
+class Round2RustTests(unittest.TestCase):
+    def test_rust_file_set(self):
+        """TASK-048 AC8: bench/rust holds exactly its round-1 files and round 2's six new modules and test file, with
+        no other file or folder."""
+        self.assertEqual(file_set(BENCH_RUST), RUST_FILES)
+
+    def test_rust_step_order(self):
+        """TASK-048 AC8: in each job the round-1 run, compare, probe and test lines come before round 2's run, compare,
+        test and probe lines; each binary (--bin port, --bin port2) and test target (--test port_test, --test
+        port2_test) is named once, and no cargo run or test line names neither."""
+        for job in jobs():
+            marks = ['--bin port --', 'rust.json"\n', 'rust-noarg.txt"\n', '--test port_test --', '--bin port2 --',
+                     'rust2.json"\n', '--test port2_test --', 'rust2-noarg.txt"\n']
+            order = [job.index(m) for m in marks]
+            self.assertEqual(order, sorted(order))
+            for name in ('--bin port --', '--bin port2 --', '--test port_test --', '--test port2_test --'):
+                self.assertEqual(job.count(name), 1, name)
+            self.assertNotIn('--quiet -- "', job)
+            self.assertNotIn('--release -- "', job)
+
+    def test_cargo_toml(self):
+        """TASK-048 AC8: Cargo.toml is exactly the round-1 bytes with one [[bin]] block (port2) and one [[test]] block
+        (port2_test) added, and Cargo.lock keeps TASK-046's bytes."""
+        self.assertEqual((BENCH_RUST / 'Cargo.toml').read_bytes(), CARGO_TOML)
+        self.assertEqual(CARGO_TOML.count(b'[[bin]]'), 2)
+        self.assertEqual(CARGO_TOML.count(b'[[test]]'), 2)
+        self.assertEqual((BENCH_RUST / 'Cargo.lock').read_bytes(), CARGO_LOCK)
+
+    def test_naming(self):
+        """TASK-048 AC10: every test of this class names the AC it stands for in its docstring."""
+        for name in unittest.TestLoader().getTestCaseNames(Round2RustTests):
+            self.assertRegex(getattr(Round2RustTests, name).__doc__ or '', r'^TASK-048 AC\d+', name)
 
 
 class SuiteTests(unittest.TestCase):

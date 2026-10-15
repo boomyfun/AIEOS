@@ -11,6 +11,12 @@ mod records;
 mod resume_check;
 mod sha256;
 
+pub mod eventlog;
+pub mod pyval;
+pub mod records2;
+pub mod recovery;
+pub mod round2;
+
 pub use document::{
     case_records, document, placeholder, read_fixture_document, GOVERNOR_FOLDER, RC_FOLDER,
 };

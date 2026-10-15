@@ -18,7 +18,17 @@ name = "port"
 path = "src/main.rs"
 test = false
 
+[[bin]]
+name = "port2"
+path = "src/round2_main.rs"
+test = false
+
 [[test]]
 name = "port_test"
 path = "tests/port_test.rs"
+harness = false
+
+[[test]]
+name = "port2_test"
+path = "tests/port2_test.rs"
 harness = false

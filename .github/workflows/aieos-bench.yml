@@ -1,4 +1,4 @@
-# AIEOS: the stack benchmark (TASK-039; Master Plan revision 4 §4; docs/plan/m4-exit-review.md §6), revision 6
+# AIEOS: the stack benchmark (TASK-039; Master Plan revision 4 §4; docs/plan/m4-exit-review.md §6), revision 7
 # (decisions D-765 to D-767, with erratum E1 of decision D-773; the reference export of TASK-041; the TypeScript
 # port's type check and run of TASK-043; the Go port's vet, format check, build, run, compare and tests of TASK-044,
 # with GOTOOLCHAIN=local, GOPROXY=off and CGO_ENABLED=0; the Rust port's format check, lint, build, run, compare and
@@ -12,7 +12,9 @@
 # registry, checked by its integrity value before it is used; it uses no action, no secret and no token, writes
 # nothing to the repository and calls no API.
 # Round 2's export (TASK-047) writes the generated input and the bootstrap's results over it into the job's
-# temporary folder, each checked against its pin.
+# temporary folder, each checked against its pin. The Rust port's step (TASK-048) then runs round 2's program port2
+# over that input, compares its output with round 2's reference, runs its tests and runs it once with no argument,
+# which must exit non-zero and print nothing; its round-1 run and test lines name their binary and test target.
 # Its results are advisory (DM A29, A31): they are this run's
 # job logs only, and no record of the governor or of the CI workflow aieos-checks.yml reads them. It is not a
 # trust-boundary measurement (Master Plan §9 item 3). Who decides a change to this file: the decision agent under DM A66,
@@ -118,12 +120,18 @@ jobs:
             cargo fmt --version
             cargo clippy --version
             (cd bench/rust && cargo fmt --check && cargo clippy --locked --offline --release -- -D warnings && cargo build --locked --offline --release)
-            (cd bench/rust && cargo run --locked --offline --release --quiet -- "$RUNNER_TEMP/fixtures.json") > "$RUNNER_TEMP/rust.json"
+            (cd bench/rust && cargo run --locked --offline --release --quiet --bin port -- "$RUNNER_TEMP/fixtures.json") > "$RUNNER_TEMP/rust.json"
             $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/reference.json" "$RUNNER_TEMP/rust.json"
             p="$RUNNER_TEMP/rust/release/port"; if [ -f "$p.exe" ]; then p="$p.exe"; fi
             if "$p" > "$RUNNER_TEMP/rust-noarg.txt"; then echo "rust: the port exits 0 with no argument"; false; fi
             test ! -s "$RUNNER_TEMP/rust-noarg.txt"
-            (cd bench/rust && cargo test --locked --offline --release -- "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")
+            (cd bench/rust && cargo test --locked --offline --release --test port_test -- "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")
+            (cd bench/rust && cargo run --locked --offline --release --quiet --bin port2 -- "$RUNNER_TEMP/round2-input.json") > "$RUNNER_TEMP/rust2.json"
+            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/round2-reference.json" "$RUNNER_TEMP/rust2.json"
+            (cd bench/rust && cargo test --locked --offline --release --test port2_test -- "$RUNNER_TEMP/round2-input.json" "$RUNNER_TEMP/round2-reference.json")
+            p2="$RUNNER_TEMP/rust/release/port2"; if [ -f "$p2.exe" ]; then p2="$p2.exe"; fi
+            if "$p2" > "$RUNNER_TEMP/rust2-noarg.txt"; then echo "rust: port2 exits 0 with no argument"; false; fi
+            test ! -s "$RUNNER_TEMP/rust2-noarg.txt"
           else
             echo "no port in bench/rust"
           fi
@@ -211,12 +219,18 @@ jobs:
             cargo fmt --version
             cargo clippy --version
             (cd bench/rust && cargo fmt --check && cargo clippy --locked --offline --release -- -D warnings && cargo build --locked --offline --release)
-            (cd bench/rust && cargo run --locked --offline --release --quiet -- "$RUNNER_TEMP/fixtures.json") > "$RUNNER_TEMP/rust.json"
+            (cd bench/rust && cargo run --locked --offline --release --quiet --bin port -- "$RUNNER_TEMP/fixtures.json") > "$RUNNER_TEMP/rust.json"
             $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/reference.json" "$RUNNER_TEMP/rust.json"
             p="$RUNNER_TEMP/rust/release/port"; if [ -f "$p.exe" ]; then p="$p.exe"; fi
             if "$p" > "$RUNNER_TEMP/rust-noarg.txt"; then echo "rust: the port exits 0 with no argument"; false; fi
             test ! -s "$RUNNER_TEMP/rust-noarg.txt"
-            (cd bench/rust && cargo test --locked --offline --release -- "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")
+            (cd bench/rust && cargo test --locked --offline --release --test port_test -- "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")
+            (cd bench/rust && cargo run --locked --offline --release --quiet --bin port2 -- "$RUNNER_TEMP/round2-input.json") > "$RUNNER_TEMP/rust2.json"
+            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/round2-reference.json" "$RUNNER_TEMP/rust2.json"
+            (cd bench/rust && cargo test --locked --offline --release --test port2_test -- "$RUNNER_TEMP/round2-input.json" "$RUNNER_TEMP/round2-reference.json")
+            p2="$RUNNER_TEMP/rust/release/port2"; if [ -f "$p2.exe" ]; then p2="$p2.exe"; fi
+            if "$p2" > "$RUNNER_TEMP/rust2-noarg.txt"; then echo "rust: port2 exits 0 with no argument"; false; fi
+            test ! -s "$RUNNER_TEMP/rust2-noarg.txt"
           else
             echo "no port in bench/rust"
           fi
