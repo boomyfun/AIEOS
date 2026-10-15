@@ -1,0 +1,251 @@
+# Task contract TASK-042, the stack benchmark's first port: TypeScript (Master Plan revision 4, §4 "The benchmark and the
+# stack ADR"; docs/plan/m4-exit-review.md §6; docs/plan/bench-port-brief.md revision 0; decisions D-794, D-800 C3,
+# D-814 Q4, D-818, D-823, D-827 to D-833; DEF-0063).
+# Revision 0, drafted under decisions D-831 (the scope note and C2) and D-832 and D-833 (the type checker's pin); brought
+# for approval in its own request; whether it is approved is recorded in the decision files, not in this file. Fields and
+# value forms follow specification 2 §5.1 and the contracts of TASK-007 to TASK-041. Readings marked "(reading)" are the
+# worker's, for the decision agent's ruling.
+# Task type: implementation, with two writers on two path sets (decision D-831 (i)):
+# - the port, bench/ts/**, is written by a fresh agent (claude-opus-5-5, started for this task only) that is given only
+#   the inputs of the port brief's section 1: the brief (docs/plan/bench-port-brief.md, SHA-256
+#   b8bc929958a8efd90d7fa9456d7fd74c4cc52ab8e1c1424bcf50504012a2608e), the four Python files at commit
+#   aed226dc6d50fc44fac0ae11d39dfb6b3cb1dc79 by the hashes the brief names, the fixture document and the reference
+#   document made at that commit (with the source of tests/unit/test_export_reference.py), and this contract. It works
+#   only in a scratch folder of the worker's scratchpad, with no access to the repository, the archives, other ports or
+#   their reviews, and may run only `node` in that folder (node v24.11.1 on this machine). Its output comes to the
+#   decision agent with every file's SHA-256 before the worker commits it unchanged;
+# - everything else (the workflow, the isolation test, the export hardening) is written by the worker.
+# The type checker (decisions D-794 option A, D-832, D-833): TypeScript 6.0.3, the newest stable release below the
+# native-only major version 7, fetched in the workflow as its registry tarball
+# https://registry.npmjs.org/typescript/-/typescript-6.0.3.tgz and checked, before it is unpacked, against its published
+# integrity sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==; it has no
+# dependencies, optional dependencies or peer dependencies (read from the registry, decision D-833); nothing is
+# installed (no npm install, so no install script runs), and no package.json or node_modules exists in the repository.
+# Its option --erasableSyntaxOnly (TypeScript 5.8 and later, a reading; the CI run is the evidence) keeps the code to
+# what Node strips without a flag (node v22.23.3 on both hosted runners, read from the benchmark's run 2).
+# The workflow change (A66, its own element; decision D-831 (ii)): in both jobs of .github/workflows/aieos-bench.yml, the
+# ts step runs the port and compares its output with the reference document by test_export_reference.py --compare, runs
+# the port's own tests, and a type-check step fetches, checks and runs the pinned type checker, all only when bench/ts
+# exists; the header lines 2 to 4 name the reference export and the ts steps (decision D-818's carry); the revision line
+# goes to 2. No trigger, permission, secret, token or `uses:` changes.
+# Limits: the benchmark workflow runs on pushes to main only (its triggers are pinned by TASK-039's tests), so the port's
+# CI evidence on Linux and Windows comes from the first run at the landing, read after acceptance, as for TASK-041; before
+# acceptance, the evidence of byte equality is the worker's local run (node v24.11.1 on Windows) and the reviews; the
+# integrity value is self-attested by the registry; the pinned type checker is older than the latest major version; node
+# differs between this machine (v24.11.1) and the runners (v22.23.3); the ports are written one after another (order
+# bias); every writer and reviewer is an AI of one vendor.
+# What it is not: the results are advisory (A29, A31) and feed no gate, record or evidence entry; aieos-checks.yml and its
+# two pins are not touched; src/ is not touched; no Go or Rust port.
+# Risk: critical, and change class critical_cr, each to be computed over the base by script (the scripts of TASK-041 with
+# only the write-set and the header line changed): .github/** is R9 (critical); bench/** is R12 (high); tests/** is R2
+# (medium) with R3's fail-closed reading (high); .github/** and tests/unit/** are evaluator paths of GOV-003's list.
+# Profile (assurance-model.md §5, gov-AIEOS, critical): high's entries plus architecture [human_review], met for gov-AIEOS
+# by the decision agent's review, and functional [the property/fuzz entry] by the CI's property_test step over the existing
+# property suite (the task adds no property test; it changes no decision code); the cross-model entry by the pair of
+# reviews: five way-2 reviews from built briefs on claude-sonnet-5-5 (a model other than the port writer's and the main
+# session's), and the decision agent's separate review. One delegated approval (reading, as TASK-041).
+# Naming (D-544 Q3): every Python test this task adds names the AC ids it stands for as "TASK-042 ACn" in its docstring.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-042.yaml and has one parent equal to base_commit; the
+# task's commits, each carrying "AIEOS-Task: TASK-042", go to task/TASK-042 under their own decisions; main receives the
+# task only at its acceptance.
+# Not applicable: OPS-001 (no ref changed by the task's code); INV-004 to INV-011 (no project state, decision engine,
+# governor, evidence record, replay or policy path in the write-set); GOV-001, GOV-004 to GOV-006. SEC-003 applies (a
+# .github/ path), under A66 as above.
+# Owner-kept acts: none, on these conditions: the changed workflow grants no write, uses no secret or token, changes no
+# repository or security setting and costs nothing (public repository, hosted runners); the type checker's download
+# needs none of these. If any of these is not so, the task stops and the point is the owner's (CR-002 part 4 limit 5),
+# fail closed.
+task: TASK-042
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add bench/ts/, the TypeScript port of the governor's acceptance decision and the Resume Check, written from the port
+  brief by a fresh agent, which prints a document byte-equal to the reference export from the fixture export, with its
+  own tests; add to both jobs of .github/workflows/aieos-bench.yml the steps that type-check it with the pinned
+  TypeScript 6.0.3, run it, compare its output with the reference and run its tests; add a test that no AIEOS module
+  names or runs bench/; harden tests/unit/test_export_reference.py's tests without changing its document. Nothing else
+  changes; the results are advisory and feed nothing.
+traces_to:
+  - docs/plan/m4-exit-review.md#6
+  - docs/plan/master-plan.md#4
+  - docs/plan/bench-port-brief.md
+  - docs/pre-genesis/constitution.md#SEC-003
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-042.yaml; G0 requires C's one parent to equal base_commit. It is filled by script from
+  # refs/heads/main just before C is made: the placeholder and its quotes are replaced by the 40-hex id, unquoted.
+  base_commit: 1390680a38be1f124519aa40834301e0b423526a
+  depends_on: [TASK-039, TASK-041]
+  intent_versions:
+    docs/plan/m4-exit-review.md: 6c41ca8200a4e757f04b22aa521e52cd67f7ac3122690e667ac4c864aa57c4a4
+    docs/plan/master-plan.md: 8276a587bbf6f75be8867feb97df6726379babfcdb2266344bfdb4d01e6b2d23
+    docs/plan/bench-port-brief.md: b8bc929958a8efd90d7fa9456d7fd74c4cc52ab8e1c1424bcf50504012a2608e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/specs/conformance-files.md: 2f1c224466fe3657167b116b49f902648130bf76e1274367d7780cc38ec7b021
+write_set:
+  # The port's files under bench/ts/ (named by its writer), one modified workflow, one added and one modified test.
+  paths:
+    - bench/ts/**
+    - .github/workflows/aieos-bench.yml
+    - tests/unit/test_bench_isolation.py
+    - tests/unit/test_export_reference.py
+read_set:
+  paths:
+    - docs/plan/**
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/specs/conformance-files.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/conformance/**
+    - tests/unit/**
+    - tests/integration/test_conformance_rc_set.py
+    - tests/integration/test_conformance_risk_set.py
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+  interfaces:
+    - tests/unit/test_export_fixtures.py (the fixture document, run as a script)
+    - tests/unit/test_export_reference.py (the reference document and --compare, run as a script)
+    - bench/ts/main.ts (new; the port, run as `node main.ts <fixture document>`)
+  schemas:
+    - conformance-files canonical form (2)
+    - the reference document's form (TASK-041 AC1)
+forbidden:
+  - .github/workflows/aieos-checks.yml
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - bench/go/**
+  - bench/rust/**
+  - bench/ts/package.json
+  - bench/ts/package-lock.json
+  - bench/ts/node_modules/**
+  - docs/**
+  - src/**
+  - tests/conformance/**
+  - tests/unit/test_export_fixtures.py
+  - tests/integration/**
+  - tests/property/**
+  - tests/run_tests.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The port's output. Run from bench/ts as `node main.ts <fixture document>`, the port prints a document byte-equal
+      to the reference document of tests/unit/test_export_reference.py at base_commit (REFERENCE_SHA256 unchanged), and
+      exits 0; on a missing or extra argument, a file that is not a fixture document, or a case it cannot compute, it
+      exits non-zero and prints nothing to standard output. Evidence before acceptance: the worker's run on this
+      machine's node (v24.11.1, Windows), compared by `--compare`, its output saved; the hosted runners' compare at the
+      landing is read after acceptance (a stated limit).
+  - AC2: >-
+      The writer and its inputs (decision D-831 (i) and C2; the brief's section 1). The port is written by a fresh agent
+      on claude-opus-5-5, given only the brief's inputs, in a scratch folder; its tool calls are only file reads, writes
+      inside that folder and `node` runs there (checked by script over its transcript); every bench/ts file is committed
+      byte-equal to the hash the decision agent read. No file under bench/ts holds a record id, a placeholder-free
+      engine_identity or any other 64-hex value of the reference document, nor any case's expected values (checked by
+      script against the two documents).
+  - AC3: >-
+      The port's form (the brief's section 3). bench/ts holds only: .ts files written by the port writer, among them
+      exactly one declaration file, bench/ts/node.d.ts (below); bench/ts/tsconfig.json, written by the worker (AC4);
+      and at most one README.md; no package.json, lock file or node_modules; the code imports only node's built-in modules
+      (node:fs for reading its one argument, node:process), and sibling modules by their .ts file names; it writes
+      nothing but standard output and standard error, reads no network, clock, environment variable or random value,
+      and starts no process; it uses only erasable TypeScript syntax. How node's built-in modules are typed: no
+      declarations package is fetched; node.d.ts declares the modules "node:fs" and "node:process" with only the
+      members the port uses (decision D-834 C2; a local file is not a package, so the brief's section 3 holds).
+  - AC4: >-
+      The type check (decisions D-794 option A, D-833, D-834). bench/ts/tsconfig.json (written by the worker) holds
+      exactly these compiler options, each for the reason given: "noEmit": true (the check writes no file);
+      "strict": true (criterion 7's type safety); "erasableSyntaxOnly": true (only syntax node strips without a flag);
+      "allowImportingTsExtensions": true (sibling imports by .ts names, as node's type stripping needs; allowed with
+      noEmit); "module": "preserve" and "moduleResolution": "bundler" (imports kept exactly as written, as node's type
+      stripping runs them, with no package.json to make the files CommonJS); "moduleDetection": "force" (every file a
+      module); "target": "es2022" and "lib": ["es2022"] (the language level node 22 runs, with no browser library);
+      "types": [] (no ambient type package is included); "verbatimModuleSyntax": true (type-only imports marked, so
+      stripping removes exactly them); and "include": ["*.ts"]. In each job, a step named "type-check ts (only if
+      bench/ts exists)" fetches the tarball URL above with curl into the job's temporary folder, checks its SHA-512
+      against the integrity value above before unpacking (failing the step on any difference), unpacks it there with
+      tar, and runs `node
+      "$RUNNER_TEMP/tsc/package/bin/tsc" -p bench/ts`; nothing is installed and nothing is written in the checkout.
+      Before the first push the worker runs the same check on this machine, under its own decision (r2): the commands
+      of capabilities.shell below, with the tarball and its unpacked files in the scratchpad only. (reading) The option
+      names are from the worker's knowledge of TypeScript 5.8 to 6.x; the CI run is the evidence.
+  - AC5: >-
+      The port's own tests. bench/ts holds a test file run as `node test.ts` that checks at least: the byte equality over
+      the whole fixture document against the reference document; one governor case and one Resume Check case field by
+      field; the placeholder; each fail-closed input of AC1. It passes on the worker's machine, and the workflow runs it.
+  - AC6: >-
+      The workflow (A66, its own element; decision D-831 (ii)). In each of the two jobs of
+      .github/workflows/aieos-bench.yml, identically: the step "port ts (only if bench/ts exists)" runs `node main.ts
+      "$RUNNER_TEMP/fixtures.json" > "$RUNNER_TEMP/ts.json"`, then `$PY tests/unit/test_export_reference.py --compare
+      "$RUNNER_TEMP/reference.json" "$RUNNER_TEMP/ts.json"`, then `node test.ts`; AC4's step comes right before it; the
+      header lines 2 to 4 name the reference export, the type check and the ts steps; the revision line goes from 1 to 2.
+      Nothing else changes: no trigger, permission, secret, token, `uses:`, Go or Rust step. The earlier tests of
+      tests/unit/test_export_fixtures.py pass unchanged over it.
+  - AC7: >-
+      Isolation (decision D-800 C3; the risk rules policy revision 6, R12). tests/unit/test_bench_isolation.py (new)
+      reads, with read_bytes, every file under src/ and tests/ and .github/workflows/aieos-checks.yml, and asserts that
+      none names "bench/" or imports from it, except a closed allow-list, each entry with its reason in the module:
+      tests/unit/test_export_fixtures.py (the benchmark workflow's trigger pins), the files under tests/conformance/
+      (the frozen fixtures, R11 critical; RISK-01's carries rule R12's pattern as a value; the module names that folder
+      only by this prefix, not the RC or risk folder, so the RC and risk set tests' allow-lists need no entry), and the
+      isolation test itself (at base_commit the only files under src/ and tests/ naming it are test_export_fixtures.py
+      and RISK-01's fixture, read by grep); a test shows that a name outside the list fails it. It also asserts that
+      .github/workflows/aieos-bench.yml is the only workflow naming bench/.
+  - AC8: >-
+      The export hardening (decision D-823's carries; D-831 (v)), in tests/unit/test_export_reference.py, tests and
+      messages only: (a) test_imports also reads indented import lines and refuses `__import__`; (b) a malformed first
+      --compare argument is tested; (c) test_workflow_step checks that the reference export step comes right after the
+      fixture export step in each job; (d) a RecursionError while reading a document is reported as "not a reference
+      document"; (e) the module docstring states the benchmark workflow's role as its design and that its first run was
+      at TASK-041's landing (run 2). REFERENCE_SHA256 and the document are unchanged, as the pin test shows.
+  - AC9: >-
+      The CI checks and purity. At the task's commits the existing CI steps report no finding: G0 scope,
+      deterministic_rule, OPS-003, SEC-001, SEC-002, SEC-003's record and bandit; every earlier test passes; the added
+      Python lines are scanned for the bandit test patterns the CI applies before the first push, as in TASK-041 AC9; if
+      any earlier test can pass only by a change outside the write-set, the task escalates (needs_out_of_scope_change).
+  - AC10: >-
+      Naming. Every Python test function the task adds or changes names "TASK-042 ACn" in its own docstring (the changed
+      tests of test_export_reference.py keep their TASK-041 ids and add TASK-042's); tests/run_tests.py is unchanged and
+      runs no export or port.
+  - AC11: >-
+      Stop conditions. If any step needs a secret, a token, write access, money or a setting, or the type checker's
+      download fails its integrity check, the task stops and the point goes to the decision agent, and to the owner when
+      it is the owner's (A66, fail closed).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell:
+    allow:
+      - "timeout 110 python tests/run_tests.py < /dev/null"
+      - "node main.ts <file>"
+      - "node test.ts"
+      - >-
+        curl -sS --fail --proto =https --max-time 120 --max-filesize 20000000 <tarball URL>
+        -o <SP>/tsc/typescript-6.0.3.tgz
+      - "openssl dgst -sha512 -binary <SP>/tsc/typescript-6.0.3.tgz | base64 -w0 (compared with the integrity value)"
+      - "tar -xzf <SP>/tsc/typescript-6.0.3.tgz -C <SP>/tsc"
+      - "node <SP>/tsc/package/bin/tsc -p bench/ts"
+  network:
+    allow:
+      - >-
+        https://registry.npmjs.org/typescript/-/typescript-6.0.3.tgz (the workflow's type-check step; one local
+        download for AC4, its own decision)
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: critical
+autonomy:
+  max_level: L1
+  budgets: {tokens: 900k, wall_time: 5h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC7, AC8, AC10]}
+  - {gate: G3, check: constitution, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC9, AC11, INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
