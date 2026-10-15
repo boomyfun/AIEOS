@@ -391,6 +391,93 @@ class GoStepTests(unittest.TestCase):
             self.assertRegex(getattr(GoStepTests, name).__doc__ or '', r'^TASK-044 AC\d+', name)
 
 
+# TASK-045 AC8: the Rust port's step (decisions D-871 B1, B3, C1), its Cargo files (D-871 B4, C2; D-872 M1) and the
+# TypeScript and Go steps kept as they were.
+RUST_STEP = ('          if [ -d bench/rust ]; then\n'
+             '            export CARGO_NET_OFFLINE=true CARGO_TARGET_DIR="$RUNNER_TEMP/rust"\n'
+             '            cargo --version\n'
+             '            cargo fmt --version\n'
+             '            cargo clippy --version\n'
+             '            (cd bench/rust && cargo fmt --check && cargo clippy --locked --offline --release -- -D warnings'
+             ' && cargo build --locked --offline --release)\n'
+             '            (cd bench/rust && cargo run --locked --offline --release --quiet -- "$RUNNER_TEMP/fixtures.json")'
+             ' > "$RUNNER_TEMP/rust.json"\n'
+             '            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/reference.json" "$RUNNER_TEMP/rust.json"\n'
+             '            (cd bench/rust && cargo test --locked --offline --release -- "$RUNNER_TEMP/fixtures.json"'
+             ' "$RUNNER_TEMP/reference.json")\n'
+             '          else\n'
+             '            echo "no port in bench/rust"\n'
+             '          fi\n')
+TS_PORT_STEP = ('      - name: port ts (only if bench/ts exists)\n'
+                '        run: |\n'
+                '          if [ -d bench/ts ]; then\n'
+                '            (cd bench/ts && node main.ts "$RUNNER_TEMP/fixtures.json") > "$RUNNER_TEMP/ts.json"\n'
+                '            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/reference.json" "$RUNNER_TEMP/ts.json"\n'
+                '            (cd bench/ts && node test.ts "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")\n'
+                '          else\n'
+                '            echo "no port in bench/ts"\n'
+                '          fi\n')
+CARGO_TOML = (b'[package]\nname = "aieos-bench-port"\nversion = "0.1.0"\nedition = "2021"\npublish = false\n'
+              b'autobins = false\nautoexamples = false\nautotests = false\nautobenches = false\n\n'
+              b'[lib]\npath = "src/lib.rs"\ntest = false\ndoctest = false\n\n'
+              b'[[bin]]\nname = "port"\npath = "src/main.rs"\ntest = false\n\n'
+              b'[[test]]\nname = "port_test"\npath = "tests/port_test.rs"\nharness = false\n')
+BENCH_RUST = REPO / 'bench' / 'rust'
+
+
+class RustStepTests(unittest.TestCase):
+    def test_rust_step(self):
+        """TASK-045 AC8: in each job the rust step runs exactly the pinned lines under its one guard, with
+        CARGO_NET_OFFLINE and CARGO_TARGET_DIR set before the first cargo command, and every build, lint, run and test
+        command locked and offline; no cargo install, add, update or fetch and no rustup."""
+        for job in jobs():
+            name = '      - name: port rust (only if bench/rust exists)\n        run: |\n'
+            self.assertEqual(job.count(name), 1)
+            self.assertEqual(job.count(name + RUST_STEP), 1)
+            self.assertLess(job.index('export CARGO_NET_OFFLINE=true CARGO_TARGET_DIR='), job.index('cargo --version'))
+            for verb in ('clippy', 'build', 'run', 'test'):
+                self.assertEqual(job.count('cargo %s --locked --offline --release' % verb), 1, verb)
+                self.assertEqual(job.count('cargo %s ' % verb) - job.count('cargo %s --version' % verb), 1, verb)
+        text = workflow()
+        for word in ('cargo install', 'cargo add', 'cargo update', 'cargo fetch', 'cargo generate-lockfile', 'rustup',
+                     'RUSTFLAGS', 'RUSTC_WRAPPER', '--target-dir', '--config'):
+            self.assertNotIn(word, text)
+
+    def test_ts_and_go_steps_kept(self):
+        """TASK-045 AC8: in each job the TypeScript type-check and port steps and the Go step are the bytes of
+        base_commit."""
+        for job in jobs():
+            self.assertEqual(job.count(TS_CHECK_STEP), 1)
+            self.assertEqual(job.count(TS_PORT_STEP), 1)
+            self.assertEqual(job.count('      - name: port go (only if bench/go exists)\n        run: |\n' + GO_STEP), 1)
+
+    def test_cargo_files(self):
+        """TASK-045 AC8: when bench/rust exists, Cargo.toml is exactly AC3's bytes, Cargo.lock is lock version 4 with
+        the one package and no source, checksum or dependencies line, and the file set is AC3's: no build.rs, no .cargo
+        folder, only src/*.rs, tests/port_test.rs and at most one README.md beside the two Cargo files."""
+        if not BENCH_RUST.is_dir():
+            return
+        self.assertEqual((BENCH_RUST / 'Cargo.toml').read_bytes(), CARGO_TOML)
+        lock = (BENCH_RUST / 'Cargo.lock').read_bytes().decode('ascii').split('\n')
+        self.assertIn('version = 4', lock)
+        self.assertEqual(lock.count('[[package]]'), 1)
+        self.assertIn('name = "aieos-bench-port"', lock)
+        self.assertIn('version = "0.1.0"', lock)
+        self.assertFalse([ln for ln in lock if ln.startswith(('source', 'checksum', 'dependencies'))])
+        files = sorted(p.relative_to(BENCH_RUST).as_posix() for p in BENCH_RUST.rglob('*') if p.is_file())
+        allowed = [f for f in files if f in ('Cargo.toml', 'Cargo.lock', 'tests/port_test.rs', 'README.md')
+                   or (f.startswith('src/') and f.endswith('.rs') and f.count('/') == 1)]
+        self.assertEqual(files, allowed)
+        self.assertIn('src/lib.rs', files)
+        self.assertIn('src/main.rs', files)
+        self.assertIn('tests/port_test.rs', files)
+
+    def test_naming(self):
+        """TASK-045 AC10: every test of this class names the AC it stands for in its docstring."""
+        for name in unittest.TestLoader().getTestCaseNames(RustStepTests):
+            self.assertRegex(getattr(RustStepTests, name).__doc__ or '', r'^TASK-045 AC\d+', name)
+
+
 class SuiteTests(unittest.TestCase):
     def test_suite_runs_no_export(self):
         """TASK-039 AC8: run_tests.py keeps its three groups, and this module runs the export only under its main guard."""
