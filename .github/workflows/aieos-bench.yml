@@ -1,7 +1,8 @@
-# AIEOS: the stack benchmark (TASK-039; Master Plan revision 4 §4; docs/plan/m4-exit-review.md §6), revision 3
+# AIEOS: the stack benchmark (TASK-039; Master Plan revision 4 §4; docs/plan/m4-exit-review.md §6), revision 4
 # (decisions D-765 to D-767, with erratum E1 of decision D-773; the reference export of TASK-041; the TypeScript
-# port's type check and run of TASK-043; the Go port's vet, format check, build, run, compare and tests of TASK-044,
-# with the runners' own go and node, not downloaded). It runs, on GitHub's hosted Linux and Windows runners, the export
+# port's type check and run of TASK-043; the Go port's vet, format check, build, run, compare and tests of TASK-044;
+# the Rust port's format check, lint, build, run, compare and tests of TASK-045; each port with the runners' own
+# toolchain, not downloaded). It runs, on GitHub's hosted Linux and Windows runners, the export
 # of the frozen fixtures and the reference export into the job's temporary folder, prints the toolchain versions, and
 # runs each language port only when its folder bench/<language>/ exists. It reads only: it checks
 # out the pushed commit from the repository's public address, built from the runner's server and repository variables,
@@ -99,7 +100,14 @@ jobs:
       - name: port rust (only if bench/rust exists)
         run: |
           if [ -d bench/rust ]; then
-            cd bench/rust && cargo run --release --quiet -- "$RUNNER_TEMP/fixtures.json"
+            export CARGO_NET_OFFLINE=true CARGO_TARGET_DIR="$RUNNER_TEMP/rust"
+            cargo --version
+            cargo fmt --version
+            cargo clippy --version
+            (cd bench/rust && cargo fmt --check && cargo clippy --locked --offline --release -- -D warnings && cargo build --locked --offline --release)
+            (cd bench/rust && cargo run --locked --offline --release --quiet -- "$RUNNER_TEMP/fixtures.json") > "$RUNNER_TEMP/rust.json"
+            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/reference.json" "$RUNNER_TEMP/rust.json"
+            (cd bench/rust && cargo test --locked --offline --release -- "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")
           else
             echo "no port in bench/rust"
           fi
@@ -173,7 +181,14 @@ jobs:
       - name: port rust (only if bench/rust exists)
         run: |
           if [ -d bench/rust ]; then
-            cd bench/rust && cargo run --release --quiet -- "$RUNNER_TEMP/fixtures.json"
+            export CARGO_NET_OFFLINE=true CARGO_TARGET_DIR="$RUNNER_TEMP/rust"
+            cargo --version
+            cargo fmt --version
+            cargo clippy --version
+            (cd bench/rust && cargo fmt --check && cargo clippy --locked --offline --release -- -D warnings && cargo build --locked --offline --release)
+            (cd bench/rust && cargo run --locked --offline --release --quiet -- "$RUNNER_TEMP/fixtures.json") > "$RUNNER_TEMP/rust.json"
+            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/reference.json" "$RUNNER_TEMP/rust.json"
+            (cd bench/rust && cargo test --locked --offline --release -- "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")
           else
             echo "no port in bench/rust"
           fi
