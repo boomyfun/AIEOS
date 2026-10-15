@@ -1,0 +1,182 @@
+# Task contract TASK-038, the stack benchmark's workflow and fixture export (Master Plan revision 4, §4 "The benchmark
+# and the stack ADR"; docs/plan/m4-exit-review.md §6; decisions D-765 and D-766).
+# Revision 0, drafted under decisions D-765 (C1 to C4) and D-766 (C1 to C5), from the scope note approved by decision
+# D-766; brought for approval in its own request; whether it is approved is recorded in the decision files, not in
+# this file. Fields and value forms follow specification 2 §5.1 and the contracts of TASK-007 to TASK-036. Readings
+# marked "(reading)" are the worker's, for the decision agent's ruling.
+# Task type: implementation. What it adds: a new CI workflow file, .github/workflows/aieos-bench.yml, that runs the
+# stack benchmark of the review's §6 on GitHub's hosted Linux and Windows runners, and a standard-library helper,
+# tests/benchmark/export_fixtures.py, that exports the frozen conformance fixtures' JSON by text into the job's
+# temporary folder at run time. The workflow's port steps (TypeScript, Go, Rust) are built in and skipped until a
+# port's folder exists, so the three port tasks change no .github/ file. No port is written here.
+# What it is not: the benchmark's results are advisory (A31) and never feed the governor's gates, the existing CI
+# channel's records or any evidence entry (A29: the workflow runs code from the commit it checks); the workflow is not
+# a trust-boundary measurement (Master Plan §9 item 3 names P-CRED, P-GH, P-LOC and C13 only); the stack choice is
+# the owner's, asked with the results (decision D-765 Q5).
+# The existing CI workflow .github/workflows/aieos-checks.yml, its governor pin and its Resume Check pin are not
+# touched (decision D-765 C2; D-748: a pin is replaced, never emptied, and none is changed here).
+# Owner points (A66, fail closed; decision D-766 C4): the new workflow grants no write, uses and references no secret
+# or token, changes no repository or security setting and costs nothing (the repository is public by
+# docs/WORKING-RECORDS.md line 9; GitHub-hosted standard runners are free for public repositories, from GitHub's
+# published billing rules, not read from the account). If any of these is not so, the task stops and the point is
+# the owner's (money, secrets, write access or settings). Triggers: pushes to main touching tests/benchmark/** or the
+# workflow file only (decision D-766 C1); workflow_dispatch is present only as a trigger for the owner and is never
+# used by the agent without its own decision; no other branch is pushed.
+# Risk: critical, and change class critical_cr, each to be computed over the base by script (the scripts of TASK-036
+# with only the write-set and the header line changed): .github/** is R9 (critical); tests/** is R2 (medium) with
+# R3's fail-closed reading (high); two of the three paths are evaluator paths of GOV-003's pinned list (the workflow
+# under .github/** and the unit test under tests/unit/**); computed: risk_class38.py "task risk class: critical",
+# gov003_class38.py "GOV-003 evaluator change: yes (2 of 3 paths)". Profile
+# (assurance-model.md §5, gov-AIEOS, critical): high's entries plus architecture [human_review], met for gov-AIEOS by
+# the decision agent's review, and functional [the property/fuzz entry]; the cross-model entry by the pair of reviews
+# (a way-2 review and the decision agent's separate review).
+# Review points (five way-2 reviews and the decision agent's): the workflow's triggers, permissions, absence of any
+# action, secret or token, and the checkout pinned to GITHUB_SHA (AC1 to AC3); the export's fail-closed reading
+# (AC4, AC5); that nothing feeds the existing CI or the governor (AC7); the shell and paths on Windows (AC2); that
+# the existing workflow and pins are unchanged (AC8).
+# Naming (D-544 Q3): every test this task adds names the AC ids it stands for as "TASK-038 ACn" in its own docstring.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-038.yaml and has one parent equal to base_commit; the
+# task's commits, each carrying "AIEOS-Task: TASK-038", go to task/TASK-038 under their own decisions; main receives
+# the task only at its acceptance. (reading) The new workflow's first run is at the landing on main, since its trigger
+# is main only; the task's own evidence comes from the existing workflow at the task's commits, and the new workflow's
+# first run at the landing is read as a check after acceptance, not as evidence of it.
+# Not applicable: OPS-001 (no ref changed by the task's code); INV-004 to INV-008 and INV-010 to INV-011 (no project
+# state, decision engine, governor, evidence record, replay or policy path in the write-set); GOV-001, GOV-004 to
+# GOV-006 (the concept file, bound artifacts, the decision matrix, the records and pre-genesis documents meet no path
+# of the write-set). SEC-003 applies (a .github/ path), under A66 as above.
+# Owner-kept acts: none, on the conditions above; if any condition fails, the task is the owner's (CR-002 part 4
+# limit 5), fail closed.
+task: TASK-038
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add .github/workflows/aieos-bench.yml, a CI workflow that runs the stack benchmark's jobs on GitHub's hosted Linux
+  and Windows runners with read-only permissions, no action, no secret and no token, triggered only by pushes to main
+  that touch tests/benchmark/** or the workflow file (and by the owner through workflow_dispatch); and
+  tests/benchmark/export_fixtures.py, a standard-library helper that exports the frozen conformance fixtures' JSON by
+  text into the job's temporary folder, failing closed on any other form; with unit tests. The existing workflow and
+  its pins are not touched; no port is written; the results are advisory and feed nothing.
+traces_to:
+  - docs/plan/m4-exit-review.md#6
+  - docs/plan/master-plan.md#4
+  - docs/pre-genesis/constitution.md#SEC-003
+input_state:
+  base_commit: d1616c5066456eefb26c8ec621476c9324e7c5ac
+  depends_on: [TASK-018, TASK-020]
+  intent_versions:
+    docs/plan/m4-exit-review.md: 6c41ca8200a4e757f04b22aa521e52cd67f7ac3122690e667ac4c864aa57c4a4
+    docs/plan/master-plan.md: 8276a587bbf6f75be8867feb97df6726379babfcdb2266344bfdb4d01e6b2d23
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/specs/risk-rules-gov-aieos.md: 97caafbd78b4d503112d1e32c445bce188a4af2f3c29ad88093989d5abbceb76
+    docs/specs/conformance-files.md: e10f714b83eb6de1ab9a014e523e542576158ad920d8b11331adf152ab6a8d92
+write_set:
+  # Three added paths.
+  paths:
+    - .github/workflows/aieos-bench.yml
+    - tests/benchmark/export_fixtures.py
+    - tests/unit/test_export_fixtures.py
+read_set:
+  paths:
+    - docs/plan/m4-exit-review.md
+    - docs/plan/master-plan.md
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/specs/conformance-files.md
+    - docs/tasks/**
+    - tests/conformance/**
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+  interfaces: [tests/benchmark/export_fixtures.py (new; a command-line helper)]
+  schemas: []
+forbidden:
+  - .github/workflows/aieos-checks.yml
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - src/**
+  - tests/conformance/**
+  - tests/run_tests.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      Triggers and permissions (decision D-766 C1; D-765 C2). The workflow's `on:` holds exactly `push` with
+      `branches: [main]` and `paths:` listing only `tests/benchmark/**` and `.github/workflows/aieos-bench.yml`, and
+      `workflow_dispatch` with a comment saying it is for the owner only; no other trigger (no pull_request, no
+      schedule, no other branch). A top-level `permissions: contents: read`; no job widens it.
+  - AC2: >-
+      Jobs and checkout (decision D-766 C2). Two jobs: `linux` on ubuntu-24.04 and `windows` on windows-latest, each
+      with `timeout-minutes` of at most 20 and an explicit `shell:` for its run steps (bash on Linux; on Windows the
+      shell named in the job's defaults). No `uses:` line anywhere (no action at all). Each job's first step fetches
+      exactly the commit `$GITHUB_SHA` from the repository's public URL with no credential and no token (a `git init`,
+      `git fetch --depth 1 origin $GITHUB_SHA` and `git checkout --detach FETCH_HEAD`, or an equivalent that names the
+      SHA), and the next step fails unless `git rev-parse HEAD` equals `$GITHUB_SHA`.
+  - AC3: >-
+      No secret, token or write. The file references no `secrets.` expression, no `GITHUB_TOKEN`, no `github.token`
+      and no `env` value from a secret; it pushes, tags, uploads, comments and calls no API; nothing in it writes
+      outside the runner's workspace and temporary folder.
+  - AC4: >-
+      The export (decision D-765 C1; D-766 C3). tests/benchmark/export_fixtures.py, run as `python3
+      tests/benchmark/export_fixtures.py --out <folder>`, reads every file under tests/conformance/fixtures/,
+      fixtures_rc/ and fixtures_risk/ as text, takes the JSON of its `DATA = r'''…'''` string, parses it, and writes
+      one JSON file per fixture, named after the fixture, into the given folder, with sorted keys; it imports no
+      fixture and no module of the repository; it writes nothing else.
+  - AC5: >-
+      Fail closed. The helper exits non-zero, writing nothing further, when a fixture file is not in that exact form
+      (no `DATA = r'''`, more than one, or text after the closing quotes other than a newline), when the JSON does not
+      parse, when the output folder is missing or not empty, or when a fixture folder is missing. A unit test covers
+      each case on temporary copies made by the test, never on the frozen fixtures.
+  - AC6: >-
+      The workflow's steps. After the checkout check, each job runs the export into `$RUNNER_TEMP/fixtures`, prints
+      the toolchain versions (node, go, rustc), and for each of tests/benchmark/ts/, go/ and rust/ runs that port's
+      step only if the folder exists (a test of the folder in the step itself), so no port step runs in this task. The
+      port steps' commands are named in the file as the ports' contracts will need them (proposed in this task's code,
+      reviewed with it) and may be changed only by those tasks' own decisions.
+  - AC7: >-
+      Advisory only. Nothing in the new workflow writes a record the governor or the existing CI reads; its results
+      are its own job logs. The existing workflow .github/workflows/aieos-checks.yml is unchanged, byte for byte, and so
+      are its two pins.
+  - AC8: >-
+      The suite and the tools ignore the benchmark. tests/run_tests.py, unchanged, does not load tests/benchmark/ (its
+      groups are unit, integration and property); a unit test asserts that discovery over those groups finds no module
+      under tests/benchmark/; INV-002's manifest check in the existing workflow's deterministic_rule step reports no
+      finding for the task's paths.
+  - AC9: >-
+      Purity and the CI checks (INV-001 to INV-003). The helper and its tests use the standard library only; the
+      helper runs no process and no model, reads no network, clock or environment except its arguments, and writes
+      only into the given folder. At the task's commits the existing CI steps report no finding: deterministic_rule,
+      OPS-003, SEC-001, SEC-002, SEC-003's record and bandit. Before the first push, the added lines are scanned for the
+      bandit test patterns the CI applies, as in TASK-036 AC9; the scan is a stated limit, the CI's bandit run is the
+      evidence.
+  - AC10: >-
+      Naming and its own tests. Every test function names "TASK-038 ACn" in its own docstring; a naming test reads the
+      loaded TestCase classes' docstrings. The tests open only the helper's source, the workflow file (read only, for
+      AC1 to AC3 and AC6 by text) and temporary files they create and remove. Every earlier test passes unchanged; if
+      one can pass only by a change outside the write-set the task escalates (needs_out_of_scope_change).
+  - AC11: >-
+      Stop conditions (decision D-766 C4). If the repository is not public, if the hosted runners would cost money,
+      or if any step needs a secret, a token, write access or a setting, the task stops and the point goes to the owner
+      (A66, fail closed); none is assumed away.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: critical
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC8, AC10]}
+  - {gate: G3, check: constitution, args: [AC7, AC9, AC11, INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
