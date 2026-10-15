@@ -223,6 +223,9 @@ Occurrences in session 2026-10-15-0830 (../History/2026-10/2026-10-15-0830-the-b
 Occurrences in session 2026-10-15-1007 (../History/2026-10/2026-10-15-1007-policy-v4-route-and-task-040-contracted.md):
 - **2026-10-15.** :119 `gh run list` outside the repository; :123 two scratch files written to /tmp, outside the session scratchpad; :288 a helper called without its argument; :347, :354, :385, :403 and :1852 `sed -i` edits of scratch scripts that did not apply or broke a string; :1030 and :1449 a stray Python part with a dash, refused by guard rules R2 and R3, nothing ran; :1060 a search pattern holding that form, refused; :1166 `git fetch --dry-run`, against "no git fetch without a decision"; :1356 "timeout 600" on a suite run, refused by rule R3, rerun with "timeout 110".
 
+Occurrences in session 2026-10-15-1601 (../History/2026-10/2026-10-15-1601-reference-export-contracted-after-the-policy-v4-landing.md):
+- **2026-10-15.** :278 an empty heredoc, refused by guard rule R1, nothing ran; :454 a `python -c` print, refused by rule R2, nothing ran; :942 a search piped into a scratch script with /dev/null as its file, a part with no effect; :1482 a `sed -i` whose pattern held "\n" and matched nothing; a leftover `git show` part with no effect in the call that filled TASK-041's contract; a scratch tool's header garbled by a global replace.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
