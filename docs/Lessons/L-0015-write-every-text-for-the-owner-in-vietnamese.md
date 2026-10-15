@@ -189,6 +189,9 @@ Occurrences in session 2026-10-15-0659 (../History/2026-10/2026-10-15-0659-m4-ex
 Occurrences in session 2026-10-15-0830 (../History/2026-10/2026-10-15-0830-the-benchmark-workflow-accepted-and-on-main.md):
 - **2026-10-15.** Eight English text blocks before tool calls, by the textblock check: :345, :526, :963, :1280, :1301, :1445, :2051 and :2163, each a short line announcing the next step; each listed before the next gated command and brought to the decision agent, and the owner was told.
 
+Occurrences in session 2026-10-15-1007 (../History/2026-10/2026-10-15-1007-policy-v4-route-and-task-040-contracted.md):
+- **2026-10-15.** Nine English text blocks before tool calls: :458, :942, :1029, :1180, :1526, :1799, :1855, :1986 and :2091, each a short line announcing the next step; the first stopped a gated run; from the call after :1799 a scratch check (tools/tbq.sh) runs first in every Bash command and caught the last four at once (D-804 C3); each listed before the next gated command and brought to the decision agent, and the owner was told.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

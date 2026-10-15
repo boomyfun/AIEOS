@@ -220,6 +220,9 @@ Occurrences in session 2026-10-15-0659 (../History/2026-10/2026-10-15-0659-m4-ex
 Occurrences in session 2026-10-15-0830 (../History/2026-10/2026-10-15-0830-the-benchmark-workflow-accepted-and-on-main.md):
 - **2026-10-15.** :121 a helper called without its line argument; :280 a search pattern holding a Python call without the timeout prefix, refused by guard rule R3, redone at :284; :342 a `sed -i` that changed nothing; :565 "timeout 300" on a suite run, refused by rule R3, rerun with "timeout 110"; :918 a part run from the wrong folder, failing with no effect; :1014 `rm -f` on a scratch file just made; :1416 a part `| head -0` of no effect; :1731 a search pattern holding "Python 3", refused by rule R3, redone at :1735; :1989 parts using `rev`, not installed here, failing with no effect.
 
+Occurrences in session 2026-10-15-1007 (../History/2026-10/2026-10-15-1007-policy-v4-route-and-task-040-contracted.md):
+- **2026-10-15.** :119 `gh run list` outside the repository; :123 two scratch files written to /tmp, outside the session scratchpad; :288 a helper called without its argument; :347, :354, :385, :403 and :1852 `sed -i` edits of scratch scripts that did not apply or broke a string; :1030 and :1449 a stray Python part with a dash, refused by guard rules R2 and R3, nothing ran; :1060 a search pattern holding that form, refused; :1166 `git fetch --dry-run`, against "no git fetch without a decision"; :1356 "timeout 600" on a suite run, refused by rule R3, rerun with "timeout 110".
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
