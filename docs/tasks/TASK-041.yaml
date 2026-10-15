@@ -1,0 +1,218 @@
+# Task contract TASK-041, the stack benchmark's reference export (Master Plan revision 4, §4 "The benchmark and the
+# stack ADR"; docs/plan/m4-exit-review.md §6, line 70: "byte-equal decision records required"; decisions D-794 C2,
+# D-795 C4 and D-814; DEF-0063).
+# Revision 0, drafted under decisions D-794 (C2), D-795 (C4), D-813 (NEXT) and D-814 (C2 to C4); brought for approval
+# in its own request; whether it is approved is recorded in the decision files, not in this file. Fields and value forms
+# follow specification 2 §5.1 and the contracts of TASK-007 to TASK-040. Readings marked "(reading)" are the worker's,
+# for the decision agent's ruling.
+# Task type: implementation. What it adds: the bootstrap's own decision records over the frozen conformance fixtures of
+# round 1, in the canonical form, as one JSON document that each language port of the benchmark must print byte for
+# byte (the reference). It reads the governor fixtures (tests/conformance/fixtures/, 19 files) and the Resume Check
+# fixtures (tests/conformance/fixtures_rc/, 11 files) itself, as bytes with pathlib, unwraps them with
+# aieos_bootstrap.conformance.unwrap (no import of another test module and no file write, which the CI channel's
+# deterministic_rule refuses under tests/; decision D-773), calls aieos_bootstrap.governor.evaluate and
+# aieos_bootstrap.resume_check.check exactly as the conformance runner calls them, and prints the document to standard
+# output. It lives with its tests in one module, tests/unit/test_export_reference.py, as TASK-039's export does. RISK-01
+# (tests/conformance/fixtures_risk/) is left out of round 1, since the derivation derive_inputs is not ported in round 1
+# (decision D-794 Q1); stated as a limit.
+# The placeholder list is closed (decision D-794 C2; D-814 Q2): exactly one path, engine_identity.python of the Resume
+# Check's records, written as the fixed text "<engine>" by the reference and by every port; nothing else is replaced
+# (record ids are compared as they are). Byte identity (D-814 Q3): the module pins the reference document's SHA-256;
+# every later task that changes the governor's or the Resume Check's decision code, or a frozen fixture of round 1,
+# must also change this pin, as a pin-only change with one exact new value (conformance-files.md section 8 (i) reading),
+# and its contract must say so.
+# The workflow change (A66, its own decision; D-814 C4): .github/workflows/aieos-bench.yml gains, on both jobs, one step
+# after the fixture export that runs the reference export into the job's temporary folder and its --check; nothing
+# else in the file changes (no trigger, permission, secret, token or `uses:` change); the compare of a port's output is
+# added by each port task under its own A66 decision (D-814 Q4; D-767 C1). The workflow's first run with the new step
+# is at the landing on main (its trigger includes the workflow file) and is read as a check after acceptance, not as
+# evidence of it, as TASK-039's first run was.
+# Limit: the workflow's trigger paths are not changed (TASK-039's test pins them), so a later change to this module or
+# to the bootstrap's decision code alone does not run the Windows check; the Linux unit_test step of aieos-checks.yml
+# checks the pin at every push, and a change to a trigger path or the owner's dispatch runs both jobs.
+# What it is not: the benchmark's results are advisory (A31) and never feed the governor's gates, the existing CI
+# channel's records or any evidence entry (A29). The existing workflow .github/workflows/aieos-checks.yml and its two
+# pins are not touched. No port is written here; bench/ is not touched.
+# Risk: critical, and change class critical_cr, each to be computed over the base by script (the scripts of TASK-040
+# with only the write-set and the header line changed): .github/** is R9 (critical); tests/** is R2 (medium) with R3's
+# fail-closed reading (high); all three paths are evaluator paths of GOV-003's pinned list.
+# Profile (assurance-model.md §5, gov-AIEOS, critical): high's entries plus architecture [human_review], met for
+# gov-AIEOS by the decision agent's review, and functional [the property/fuzz entry]; the cross-model entry by the pair
+# of reviews (a way-2 review and the decision agent's separate review). Five way-2 reviews from built briefs on a model
+# other than the main session's, the decision agent's reviews, one delegated approval (reading, as TASK-039).
+# Naming (D-544 Q3): every test this task adds names the AC ids it stands for as "TASK-041 ACn" in its own docstring.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-041.yaml and has one parent equal to base_commit; the
+# task's commits, each carrying "AIEOS-Task: TASK-041", go to task/TASK-041 under their own decisions; main receives the
+# task only at its acceptance. (reading) The first task-branch push's conformance base run is RISK-01's first CI run
+# over the risk rules policy v4 (decision D-814); it is read by its run id and recorded in DEF-0063.
+# Not applicable: OPS-001 (no ref changed by the task's code); INV-004 to INV-008 and INV-010 to INV-011 (no project
+# state, decision engine, governor, evidence record, replay or policy path in the write-set; the module calls the
+# governor and the Resume Check read only); GOV-001, GOV-004 to GOV-006 (no path of theirs in the write-set). SEC-003
+# applies (a .github/ path), under A66 as above.
+# Owner-kept acts: none, on these conditions: the changed workflow grants no write, uses no secret or token, changes no
+# repository or security setting and costs nothing (public repository, hosted runners); if any of these is not so, the
+# task stops and the point is the owner's (CR-002 part 4 limit 5), fail closed.
+task: TASK-041
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add tests/unit/test_export_reference.py: run as a script with --root tests/conformance, it prints to standard output
+  one JSON document holding the bootstrap's own decision records for every case of the 19 governor fixtures and the 11
+  Resume Check fixtures, in the canonical form, with the one closed placeholder; with --check it also verifies the
+  document against a pinned SHA-256; with --compare it compares two documents byte for byte; it fails closed on any
+  other input; with its unit tests. Add one step to each job of .github/workflows/aieos-bench.yml that runs it into the
+  job's temporary folder and checks it, and name the module in the allow-list of the RC fixture folder's earlier test.
+  Nothing else changes; the results are advisory and feed nothing.
+traces_to:
+  - docs/plan/m4-exit-review.md#6
+  - docs/plan/master-plan.md#4
+  - docs/specs/conformance-files.md#2
+  - docs/pre-genesis/constitution.md#SEC-003
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-041.yaml; G0 requires C's one parent to equal base_commit. It is filled by script from
+  # refs/heads/main just before C is made: the placeholder and its quotes are replaced by the 40-hex id, unquoted.
+  base_commit: 1121c235d8a55729f3631570e292e633ef152ada
+  depends_on: [TASK-039, TASK-040]
+  intent_versions:
+    docs/plan/m4-exit-review.md: 6c41ca8200a4e757f04b22aa521e52cd67f7ac3122690e667ac4c864aa57c4a4
+    docs/plan/master-plan.md: 8276a587bbf6f75be8867feb97df6726379babfcdb2266344bfdb4d01e6b2d23
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/specs/risk-rules-gov-aieos.md: e33397c6c6a6ff92b6a355be54c3464bd0cc915f04424902f0a8be7e72abe57b
+    docs/specs/conformance-files.md: 2f1c224466fe3657167b116b49f902648130bf76e1274367d7780cc38ec7b021
+write_set:
+  # One added path and two modified paths.
+  paths:
+    - tests/unit/test_export_reference.py
+    - .github/workflows/aieos-bench.yml
+    - tests/integration/test_conformance_rc_set.py
+read_set:
+  paths:
+    - docs/plan/m4-exit-review.md
+    - docs/plan/master-plan.md
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/specs/conformance-files.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/conformance/**
+    - tests/unit/test_export_fixtures.py
+    - tests/integration/test_conformance_rc_set.py
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+  interfaces:
+    - aieos_bootstrap.governor.evaluate
+    - aieos_bootstrap.resume_check.check
+    - aieos_bootstrap.conformance.unwrap
+    - aieos_bootstrap.conformance.canonical_text
+    - tests/unit/test_export_reference.py (new; the reference export, run as a script)
+  schemas:
+    - conformance-files canonical form (2)
+    - conformance-files fixture file (4)
+    - conformance-files Resume Check fixture file (9)
+forbidden:
+  - .github/workflows/aieos-checks.yml
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - bench/**
+  - docs/**
+  - src/**
+  - tests/conformance/**
+  - tests/unit/test_export_fixtures.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/run_tests.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The reference document. `python tests/unit/test_export_reference.py --root tests/conformance` reads every .py file
+      of <root>/fixtures and <root>/fixtures_rc (a folder named exactly `__pycache__` passed over; any other entry that
+      is not a .py file fails closed) with pathlib's read_bytes only, unwraps each with
+      aieos_bootstrap.conformance.unwrap, and for each case calls aieos_bootstrap.governor.evaluate(request, inputs,
+      records) (fixtures/) or aieos_bootstrap.resume_check.check(inputs) (fixtures_rc/), each argument a deep copy, as
+      aieos_bootstrap.conformance.run_scenario and _run_rc_cases call them. It prints to standard output, through
+      sys.stdout.buffer, the bytes of aieos_bootstrap.conformance.canonical_text of one object whose keys are
+      "<folder>/<file stem>" (30 keys) and whose values are the lists of that file's case records in case order. RISK-01
+      is not in it.
+  - AC2: >-
+      The closed placeholder list (decision D-794 C2). In every record that has engine_identity.python, its value is
+      replaced by the text "<engine>" before the document is built; no other value is replaced. A test makes
+      aieos_bootstrap.resume_check._python_version return another value (by patching, restored after), builds the
+      document again, and asserts that the set of value paths that differ is exactly {engine_identity.python} in the
+      Resume Check records and that, after the placeholder, the two documents are byte-equal.
+  - AC3: >-
+      Byte identity (decision D-814 Q3). The module holds the constant REFERENCE_SHA256, the SHA-256 of the document at
+      the task's commit. A test builds the document twice in one process and asserts byte equality, no CR byte, ASCII
+      only and a final LF, and that its SHA-256 equals REFERENCE_SHA256. `--root tests/conformance --check` prints the
+      document as AC1 and exits non-zero, printing nothing to standard output and its message to standard error, when
+      the document's SHA-256 differs from REFERENCE_SHA256; the whole document is built before the single write. The
+      module's docstring states that a later task changing the governor's or the Resume Check's decision code, or a
+      frozen fixture of round 1, changes this pin, pin-only, with one exact new value.
+  - AC4: >-
+      The compare (decision D-814 C3). `--compare <a> <b>` reads both files with read_bytes and exits 0, printing
+      nothing, when they are byte-equal; otherwise exits 1, printing to standard error the first key (and case index)
+      whose canonical text differs, or "not a reference document" when a file is not one object of lists in the
+      canonical form. Unit tests cover equal documents, a one-byte difference, a missing key, an extra key and a
+      malformed input, each on texts held in memory, the file-reading part on a path that does not exist; no file is
+      made.
+  - AC5: >-
+      Fail closed. The command line is the export only when the first argument is `--root` or `--compare`; otherwise
+      the module is the test runner. A missing or extra argument, a missing folder, an entry that is not a .py file, a
+      file unwrap refuses, a case whose call raises, or a record that is not an object exits non-zero and prints nothing
+      to standard output. Tests cover each case on texts and folders held in memory (no file made), and one test runs
+      the export over the real folders, read only, and checks 30 keys and 32 case records (acc_13 has 3 cases, every
+      other file 1).
+  - AC6: >-
+      The workflow step (A66; decision D-814 C4). In each of the two jobs of .github/workflows/aieos-bench.yml, one step
+      named "reference export (bootstrap decisions over the frozen fixtures)" is added right after the fixture export
+      step, running `$PY tests/unit/test_export_reference.py --root tests/conformance --check >
+      "$RUNNER_TEMP/reference.json"` and then `wc -c "$RUNNER_TEMP/reference.json"`; nothing else in the file changes:
+      no trigger, permission, secret, token, `uses:`, port step or comment line other than the header's revision line.
+      The earlier tests of tests/unit/test_export_fixtures.py (TASK-039 AC1 to AC3 and AC6) pass unchanged over it.
+  - AC7: >-
+      Advisory only. Nothing in the workflow writes a record the governor or the existing CI reads; the existing
+      workflow .github/workflows/aieos-checks.yml is unchanged, byte for byte, and so are its two pins.
+  - AC8: >-
+      The allow-list (decisions D-774, D-814 C4). tests/integration/test_conformance_rc_set.py changes only by adding
+      'tests/unit/test_export_reference.py' to the OTHERS tuple that not_allowed reads (the tuple's closing line may be
+      rewrapped to hold it), because the module names the RC fixture folder; nothing else in it changes. The risk
+      folder is not named by the module, so tests/integration/test_conformance_risk_set.py is not changed.
+  - AC9: >-
+      Purity and the CI checks (INV-001 to INV-003). The module imports only copy, hashlib, io, json, sys, unittest,
+      unittest.mock, pathlib and aieos_bootstrap (its conformance, governor and resume_check modules); it runs no
+      process and no model, reads no network, clock or environment except its arguments, and writes nothing; its only
+      output is standard output and standard error. At the task's commits the existing CI steps report no finding: G0
+      scope, deterministic_rule, OPS-003, SEC-001, SEC-002, SEC-003's record and bandit. Before the first push, the
+      added lines are scanned for the bandit test patterns the CI applies, as in TASK-039 AC9; the scan is a stated
+      limit, the CI's bandit run is the evidence.
+  - AC10: >-
+      Naming and its own tests. Every test function names "TASK-041 ACn" in its own docstring; a naming test reads the
+      loaded TestCase classes' docstrings. tests/run_tests.py is unchanged; running it loads the module only as a unit
+      test and runs no export. Every earlier test passes; if any can pass only by a change outside the write-set, the
+      task escalates (needs_out_of_scope_change).
+  - AC11: >-
+      Stop conditions. If any step needs a secret, a token, write access, money or a setting, the task stops and the
+      point goes to the owner (A66, fail closed).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: critical
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC8, AC10]}
+  - {gate: G3, check: constitution, args: [AC7, AC9, AC11, INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
