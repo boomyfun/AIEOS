@@ -34,7 +34,8 @@ OWN = ('tests/unit/test_conformance_rc_files.py', 'tests/integration/test_confor
 OTHERS = ('src/aieos_bootstrap/conformance.py', 'tests/unit/test_runner_rc.py',
           'tests/integration/test_runner_rc_run.py', 'tests/property/test_runner_rc_properties.py',
           'tests/conformance/set.py', 'tests/unit/test_conformance_files.py',
-          'tests/property/test_conformance_properties.py', 'tests/integration/test_conformance_set.py')
+          'tests/property/test_conformance_properties.py', 'tests/integration/test_conformance_set.py',
+          'tests/unit/test_export_fixtures.py')
 
 
 def read(path):
