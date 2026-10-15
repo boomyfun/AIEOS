@@ -195,6 +195,9 @@ Occurrences in session 2026-10-15-1007 (../History/2026-10/2026-10-15-1007-polic
 Occurrences in session 2026-10-15-1601 (../History/2026-10/2026-10-15-1601-reference-export-contracted-after-the-policy-v4-landing.md):
 - **2026-10-15.** Five English text blocks before tool calls: :323, :501, :525, :1252 and :1692, each a short line announcing the next step; tools/tbq.sh caught each at the next call; each listed before the next gated command and brought to the decision agent, and the owner was told. The check catches the slips but does not prevent them.
 
+Occurrences in session 2026-10-15-1724 (../History/2026-10/2026-10-15-1724-reference-export-landed-and-the-typescript-port-contracted.md):
+- **2026-10-15.** Four English text blocks before tool calls: :155, :1330, :1715 and :2142, each a short line announcing the next step; tools/tbq.sh showed each at the next call; each listed before the next gated command and told to the owner.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

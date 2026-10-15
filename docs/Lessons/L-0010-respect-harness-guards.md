@@ -226,6 +226,9 @@ Occurrences in session 2026-10-15-1007 (../History/2026-10/2026-10-15-1007-polic
 Occurrences in session 2026-10-15-1601 (../History/2026-10/2026-10-15-1601-reference-export-contracted-after-the-policy-v4-landing.md):
 - **2026-10-15.** :278 an empty heredoc, refused by guard rule R1, nothing ran; :454 a `python -c` print, refused by rule R2, nothing ran; :942 a search piped into a scratch script with /dev/null as its file, a part with no effect; :1482 a `sed -i` whose pattern held "\n" and matched nothing; a leftover `git show` part with no effect in the call that filled TASK-041's contract; a scratch tool's header garbled by a global replace.
 
+Occurrences in session 2026-10-15-1724 (../History/2026-10/2026-10-15-1724-reference-export-landed-and-the-typescript-port-contracted.md):
+- **2026-10-15.** :2128 a no-effect part `sed -n 1,12p ... > /dev/null`; :252 a no-effect part `cat > /dev/null < /dev/null`; :316 the same form as a search string; :513 a no-effect `diff ... | head -5 >/dev/null`; :943 a one-line program in the interpreter's dash form, refused by guard rule R2, nothing ran; :1029 that form as a search needle, refused by R2; :1447 a search pattern holding the interpreter's capitalized name and version, refused by R3; :1943 a no-effect `diff ... > /dev/null 2>&1`. Separately, a condition of the decision agent (D-832 C2, isolated mode) conflicted with rule R2; it was brought back, not worked around, and withdrawn.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
