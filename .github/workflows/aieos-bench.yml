@@ -1,4 +1,4 @@
-# AIEOS: the stack benchmark (TASK-039; Master Plan revision 4 §4; docs/plan/m4-exit-review.md §6), revision 5
+# AIEOS: the stack benchmark (TASK-039; Master Plan revision 4 §4; docs/plan/m4-exit-review.md §6), revision 6
 # (decisions D-765 to D-767, with erratum E1 of decision D-773; the reference export of TASK-041; the TypeScript
 # port's type check and run of TASK-043; the Go port's vet, format check, build, run, compare and tests of TASK-044,
 # with GOTOOLCHAIN=local, GOPROXY=off and CGO_ENABLED=0; the Rust port's format check, lint, build, run, compare and
@@ -11,6 +11,8 @@
 # with no credential, and each job makes one download, the pinned type checker (TypeScript 6.0.3) from the npm
 # registry, checked by its integrity value before it is used; it uses no action, no secret and no token, writes
 # nothing to the repository and calls no API.
+# Round 2's export (TASK-047) writes the generated input and the bootstrap's results over it into the job's
+# temporary folder, each checked against its pin.
 # Its results are advisory (DM A29, A31): they are this run's
 # job logs only, and no record of the governor or of the CI workflow aieos-checks.yml reads them. It is not a
 # trust-boundary measurement (Master Plan §9 item 3). Who decides a change to this file: the decision agent under DM A66,
@@ -57,6 +59,11 @@ jobs:
         run: |
           $PY tests/unit/test_export_reference.py --root tests/conformance --check > "$RUNNER_TEMP/reference.json"
           wc -c "$RUNNER_TEMP/reference.json"
+      - name: round-2 export (the generated log and the bootstrap's results)
+        run: |
+          $PY tests/unit/test_export_round2.py --input --check > "$RUNNER_TEMP/round2-input.json"
+          $PY tests/unit/test_export_round2.py --reference "$RUNNER_TEMP/round2-input.json" --check > "$RUNNER_TEMP/round2-reference.json"
+          wc -c "$RUNNER_TEMP/round2-input.json" "$RUNNER_TEMP/round2-reference.json"
       - name: toolchain versions
         run: |
           $PY --version
@@ -145,6 +152,11 @@ jobs:
         run: |
           $PY tests/unit/test_export_reference.py --root tests/conformance --check > "$RUNNER_TEMP/reference.json"
           wc -c "$RUNNER_TEMP/reference.json"
+      - name: round-2 export (the generated log and the bootstrap's results)
+        run: |
+          $PY tests/unit/test_export_round2.py --input --check > "$RUNNER_TEMP/round2-input.json"
+          $PY tests/unit/test_export_round2.py --reference "$RUNNER_TEMP/round2-input.json" --check > "$RUNNER_TEMP/round2-reference.json"
+          wc -c "$RUNNER_TEMP/round2-input.json" "$RUNNER_TEMP/round2-reference.json"
       - name: toolchain versions
         run: |
           $PY --version
