@@ -1,0 +1,224 @@
+# Task contract TASK-047, the stack benchmark's round-2 export (Master Plan revision 4, §4 "The benchmark and the stack
+# ADR"; docs/plan/m4-exit-review.md §6, line 70: "plus the event log's append and recovery over a generated log";
+# decisions D-794 Q1, D-904 and D-905; DEF-0063).
+# Revision 0, drafted under decision D-905 (C1 to C3, C5); brought for approval in its own request; whether it is
+# approved is recorded in the decision files, not in this file. Fields and value forms follow specification 2 §5.1 and
+# the contracts of TASK-007 to TASK-046. Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# Task type: implementation. What it adds: round 2's input and reference, the first task of round 2 (D-905). The
+# workload (reading, D-905): the two pure computations of the bootstrap for line 70, aieos_bootstrap.eventlog.append
+# (TASK-007) and aieos_bootstrap.recovery.reconcile (TASK-009), with the record forms of aieos_bootstrap.records they
+# use; not the writer (files and SQLite) and not startup (it starts git), which a port may not do (bench-port-brief.md
+# §3); a stated limit: no file behaviour is compared.
+# The generated log (D-794 Q1): never committed. A deterministic generator in the new module produces, from fixed tables
+# and a counter (no random source, clock or environment), the round-2 input document: a list of append calls, each
+# with its event type, payload, event_id, appended_at, task_id, fencing_token, corrects, lease, recorder and record_id,
+# and a list of reconcile cases, each with its log (the bytes of a log the generator builds with eventlog.append, given
+# as text), commits, leases, now and recorder. The recorder is the fixed text "bench-round2" in every call and case, and
+# every record_id is formed from the call's index (D-905 C3). Every value is given as canonical JSON text (times as
+# "YYYY-MM-DDTHH:MM:SSZ" text, converted to aware UTC datetimes by the export, as a port must).
+# The reference (byte-equality, D-905): the module also computes, from the input document only, the bootstrap's results:
+# for each append call in order, its result with the log carried from one call to the next ("appended" calls extend it;
+# others leave it), as {result, reason, findings, seq, line, record}; for each reconcile case, {log, events, expired,
+# findings}; all in the canonical text of aieos_bootstrap.conformance.canonical_text, one object whose keys are
+# "append" and "reconcile" and whose values are the lists of results in order, so that test_export_reference.py's
+# --compare compares a port's output with it unchanged (TASK-041 AC4). Both documents are pinned: INPUT_SHA256 and
+# REFERENCE2_SHA256, each with --check; a later task that changes eventlog.py, recovery.py or records.py, or the
+# generator, changes these pins, pin-only, with one exact new value, and its contract says so. No conformance fixture
+# set and no freeze decision: the pins play that role for the benchmark only, which feeds nothing (D-905).
+# Size (D-905 C2): fixed by the generator's parameters N_APPEND and N_RECONCILE, chosen at code time so a test shows
+# every result of eventlog.RESULTS, every reason of eventlog.REASONS and every reconcile outcome (an appended
+# compensating task.submitted, an observation record.added, a duplicate, a reported missing commit, an expired lease)
+# occurs at least once, and so that the local export (the worker's machine, the bootstrap's Python) takes at most 60
+# seconds, recorded as a stated fact in the first task commit's message; eventlog.append re-checks the whole log on
+# each call, so the cost grows with the square of the log's length (a stated reason for the bound).
+# Main guard (D-905 C1): the generator and the reference export run only when the module is run as a script with
+# --input or --reference as its first argument, as test_export_reference.py's export does; no unit test writes a file;
+# the generated documents go only to standard output, and the workflow writes them only into the job's temporary
+# folder.
+# The workflow change (A66, its own decision): in each job of .github/workflows/aieos-bench.yml, one step after the
+# reference export runs the input export with --check into "$RUNNER_TEMP/round2-input.json" and the reference with
+# --check into "$RUNNER_TEMP/round2-reference.json"; nothing else changes (no trigger, permission, secret, token,
+# `uses:`, download or port step); the header's revision line from 5 to 6 and one header sentence naming the step. The
+# ports' round-2 compares come with each port's own task under its own A66 decision. The workflow's first run with the
+# step is at the landing on main, read after acceptance.
+# Trigger (a stated limit): aieos-bench.yml runs only on changes to bench/**, itself and test_export_fixtures.py, so a
+# later change to test_export_round2.py or src/** runs its --check only at the next triggering push; the pins are
+# asserted on every push by aieos-checks' unit_test step (AC3).
+# What it is not: the results are advisory (A29, A31) and feed nothing; aieos-checks.yml and its two pins are not
+# touched; no port is written; bench/ is not touched.
+# Risk: computed over the base by script (risk_class47.py: risk_class46.py with only the write-set and its header line
+# changed): .github/** is R9 (critical); tests/** is R2 (medium) with R3's fail-closed reading (high); the result is
+# critical, change class critical_cr; .github/** and tests/unit/** are evaluator paths of GOV-003's list.
+# Profile (assurance-model.md §5, gov-AIEOS, critical): high's entries plus architecture [human_review], met for
+# gov-AIEOS by the decision agent's review, and functional [the property/fuzz entry] by the CI's property_test step over
+# the existing property suite; the cross-model entry by the pair of reviews: five way-2 reviews from the hardening
+# review template (a non-port task, D-893) on claude-sonnet-5-5, and the decision agent's separate review. One
+# delegated approval (reading, as TASK-041).
+# Naming (D-544 Q3): every test this task adds names the AC ids it stands for as "TASK-047 ACn" in its docstring.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-047.yaml and has one parent equal to base_commit; the
+# task's commits, each carrying "AIEOS-Task: TASK-047", go to task/TASK-047 under their own decisions; main receives the
+# task only at its acceptance.
+# Not applicable: OPS-001; INV-004 to INV-008 and INV-010 to INV-011 (the module calls eventlog, recovery and records
+# read only, on bytes in memory); GOV-001, GOV-004 to GOV-006. SEC-003 applies (a .github/ path), under A66.
+# Owner-kept acts: none, on these conditions: the changed workflow grants no write, uses no secret or token, changes no
+# repository or security setting and costs nothing (public repository, hosted runners); if any of these is not so, the
+# task stops and the point is the owner's (CR-002 part 4 limit 5), fail closed.
+task: TASK-047
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add tests/unit/test_export_round2.py: run as a script with --input it prints round 2's generated input document; with
+  --reference <input file> it prints the bootstrap's results over that input (eventlog.append and recovery.reconcile)
+  as round 2's reference document; with --check each verifies its document against a pinned SHA-256; it fails closed
+  on any other input; with its unit tests. Add one step to each job of .github/workflows/aieos-bench.yml that writes
+  both documents into the job's temporary folder with their checks. Nothing else changes; the results are advisory and
+  feed nothing.
+traces_to:
+  - docs/plan/m4-exit-review.md#6
+  - docs/plan/master-plan.md#4
+  - docs/plan/bench-port-brief.md
+  - docs/pre-genesis/constitution.md#SEC-003
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-047.yaml; G0 requires C's one parent to equal base_commit. It is filled by script from
+  # refs/heads/main just before C is made: the placeholder and its quotes are replaced by the 40-hex id, unquoted.
+  base_commit: 2f136dbb7d21b0fc653ad8cd87e77f50f05496ad
+  depends_on: [TASK-007, TASK-009, TASK-041, TASK-046]
+  intent_versions:
+    docs/plan/m4-exit-review.md: 6c41ca8200a4e757f04b22aa521e52cd67f7ac3122690e667ac4c864aa57c4a4
+    docs/plan/master-plan.md: 8276a587bbf6f75be8867feb97df6726379babfcdb2266344bfdb4d01e6b2d23
+    docs/plan/bench-port-brief.md: d307c6ede5080a9012c16697184437d5a579ebfd41e9bedee69dfffcd25a15e0
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+write_set:
+  # One added path and one modified path.
+  paths:
+    - tests/unit/test_export_round2.py
+    - .github/workflows/aieos-bench.yml
+read_set:
+  paths:
+    - docs/plan/**
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/unit/test_export_reference.py
+    - tests/unit/test_export_fixtures.py
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+  interfaces:
+    - aieos_bootstrap.eventlog.append
+    - aieos_bootstrap.recovery.reconcile
+    - aieos_bootstrap.records.check_log
+    - aieos_bootstrap.conformance.canonical_text
+    - tests/unit/test_export_round2.py (new; the round-2 input and reference export, run as a script)
+  schemas:
+    - specification 2 §6.1 to §6.3 (the event log's line form)
+    - conformance-files canonical form (2)
+forbidden:
+  - .github/workflows/aieos-checks.yml
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - bench/**
+  - docs/**
+  - src/**
+  - tests/conformance/**
+  - tests/integration/**
+  - tests/property/**
+  - tests/run_tests.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_bench_isolation.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The input document. `python tests/unit/test_export_round2.py --input` prints to standard output, through
+      sys.stdout.buffer, the bytes of aieos_bootstrap.conformance.canonical_text of one object with the keys "append"
+      (N_APPEND calls) and "reconcile" (N_RECONCILE cases), built by the generator from fixed tables and a counter only:
+      no random source, clock, environment, file or network read. The recorder is "bench-round2" everywhere; each
+      record_id is formed from its call's index; times are "YYYY-MM-DDTHH:MM:SSZ" text. Building it twice in one
+      process gives the same bytes.
+  - AC2: >-
+      The reference document. `--reference <file>` reads the file with read_bytes, refuses it unless it is an input
+      document of AC1's form, and for each append call in order calls aieos_bootstrap.eventlog.append with the log
+      carried from call to call (an "appended" result's new log becomes the next call's log; any other result leaves
+      it), and for each reconcile case calls aieos_bootstrap.recovery.reconcile; it prints the canonical text of one
+      object {"append": [...], "reconcile": [...]} whose entries are, for append, {result, reason, findings, seq, line,
+      record} and, for reconcile, {log, events, expired, findings}, every bytes value as text and every datetime as
+      AC1's text form. test_export_reference.py's --compare accepts the document's form (one object of lists) unchanged.
+  - AC3: >-
+      Pins. The module holds INPUT_SHA256 and REFERENCE2_SHA256, the SHA-256 of the two documents at the task's commit;
+      tests assert both, and that each document has no CR byte, is ASCII only and ends with one LF; `--input --check`
+      and `--reference <file> --check` exit non-zero, printing nothing to standard output and a message to standard
+      error, when the SHA-256 differs; each document is built whole before its single write. The docstring states that a
+      later task changing eventlog.py, recovery.py, records.py or the generator changes these pins, pin-only, with one
+      exact new value. Each document is built at most once per test process, shared by the tests that need it (AC3 and
+      AC4).
+  - AC4: >-
+      Coverage and size (D-905 C2). A test builds the reference in memory and asserts that every result of
+      eventlog.RESULTS and every reason of eventlog.REASONS occurs among the append entries (a reason that no call
+      starting from a log the bootstrap accepts can reach is named, with the reason it cannot be reached, in the test's
+      docstring and in the commit message, and the test asserts it absent; a reading for the decision agent at code
+      time), and that among the
+      reconcile entries there is an appended compensating task.submitted, an observation record.added, a duplicate, a
+      reported commit missing from the given commits, and an expired lease. N_APPEND and N_RECONCILE are module
+      constants; the first task commit's message states the local export time on the worker's machine, at most 60
+      seconds.
+  - AC5: >-
+      Fail closed. The command line is the export only when the first argument is `--input` or `--reference`;
+      otherwise the module is the test runner. A missing or extra argument, an unreadable file, a document not of AC1's
+      form, or a call that raises exits non-zero and prints nothing to standard output. Tests cover each case on texts
+      held in memory (no file made) and the file-reading part on a path that does not exist.
+  - AC6: >-
+      The workflow step (A66). In each of the two jobs of .github/workflows/aieos-bench.yml, one step named "round-2
+      export (the generated log and the bootstrap's results)" is added right after the reference export step, running
+      `$PY tests/unit/test_export_round2.py --input --check > "$RUNNER_TEMP/round2-input.json"`, then
+      `$PY tests/unit/test_export_round2.py --reference "$RUNNER_TEMP/round2-input.json" --check >
+      "$RUNNER_TEMP/round2-reference.json"`, then `wc -c` of both; the header's revision line goes from 5 to 6 and one
+      header sentence names the step; nothing else changes (no trigger, permission, secret, token, `uses:`, download or
+      port step). The earlier tests of tests/unit/test_export_fixtures.py pass unchanged over it (their pins of the port
+      steps, the step list's symmetry and the counts of TASK-039 AC6 and TASK-043 AC12).
+  - AC7: >-
+      Advisory only. Nothing writes a record the governor or the existing CI reads; aieos-checks.yml and its two pins
+      are
+      unchanged, byte for byte; bench/ is unchanged.
+  - AC8: >-
+      Purity and the CI checks (INV-001 to INV-003). The module imports only copy, datetime, hashlib, io, json, sys,
+      unittest, pathlib and aieos_bootstrap (its conformance, eventlog, recovery and records modules); it runs no
+      process
+      and no model, reads no network, clock or environment except its arguments, and writes nothing; its only output is
+      standard output and standard error. At the task's commits the existing CI steps report no finding: G0 scope,
+      deterministic_rule, OPS-003, SEC-001, SEC-002, SEC-003's record and bandit; before the first push the added lines
+      are scanned for the bandit test patterns the CI applies (a stated limit; the CI's run is the evidence).
+  - AC9: >-
+      Naming and its own tests. Every test function names "TASK-047 ACn" in its own docstring; a naming test reads the
+      loaded TestCase classes' docstrings. tests/run_tests.py is unchanged; running it loads the module only as a unit
+      test and runs no export. Every earlier test passes; if any can pass only by a change outside the write-set, the
+      task escalates (needs_out_of_scope_change).
+  - AC10: >-
+      Stop conditions. If any step needs a secret, a token, write access, money or a setting, the task stops and the
+      point goes to the owner (A66, fail closed).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: critical
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC9]}
+  - {gate: G3, check: constitution, args: [AC7, AC8, AC10, INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
