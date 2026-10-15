@@ -1,7 +1,7 @@
 # Master Plan of the AIEOS self-build
 
-> - **Status:** revision 3. Whether it is ratified is recorded in DM section F, not in this file. It plans; it decides nothing that a decision matrix (DM) row or a bound document decides, and it approves no specification, task or owner act.
-> - **Drafted under:** decision agent decisions D-136 (the drafting plan) and D-133 (A14 step 9 started, DM row F9); revision 2 under decision D-174 (C5); revision 3 under decision D-251 (C1). Decision files are kept outside the repository (`docs/WORKING-RECORDS.md`).
+> - **Status:** revision 4. Whether it is ratified is recorded in DM section F, not in this file. It plans; it decides nothing that a decision matrix (DM) row or a bound document decides, and it approves no specification, task or owner act.
+> - **Drafted under:** decision agent decisions D-136 (the drafting plan) and D-133 (A14 step 9 started, DM row F9); revision 2 under decision D-174 (C5); revision 3 under decision D-251 (C1); revision 4 under decision D-757, after the review point at M4's exit (`docs/plan/m4-exit-review.md`; decisions D-752 to D-756). Decision files are kept outside the repository (`docs/WORKING-RECORDS.md`).
 > - **Path:** `docs/plan/master-plan.md` is interim. The layout is settled (DM B7 with A59; CR-001 E4, closed by Genesis version 2, A60; specification 2's layout part, F16), but the file moves only when a core exists to write `.aieos/` (constitution INV-004; specification 2 §10 point 2), by a later change.
 > - **Sources:** "Concept line N" is a line of `AIEOS-concept.md` (v0.5, byte-identical, A22). "DM A13" is a row of `docs/pre-genesis/decision-matrix.md`. Statuses are those the DM rows record, not a document's own status line (charter §6).
 
@@ -59,19 +59,26 @@ For each milestone, what is known now: goal, inputs, deliverables, exit, the own
 **M4. Verification and evidence.**
 - Goal: §18 specification 4 (line 994) and its code: V0 to V2, evidence bound to a commit, the default profiles for low and medium risk (line 947); deterministic reconciliation of the constitution, the scope and stale evidence (line 948); rule-based risk and autonomy L1 to L2 (line 949), the latter built as a product feature that gov-AIEOS uses only as A54 point 2 and `assurance-model.md` §6 allow.
 - Constraints: built in the bootstrap: Python 3, standard library only, disposable (A9; constitution INV-002, INV-003), as ruled in decision D-251; its code contracts name INV-002 and INV-003.
+- Exited with named limits L-a to L-e (decision D-756; `docs/plan/m4-exit-review.md` §3), carried in DEF-0030, DEF-0042, DEF-0058, DEF-0059 and DEF-0061.
+
+**The benchmark and the stack ADR (after M4's exit, beside M5).**
+- Goal: choose the native stack among TS, Go and Rust (A8, A10, C12) and record it in a stack ADR (CR-001 E6), by the benchmark plan of `docs/plan/m4-exit-review.md` §6.
+- The criteria and weights are the owner's, approved on 2026-10-15 (that document's §7). The benchmark runs only by its own decision; a run in the CI channel needs its own workflow decision under A66, with no secret and no write access. It is not a trust-boundary measurement (section 9 point 3). It blocks no bootstrap work (A8).
 
 **M5. Adapters.**
 - Goal: §18 specification 5 (line 995): the adapter contract, the Claude Code adapter (line 945: hooks that enforce the write-set and the shell allowlist, block `git push`, record the observed read-set; advisory until measured: A25, C6, CR-001 E1), the T0 manual adapter and the replay adapter (A12).
 - Owner act: installing hooks or changing Claude Code settings (A51 item (4)); a task that carries out or changes such an act is approved by the owner (CR-002 part 4 limit 5).
+- Constraints (M5 to M7): built in the bootstrap: Python 3, standard library only, disposable (A9; constitution INV-002, INV-003), by the owner's choice of Option C on 2026-10-15 (`docs/plan/m4-exit-review.md` §5, §7); each capability is later taken over by native per capability under A11 (M8).
 
 **M6. MCP protocol and Work Orders.**
-- Goal: §18 specification 6 (line 996): about eight tools (line 944) through which agents pull Work Orders (A43 Q6); the Context Compiler v1, graph-based (line 942; concept §7.3; its placement here is open, section 10).
+- Goal: §18 specification 6 (line 996): about eight tools (line 944) through which agents pull Work Orders (A43 Q6); the Context Compiler v1, graph-based (line 942; concept §7.3), placed here, in specification 6 beside Work Orders, by decision D-752 (its output is the Work Order and it runs only after a CONTINUE, concept lines 506-508).
 
 **M7. CLI and the zero-friction path.**
 - Goal: §18 specification 7 (line 997): `aieos init`, `aieos import`, `aieos run` (lines 939-940), `aieos status` (line 800); the zero-friction path (concept §11).
 
 **M8. Self-hosting.**
-- Goal: AIEOS governs its own build, per capability, through the stages of A11 that v0.1 reaches (open until the review point at M4's exit, section 5); the delegation continues once AIEOS governs its own build (A55).
+- Goal: AIEOS governs its own build, per capability, through the stages of A11 that v0.1 reaches; the delegation continues once AIEOS governs its own build (A55).
+- The A11 stages in v0.1 (`docs/plan/m4-exit-review.md` §5 (c), applying with the owner's choice of Option C): every capability governs at stage "bootstrap"; the native governor and Resume Check reach "shadow" (run beside the bootstrap, compared by conformance, deciding nothing); "assisted", "native takeover" and "bootstrap retirement" come after v0.1. Takeover order: the pure computations with frozen conformance fixtures first (governor, Resume Check, risk), the stateful writer last.
 - Exit: the v0.1 goal measured as section 7 says.
 
 ## 5. Order and dependencies
@@ -85,7 +92,7 @@ For each milestone, what is known now: goal, inputs, deliverables, exit, the own
   5. The first governor version has no base version to judge it (`governor-spec.md` §8 point 1 assumes one). It is accepted by the owner (decision D-166: it puts into force the rules on who may approve what), after the Verification scenarios have passed in the CI channel (`governor-spec.md` §8 point 3), and is pinned by its content hash.
   6. Until its identity is bound, a change to the governor is `critical_cr` (`governor-spec.md` §8 point 2). Binding the identity (charter item 7) is a Genesis amendment (`genesis-model.md` §5), decided under A51 unless it touches an owner-kept part. From the pin on, the pinned governor, taken from the base, runs in the CI channel (`governor-spec.md` §7) and judges every change to itself (§8 point 1); its decisions stay advisory (§10).
 - Points 2 (the first checks in M0) and 4 to 6 are readings, not bound text. The decision agent ruled points 2 and 4 in decision D-137 and points 5 and 6 in decision D-166.
-- The bootstrap's scope (decision D-251): the capabilities of M2 to M4 are built in the bootstrap (A9), and this is its written scope until a further ruling. Not ruled: whether M5 to M7 are bootstrap or native; where the benchmark, the stack ADR and the native stack come (A8, A10, C12; CR-001 E6); and the A11 stages M8 reaches. These are ruled at a review point at M4's exit, before any M5 code contract, with a benchmark plan drafted by then (a document only; nothing runs). The benchmark's criteria and weights are the owner's (A8), asked once when they are drafted. At the review point, an option that keeps the whole of v0.1 in the bootstrap, or that starts capabilities native without A11's stages, goes to the owner as a plain question.
+- The bootstrap's scope (decision D-251, extended at the review point at M4's exit): the capabilities of M2 to M7 are built in the bootstrap (A9). At that review point (`docs/plan/m4-exit-review.md`), the owner chose Option C on 2026-10-15: M5 to M7 in the bootstrap, the benchmark and the stack ADR now, beside M5, and native takeover per capability under A11 (M8); the owner also approved the benchmark's criteria and weights (A8). Option A, the benchmark after v0.1, was ruled out by decision D-752. The A11 stages that v0.1 reaches are in M8.
 
 ## 6. Acceptance of tasks and milestones
 
@@ -128,7 +135,7 @@ Not complete: A51 item (4), CR-002 parts 4 and 8 and `genesis-model.md` §5 poin
 - DEF-0011: the §18 specifications are scheduled by this plan once it is ratified (M1 to M7); open source and historical intelligence stay the owner's (section 9).
 - DEF-0018, the layout: done (A59, A60; DM B7 note, F16); the interim documents move only when a core writes `.aieos/` (specification 2 §10 point 2).
 - DEF-0020, the option-b product documents (CR-002 part 9): outside the gov-AIEOS scope of section 2; they wait for the §18 specifications that their rules need (record formats in M1, approval flow in M7, evidence in M4); their placement is open.
-- Readings ruled: section 5, points 2 and 4 (decision D-137) and points 5 and 6 (decision D-166); the M2 record store in direction (decision D-166: a records folder in the repository, written only through a reviewed change, and records re-fetched from the CI channel, each counting only as DM B5 allows), with its details left to the first M2 contract. Still for the decision agent to rule on: whether Context Compiler v1 belongs to M6 (the §18 table names no specification for it). Which milestones after M2 are built as bootstrap is ruled in part by decision D-251: M3 and M4 in the bootstrap, with the bootstrap's scope, the review point at M4's exit and the owner's approval of the benchmark's criteria in section 5; open until that review point: whether M5 to M7 are bootstrap or native, where the benchmark, the stack ADR and the native stack come (A8, A10, C12; CR-001 E6), and the A11 stages M8 reaches.
+- Readings ruled: section 5, points 2 and 4 (decision D-137) and points 5 and 6 (decision D-166); the M2 record store in direction (decision D-166: a records folder in the repository, written only through a reviewed change, and records re-fetched from the CI channel, each counting only as DM B5 allows), with its details left to the first M2 contract. Context Compiler v1 belongs to M6 (decision D-752). Which milestones after M2 are built as bootstrap: M3 and M4 by decision D-251; M5 to M7 by the owner's choice of Option C at the review point at M4's exit (2026-10-15; `docs/plan/m4-exit-review.md`), where the benchmark and the stack ADR come (section 4, beside M5) and the A11 stages M8 reaches in v0.1 (section 4, M8) were also set.
 
 ## 11. Change control
 
@@ -137,3 +144,4 @@ Not complete: A51 item (4), CR-002 parts 4 and 8 and `genesis-model.md` §5 poin
 - Each revision says what changed and why.
 - Revision 2 (decision D-174 C5): carries Genesis instance 2 (A59, A60; F14), the settled layout (B7, F16), the risk rules revision 2 (F15) and the rulings of decisions D-137, D-154, D-163 and D-166 into sections 3 to 6, 9 and 10, and the path note; no milestone, order or owner-kept item is added or removed.
 - Revision 3 (decision D-251 C1): records decision D-251's ruling in sections 4, 5 and 10: M3 and M4 in the bootstrap, the bootstrap's scope M2 to M4, the review point at M4's exit and the owner's approval of the benchmark's criteria (A8); the placement it leaves open is not decided here; no milestone, order or owner-kept item is added or removed.
+- Revision 4 (decision D-757): records the review point at M4's exit (`docs/plan/m4-exit-review.md`; decisions D-752 to D-756) in sections 4, 5 and 10: M4 exited with named limits (D-756); the benchmark and the stack ADR beside M5, with the owner's criteria and weights; M5 to M7 in the bootstrap, by the owner's choice of Option C (2026-10-15); Context Compiler v1 in M6 (D-752); the A11 stages v0.1 reaches (M8). No milestone is removed; no order or owner-kept item is changed.
