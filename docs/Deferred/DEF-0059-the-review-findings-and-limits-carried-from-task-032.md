@@ -23,3 +23,4 @@ TASK-032 (accepted, decision D-693); TASK-008 (resume_check.py); TASK-016 and TA
 
 ## Log
 - 2026-10-15: opened (decisions D-692 and D-693; session 8dcd35e9).
+- 2026-10-15 (session 218e5c55): M4 exited with named limits (decision D-756; docs/plan/m4-exit-review.md §3, after the owner chose Option C on 2026-10-15). Limit L-c: no module calls execute yet; the session-start caller of specification 3 section 1 comes with the runtime of M5 to M7.

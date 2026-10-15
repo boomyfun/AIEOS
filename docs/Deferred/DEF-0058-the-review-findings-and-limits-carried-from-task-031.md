@@ -24,3 +24,4 @@ TASK-031 (accepted, decision D-681); TASK-023 (stale.py); DEF-0030; DEF-0057.
 
 ## Log
 - 2026-10-14: opened (decisions D-680 and D-681; session 45777526).
+- 2026-10-15 (session 218e5c55): M4 exited with named limits (decision D-756; docs/plan/m4-exit-review.md §3, after the owner chose Option C on 2026-10-15). Limit L-d: the reconciliation callers have not run at a real base commit; this item stays open until their first such run or a task that changes them.
