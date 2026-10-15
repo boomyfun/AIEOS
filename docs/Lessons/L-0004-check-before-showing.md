@@ -173,6 +173,9 @@ Occurrences in session 2026-10-15-0531 (../History/2026-10/2026-10-15-0531-the-a
 Occurrences in session 2026-10-15-0659 (../History/2026-10/2026-10-15-0659-m4-exited-specification-5-and-the-benchmark-workflow-contract.md):
 - **2026-10-15 (D-753, D-757).** Two requests named line numbers before they were checked (:561 for :545 and :588 for :591 in D-753's; :1012 for :960 and :1083 for :1085 in D-757's); each corrected inline before the decision.
 
+Occurrences in session 2026-10-15-0830 (../History/2026-10/2026-10-15-0830-the-benchmark-workflow-accepted-and-on-main.md):
+- **2026-10-15 (D-772, D-773, D-777).** Five line-number corrections: :283 for :284 and ":330 and :338" for :338 and :342 (D-772); :412 for :427 (D-773); a placeholder ":?" and :834 misplaced (D-777); :1000 for :1014 (the D-777 conflict message); each corrected inline before the decision. From D-777 C4 a script (tools/linecheck.py) lists every cited line before a request is sent.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

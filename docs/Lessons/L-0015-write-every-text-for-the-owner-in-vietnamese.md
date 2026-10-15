@@ -186,6 +186,9 @@ Occurrences in session 2026-10-15-0531 (../History/2026-10/2026-10-15-0531-the-a
 Occurrences in session 2026-10-15-0659 (../History/2026-10/2026-10-15-0659-m4-exited-specification-5-and-the-benchmark-workflow-contract.md):
 - **2026-10-15.** Four English text blocks before tool calls, by the textblock check: :579, :942, :1027 and :1692, each a short line announcing the next step; each listed before the next gated command and brought to the decision agent, and the owner was told.
 
+Occurrences in session 2026-10-15-0830 (../History/2026-10/2026-10-15-0830-the-benchmark-workflow-accepted-and-on-main.md):
+- **2026-10-15.** Eight English text blocks before tool calls, by the textblock check: :345, :526, :963, :1280, :1301, :1445, :2051 and :2163, each a short line announcing the next step; each listed before the next gated command and brought to the decision agent, and the owner was told.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

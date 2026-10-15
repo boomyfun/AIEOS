@@ -217,6 +217,9 @@ Occurrences in session 2026-10-15-0531 (../History/2026-10/2026-10-15-0531-the-a
 Occurrences in session 2026-10-15-0659 (../History/2026-10/2026-10-15-0659-m4-exited-specification-5-and-the-benchmark-workflow-contract.md):
 - **2026-10-15.** :195 Python's name followed by a dash and no timeout, refused by guard rules R2 and R3; :357 a part `| head -0` of no effect; :365 a helper given the agent id in place of a transcript path; :369 a search pattern holding Python's name followed by a dash, refused by rule R2; :584 a heredoc, refused by rule R1, redone with the Write tool; :878 a `sed -i` that changed nothing; :1169 a second save of the same handback; :1179 a part `| head -0` of no effect. Separately, a correct command was refused at :1323 (a false positive, decision D-760, not a slip).
 
+Occurrences in session 2026-10-15-0830 (../History/2026-10/2026-10-15-0830-the-benchmark-workflow-accepted-and-on-main.md):
+- **2026-10-15.** :121 a helper called without its line argument; :280 a search pattern holding a Python call without the timeout prefix, refused by guard rule R3, redone at :284; :342 a `sed -i` that changed nothing; :565 "timeout 300" on a suite run, refused by rule R3, rerun with "timeout 110"; :918 a part run from the wrong folder, failing with no effect; :1014 `rm -f` on a scratch file just made; :1416 a part `| head -0` of no effect; :1731 a search pattern holding "Python 3", refused by rule R3, redone at :1735; :1989 parts using `rev`, not installed here, failing with no effect.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
