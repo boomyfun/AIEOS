@@ -106,8 +106,8 @@ def append_call(i):
     token = {'epoch': 'bench', 'counter': n}
     first = 'e%06d' % (n * KINDS)
     contract = {'contract_version': 'v1', 'contract_hash': digest('contract', task)}
-    call = {'event_type': None, 'payload': None, 'event_id': 'e%06d' % i, 'appended_at': at(i), 'task_id': task,
-            'fencing_token': None, 'corrects': None, 'lease': None, 'recorder': RECORDER, 'record_id': 'r%06d' % i}
+    call = dict.fromkeys(CALL_KEYS)  # every key null until set below
+    call.update(event_id='e%06d' % i, appended_at=at(i), task_id=task, recorder=RECORDER, record_id='r%06d' % i)
     if kind == 0:      # a draft: appended
         call.update(event_type='task.drafted', payload=dict(contract), event_id=first)
     elif kind == 1:    # its approval: appended
