@@ -1,6 +1,6 @@
 # The stack benchmark's port brief
 
-> - **Status:** revision 1. Non-binding, like `docs/plan/m4-exit-review.md`: it plans and decides nothing that a decision matrix (DM) row, a bound document or a task contract decides. Its text is decided by the decision agent (decision D-829); it changes only by a decision of its own, applied to every port not yet written, and each change is recorded as a limit of the benchmark's results (decision D-794 Q5).
+> - **Status:** revision 2. Non-binding, like `docs/plan/m4-exit-review.md`: it plans and decides nothing that a decision matrix (DM) row, a bound document or a task contract decides. Its text is decided by the decision agent (decision D-829); it changes only by a decision of its own, applied to every port not yet written, and each change is recorded as a limit of the benchmark's results (decision D-794 Q5).
 > - **Purpose:** the one brief that every language port of round 1 of the stack benchmark is written from (`docs/plan/m4-exit-review.md` §6; Master Plan §4, the benchmark; DEF-0063), so that the three ports (TypeScript, Go, Rust) are written under the same conditions.
 > - **Sources:** the decisions D-765 to D-767, D-773, D-794, D-800, D-814 to D-818 and D-827; decision files are kept outside the repository (`docs/WORKING-RECORDS.md`).
 
@@ -32,6 +32,7 @@
 ## 3. Rules for every port
 
 - No third-party package at run time. A build-time tool (a compiler, a type checker) only as the port task's contract names it, at an exact version, checked against its published integrity hash, with install scripts disabled.
+- The language's own toolchain (node for TypeScript, the go command for Go, cargo and rustc for Rust) is the one the hosted runners provide: it is not downloaded in the workflow, its version is printed in the run's log, and that version is stated as a limit of the results. The worker's local check uses that version, fetched once and checked against its published hash, in the scratchpad only, or states the difference as a limit (TASK-043's local check ran on the worker machine's node v24.11.1). Any other build-time tool keeps the rule above.
 - No file written except standard output and standard error; no network, clock, environment variable, random value or process started; no reading of any path but its one argument.
 - The code lives under `bench/<language>/` only (`bench/ts/`, `bench/go/`, `bench/rust/`); no file outside it. No part of AIEOS imports or runs anything under `bench/`; each port task's contract tests this (decision D-800 C3; the risk rules policy, rule R12).
 - The same behaviour on Linux and Windows: the benchmark workflow runs the port on both and compares its output with the reference document by `tests/unit/test_export_reference.py --compare` (each port task adds its compare step under its own A66 decision; decision D-814 Q4).
@@ -48,3 +49,4 @@
 
 - Revision 0: first text (decisions D-827 and D-829), written after TASK-041 rather than before it as decision D-794 Q6 ordered (a departure recorded in DEF-0063); no port had been written.
 - Revision 1 (decision D-854): §2 states how every port treats the two unexpected-error paths of `resume_check.check`, as the TypeScript port (TASK-043) already does (decision D-849); written after that port and before the Go and Rust ports, so it changes no port already written; recorded as a limit of the results (DEF-0063).
+- Revision 2 (decision D-855): §3 states that each language's own toolchain is the hosted runners' and is not pinned in the workflow, as the TypeScript port already ran on the runners' node (TASK-043), while any other build-time tool stays pinned; written before the Go and Rust ports, so it changes no port already written; recorded as a limit of the results (DEF-0063).
