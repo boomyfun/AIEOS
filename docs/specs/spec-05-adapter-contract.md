@@ -108,7 +108,7 @@
 11. Which conformance scenarios each adapter must pass, beyond ADV-02 (for T0, and for the lease and fencing flow): set with their fixtures in tasks of their own (section 9).
 12. A bound on repeated STOP: violation for one task (section 8), for example by the retry budget the governor reads: an open point.
 13. The choices marked "(proposed)" throughout, among them the hooks mapping table (section 6), the replay adapter's form (section 5) and the reading order (section 1).
-14. A consequence of section 3, stated: until a declaration of the self-build's runtime exists with a measurement record, check 7 gives STOP: runtime insufficient for its tasks, and with an unmeasured declaration for every task above low risk; so the self-build cannot lease such a task through the core (Master Plan M8) until the owner has measured the runtime (C6, P-LOC; Master Plan §9 item 3). Any interim rule that lets an unmeasured runtime take a task above low risk is a raise because of an adapter, and is the owner's (Master Plan §9 item 5); this specification proposes none.
+14. A consequence of section 3, stated: until a declaration of the self-build's runtime exists with a measurement record, check 7 gives STOP: runtime insufficient for its tasks, and with an unmeasured declaration for every task above low risk; so the self-build cannot lease such a task through the core (Master Plan M8) until the owner has measured the runtime (C6, P-LOC; Master Plan §9 item 3). Any interim rule that lets an unmeasured runtime take a task above low risk is a raise because of an adapter, and is the owner's (Master Plan §9 item 5); this specification proposes none. [Marker 2026-10-15: lifted by the owner (DM A69).]
 
 ## 12. Revisions
 

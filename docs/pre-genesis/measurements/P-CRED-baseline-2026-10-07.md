@@ -1,5 +1,7 @@
 # P-CRED baseline — 2026-10-07 (minimal, A39)
 
+[Marker 2026-10-15: superseded by the owner's measurement (DM A69); this FAIL is no longer used. Kept unchanged below.]
+
 > **Status: finding proposed by Claude; approved by the owner on 2026-10-07.** Pre-genesis measurement artifact under measurement-protocol revision 4 (§1, §1.3 exception for the minimal baseline, §1.7). It contains no secret values, no account names, no paths and no session identifiers.
 
 ## Scope
