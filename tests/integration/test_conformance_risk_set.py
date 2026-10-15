@@ -31,7 +31,7 @@ RUNNER = 'src/aieos_bootstrap/conformance.py'
 RUNNER_TESTS = re.compile(r'tests/(?:unit|integration|property)/test_runner_risk[A-Za-z0-9_]*\.py')
 # TASK-020 AC5: the three modules whose set check names the folder for RISK-01's path (sections 2 and 10), each by name.
 SET_CHECKS = ('tests/unit/test_conformance_files.py', 'tests/integration/test_conformance_set.py',
-              'tests/property/test_conformance_properties.py')
+              'tests/property/test_conformance_properties.py', 'tests/unit/test_export_fixtures.py')
 
 
 def read(path):

@@ -1,0 +1,123 @@
+# AIEOS: the stack benchmark (TASK-039; Master Plan revision 4 §4; docs/plan/m4-exit-review.md §6), revision 0
+# (decisions D-765 to D-767, with erratum E1 of decision D-773). It runs, on GitHub's hosted Linux and Windows runners,
+# the export of the frozen conformance fixtures into the job's temporary folder, prints the toolchain versions, and
+# runs each language port only when its folder bench/<language>/ exists (no port exists yet). It reads only: it checks
+# out the pushed commit from the repository's public address, built from the runner's server and repository variables,
+# with no credential; it uses no action, no secret and no token, writes nothing to the repository and calls no API.
+# Its results are advisory (DM A29, A31): they are this run's
+# job logs only, and no record of the governor or of the CI workflow aieos-checks.yml reads them. It is not a
+# trust-boundary measurement (Master Plan §9 item 3). Who decides a change to this file: the decision agent under DM A66,
+# each change its own decision; a change that grants write access, uses a secret or token, or changes a repository or
+# security setting stays the owner's. The port steps' commands are proposed here and may be changed only by the port
+# tasks' own decisions (decision D-767 C1).
+name: aieos-bench
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'bench/**'
+      - '.github/workflows/aieos-bench.yml'
+      - 'tests/unit/test_export_fixtures.py'
+  # for the owner only: the agent never starts it without its own decision (decision D-766 C1)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    env:
+      PY: python3
+    steps:
+      - name: checkout (the pushed commit only, from the public address, no credential)
+        run: |
+          git init -q .
+          git fetch -q --depth 1 "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" "$GITHUB_SHA"
+          git checkout -q --detach FETCH_HEAD
+      - name: checkout check (HEAD is the pushed commit)
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: export the frozen fixtures into the temporary folder
+        run: |
+          $PY tests/unit/test_export_fixtures.py --root tests/conformance > "$RUNNER_TEMP/fixtures.json"
+          wc -c "$RUNNER_TEMP/fixtures.json"
+      - name: toolchain versions
+        run: |
+          $PY --version
+          node --version
+          go version
+          rustc --version
+      - name: port ts (only if bench/ts exists)
+        run: |
+          if [ -d bench/ts ]; then
+            cd bench/ts && node run.js "$RUNNER_TEMP/fixtures.json"
+          else
+            echo "no port in bench/ts"
+          fi
+      - name: port go (only if bench/go exists)
+        run: |
+          if [ -d bench/go ]; then
+            cd bench/go && go run . "$RUNNER_TEMP/fixtures.json"
+          else
+            echo "no port in bench/go"
+          fi
+      - name: port rust (only if bench/rust exists)
+        run: |
+          if [ -d bench/rust ]; then
+            cd bench/rust && cargo run --release --quiet -- "$RUNNER_TEMP/fixtures.json"
+          else
+            echo "no port in bench/rust"
+          fi
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    env:
+      PY: python
+    steps:
+      - name: checkout (the pushed commit only, from the public address, no credential)
+        run: |
+          git init -q .
+          git fetch -q --depth 1 "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" "$GITHUB_SHA"
+          git checkout -q --detach FETCH_HEAD
+      - name: checkout check (HEAD is the pushed commit)
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: export the frozen fixtures into the temporary folder
+        run: |
+          $PY tests/unit/test_export_fixtures.py --root tests/conformance > "$RUNNER_TEMP/fixtures.json"
+          wc -c "$RUNNER_TEMP/fixtures.json"
+      - name: toolchain versions
+        run: |
+          $PY --version
+          node --version
+          go version
+          rustc --version
+      - name: port ts (only if bench/ts exists)
+        run: |
+          if [ -d bench/ts ]; then
+            cd bench/ts && node run.js "$RUNNER_TEMP/fixtures.json"
+          else
+            echo "no port in bench/ts"
+          fi
+      - name: port go (only if bench/go exists)
+        run: |
+          if [ -d bench/go ]; then
+            cd bench/go && go run . "$RUNNER_TEMP/fixtures.json"
+          else
+            echo "no port in bench/go"
+          fi
+      - name: port rust (only if bench/rust exists)
+        run: |
+          if [ -d bench/rust ]; then
+            cd bench/rust && cargo run --release --quiet -- "$RUNNER_TEMP/fixtures.json"
+          else
+            echo "no port in bench/rust"
+          fi
