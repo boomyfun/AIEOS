@@ -51,22 +51,38 @@ def parse_fixture(text):
     return json.loads(body)
 
 
-def export(root):
-    """Returns the export document of the fixture folders under root as an ASCII string ending in LF."""
+def listing(root):
+    """The fixture folders under root as {folder: [(name, kind, bytes or None)]}, kind "dir", "file" or "other";
+    a missing folder is left out, so that document() refuses it."""
     out = {}
     for folder in FOLDERS:
         d = Path(root) / folder
-        if not d.is_dir():
+        if d.is_dir():
+            out[folder] = [(p.name, 'dir' if p.is_dir() else 'file' if p.is_file() else 'other',
+                            p.read_bytes() if p.is_file() else None) for p in sorted(d.iterdir())]
+    return out
+
+
+def document(entries):
+    """Returns the export document of a listing as an ASCII string ending in LF; refuses any other form."""
+    out = {}
+    for folder in FOLDERS:
+        if folder not in entries:
             raise ExportError('missing fixture folder ' + folder)
-        for p in sorted(d.iterdir()):
-            if p.name == '__pycache__' and p.is_dir():
+        for name, kind, data in entries[folder]:
+            if name == '__pycache__' and kind == 'dir':
                 continue
-            if not p.is_file() or p.suffix != '.py':
-                raise ExportError('not a .py file: %s/%s' % (folder, p.name))
-            out['%s/%s' % (folder, p.stem)] = parse_fixture(p.read_bytes().decode('utf-8'))
+            if kind != 'file' or not name.endswith('.py'):
+                raise ExportError('not a .py file: %s/%s' % (folder, name))
+            out['%s/%s' % (folder, name[:-3])] = parse_fixture(data.decode('utf-8'))
     if not out:
         raise ExportError('no fixture')
     return json.dumps(out, sort_keys=True, indent=2, ensure_ascii=True) + '\n'
+
+
+def export(root):
+    """Returns the export document of the fixture folders under root as an ASCII string ending in LF."""
+    return document(listing(root))
 
 
 def main(argv, out=None):
@@ -95,13 +111,57 @@ class ParseTests(unittest.TestCase):
 
     def test_fails_closed(self):
         """TASK-039 AC5: no head, text before it, two heads, extra quotes, text after the quotes or bad JSON all raise."""
-        bad = ('{"a": 1}' + "'''\n", '# x\n' + fixture(), fixture(body='{"a": 1}' + "'''\n" + HEAD + '{}'),
-               fixture(body='{"a": "' + "'''" + '"}'), fixture(tail="'''\nX = 1\n"), fixture(tail="'''\n\n"),
-               fixture(tail=''), fixture(body='{"a": 1,}'), fixture(body=''))
-        for text in bad:
+        bad = (('{"a": 1}' + "'''\n", 'does not start'), ('# x\n' + fixture(), 'does not start'),
+               (fixture(body='{"a": 1}' + "'''\n" + HEAD + '{}'), 'more than one'),
+               (fixture(body='{"a": "' + "'''" + '"}'), 'not exactly one closing'), (fixture(tail=''), 'not exactly one closing'),
+               (fixture(tail="'''\nX = 1\n"), 'text after'), (fixture(tail="'''\n\n"), 'text after'))
+        for text, why in bad:
             with self.subTest(text=text):
-                with self.assertRaises((ExportError, ValueError)):
+                with self.assertRaisesRegex(ExportError, why):
                     parse_fixture(text)
+        for body in ('{"a": 1,}', ''):
+            with self.subTest(body=body):
+                with self.assertRaises(ValueError):
+                    parse_fixture(fixture(body=body))
+
+
+def entries(**extra):
+    """A listing of the three folders, each with one good fixture, changed by extra (folder: list or None)."""
+    out = {f: [('%s_01.py' % f, 'file', fixture().encode('ascii'))] for f in FOLDERS}
+    for f, v in extra.items():
+        if v is None:
+            del out[f]
+        else:
+            out[f] = v
+    return out
+
+
+class DocumentTests(unittest.TestCase):
+    def test_form(self):
+        """TASK-039 AC4: keys "<folder>/<stem>", sorted at every level, ASCII only, a __pycache__ folder passed over."""
+        e = entries(fixtures=[('z_02.py', 'file', fixture(body='{"b": 1, "a": "é"}').encode('utf-8')),
+                              ('__pycache__', 'dir', None), ('a_01.py', 'file', fixture().encode('ascii'))])
+        doc = document(e)
+        self.assertTrue(doc.isascii())
+        self.assertIn('\\u00e9', doc)
+        got = json.loads(doc)
+        self.assertEqual(list(got), ['fixtures/a_01', 'fixtures/z_02', 'fixtures_rc/fixtures_rc_01',
+                                     'fixtures_risk/fixtures_risk_01'])
+        self.assertEqual(list(got['fixtures/z_02']), ['a', 'b'])
+        self.assertEqual(doc, json.dumps(got, sort_keys=True, indent=2, ensure_ascii=True) + '\n')
+
+    def test_refuses(self):
+        """TASK-039 AC5: a missing folder, a non-.py file, another folder, a __pycache__ file or no fixture is refused."""
+        cases = ((entries(fixtures_risk=None), 'missing fixture folder'),
+                 (entries(fixtures_rc=[('x.txt', 'file', b'')]), 'not a .py file'),
+                 (entries(fixtures=[('sub', 'dir', None)]), 'not a .py file'),
+                 (entries(fixtures=[('__pycache__', 'file', b'')]), 'not a .py file'),
+                 (entries(fixtures=[('odd.py', 'other', None)]), 'not a .py file'),
+                 ({f: [] for f in FOLDERS}, 'no fixture'))
+        for e, why in cases:
+            with self.subTest(why=why):
+                with self.assertRaisesRegex(ExportError, why):
+                    document(e)
 
 
 class ExportTests(unittest.TestCase):
@@ -129,9 +189,11 @@ class ExportTests(unittest.TestCase):
 
     def test_main_fails_closed(self):
         """TASK-039 AC5: a missing folder or any other argument form gives a non-zero exit and nothing written."""
-        missing = REPO / 'tests' / 'no-such-folder-task-038'
+        missing = REPO / 'tests' / 'no-such-folder-task-039'
         self.assertFalse(missing.exists())
-        for argv in (['--root', str(missing)], [], ['--root'], ['--out', 'x'], ['--root', 'a', 'b'], ['x', 'y']):
+        real = str(REPO / 'tests' / 'conformance')
+        for argv in (['--root', str(missing)], [], ['--root'], ['--out', 'x'], ['--root', 'a', 'b'], ['x', 'y'],
+                     ['--root', real, 'x'], ['--out', real], ['--root', real, '--root', real]):
             with self.subTest(argv=argv):
                 out = io.BytesIO()
                 self.assertNotEqual(main(argv, out), 0)
@@ -167,7 +229,7 @@ def top_block(text, key):
 
 class WorkflowTests(unittest.TestCase):
     def test_triggers_and_permissions(self):
-        """TASK-039 AC1: push to main with the two paths, workflow_dispatch for the owner only, contents read only."""
+        """TASK-039 AC1: push to main with the three paths, workflow_dispatch for the owner only, contents read only."""
         text = workflow()
         on = [ln for ln in top_block(text, 'on') if ln.strip() and not ln.strip().startswith('#')]
         self.assertEqual(on, ['on:', '  push:', '    branches: [main]', '    paths:', "      - 'bench/**'",
@@ -232,7 +294,7 @@ class SuiteTests(unittest.TestCase):
     def test_naming(self):
         """TASK-039 AC10: every test of this module names the AC it stands for in its docstring."""
         loader = unittest.TestLoader()
-        for case in (ParseTests, ExportTests, WorkflowTests, SuiteTests):
+        for case in (ParseTests, DocumentTests, ExportTests, WorkflowTests, SuiteTests):
             for name in loader.getTestCaseNames(case):
                 doc = getattr(case, name).__doc__ or ''
                 self.assertRegex(doc, r'^TASK-039 AC\d+', name)
