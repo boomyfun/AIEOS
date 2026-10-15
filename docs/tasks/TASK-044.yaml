@@ -1,0 +1,247 @@
+# Task contract TASK-044, the stack benchmark's second port: Go (Master Plan revision 4, §4 "The benchmark and the
+# stack ADR"; docs/plan/m4-exit-review.md §6; docs/plan/bench-port-brief.md revision 2; decisions D-794, D-800 C3,
+# D-814 Q4, D-849, D-854, D-855; DEF-0063).
+# Revision 0, drafted under decision D-855 (the scope note, B1 to B8); brought for approval in its own request; whether
+# it is approved is recorded in the decision files, not in this file. Fields and value forms follow specification 2 §5.1
+# and the contracts of TASK-007 to TASK-043. Readings marked "(reading)" are the worker's, for the decision agent's
+# ruling.
+# Task type: implementation, with two writers on two path sets (as TASK-043, decision D-831 (i)):
+# - the port, bench/go/** except go.mod, is written by a fresh agent (claude-opus-5-5, started for this task only) given
+#   only the inputs of the port brief's section 1: the brief at revision 2 (its hash below), the four Python files at
+#   commit aed226dc6d50fc44fac0ae11d39dfb6b3cb1dc79 by the hashes the brief names, the fixture document and the
+#   reference document made at that commit (with the source of tests/unit/test_export_reference.py at that commit,
+#   2acae51b…), and this contract. It works only in a scratch folder of the worker's scratchpad, with no access to the
+#   repository, the archives, other ports or their reviews, and runs only the go command there, through the worker's
+#   wrapper script that sets the environment of AC4;
+# - everything else (go.mod, the workflow step and the tests of AC8) is written by the worker.
+# The toolchain (brief §3 as revised by decision D-855; B1, B2): in CI, the go command the hosted runners provide
+# (go1.24.13 on both in the benchmark's run 3; printed by the toolchain-versions step), not downloaded; locally, the
+# same version for windows-amd64, fetched once from Google's download server and checked against the SHA-256 that
+# go.dev's download listing publishes, unpacked in the scratchpad only, nothing installed. Every go run, in CI and
+# locally, has GOTOOLCHAIN=local (no automatic toolchain download) and GOPROXY=off (no module fetch); locally also
+# GOCACHE, GOPATH, GOMODCACHE and APPDATA under the scratchpad (APPDATA is where go 1.23 and later keep their local
+# telemetry counters on Windows), so nothing is written outside it. No go telemetry, go get or go install command.
+# The workflow change (A66, its own element at code time): in both jobs of .github/workflows/aieos-bench.yml, the
+# existing step "port go (only if bench/go exists)" keeps its one guard and becomes: go vet, gofmt's list check, go
+# build of one binary into the job's temporary folder, its run on the fixture document, the compare by
+# test_export_reference.py --compare, and go test with the two documents as arguments; the header names the go steps
+# and the runners' go; the revision line goes to 3. No download, trigger, permission, secret, token or `uses:`; the
+# TypeScript steps' bytes and the Rust step are unchanged.
+# Carried from TASK-043 (decision D-849; D-855 B5 (i), B-C3): in tests/unit/test_export_fixtures.py only, the guard
+# count per job for every port and the whole TypeScript type-check step pinned per job, its got= line included; no
+# bench/ts byte and no TypeScript workflow byte changes. The rest (the tsconfig and file-set pins, the isolation test's
+# textual reach, curl's redirect protocols) waits for a hardening task after the Rust port (DEF-0063).
+# Limits: the benchmark workflow runs on pushes to main only (its triggers are pinned by TASK-039's tests), so it does
+# not run on the task branch; the port's CI evidence on Linux and Windows comes from the first run at the landing, read
+# after acceptance, as for TASK-041 and TASK-043; before acceptance, the evidence of byte equality is the worker's local
+# run (go1.24.13, windows-amd64) and the reviews; the runners' go version is not pinned and may move (brief §3); the
+# download listing's hash is self-attested by its publisher; the two unexpected-error paths of resume_check.check fail
+# closed (brief §2, revision 1); the ports are written one after another (order bias); every writer and reviewer is an
+# AI of one vendor.
+# What it is not: the results are advisory (A29, A31) and feed no gate, record or evidence entry; aieos-checks.yml and
+# its two pins are not touched; src/ is not touched; no TypeScript or Rust change.
+# Risk: critical, and change class critical_cr, each to be computed over the base by script (risk_class43.py with only
+# the write-set and its header line changed): .github/** is R9 (critical); bench/** is R12 (high); tests/** is R2
+# (medium) with R3's fail-closed reading (high); .github/** and tests/unit/** are evaluator paths of GOV-003's list.
+# Profile (assurance-model.md §5, gov-AIEOS, critical): high's entries plus architecture [human_review], met for
+# gov-AIEOS by the decision agent's review, and functional [the property/fuzz entry] by the CI's property_test step over
+# the existing property suite (the task adds no property test; it changes no decision code); the cross-model entry by
+# the pair of reviews: five way-2 reviews from the port review template on claude-sonnet-5-5 (a model other than the
+# port writer's and the main session's), and the decision agent's separate review. One delegated approval (reading, as
+# TASK-043).
+# Naming (D-544 Q3): every Python test this task adds names the AC ids it stands for as "TASK-044 ACn" in its docstring.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-044.yaml and has one parent equal to base_commit; the
+# task's commits, each carrying "AIEOS-Task: TASK-044", go to task/TASK-044 under their own decisions; main receives the
+# task only at its acceptance.
+# Not applicable: OPS-001 (no ref changed by the task's code); INV-004 to INV-011 (no project state, decision engine,
+# governor, evidence record, replay or policy path in the write-set); GOV-001, GOV-004 to GOV-006. SEC-003 applies (a
+# .github/ path), under A66 as above.
+# Owner-kept acts: none, on these conditions: the changed workflow grants no write, uses no secret or token, changes no
+# repository or security setting and costs nothing (public repository, hosted runners); the local toolchain's download
+# needs none of these. If any of these is not so, the task stops and the point is the owner's (CR-002 part 4 limit 5),
+# fail closed.
+task: TASK-044
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add bench/go/, the Go port of the governor's acceptance decision and the Resume Check, written from the port brief
+  (revision 2) by a fresh agent, which prints a document byte-equal to the reference export from the fixture export,
+  with its own tests; make the go step of both jobs of .github/workflows/aieos-bench.yml vet, format-check, build and
+  run it, compare its output with the reference and run its tests, with the runners' go and no download; pin that step,
+  go.mod and the carried TypeScript checks in tests/unit/test_export_fixtures.py. Nothing else changes; the results are
+  advisory and feed nothing.
+traces_to:
+  - docs/plan/m4-exit-review.md#6
+  - docs/plan/master-plan.md#4
+  - docs/plan/bench-port-brief.md
+  - docs/pre-genesis/constitution.md#SEC-003
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-044.yaml; G0 requires C's one parent to equal base_commit. It is filled by script from
+  # refs/heads/main just before C is made: the placeholder and its quotes are replaced by the 40-hex id, unquoted.
+  base_commit: 21a2ea35a835463adaf85429dcbd9c7f1fdb9fce
+  depends_on: [TASK-039, TASK-041, TASK-043]
+  intent_versions:
+    docs/plan/m4-exit-review.md: 6c41ca8200a4e757f04b22aa521e52cd67f7ac3122690e667ac4c864aa57c4a4
+    docs/plan/master-plan.md: 8276a587bbf6f75be8867feb97df6726379babfcdb2266344bfdb4d01e6b2d23
+    docs/plan/bench-port-brief.md: d307c6ede5080a9012c16697184437d5a579ebfd41e9bedee69dfffcd25a15e0
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/specs/conformance-files.md: 2f1c224466fe3657167b116b49f902648130bf76e1274367d7780cc38ec7b021
+write_set:
+  # The port's files under bench/go/ (go.mod by the worker), one modified workflow, one modified test module.
+  paths:
+    - bench/go/**
+    - .github/workflows/aieos-bench.yml
+    - tests/unit/test_export_fixtures.py
+read_set:
+  paths:
+    - docs/plan/**
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/specs/conformance-files.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/conformance/**
+    - tests/unit/**
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+  interfaces:
+    - tests/unit/test_export_fixtures.py (the fixture document, run as a script)
+    - tests/unit/test_export_reference.py (the reference document and --compare, run as a script)
+    - bench/go (new; the port, built by `go build` and run as `<binary> <fixture document>`)
+  schemas:
+    - conformance-files canonical form (2)
+    - the reference document's form (TASK-041 AC1)
+forbidden:
+  - .github/workflows/aieos-checks.yml
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - bench/ts/**
+  - bench/rust/**
+  - bench/go/go.sum
+  - bench/go/vendor/**
+  - docs/**
+  - src/**
+  - tests/conformance/**
+  - tests/integration/**
+  - tests/property/**
+  - tests/run_tests.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_export_reference.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The port's output. Built from bench/go by `go build` and run as `<binary> <fixture document>`, the port prints a
+      document byte-equal to the reference document of tests/unit/test_export_reference.py at base_commit
+      (REFERENCE_SHA256 unchanged), and exits 0; on a missing or extra argument, a file that is not a fixture document,
+      or a case it cannot compute (the two unexpected-error paths of resume_check.check among them, brief §2), it exits
+      non-zero and prints nothing to standard output. Evidence before acceptance: the worker's run with go1.24.13 on
+      this machine (windows-amd64), compared by `--compare`, its output saved; the hosted runners' compare at the
+      landing is read after acceptance (a stated limit).
+  - AC2: >-
+      The writer and its inputs (the brief's section 1; decision D-855 B6, B-C5). The port is written by a fresh agent
+      on claude-opus-5-5, given only the brief's inputs (the documents made again at aed226dc and checked equal by hash
+      to those TASK-043's writer was given), in a scratch folder; its tool calls are only file reads there, writes
+      inside its own folder and go commands there through the worker's wrapper (checked by script over its transcript
+      before any of its files is used); every bench/go file but go.mod is committed byte-equal to the hash the decision
+      agent accepts after that check. No file under bench/go holds a record id, a placeholder-free engine_identity or
+      any other 64-hex value of the reference document, nor any case's expected values (checked by script against the
+      two documents).
+  - AC3: >-
+      The port's form (the brief's section 3). bench/go holds only: .go files written by the port writer, in one
+      package main, its tests in *_test.go files; bench/go/go.mod, written by the worker, holding exactly a module line
+      and `go 1.24`, with no require, replace or toolchain line; and at most one README.md; no go.sum, vendor folder
+      or other module. The code imports only Go's standard library; it writes nothing but standard output and standard
+      error, reads no network, clock, environment variable or random value, starts no process, and reads no path but
+      its one argument (its tests read only the two documents given as arguments).
+  - AC4: >-
+      The static checks and the build (brief §3 as revised; D-855 B1 to B3). In bench/go, with GOTOOLCHAIN=local and
+      GOPROXY=off: `go vet .` reports nothing and exits 0; `gofmt -l .` prints nothing; `go build -trimpath` builds one
+      binary. Before the first push the worker runs the same checks on this machine with go1.24.13 for windows-amd64,
+      fetched under its own decisions (the listing read, then the download and its SHA-256 check, D-855 B-C4) and
+      unpacked in the scratchpad only, with GOCACHE, GOPATH, GOMODCACHE and APPDATA under the scratchpad.
+  - AC5: >-
+      The port's own tests. bench/go holds tests run as `go test -count=1 . -args <fixture document> <reference
+      document>` (the two documents as arguments, as TASK-043's erratum E1) that check at least: the byte equality over
+      the whole fixture document against the reference document; one governor case and one Resume Check case field by
+      field; the placeholder; each fail-closed input of AC1. They pass on the worker's machine, and the workflow runs
+      them.
+  - AC6: >-
+      The workflow (A66, its own element). In each of the two jobs of .github/workflows/aieos-bench.yml, identically,
+      the step "port go (only if bench/go exists)", under its one existing guard, sets GOTOOLCHAIN=local and
+      GOPROXY=off, and runs, from bench/go, `go vet .`, `gofmt -l .` (failing the step if it prints anything) and `go
+      build -trimpath -o "$RUNNER_TEMP/go/port.exe" .`; then the binary on "$RUNNER_TEMP/fixtures.json" into
+      "$RUNNER_TEMP/go.json"; then, from the checkout's root, `$PY tests/unit/test_export_reference.py --compare
+      "$RUNNER_TEMP/reference.json" "$RUNNER_TEMP/go.json"`; then, from bench/go, `go test -count=1 . -args
+      "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json"`. The header names the go steps and states that each
+      port's own toolchain is the runners'; the revision line goes from 2 to 3. Nothing else changes: no download,
+      trigger, permission, secret, token, `uses:`, TypeScript or Rust byte. The earlier tests of
+      tests/unit/test_export_fixtures.py pass over it unchanged.
+  - AC7: >-
+      Isolation (decision D-800 C3; the risk rules policy revision 6, R12). tests/unit/test_bench_isolation.py, unchanged,
+      passes: no file under src/ or tests/ outside its allow-list, nor aieos-checks.yml, names bench/ or imports from it,
+      and aieos-bench.yml is the only workflow naming bench/.
+  - AC8: >-
+      The pins (D-855 B4, B5 (i), B-C3), in tests/unit/test_export_fixtures.py, in a new test class whose docstrings
+      start with TASK-044: in each job, the go step's commands of AC6 in their order, GOTOOLCHAIN=local and GOPROXY=off
+      set before the first go command, and no `go get`, `go install`, `go mod download` or `go env -w`; bench/go/go.mod
+      exactly as AC3 (read only if bench/go exists), and no bench/go/go.sum or vendor folder; in each job, the guard
+      `if [ -d bench/<language> ]; then` counted per job (ts twice, go once, rust once); and the whole TypeScript
+      type-check step pinned per job, its got= line included, against its bytes at base_commit. The module's export,
+      its other tests and its main guard are unchanged.
+  - AC9: >-
+      The CI checks and purity. At the task's commits the existing CI steps report no finding: G0 scope,
+      deterministic_rule, OPS-003, SEC-001, SEC-002, SEC-003's record and bandit; every earlier test passes; the added
+      Python lines are scanned for the bandit test patterns the CI applies before the first push, as in TASK-043 AC9;
+      if any earlier test can pass only by a change outside the write-set, the task escalates
+      (needs_out_of_scope_change).
+  - AC10: >-
+      Naming. Every Python test function the task adds names "TASK-044 ACn" in its own docstring; no existing test's
+      docstring changes; tests/run_tests.py is unchanged and runs no export or port.
+  - AC11: >-
+      Stop conditions. If any step needs a secret, a token, write access, money or a setting, or the local toolchain's
+      download differs from its published SHA-256, the task stops and the point goes to the decision agent, and to the
+      owner when it is the owner's (A66, fail closed).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell:
+    allow:
+      - "timeout 110 python tests/run_tests.py < /dev/null"
+      - >-
+        go vet . / gofmt -l . / go build -trimpath -o <file> . / go test -count=1 . -args <file> <file> (with
+        GOTOOLCHAIN=local, GOPROXY=off and, locally, the scratchpad environment of AC4)
+      - "<binary> <file>"
+      - >-
+        curl -sS --fail --proto =https --max-time 120 --max-filesize 1000000 "https://go.dev/dl/?mode=json&include=all"
+        -o <SP>/go/listing.json
+      - >-
+        curl -sS --fail --proto =https --max-time 300 --max-filesize 150000000
+        https://dl.google.com/go/go1.24.13.windows-amd64.zip -o <SP>/go/go1.24.13.windows-amd64.zip
+      - "sha256sum <SP>/go/go1.24.13.windows-amd64.zip (compared with the listing's value)"
+      - "timeout 110 python <SP script> < /dev/null (the standard library's zipfile, unpacking into <SP>/go only)"
+  network:
+    allow:
+      - >-
+        https://go.dev/dl/?mode=json&include=all and https://dl.google.com/go/go1.24.13.windows-amd64.zip (one local
+        read and one local download for AC4, each its own decision); none in the workflow
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: critical
+autonomy:
+  max_level: L1
+  budgets: {tokens: 900k, wall_time: 5h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC7, AC8, AC10]}
+  - {gate: G3, check: constitution, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC9, AC11, INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
