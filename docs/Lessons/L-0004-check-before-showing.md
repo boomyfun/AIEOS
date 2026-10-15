@@ -170,6 +170,9 @@ Occurrences in session 2026-10-15-0531 (../History/2026-10/2026-10-15-0531-the-a
 - **2026-10-15 (D-738).** A request named the gated run as ":437" before the number was checked; by grep it was :439; corrected inline before the decision (a repeat of 043a's ":427").
 - **2026-10-15 (D-742).** The first-push request named four lines (:704, :713, :759, :890) from memory; checked against the steps listing and corrected before it was sent. The gh failure of :119 was named ":120", its result record, in D-736 and D-737.
 
+Occurrences in session 2026-10-15-0659 (../History/2026-10/2026-10-15-0659-m4-exited-specification-5-and-the-benchmark-workflow-contract.md):
+- **2026-10-15 (D-753, D-757).** Two requests named line numbers before they were checked (:561 for :545 and :588 for :591 in D-753's; :1012 for :960 and :1083 for :1085 in D-757's); each corrected inline before the decision.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

@@ -214,6 +214,9 @@ Occurrences in session 2026-10-15-0422 (../History/2026-10/2026-10-15-0422-the-s
 Occurrences in session 2026-10-15-0531 (../History/2026-10/2026-10-15-0531-the-autonomy-levels-feature-accepted-and-on-main.md), each my incorrect command:
 - **2026-10-15.** :119 `gh run list` from the scratchpad (no effect); :248 `python -c` without the timeout, refused by guard rules R2 and R3; :367 an `rm -f` of a scratch copy and a sed reconstruction that did not match; :753 `python -m unittest`, refused by rule R2; :836 `timeout 300 python`, refused by rule R3 and rerun with the rule's own `timeout 110` at :840 (accepted, D-742: a guard refusal goes to the decision agent before any changed rerun); :869 a folder made and never used; :1058 a stray assignment `sleep_free=1;`; :1427 a copied file never used; :1603 a tool run with no argument and its output discarded. Ten in all.
 
+Occurrences in session 2026-10-15-0659 (../History/2026-10/2026-10-15-0659-m4-exited-specification-5-and-the-benchmark-workflow-contract.md):
+- **2026-10-15.** :195 Python's name followed by a dash and no timeout, refused by guard rules R2 and R3; :357 a part `| head -0` of no effect; :365 a helper given the agent id in place of a transcript path; :369 a search pattern holding Python's name followed by a dash, refused by rule R2; :584 a heredoc, refused by rule R1, redone with the Write tool; :878 a `sed -i` that changed nothing; :1169 a second save of the same handback; :1179 a part `| head -0` of no effect. Separately, a correct command was refused at :1323 (a false positive, decision D-760, not a slip).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
