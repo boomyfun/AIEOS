@@ -234,6 +234,12 @@ DATA = r'''{
             "match": [
               "tests/conformance/**"
             ]
+          },
+          {
+            "class": "high",
+            "match": [
+              "bench/**"
+            ]
           }
         ],
         "ruleset_version": "v1"

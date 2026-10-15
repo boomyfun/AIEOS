@@ -185,8 +185,8 @@ def check_set(value, rows=None, files=None):
         errors.append('set: scenario_set_version is not 2')
     if value['scenario_set_file_hash'] != sha256(read(SCENARIO_FILE)):
         errors.append('set: scenario_set_file_hash is not the bound file\'s SHA-256')
-    if value['fixture_set_version'] != 3 or isinstance(value['fixture_set_version'], bool):
-        errors.append('set: fixture_set_version is not 3')
+    if value['fixture_set_version'] != 4 or isinstance(value['fixture_set_version'], bool):
+        errors.append('set: fixture_set_version is not 4')
     entries = value['scenarios']
     if not isinstance(entries, list) or len(entries) != len(rows):
         return errors + ['set: not one entry per scenario row']
@@ -401,7 +401,7 @@ class ConformanceSetEndToEndTest(unittest.TestCase):
         value = unwrap(read(SET_FILE))
         self.assertEqual(value['scenario_set_file_hash'], sha256(read(SCENARIO_FILE)))
         self.assertEqual(value['scenario_set_version'], 2)
-        self.assertEqual(value['fixture_set_version'], 3)
+        self.assertEqual(value['fixture_set_version'], 4)
 
 
 if __name__ == '__main__':
