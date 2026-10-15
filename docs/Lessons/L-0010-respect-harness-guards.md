@@ -238,6 +238,9 @@ Occurrences in session 2026-10-15-2005 (../History/2026-10/2026-10-15-2005-the-g
 Occurrences in session 2026-10-15-2126 (../History/2026-10/2026-10-15-2126-the-rust-port-written-and-on-its-task-branch.md):
 - **2026-10-15.** Four refusals by the owner's command guard, nothing run each time: :220 a here-document feeding Python from standard input; :997 Python's name followed by a dash (a version check); :1501 a sed whose text held the interpreter's name; :1562 a grep whose search pattern held it (a repeat of the search-pattern slip); also a command run outside the repository (:158) and a no-effect part (a copy of a file that did not exist).
 
+Occurrences in session 2026-10-15-2247 (../History/2026-10/2026-10-15-2247-the-rust-port-on-main-and-the-hardening-task-on-its-branch.md):
+- **2026-10-15.** No guard refusal; command slips with no effect: :309 an `rm -rf` of a folder that did not exist (a forbidden form, not refused); seds that missed their pattern or wrote a wrong name into a header comment, each corrected before any hash or run; a call to a tool script that did not exist; one pre-request output not saved.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
