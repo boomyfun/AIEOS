@@ -1,14 +1,16 @@
-# AIEOS: the stack benchmark (TASK-039; Master Plan revision 4 §4; docs/plan/m4-exit-review.md §6), revision 4
+# AIEOS: the stack benchmark (TASK-039; Master Plan revision 4 §4; docs/plan/m4-exit-review.md §6), revision 5
 # (decisions D-765 to D-767, with erratum E1 of decision D-773; the reference export of TASK-041; the TypeScript
-# port's type check and run of TASK-043; the Go port's vet, format check, build, run, compare and tests of TASK-044;
-# the Rust port's format check, lint, build, run, compare and tests of TASK-045; each port with the runners' own
-# toolchain, not downloaded). It runs, on GitHub's hosted Linux and Windows runners, the export
+# port's type check and run of TASK-043; the Go port's vet, format check, build, run, compare and tests of TASK-044,
+# with GOTOOLCHAIN=local, GOPROXY=off and CGO_ENABLED=0; the Rust port's format check, lint, build, run, compare and
+# tests of TASK-045; TASK-046's hardening: gofmt's own exit kept, and in each port step, after its compare, one run of
+# the port's program with no argument that must exit non-zero and print nothing). Every port's own toolchain (node, go,
+# cargo and rustc) is the runners', not downloaded. It runs, on GitHub's hosted Linux and Windows runners, the export
 # of the frozen fixtures and the reference export into the job's temporary folder, prints the toolchain versions, and
 # runs each language port only when its folder bench/<language>/ exists. It reads only: it checks
 # out the pushed commit from the repository's public address, built from the runner's server and repository variables,
-# with no credential, and makes one download, the pinned type checker (TypeScript 6.0.3) from the npm registry, checked
-# by its integrity value before it is used; it uses no action, no secret and no token, writes nothing to the repository
-# and calls no API.
+# with no credential, and each job makes one download, the pinned type checker (TypeScript 6.0.3) from the npm
+# registry, checked by its integrity value before it is used; it uses no action, no secret and no token, writes
+# nothing to the repository and calls no API.
 # Its results are advisory (DM A29, A31): they are this run's
 # job logs only, and no record of the governor or of the CI workflow aieos-checks.yml reads them. It is not a
 # trust-boundary measurement (Master Plan §9 item 3). Who decides a change to this file: the decision agent under DM A66,
@@ -81,6 +83,8 @@ jobs:
           if [ -d bench/ts ]; then
             (cd bench/ts && node main.ts "$RUNNER_TEMP/fixtures.json") > "$RUNNER_TEMP/ts.json"
             $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/reference.json" "$RUNNER_TEMP/ts.json"
+            if (cd bench/ts && node main.ts) > "$RUNNER_TEMP/ts-noarg.txt"; then echo "ts: the port exits 0 with no argument"; false; fi
+            test ! -s "$RUNNER_TEMP/ts-noarg.txt"
             (cd bench/ts && node test.ts "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")
           else
             echo "no port in bench/ts"
@@ -90,9 +94,11 @@ jobs:
           if [ -d bench/go ]; then
             export GOTOOLCHAIN=local GOPROXY=off CGO_ENABLED=0
             mkdir "$RUNNER_TEMP/go"
-            (cd bench/go && go vet . && test -z "$(gofmt -l .)" && go build -trimpath -o "$RUNNER_TEMP/go/port.exe" .)
+            (cd bench/go && go vet . && out="$(gofmt -l .)" && test -z "$out" && go build -trimpath -o "$RUNNER_TEMP/go/port.exe" .)
             "$RUNNER_TEMP/go/port.exe" "$RUNNER_TEMP/fixtures.json" > "$RUNNER_TEMP/go.json"
             $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/reference.json" "$RUNNER_TEMP/go.json"
+            if "$RUNNER_TEMP/go/port.exe" > "$RUNNER_TEMP/go-noarg.txt"; then echo "go: the port exits 0 with no argument"; false; fi
+            test ! -s "$RUNNER_TEMP/go-noarg.txt"
             (cd bench/go && go test -count=1 . -args "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")
           else
             echo "no port in bench/go"
@@ -107,6 +113,9 @@ jobs:
             (cd bench/rust && cargo fmt --check && cargo clippy --locked --offline --release -- -D warnings && cargo build --locked --offline --release)
             (cd bench/rust && cargo run --locked --offline --release --quiet -- "$RUNNER_TEMP/fixtures.json") > "$RUNNER_TEMP/rust.json"
             $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/reference.json" "$RUNNER_TEMP/rust.json"
+            p="$RUNNER_TEMP/rust/release/port"; if [ -f "$p.exe" ]; then p="$p.exe"; fi
+            if "$p" > "$RUNNER_TEMP/rust-noarg.txt"; then echo "rust: the port exits 0 with no argument"; false; fi
+            test ! -s "$RUNNER_TEMP/rust-noarg.txt"
             (cd bench/rust && cargo test --locked --offline --release -- "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")
           else
             echo "no port in bench/rust"
@@ -162,6 +171,8 @@ jobs:
           if [ -d bench/ts ]; then
             (cd bench/ts && node main.ts "$RUNNER_TEMP/fixtures.json") > "$RUNNER_TEMP/ts.json"
             $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/reference.json" "$RUNNER_TEMP/ts.json"
+            if (cd bench/ts && node main.ts) > "$RUNNER_TEMP/ts-noarg.txt"; then echo "ts: the port exits 0 with no argument"; false; fi
+            test ! -s "$RUNNER_TEMP/ts-noarg.txt"
             (cd bench/ts && node test.ts "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")
           else
             echo "no port in bench/ts"
@@ -171,9 +182,11 @@ jobs:
           if [ -d bench/go ]; then
             export GOTOOLCHAIN=local GOPROXY=off CGO_ENABLED=0
             mkdir "$RUNNER_TEMP/go"
-            (cd bench/go && go vet . && test -z "$(gofmt -l .)" && go build -trimpath -o "$RUNNER_TEMP/go/port.exe" .)
+            (cd bench/go && go vet . && out="$(gofmt -l .)" && test -z "$out" && go build -trimpath -o "$RUNNER_TEMP/go/port.exe" .)
             "$RUNNER_TEMP/go/port.exe" "$RUNNER_TEMP/fixtures.json" > "$RUNNER_TEMP/go.json"
             $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/reference.json" "$RUNNER_TEMP/go.json"
+            if "$RUNNER_TEMP/go/port.exe" > "$RUNNER_TEMP/go-noarg.txt"; then echo "go: the port exits 0 with no argument"; false; fi
+            test ! -s "$RUNNER_TEMP/go-noarg.txt"
             (cd bench/go && go test -count=1 . -args "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")
           else
             echo "no port in bench/go"
@@ -188,6 +201,9 @@ jobs:
             (cd bench/rust && cargo fmt --check && cargo clippy --locked --offline --release -- -D warnings && cargo build --locked --offline --release)
             (cd bench/rust && cargo run --locked --offline --release --quiet -- "$RUNNER_TEMP/fixtures.json") > "$RUNNER_TEMP/rust.json"
             $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/reference.json" "$RUNNER_TEMP/rust.json"
+            p="$RUNNER_TEMP/rust/release/port"; if [ -f "$p.exe" ]; then p="$p.exe"; fi
+            if "$p" > "$RUNNER_TEMP/rust-noarg.txt"; then echo "rust: the port exits 0 with no argument"; false; fi
+            test ! -s "$RUNNER_TEMP/rust-noarg.txt"
             (cd bench/rust && cargo test --locked --offline --release -- "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")
           else
             echo "no port in bench/rust"
