@@ -1,6 +1,6 @@
 # The stack benchmark's port brief
 
-> - **Status:** revision 0. Non-binding, like `docs/plan/m4-exit-review.md`: it plans and decides nothing that a decision matrix (DM) row, a bound document or a task contract decides. Its text is decided by the decision agent (decision D-829); it changes only by a decision of its own, applied to every port not yet written, and each change is recorded as a limit of the benchmark's results (decision D-794 Q5).
+> - **Status:** revision 1. Non-binding, like `docs/plan/m4-exit-review.md`: it plans and decides nothing that a decision matrix (DM) row, a bound document or a task contract decides. Its text is decided by the decision agent (decision D-829); it changes only by a decision of its own, applied to every port not yet written, and each change is recorded as a limit of the benchmark's results (decision D-794 Q5).
 > - **Purpose:** the one brief that every language port of round 1 of the stack benchmark is written from (`docs/plan/m4-exit-review.md` §6; Master Plan §4, the benchmark; DEF-0063), so that the three ports (TypeScript, Go, Rust) are written under the same conditions.
 > - **Sources:** the decisions D-765 to D-767, D-773, D-794, D-800, D-814 to D-818 and D-827; decision files are kept outside the repository (`docs/WORKING-RECORDS.md`).
 
@@ -27,6 +27,7 @@
 - It computes every record from the case's request, inputs and records in the fixture document. Its code embeds no part of the reference document and uses no case's expected values; only its own tests may read the reference document or the expected values, as the expected output.
 - It prints to standard output one document byte-equal to the reference document: one object whose keys are `"<folder>/<file stem>"` (30 keys) and whose values are the lists of that file's case records in case order, in the canonical text (sorted keys, the separators and escaping of `canonical_text`, ASCII only, LF line ends, one final LF), with exactly one placeholder: in every record that has `engine_identity.python`, its value is the text `<engine>`. No other value is replaced; record ids are computed, not copied.
 - It fails closed: on a missing or extra argument, a document that is not of the fixture document's form, or any case it cannot compute, it exits non-zero and prints nothing to standard output (the whole document is built before the single write).
+- An unexpected error inside a computation is a case it cannot compute. Where the Python returns an error record that names a Python exception type, it fails closed instead: `resume_check.check`'s "an input could not be read: <type>" and "the check could not complete: <type>". No fixture reaches these paths, and the type names are Python's own, so no port can reproduce them; every port treats them alike, and the results state it as a limit.
 
 ## 3. Rules for every port
 
@@ -46,3 +47,4 @@
 ## 5. Revisions
 
 - Revision 0: first text (decisions D-827 and D-829), written after TASK-041 rather than before it as decision D-794 Q6 ordered (a departure recorded in DEF-0063); no port had been written.
+- Revision 1 (decision D-854): §2 states how every port treats the two unexpected-error paths of `resume_check.check`, as the TypeScript port (TASK-043) already does (decision D-849); written after that port and before the Go and Rust ports, so it changes no port already written; recorded as a limit of the results (DEF-0063).
