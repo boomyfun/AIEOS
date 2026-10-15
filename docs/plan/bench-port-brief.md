@@ -1,8 +1,8 @@
 # The stack benchmark's port brief
 
-> - **Status:** revision 2. Non-binding, like `docs/plan/m4-exit-review.md`: it plans and decides nothing that a decision matrix (DM) row, a bound document or a task contract decides. Its text is decided by the decision agent (decision D-829); it changes only by a decision of its own, applied to every port not yet written, and each change is recorded as a limit of the benchmark's results (decision D-794 Q5).
-> - **Purpose:** the one brief that every language port of round 1 of the stack benchmark is written from (`docs/plan/m4-exit-review.md` §6; Master Plan §4, the benchmark; DEF-0063), so that the three ports (TypeScript, Go, Rust) are written under the same conditions.
-> - **Sources:** the decisions D-765 to D-767, D-773, D-794, D-800, D-814 to D-818 and D-827; decision files are kept outside the repository (`docs/WORKING-RECORDS.md`).
+> - **Status:** revision 3. Non-binding, like `docs/plan/m4-exit-review.md`: it plans and decides nothing that a decision matrix (DM) row, a bound document or a task contract decides. Its text is decided by the decision agent (decision D-829); it changes only by a decision of its own, applied to every port not yet written, and each change is recorded as a limit of the benchmark's results (decision D-794 Q5).
+> - **Purpose:** the one brief that every language port of the stack benchmark is written from (`docs/plan/m4-exit-review.md` §6; Master Plan §4, the benchmark; DEF-0063), so that the three ports (TypeScript, Go, Rust) are written under the same conditions: round 1 (§1 to §4) and round 2 (§6).
+> - **Sources:** the decisions D-765 to D-767, D-773, D-794, D-800, D-814 to D-818, D-827, D-905 and D-917; decision files are kept outside the repository (`docs/WORKING-RECORDS.md`).
 
 ## 1. Who writes a port, and from what
 
@@ -50,3 +50,35 @@
 - Revision 0: first text (decisions D-827 and D-829), written after TASK-041 rather than before it as decision D-794 Q6 ordered (a departure recorded in DEF-0063); no port had been written.
 - Revision 1 (decision D-854): §2 states how every port treats the two unexpected-error paths of `resume_check.check`, as the TypeScript port (TASK-043) already does (decision D-849); written after that port and before the Go and Rust ports, so it changes no port already written; recorded as a limit of the results (DEF-0063).
 - Revision 2 (decision D-855): §3 states that each language's own toolchain is the hosted runners' and is not pinned in the workflow, as the TypeScript port already ran on the runners' node (TASK-043), while any other build-time tool stays pinned; written before the Go and Rust ports, so it changes no port already written; recorded as a limit of the results (DEF-0063).
+- Revision 3 (decision D-919): §6 adds round 2 (decision D-905; its export TASK-047, accepted and on `main` at `6b026569b4c62ec5d5b061138d8522d2ab651542`, decisions D-917 and D-918); §1 to §4 are unchanged for round 1, and the headers name both rounds; written before any round-2 port, so it changes no port already written; recorded as a limit of the results (DEF-0063).
+
+## 6. Round 2: the event log's append and recovery over a generated log
+
+**6.1 What it is.** Round 2 is `docs/plan/m4-exit-review.md` §6's "the event log's append and recovery over a generated log" (decision D-905): the two pure computations of the bootstrap, `eventlog.append` (TASK-007) and `recovery.reconcile` (TASK-009), with the record forms of `records.py` they use and `records.check_log`. Not the writer (files and SQLite) and not startup (it starts `git`), which §3 forbids a port to do; so no file behaviour is compared, a limit. The order of the round-2 ports is Rust, Go, TypeScript, the reverse of round 1, so the order bias does not fall on the same language twice (decision D-905); it stays a limit.
+
+**6.2 Who writes it, and from what.** Each round-2 port is written by a fresh agent, as §1 says, given exactly these inputs, and nothing else:
+1. this brief;
+2. the Python source of the bootstrap at commit `6b026569b4c62ec5d5b061138d8522d2ab651542`, of these four files only, each checked by its SHA-256 before it is given:
+   - `src/aieos_bootstrap/eventlog.py` (debee5c25e3113872a74ca8329e1a416a6440d718c1dbe2fbea78751571cdd4b);
+   - `src/aieos_bootstrap/recovery.py` (60caf50bab4f5a66e48090f61f8e70c8c3b12bdda7e084b2a1ba2acdaa473f3d);
+   - `src/aieos_bootstrap/records.py` (a85f74851e69979cdce5063c9522237704860c68a89b6f4a26801000c3fcd5b9);
+   - `src/aieos_bootstrap/conformance.py` (70cce9106018f7b49ee608e7eb111708044aef6061c1c21ad5e6dad1cedfeacc);
+3. the two round-2 documents, made at that commit: the input document, printed by `tests/unit/test_export_round2.py --input`, and the reference document, printed by `tests/unit/test_export_round2.py --reference <input document>`, with the source of that module (6fd0c9d2109344a131cf782135ef81a2a24d49d478dc07a955abb0e44b75f6bd) as the description of both forms; each document checked against its pin (`INPUT_SHA256`, `REFERENCE2_SHA256`) before it is given;
+4. the port's own round-1 code under `bench/<language>/`, at that commit, which the round-2 code extends and reuses (its canonical text, its JSON reading, its SHA-256), and nothing of the other two ports;
+5. the port task's contract.
+- If a later task changes one of these files, the same rule as §1 applies (the round-2 pins change with it, TASK-047's contract).
+
+**6.3 What a round-2 port does.**
+- It adds to its package a second program, beside the round-1 program and separate from it, whose one argument is the path of the round-2 input document; the round-1 program, its argument rule and its tests stay as they are (a reading for each port task's contract: the round-1 program's fail-closed rule refuses an extra argument, so round 2 does not become a mode of it).
+- It reads the input document and computes, exactly as the reference export does: for each append call in order, `eventlog.append` with the log carried from call to call (an `appended` result's new log becomes the next call's log; any other result leaves it), giving `{result, reason, findings, seq, line, record}`; for each reconcile case, `recovery.reconcile`, giving `{log, events, expired, findings}`; every bytes value as text and every datetime in the input's `YYYY-MM-DDTHH:MM:SSZ` text form, read as a UTC time.
+- It prints to standard output one document byte-equal to the round-2 reference document: one object with the keys `append` and `reconcile`, in the canonical text of §2; there is no placeholder in round 2 (no record of it carries `engine_identity`).
+- It computes every entry from the input document only; its code embeds no part of the reference document; only its own tests may read the reference document, as the expected output.
+- It fails closed as §2 says (a missing or extra argument, a document not of the input document's form, a call it cannot compute: non-zero exit and nothing on standard output, the whole document built before the single write). Where the Python builds a text that names a Python type (`records.check_log`'s "the line is a JSON <type>, not an object", and the `TypeError` texts of `eventlog.append`, `recovery.reconcile` and `records.check_log` for an argument of the wrong type), the port fails closed instead; the generated input reaches none of these (the reference holds no such text), and the results state it as a limit, as §2 does for round 1.
+
+**6.4 Rules for a round-2 port.** §3's rules hold unchanged, with these additions:
+- SHA-256 (decision D-905 C4): each port uses the SHA-256 its round-1 code already has and adds none: Go the standard library's `crypto/sha256`; TypeScript its own `sha256Hex` in `bench/ts/bytes.ts`; Rust its own `bench/rust/src/sha256.rs`. No new third-party package and no new build-time tool.
+- No clock: every time comes from the input document; `now` is the case's `now`.
+- Its own tests, in its language, for at least: the byte-equality over the whole round-2 input; one append call and one reconcile case checked field by field; the carried log (an entry after an `appended` one and after a refused one); each fail-closed input; the round-1 tests still passing unchanged.
+- The benchmark workflow runs the round-2 program on Linux and Windows after the round-2 export and compares its output with the round-2 reference by `tests/unit/test_export_reference.py --compare` (one object of lists, which `--compare` reads unchanged, TASK-047 AC2); each port task adds that step under its own A66 decision. Each port task also updates TASK-046's pins of its port (the file set, and for Rust `Cargo.lock` if it changes) as a pin update, not a loosening.
+
+**6.5 Review and counting.** As §4, with the port review template unchanged; the round-2 findings are counted per task in the same table form, apart from round 1's.
