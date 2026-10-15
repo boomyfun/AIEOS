@@ -1,7 +1,8 @@
-# AIEOS: the stack benchmark (TASK-039; Master Plan revision 4 §4; docs/plan/m4-exit-review.md §6), revision 2
+# AIEOS: the stack benchmark (TASK-039; Master Plan revision 4 §4; docs/plan/m4-exit-review.md §6), revision 3
 # (decisions D-765 to D-767, with erratum E1 of decision D-773; the reference export of TASK-041; the TypeScript
-# port's type check and run of TASK-043). It runs, on GitHub's hosted Linux and Windows runners, the export of the
-# frozen fixtures and the reference export into the job's temporary folder, prints the toolchain versions, and
+# port's type check and run of TASK-043; the Go port's vet, format check, build, run, compare and tests of TASK-044,
+# with the runners' own go and node, not downloaded). It runs, on GitHub's hosted Linux and Windows runners, the export
+# of the frozen fixtures and the reference export into the job's temporary folder, prints the toolchain versions, and
 # runs each language port only when its folder bench/<language>/ exists. It reads only: it checks
 # out the pushed commit from the repository's public address, built from the runner's server and repository variables,
 # with no credential, and makes one download, the pinned type checker (TypeScript 6.0.3) from the npm registry, checked
@@ -86,7 +87,12 @@ jobs:
       - name: port go (only if bench/go exists)
         run: |
           if [ -d bench/go ]; then
-            cd bench/go && go run . "$RUNNER_TEMP/fixtures.json"
+            export GOTOOLCHAIN=local GOPROXY=off CGO_ENABLED=0
+            mkdir "$RUNNER_TEMP/go"
+            (cd bench/go && go vet . && test -z "$(gofmt -l .)" && go build -trimpath -o "$RUNNER_TEMP/go/port.exe" .)
+            "$RUNNER_TEMP/go/port.exe" "$RUNNER_TEMP/fixtures.json" > "$RUNNER_TEMP/go.json"
+            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/reference.json" "$RUNNER_TEMP/go.json"
+            (cd bench/go && go test -count=1 . -args "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")
           else
             echo "no port in bench/go"
           fi
@@ -155,7 +161,12 @@ jobs:
       - name: port go (only if bench/go exists)
         run: |
           if [ -d bench/go ]; then
-            cd bench/go && go run . "$RUNNER_TEMP/fixtures.json"
+            export GOTOOLCHAIN=local GOPROXY=off CGO_ENABLED=0
+            mkdir "$RUNNER_TEMP/go"
+            (cd bench/go && go vet . && test -z "$(gofmt -l .)" && go build -trimpath -o "$RUNNER_TEMP/go/port.exe" .)
+            "$RUNNER_TEMP/go/port.exe" "$RUNNER_TEMP/fixtures.json" > "$RUNNER_TEMP/go.json"
+            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/reference.json" "$RUNNER_TEMP/go.json"
+            (cd bench/go && go test -count=1 . -args "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")
           else
             echo "no port in bench/go"
           fi

@@ -312,6 +312,85 @@ class TypeCheckTests(unittest.TestCase):
             self.assertRegex(getattr(TypeCheckTests, name).__doc__ or '', r'^TASK-043 AC\d+', name)
 
 
+# TASK-044 AC8: the Go port's step (decision D-855 B3, B4), its module file, and the checks carried from TASK-043
+# (decision D-849; D-855 B5 (i)): the guard count per job and the whole TypeScript type-check step.
+GO_STEP = ('          if [ -d bench/go ]; then\n'
+           '            export GOTOOLCHAIN=local GOPROXY=off CGO_ENABLED=0\n'
+           '            mkdir "$RUNNER_TEMP/go"\n'
+           '            (cd bench/go && go vet . && test -z "$(gofmt -l .)"'
+           ' && go build -trimpath -o "$RUNNER_TEMP/go/port.exe" .)\n'
+           '            "$RUNNER_TEMP/go/port.exe" "$RUNNER_TEMP/fixtures.json" > "$RUNNER_TEMP/go.json"\n'
+           '            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/reference.json" "$RUNNER_TEMP/go.json"\n'
+           '            (cd bench/go && go test -count=1 . -args "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")\n'
+           '          else\n'
+           '            echo "no port in bench/go"\n'
+           '          fi\n')
+TS_CHECK_STEP = ('      - name: type-check ts (only if bench/ts exists)\n'
+                 '        run: |\n'
+                 '          if [ -d bench/ts ]; then\n'
+                 '            mkdir "$RUNNER_TEMP/tsc"\n'
+                 '            ' + CURL + '\n'
+                 '            got="sha512-$(openssl dgst -sha512 -binary "$RUNNER_TEMP/tsc/typescript-6.0.3.tgz" | base64 -w0)"\n'
+                 '            if [ "$got" != "' + TSC_INTEGRITY + '" ]; then\n'
+                 '              echo "the type checker\'s integrity differs: $got"\n'
+                 '              exit 1\n'
+                 '            fi\n'
+                 '            (cd "$RUNNER_TEMP/tsc" && tar -xzf typescript-6.0.3.tgz)\n'
+                 '            node "$RUNNER_TEMP/tsc/package/bin/tsc" -p bench/ts\n'
+                 '          else\n'
+                 '            echo "no port in bench/ts"\n'
+                 '          fi\n')
+GO_MOD = b'module aieosbench\n\ngo 1.24\n'
+BENCH_GO = REPO / 'bench' / 'go'
+
+
+def jobs():
+    parts = workflow().split('\n  windows:\n')
+    if len(parts) != 2:
+        raise AssertionError('not exactly two jobs')
+    return parts
+
+
+class GoStepTests(unittest.TestCase):
+    def test_go_step(self):
+        """TASK-044 AC8: in each job the go step runs exactly the pinned commands under its one guard, with the toolchain
+        switch and the module proxy off before the first go command; no go get, install, mod download or env -w."""
+        for job in jobs():
+            name = '      - name: port go (only if bench/go exists)\n        run: |\n'
+            self.assertEqual(job.count(name), 1)
+            self.assertEqual(job.count(name + GO_STEP), 1)
+            self.assertLess(job.index('export GOTOOLCHAIN=local GOPROXY=off'), job.index('go vet .'))
+        text = workflow()
+        for word in ('go get', 'go install', 'go mod', 'go env', 'GOFLAGS', 'GONOSUMDB', 'GOPRIVATE'):
+            self.assertNotIn(word, text)
+
+    def test_guards_per_job(self):
+        """TASK-044 AC8: in each job, the bench/ts guard twice (the type check and the port), bench/go and bench/rust
+        once."""
+        for job in jobs():
+            for port, count in (('ts', 2), ('go', 1), ('rust', 1)):
+                self.assertEqual(job.count('if [ -d bench/%s ]; then' % port), count, port)
+
+    def test_ts_type_check_step(self):
+        """TASK-044 AC8: the whole TypeScript type-check step of each job, its got= line included, is TASK-043's."""
+        for job in jobs():
+            self.assertEqual(job.count(TS_CHECK_STEP), 1)
+
+    def test_go_module(self):
+        """TASK-044 AC8: when bench/go exists, its go.mod is exactly the module line and go 1.24 (no require, replace
+        or toolchain line), and it has no go.sum and no vendor folder."""
+        if not BENCH_GO.is_dir():
+            return
+        self.assertEqual((BENCH_GO / 'go.mod').read_bytes(), GO_MOD)
+        self.assertFalse((BENCH_GO / 'go.sum').exists())
+        self.assertFalse((BENCH_GO / 'vendor').exists())
+
+    def test_naming(self):
+        """TASK-044 AC10: every test of this class names the AC it stands for in its docstring."""
+        for name in unittest.TestLoader().getTestCaseNames(GoStepTests):
+            self.assertRegex(getattr(GoStepTests, name).__doc__ or '', r'^TASK-044 AC\d+', name)
+
+
 class SuiteTests(unittest.TestCase):
     def test_suite_runs_no_export(self):
         """TASK-039 AC8: run_tests.py keeps its three groups, and this module runs the export only under its main guard."""
