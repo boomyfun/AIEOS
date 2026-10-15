@@ -241,6 +241,9 @@ Occurrences in session 2026-10-15-2126 (../History/2026-10/2026-10-15-2126-the-r
 Occurrences in session 2026-10-15-2247 (../History/2026-10/2026-10-15-2247-the-rust-port-on-main-and-the-hardening-task-on-its-branch.md):
 - **2026-10-15.** No guard refusal; command slips with no effect: :309 an `rm -rf` of a folder that did not exist (a forbidden form, not refused); seds that missed their pattern or wrote a wrong name into a header comment, each corrected before any hash or run; a call to a tool script that did not exist; one pre-request output not saved.
 
+Occurrences in session 2026-10-15-2351 (../History/2026-10/2026-10-15-2351-the-hardening-on-main-and-round-2s-export-on-its-branch.md):
+- **2026-10-16.** Two guard refusals, both the worker's errors and neither ran: a pipe into Python's inline form with a dash and without the timeout, and a grep pattern holding Python's name followed by a dash. Command slips with no effect: five Bash calls before tbq.sh existed, a run of a tool without its arguments, a command part printing nothing, a sed range that dropped a closing brace, a sed that lost a backslash, and a trial run of the end builder that stopped on a missing folder before writing, each found before use.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

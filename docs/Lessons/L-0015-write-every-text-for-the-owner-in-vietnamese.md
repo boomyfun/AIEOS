@@ -210,6 +210,9 @@ Occurrences in session 2026-10-15-2126 (../History/2026-10/2026-10-15-2126-the-r
 Occurrences in session 2026-10-15-2247 (../History/2026-10/2026-10-15-2247-the-rust-port-on-main-and-the-hardening-task-on-its-branch.md):
 - **2026-10-15.** Eight English text blocks before tool calls: :286, :308, :347, :403, :525, :648, :1037 and :1086, each a short line at the start of a new piece of work, :347 right after the harness's note asking what is being done; tools/tbq.sh showed each at the next call; each listed before the next gated command and told to the owner. With session 917ba401's :1939 (carried), the practice of writing nothing at all before a tool call still fails at the start of new work.
 
+Occurrences in session 2026-10-15-2351 (../History/2026-10/2026-10-15-2351-the-hardening-on-main-and-round-2s-export-on-its-branch.md):
+- **2026-10-16.** Six English text blocks before tool calls: :84, :287, :433, :456, :1419 and :1623, each a short line at the start of a new piece of work, most right after the harness asked what was being done; each listed in a request, 1419 appended to the listing before the request named it.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

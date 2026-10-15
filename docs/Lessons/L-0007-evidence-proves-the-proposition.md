@@ -47,6 +47,9 @@ Occurrences in session 2026-10-11-2112 (../History/2026-10/2026-10-11-2112-test-
 Occurrences in session 2026-10-11-2233 (../History/2026-10/2026-10-11-2233-stale-evidence-computation-accepted-and-on-main.md):
 - **2026-10-11 (a067 :2036; D-542, D-543).** The last session's closing reply carried its owner texts word for word but re-laid out the checked line around them (a sentence added, the opening and closing reworded); line_sent.py against the checked file gave "sent as text: False". The check was made at this session's start, as the reply promised, and the owner was told.
 
+Occurrences in session 2026-10-15-2351 (../History/2026-10/2026-10-15-2351-the-hardening-on-main-and-round-2s-export-on-its-branch.md):
+- **2026-10-16.** A local text scan for bandit's patterns was reported as "every bandit pattern 0"; it was a proxy, not bandit, and missed B105 reading a dict literal `'fencing_token': None` as a hard-coded password, so the branch run's bandit step failed (run 298). A local pattern scan is described as a proxy, never as bandit's result; the CI's bandit run is the evidence.
+
 ## Why it happens
 - Proxies are cheaper than the real check.
 - The same model picks the evidence and judges it.
