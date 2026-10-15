@@ -211,6 +211,13 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(imports, ['import io', 'import json', 'import sys', 'import unittest', 'from pathlib import Path'])
 
 
+# TASK-043 AC12: the one download the benchmark workflow may make, the pinned type checker (decision D-844).
+TSC_URL = 'https://registry.npmjs.org/typescript/-/typescript-6.0.3.tgz'
+TSC_INTEGRITY = 'sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=='
+CURL = ('curl -sS --fail --proto =https --max-time 120 --max-filesize 20000000 ' + TSC_URL
+        + ' -o "$RUNNER_TEMP/tsc/typescript-6.0.3.tgz"')
+
+
 def workflow():
     return WORKFLOW.read_bytes().decode('utf-8')
 
@@ -263,21 +270,46 @@ class WorkflowTests(unittest.TestCase):
         self.assertTrue(half[1].startswith('- name: checkout check'))
 
     def test_no_secret_token_or_write(self):
-        """TASK-039 AC3: no secret, no token, no push, tag, upload, comment or API call."""
+        """TASK-039 AC3: no secret, no token, no push, tag, upload, comment or API call; TASK-043 AC12: curl only as the
+        pinned type checker download, exactly twice."""
         text = workflow()
+        self.assertEqual(text.count(CURL), 2)
+        text = text.replace(CURL, '')
         for word in ('secrets.', 'GITHUB_TOKEN', 'github.token', 'git push', 'git tag', 'upload', 'gh ', 'curl', 'wget',
                      'github.com', 'api.github', 'Invoke-WebRequest', 'write-all', ': write', '${{'):
             self.assertNotIn(word, text)
 
     def test_steps(self):
-        """TASK-039 AC6: the export into the temporary folder, the toolchain versions, and each port only if it exists."""
+        """TASK-039 AC6: the export into the temporary folder, the toolchain versions, and each port only if it exists;
+        TASK-043 AC12: the bench/ts guard twice per job (the type check and the port)."""
         text = workflow()
         self.assertEqual(text.count('tests/unit/test_export_fixtures.py --root tests/conformance > "$RUNNER_TEMP/fixtures.json"'), 2)
         for tool in ('node --version', 'go version', 'rustc --version'):
             self.assertEqual(text.count(tool), 2)
         self.assertNotIn('powershell', text.lower())
-        for port in ('ts', 'go', 'rust'):
-            self.assertEqual(text.count('if [ -d bench/%s ]; then' % port), 2)
+        for port, count in (('ts', 4), ('go', 2), ('rust', 2)):
+            self.assertEqual(text.count('if [ -d bench/%s ]; then' % port), count)
+
+
+class TypeCheckTests(unittest.TestCase):
+    def test_pinned_download(self):
+        """TASK-043 AC12: each job fetches only the pinned tarball and checks its integrity before tar and the run."""
+        text = workflow()
+        jobs = text.split('\n  windows:\n')
+        self.assertEqual(len(jobs), 2)
+        for job in jobs:
+            self.assertEqual(job.count(CURL), 1)
+            self.assertEqual(job.count(TSC_URL), 1)
+            self.assertEqual(job.count(TSC_INTEGRITY), 1)
+            order = [job.index(CURL), job.index('if [ "$got" != "' + TSC_INTEGRITY + '" ]; then'),
+                     job.index('tar -xzf typescript-6.0.3.tgz'), job.index('node "$RUNNER_TEMP/tsc/package/bin/tsc" -p bench/ts')]
+            self.assertEqual(order, sorted(order))
+            self.assertEqual(job.count('exit 1'), 1)
+
+    def test_naming(self):
+        """TASK-043 AC12: every test of this class names the AC it stands for in its docstring."""
+        for name in unittest.TestLoader().getTestCaseNames(TypeCheckTests):
+            self.assertRegex(getattr(TypeCheckTests, name).__doc__ or '', r'^TASK-043 AC\d+', name)
 
 
 class SuiteTests(unittest.TestCase):

@@ -1,9 +1,12 @@
-# AIEOS: the stack benchmark (TASK-039; Master Plan revision 4 §4; docs/plan/m4-exit-review.md §6), revision 1
-# (decisions D-765 to D-767, with erratum E1 of decision D-773). It runs, on GitHub's hosted Linux and Windows runners,
-# the export of the frozen conformance fixtures into the job's temporary folder, prints the toolchain versions, and
-# runs each language port only when its folder bench/<language>/ exists (no port exists yet). It reads only: it checks
+# AIEOS: the stack benchmark (TASK-039; Master Plan revision 4 §4; docs/plan/m4-exit-review.md §6), revision 2
+# (decisions D-765 to D-767, with erratum E1 of decision D-773; the reference export of TASK-041; the TypeScript
+# port's type check and run of TASK-043). It runs, on GitHub's hosted Linux and Windows runners, the export of the
+# frozen fixtures and the reference export into the job's temporary folder, prints the toolchain versions, and
+# runs each language port only when its folder bench/<language>/ exists. It reads only: it checks
 # out the pushed commit from the repository's public address, built from the runner's server and repository variables,
-# with no credential; it uses no action, no secret and no token, writes nothing to the repository and calls no API.
+# with no credential, and makes one download, the pinned type checker (TypeScript 6.0.3) from the npm registry, checked
+# by its integrity value before it is used; it uses no action, no secret and no token, writes nothing to the repository
+# and calls no API.
 # Its results are advisory (DM A29, A31): they are this run's
 # job logs only, and no record of the governor or of the CI workflow aieos-checks.yml reads them. It is not a
 # trust-boundary measurement (Master Plan §9 item 3). Who decides a change to this file: the decision agent under DM A66,
@@ -56,10 +59,27 @@ jobs:
           node --version
           go version
           rustc --version
+      - name: type-check ts (only if bench/ts exists)
+        run: |
+          if [ -d bench/ts ]; then
+            mkdir "$RUNNER_TEMP/tsc"
+            curl -sS --fail --proto =https --max-time 120 --max-filesize 20000000 https://registry.npmjs.org/typescript/-/typescript-6.0.3.tgz -o "$RUNNER_TEMP/tsc/typescript-6.0.3.tgz"
+            got="sha512-$(openssl dgst -sha512 -binary "$RUNNER_TEMP/tsc/typescript-6.0.3.tgz" | base64 -w0)"
+            if [ "$got" != "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==" ]; then
+              echo "the type checker's integrity differs: $got"
+              exit 1
+            fi
+            (cd "$RUNNER_TEMP/tsc" && tar -xzf typescript-6.0.3.tgz)
+            node "$RUNNER_TEMP/tsc/package/bin/tsc" -p bench/ts
+          else
+            echo "no port in bench/ts"
+          fi
       - name: port ts (only if bench/ts exists)
         run: |
           if [ -d bench/ts ]; then
-            cd bench/ts && node run.js "$RUNNER_TEMP/fixtures.json"
+            (cd bench/ts && node main.ts "$RUNNER_TEMP/fixtures.json") > "$RUNNER_TEMP/ts.json"
+            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/reference.json" "$RUNNER_TEMP/ts.json"
+            (cd bench/ts && node test.ts "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")
           else
             echo "no port in bench/ts"
           fi
@@ -108,10 +128,27 @@ jobs:
           node --version
           go version
           rustc --version
+      - name: type-check ts (only if bench/ts exists)
+        run: |
+          if [ -d bench/ts ]; then
+            mkdir "$RUNNER_TEMP/tsc"
+            curl -sS --fail --proto =https --max-time 120 --max-filesize 20000000 https://registry.npmjs.org/typescript/-/typescript-6.0.3.tgz -o "$RUNNER_TEMP/tsc/typescript-6.0.3.tgz"
+            got="sha512-$(openssl dgst -sha512 -binary "$RUNNER_TEMP/tsc/typescript-6.0.3.tgz" | base64 -w0)"
+            if [ "$got" != "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==" ]; then
+              echo "the type checker's integrity differs: $got"
+              exit 1
+            fi
+            (cd "$RUNNER_TEMP/tsc" && tar -xzf typescript-6.0.3.tgz)
+            node "$RUNNER_TEMP/tsc/package/bin/tsc" -p bench/ts
+          else
+            echo "no port in bench/ts"
+          fi
       - name: port ts (only if bench/ts exists)
         run: |
           if [ -d bench/ts ]; then
-            cd bench/ts && node run.js "$RUNNER_TEMP/fixtures.json"
+            (cd bench/ts && node main.ts "$RUNNER_TEMP/fixtures.json") > "$RUNNER_TEMP/ts.json"
+            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/reference.json" "$RUNNER_TEMP/ts.json"
+            (cd bench/ts && node test.ts "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")
           else
             echo "no port in bench/ts"
           fi

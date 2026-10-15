@@ -18,7 +18,9 @@ The pin: REFERENCE_SHA256 is the SHA-256 of the document at this task's commit. 
 governor's or the Resume Check's decision code, or a frozen fixture of round 1, also changes this pin, pin-only, with
 one exact new value (conformance-files.md section 8 (i) reading), and its contract says so. `--check` fails when the
 document's hash differs from the pin; the benchmark workflow runs it on Linux and Windows, and the unit tests check
-the pin at every push on Linux.
+the pin at every push on Linux. The benchmark workflow (.github/workflows/aieos-bench.yml) is where this module runs as
+a script, by design: each job runs the reference export right after the fixture export, and its first run with that
+step was the workflow's run 2, at TASK-041's landing (TASK-043 AC8).
 
 `--compare <a> <b>` compares two documents byte for byte and names the first key (and case) that differs.
 
@@ -147,7 +149,7 @@ def first_difference(a, b):
         return None
     try:
         da, db = json.loads(a.decode('ascii')), json.loads(b.decode('ascii'))
-    except (UnicodeDecodeError, ValueError):
+    except (UnicodeDecodeError, ValueError, RecursionError):
         return 'not a reference document'
     for d, raw in ((da, a), (db, b)):
         if not isinstance(d, dict) or not all(isinstance(v, list) for v in d.values()):
@@ -380,8 +382,15 @@ class CompareTests(unittest.TestCase):
                     json.dumps({'fixtures/a': []}).encode('ascii')):
             self.assertEqual(first_difference(self.doc, bad), 'not a reference document', bad)
 
+    def test_deep_nesting(self):
+        """TASK-041 AC4; TASK-043 AC8 (d): a document nested too deep to read is "not a reference document"."""
+        deep = b'{"fixtures/a": ' + b'[' * 200000 + b']' * 200000 + b'}\n'
+        self.assertEqual(first_difference(self.doc, deep), 'not a reference document')
+        self.assertEqual(first_difference(deep, self.doc), 'not a reference document')
+
     def test_compare_main(self):
-        """TASK-041 AC4: --compare exits 0 on equal files, 1 with a message on a difference, 2 on a missing path."""
+        """TASK-041 AC4: --compare exits 0 on equal files, 1 with a message on a difference, 2 on a missing path;
+        TASK-043 AC8 (b): a malformed first document is refused as well."""
         out, err = io.BytesIO(), io.StringIO()
         with mock.patch.object(Path, 'read_bytes', side_effect=[self.doc, self.doc]):
             self.assertEqual(main(['--compare', 'a', 'b'], out, err), 0)
@@ -392,15 +401,23 @@ class CompareTests(unittest.TestCase):
         self.assertEqual(out.getvalue(), b'')
         self.assertIn('not a reference document', err.getvalue())
         out, err = io.BytesIO(), io.StringIO()
+        with mock.patch.object(Path, 'read_bytes', side_effect=[b'{', self.doc]):
+            self.assertEqual(main(['--compare', 'a', 'b'], out, err), 1)
+        self.assertEqual(out.getvalue(), b'')
+        self.assertIn('not a reference document', err.getvalue())
+        out, err = io.BytesIO(), io.StringIO()
         self.assertEqual(main(['--compare', str(REPO / 'no-such-file'), str(REPO / 'no-such-file')], out, err), 2)
         self.assertEqual(out.getvalue(), b'')
 
 
 class SuiteTests(unittest.TestCase):
     def test_imports(self):
-        """TASK-041 AC9: the module imports only the standard library names listed and aieos_bootstrap."""
-        lines = Path(__file__).read_bytes().decode('utf-8').split('\n')
-        imports = [ln for ln in lines if ln.startswith(('import ', 'from '))]
+        """TASK-041 AC9: the module imports only the standard library names listed and aieos_bootstrap; TASK-043 AC8
+        (a): indented import lines count too, and the built-in import function is not named."""
+        text = Path(__file__).read_bytes().decode('utf-8')
+        self.assertNotIn('_' + '_import_' + '_', text)
+        lines = text.split('\n')
+        imports = [ln.strip() for ln in lines if ln.lstrip().startswith(('import ', 'from '))]
         self.assertEqual(imports, ['import copy', 'import hashlib', 'import io', 'import json', 'import sys',
                                    'import unittest', 'from pathlib import Path', 'from unittest import mock',
                                    'from aieos_bootstrap import conformance, governor, resume_check  # noqa: E402'])
@@ -415,8 +432,13 @@ class SuiteTests(unittest.TestCase):
                                               '        sys.exit(main(sys.argv[1:]))', '    unittest.main()', ''])
 
     def test_workflow_step(self):
-        """TASK-041 AC6: each job runs the reference export with --check into the temporary folder, once."""
+        """TASK-041 AC6: each job runs the reference export with --check into the temporary folder, once; TASK-043 AC8
+        (c): in each job it is the step right after the fixture export."""
         text = (REPO / '.github' / 'workflows' / 'aieos-bench.yml').read_bytes().decode('utf-8')
+        for job in text.split('\n  windows:\n'):
+            names = [ln.strip() for ln in job.split('\n') if ln.strip().startswith('- name:')]
+            i = names.index('- name: export the frozen fixtures into the temporary folder')
+            self.assertEqual(names[i + 1], '- name: reference export (bootstrap decisions over the frozen fixtures)')
         cmd = ('$PY tests/unit/test_export_reference.py --root tests/conformance --check > '
                '"$RUNNER_TEMP/reference.json"')
         self.assertEqual(text.count(cmd), 2)
