@@ -244,6 +244,9 @@ Occurrences in session 2026-10-15-2247 (../History/2026-10/2026-10-15-2247-the-r
 Occurrences in session 2026-10-15-2351 (../History/2026-10/2026-10-15-2351-the-hardening-on-main-and-round-2s-export-on-its-branch.md):
 - **2026-10-16.** Two guard refusals, both the worker's errors and neither ran: a pipe into Python's inline form with a dash and without the timeout, and a grep pattern holding Python's name followed by a dash. Command slips with no effect: five Bash calls before tbq.sh existed, a run of a tool without its arguments, a command part printing nothing, a sed range that dropped a closing brace, a sed that lost a backslash, and a trial run of the end builder that stopped on a missing folder before writing, each found before use.
 
+Occurrences in session 2026-10-16-0402 (../History/2026-10/2026-10-16-0402-round-2s-export-on-main-and-the-rust-round-2-port-written.md):
+- **2026-10-16.** Four guard refusals, all the worker's errors, none ran: a placeholder command holding a here-document and Python's name with a dash (:322), two grep patterns holding the interpreter's name (:856, :894), and a sed text holding "command -v" and the interpreter's name (:1461), whose change was then made with the Edit tool; command slips with no effect: the placeholder itself, `cat >> /dev/null < /dev/null` (:1567), `python_check=0;` (:1629), and five Bash calls before tbq.sh existed. Correction (decision D-913 amendment 1): session 100674e8 had three guard refusals, not two (its transcript's :266, :358 and :1769).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

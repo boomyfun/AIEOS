@@ -213,6 +213,9 @@ Occurrences in session 2026-10-15-2247 (../History/2026-10/2026-10-15-2247-the-r
 Occurrences in session 2026-10-15-2351 (../History/2026-10/2026-10-15-2351-the-hardening-on-main-and-round-2s-export-on-its-branch.md):
 - **2026-10-16.** Six English text blocks before tool calls: :84, :287, :433, :456, :1419 and :1623, each a short line at the start of a new piece of work, most right after the harness asked what was being done; each listed in a request, 1419 appended to the listing before the request named it.
 
+Occurrences in session 2026-10-16-0402 (../History/2026-10/2026-10-16-0402-round-2s-export-on-main-and-the-rust-round-2-port-written.md):
+- **2026-10-16.** Four English text blocks before tool calls: :320, :1339, :1646 and :1797, each a short line at the start of a new piece of work; each listed with its own command and named in a request.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

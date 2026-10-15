@@ -1,0 +1,53 @@
+# Session 2026-10-16 04:02 (UTC+7): decision files D-897 to D-913; round 2's export (TASK-047) reviewed, accepted, on main and run on Linux and Windows; the port brief's revision 3 on main; the Rust round-2 port (TASK-048) contracted, on main as commit C, and its writer's files accepted as candidates
+
+> - **Status:** working record, non-authoritative. Claude wrote it during this session. It is a claim, not evidence. Owner decisions are in `docs/pre-genesis/decision-matrix.md` (DM). Delegated decisions are in the decision files, kept outside the repository.
+> - **Session and transcript:** session `e35cb796-8f59-4fd5-a2f6-dc47ab1aaef8`. A reference such as (:3) is a line in its transcript.
+> - **Models, by machine:** the worker `claude-opus-5-5`, the owner's choice (reported, not judged); one decision-agent instance on `claude-opus-5-5`, whose own context held the definition's revision 10 (5228fe63…, A41's last value; D-914); five way-2 reviewers on `claude-sonnet-5-5` for TASK-047 (review_models2.py: PASS, slips 0; prompts equal to the briefs byte for byte); the Rust round-2 writer a fresh agent on `claude-opus-5-5` (writer check: PASS, 48 tool calls, no violation).
+> - **Repository:** local and GitHub `main` 35503372 at start; 6b026569 after TASK-047's landing (D-918; two rebuilt commits of the reviewed head ee7bbcb5 with the same diffs and messages); e420c2f9 after the port brief's revision 3 (CS-226, D-920); b6643660 after TASK-048's commit C (CS-227, D-923); then this session's records commit.
+
+## Summary
+
+- **The owner's message:** :3 is the prompt approved in D-913, unchanged but for the app's paste frame (D-914). The start check passed: the decision agent's own text is revision 10 and the models are as the owner set them (D-914).
+- **Decision files D-897 to D-913** written (D-915 and its amendment 1): 889 entries in the folder, the 872 earlier ones unchanged by hash; D-898's amendment 1 and D-913's amendments 1 and 2 given verbatim inside their decisions' files; labels taken by machine from each handback's GROUP line (D-914 C2). The first build said D-913 amendment 1 C3 was met before this session's records existed; D-915 returned it, and it was written "open", rebuilt in a new folder (dec79c) before any write; its met note is appended to D-913's file with this session's records (D-915 C3).
+- **TASK-047, round 2's export:** five way-2 reviews from the hardening template (D-893), with two brief lines corrected for this run (line 3 called the task a hardening task; line 13 said one task commit), a departure decided in D-916 and its amendment 1 (a post-processor replaced exactly those two lines; the diff showed nothing else); all pass, no blocking finding: 20 non-blocking findings listed, 8 counted (D1, D2, D3, D5, D6, D7, D8, D9; D4 not used; R3-3 not counted, recovery.py having one "step 2:" form) (D-917). Reviewer R5 wrote that test_export_reference.py was missing from its folder, which held it; the worker and the decision agent checked the two points it left open. The decision agent's separate review TASK-047-DA-1 passes; TASK-047 accepted at ee7bbcb5 (D-917, one delegated approval). Landed as two rebuilt commits ending at 6b026569 (D-918). Main's run 301 passed; the benchmark's run 7 passed on Linux and Windows, the round-2 step's two checks passing on both with 301177 and 224021 bytes, the Windows argument form working (D-919).
+- **The port brief's revision 3** (D-919, D-920): a new §6 for round 2 (the inputs a fresh writer is given at 6b026569 with their hashes, a second program beside the round-1 program, no placeholder, texts naming a Python type failing closed, each port's own SHA-256, its compare and pin update under its own decisions); §1 to §4 unchanged; on main at e420c2f9 (run 302). D-905 C4's wording "node's standard library" for TypeScript was superseded: the TypeScript port already has its own SHA-256 (bench/ts/bytes.ts) and uses no node crypto module (D-919).
+- **TASK-048, the Rust port's round 2:** scope note (D-921, with the addition that the round-1 run line names `--bin port`), contract revision 0 (D-922), commit C b6643660 (D-923, run 303), the owner told before any code (:1284); the local Rust 1.99.0 toolchain rebuilt without network from session 917ba401's archive, checked against the saved published SHA-256 before unpacking (D-924); a fresh writer on claude-opus-5-5 given only the brief's §6.2 inputs and the round-1 code (D-925, launched at :1400); its seven new files and lib.rs's five added `pub mod` lines accepted as candidates (D-926): round-1 files byte-equal, TASK-046's forbidden-form scan empty, the reference scans with no embedded line, log, id or hash; the local run of the planned rust-step lines on a copy: port's output equal to the round-1 reference (port_test 65 passed), port2's output equal to REFERENCE2_SHA256 (port2_test 45 checks passed), both no-argument probes failing closed. lib.rs also gained one blank line beside the `pub mod` lines, a recorded departure (D-926 Q2). D-926 C1's string scan was over-broad by the decision agent's own wording: its six hits are finding texts and a record kind that eventlog.py and recovery.py hold as constants; the decision agent corrected the rule to exclude strings in the given Python sources (D-927). The A66 element, the pin class, the scratch-clone suite and the first task push are carried (D-927).
+
+## Decisions
+
+| Date | What | Decided by | Recorded in |
+|---|---|---|---|
+| 2026-10-16 | Session start; definition and models; the plan | Decision agent (A41), D-914 | `D-914-…` |
+| 2026-10-16 | The decision files D-897 to D-913; amendment 1 (the line set to open, the rebuild) | Decision agent (A41), D-915 | `D-915-…` |
+| 2026-10-16 | TASK-047's review briefs, two lines corrected; amendment 1 (the post-processor) | Decision agent (A41), D-916 | `D-916-…` |
+| 2026-10-16 | The reviews, the dispositions, TASK-047-DA-1, acceptance | Decision agent (A41, A51), D-917 | `D-917-…` |
+| 2026-10-16 | TASK-047's landing by two rebuilt commits and its push | Decision agent (A41), D-918 | `D-918-…` |
+| 2026-10-16 | The CI reads; the port brief's revision 3 | Decision agent (A41), D-919 | `D-919-…` |
+| 2026-10-16 | CS-226, the brief's commit and push | Decision agent (A41), D-920 | `D-920-…` |
+| 2026-10-16 | TASK-048's scope note | Decision agent (A41, A51), D-921 | `D-921-…` |
+| 2026-10-16 | TASK-048's contract revision 0 | Decision agent (A41, A51), D-922 | `D-922-…` |
+| 2026-10-16 | CS-227, TASK-048's commit C and its push | Decision agent (A41), D-923 | `D-923-…` |
+| 2026-10-16 | The local Rust toolchain from the earlier archive | Decision agent (A41), D-924 | `D-924-…` |
+| 2026-10-16 | The writer's start | Decision agent (A41), D-925 | `D-925-…` |
+| 2026-10-16 | The writer's files as candidates (issued twice, the second after a line-number correction) | Decision agent (A41), D-926 | `D-926-…` |
+| 2026-10-16 | The scan reading; the rest carried; the session end's plan | Decision agent (A41), D-927 | `D-927-…` |
+| 2026-10-16 | This change-set: the records, memory, the push | Decision agent (A41), D-928 | `D-928-…` |
+
+## Carried
+
+- **DEF-0063** stays open: TASK-048's A66 element (the rust step's lines as run locally, revision 7), the pin class in test_export_fixtures.py, the scratch-clone suite and the scans, the first task push and the branch run; then its five way-2 reviews from the port template revision 1, with the readings of D-926 C3 (the blank line in lib.rs; round 1's CI_CLASS `concat!` form against a substring scan), the decision agent's review, acceptance, the landing and the benchmark's run; then the Go and TypeScript round-2 ports. The writer's files are used only at the accepted hashes; the toolchain is rebuilt by rust_local48.sh if this scratchpad's copy is gone.
+- **TASK-047's counted findings D1 to D9** go to the next change of test_export_round2.py or aieos-bench.yml, each its own decision (D7 with TASK-046's carried header fix); the hardening template's two fixed phrases (lines 3 and 13) are to be revised before the next task that is not a port (D-916 C4).
+
+## Problems and mistakes
+
+- **Text blocks before tool calls (L-0015), four:** :320 "Now the writer and gated command.", :1339 "Now the prep script.", :1646 "Now the review lines, DA-1, contract and acceptance texts.", :1797 "Now the archive script and the gated command."; each listed with its own command (1797 first listed as 1792 by a guess and corrected) and named in a request.
+- **Commands (L-0010):** four guard refusals, all the worker's errors, none ran: :322 (a placeholder holding a here-document and Python's name with a dash), :856 and :894 (grep patterns holding the interpreter's name), :1461 (a sed text holding "command -v" and the interpreter's name; the change was then made with the Edit tool on the file). A request first gave :901 for the third (D-919); :894 is right (D-926). The placeholder at :321 is also a filler command; two command parts with no effect: `cat >> /dev/null < /dev/null` (:1567) and `python_check=0;` (:1629). The first five Bash calls ran before tbq.sh existed in the scratchpad (reads and the copy of the tools); the sixth ran it after its seds.
+- **Corrected count of session 100674e8 (D-913 amendment 1 C3):** that session had three guard refusals (:266, :358, :1769 of its transcript), not two as its History, its L-0010 block and its memory clause say.
+- **Errors found by the decision agent in the worker's work:** the decision file D-913 written as met for an act not yet done (D-915); two brief lines false for this task (D-916); the round-1 run line that a second binary would break (D-921); the reference scan covering hex runs only (D-926).
+- **The worker's own errors corrected before a decision:** a proposal to end the session at about 50%, against the owner's rule that a session ends only by the context level, withdrawn before the decision agent ruled (D-919); a method departure in rebuilding the briefs, brought before the launch (D-916 amendment 1).
+
+## State at the end and next step
+
+- **A14:** step 9; M5 in progress; the benchmark: round 1 complete and its results recorded; round 2's export TASK-047 on main and run on both runners; the port brief at revision 3; TASK-048 (the Rust round-2 port) contracted, its writer's files accepted as candidates in the scratchpad, not yet pushed.
+- **Next session:** the definition and model check; the decision files D-914 onward; then TASK-048's A66 element, pins, suite and first push, its five reviews, acceptance and landing (DEF-0063).
+- **Open:** DEF-0004, DEF-0005, DEF-0008, DEF-0011, DEF-0020, DEF-0024, DEF-0026 to DEF-0044, DEF-0046 to DEF-0052, DEF-0054 to DEF-0059, DEF-0061 to DEF-0063.
