@@ -44,12 +44,12 @@ def resume_check_record():
             'sha256': conformance.sha256((ROOT / conformance.RESUME_CHECK_PATH).read_bytes())}
 
 
-RISK_01_SHA256 = '8a0bdb1665dc30998fae3a6926a37f854a38780695e6276d62ce5d9ece06a45b'
+RISK_01_SHA256 = 'd04f33395b7dad7f296038dbdf277dba3fadbd00bfbf85cb8ae32bfc6f8723df'
 
 
 def risk_state(value=None):
     """The state of the set file's RISK-01 entry (TASK-019, contract AC1): 'null' when it names no fixture, 'present'
-    when it names the file conformance.expected_path gives with the SHA-256 that DM row F34's freeze binds, that file
+    when it names the file conformance.expected_path gives with the SHA-256 that DM row F43's freeze binds, that file
     in the tree having that SHA-256; any other value fails. Without a value it reads the tree's set file."""
     if value is None:
         value = conformance.unwrap((ROOT / conformance.SET_FILE).read_bytes())

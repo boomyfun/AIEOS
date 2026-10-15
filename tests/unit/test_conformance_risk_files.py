@@ -545,7 +545,7 @@ class Ac5RulesTest(unittest.TestCase):
 
     def test_the_policy_is_read_rule_by_rule(self):
         self.assertTrue(self.fail_closed)
-        self.assertEqual([rid for rid, _ in self.rules], ['R%d' % i for i in range(1, 12)])
+        self.assertEqual([rid for rid, _ in self.rules], ['R%d' % i for i in range(1, 13)])
         got = self.value['cases'][0]['values']['risk_rules']
         self.assertEqual(len(got), len(self.rules))
         for (rid, want), have in zip(self.rules, got):
