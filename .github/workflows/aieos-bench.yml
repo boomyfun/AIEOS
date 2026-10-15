@@ -1,4 +1,4 @@
-# AIEOS: the stack benchmark (TASK-039; Master Plan revision 4 §4; docs/plan/m4-exit-review.md §6), revision 0
+# AIEOS: the stack benchmark (TASK-039; Master Plan revision 4 §4; docs/plan/m4-exit-review.md §6), revision 1
 # (decisions D-765 to D-767, with erratum E1 of decision D-773). It runs, on GitHub's hosted Linux and Windows runners,
 # the export of the frozen conformance fixtures into the job's temporary folder, prints the toolchain versions, and
 # runs each language port only when its folder bench/<language>/ exists (no port exists yet). It reads only: it checks
@@ -46,6 +46,10 @@ jobs:
         run: |
           $PY tests/unit/test_export_fixtures.py --root tests/conformance > "$RUNNER_TEMP/fixtures.json"
           wc -c "$RUNNER_TEMP/fixtures.json"
+      - name: reference export (bootstrap decisions over the frozen fixtures)
+        run: |
+          $PY tests/unit/test_export_reference.py --root tests/conformance --check > "$RUNNER_TEMP/reference.json"
+          wc -c "$RUNNER_TEMP/reference.json"
       - name: toolchain versions
         run: |
           $PY --version
@@ -94,6 +98,10 @@ jobs:
         run: |
           $PY tests/unit/test_export_fixtures.py --root tests/conformance > "$RUNNER_TEMP/fixtures.json"
           wc -c "$RUNNER_TEMP/fixtures.json"
+      - name: reference export (bootstrap decisions over the frozen fixtures)
+        run: |
+          $PY tests/unit/test_export_reference.py --root tests/conformance --check > "$RUNNER_TEMP/reference.json"
+          wc -c "$RUNNER_TEMP/reference.json"
       - name: toolchain versions
         run: |
           $PY --version
