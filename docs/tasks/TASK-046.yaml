@@ -1,0 +1,218 @@
+# Task contract TASK-046, the stack benchmark's hardening task after the three ports (Master Plan revision 4, §4 "The
+# benchmark and the stack ADR"; docs/plan/m4-exit-review.md §6; docs/plan/bench-port-brief.md revision 2; DEF-0063;
+# decisions D-849, D-865, D-887 (the three ports' dispositions), D-889 C2 and D-890 (this scope)).
+# Revision 0, drafted under decision D-890; brought for approval in its own request; whether it is approved is recorded
+# in the decision files, not in this file. Fields and value forms follow specification 2 §5.1 and the contracts of
+# TASK-007 to TASK-045. Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# Task type: implementation, written by the worker only: no port code is written, so no fresh writer (the port brief's
+# section 1 governs port writers only); no file under bench/ changes (the three ports are frozen at their accepted
+# hashes: TASK-043 at 22bc141e, TASK-044 at b8f876cf, TASK-045 at 4fcb1619, landed as 1c6117c7).
+# The carries (D-890), each closed here or left with its reason:
+# - taken: (1) each port folder required, so no port pin passes vacuously (TASK-044 R1-2, R3-1; TASK-045 R3-1, R4-3,
+#   R5-5); (2) the exact file sets of bench/ts and bench/go (TASK-043 R3-3; TASK-044 R3-2); (3) bench/ts/tsconfig.json
+#   by its bytes (TASK-043 R3-3); (4) bench/rust/Cargo.lock by its bytes (TASK-045 R1-1); (5) TASK-045 AC3's forbidden
+#   source forms checked by a committed test (TASK-045 R3-3, R5-6); (6) gofmt's exit kept (TASK-044 R2-1); (8) the
+#   workflow header's wording: one download per job, the ports' toolchains the runners' with the type checker the one
+#   download, CGO_ENABLED=0 named (TASK-043 R4-1; TASK-044 R4-1, R2-2, R4-3; TASK-045 R4-1); (9) a no-argument probe
+#   of each port's program in the workflow (TASK-043 R3-4, R5-3; TASK-045 R3-4, R5-2);
+# - left: (7) curl's redirect protocols (TASK-043 R2-1): the curl lines carry no -L, so curl follows no redirect and
+#   --proto-redir would have no effect; a redirect's body fails the integrity check before use (D-890); (10) clippy over
+#   the test target (TASK-045 R5-3): a lint on the frozen tests/port_test.rs could fail the step and only a port change
+#   could fix it; a stated limit; (11) the isolation test's textual reach (TASK-043 R3-5, R5-5): a wider scan is a new
+#   check; (13) the port files' own points (TASK-043 R5-2, R4-3: the U+FEFF literal; TASK-044 R5-3: port_test.go does
+#   not show which path fired; TASK-045 R5-4: the lone surrogate; TASK-045 R3-2, R4-2, R5-1: the `concat!` form): the
+#   files are frozen, stated limits of the results; (14) the runners' versions, clippy's moving lints, the lock version
+#   (TASK-045 R2-1, R2-2): stated limits of brief §3 revision 2;
+# - done already: (12) the bench/ts guard per job, the whole type-check step pinned, the order (TASK-043 R3-1, R3-2,
+#   R5-4, R1-2): GoStepTests.test_guards_per_job and GoStepTests.test_ts_type_check_step (TASK-044, decision D-862).
+# The workflow change (A66, its own element at code time): in both jobs of .github/workflows/aieos-bench.yml,
+# identically: the go step keeps gofmt's exit (item 6); each of the three port steps gains, after its compare, one
+# no-argument probe of its program that requires a non-zero exit and an empty standard output, its output kept in the
+# job's temporary folder (item 9); the header's wording (item 8) and its revision line from 4 to 5. No download, curl
+# change, trigger, permission, secret, token or `uses:`; the type-check step's bytes unchanged.
+# The earlier pins (item 9's and item 6's consequence): the pin constants GO_STEP, TS_PORT_STEP and RUST_STEP of
+# tests/unit/test_export_fixtures.py hold the step bytes, so each is updated to the whole new step's bytes (an update
+# of a pin to the A66 bytes, not a loosening); no assertion is removed or weakened; every other earlier test passes
+# over the change unchanged.
+# Item 9's evidence (D-890 C2): the earlier local no-argument probes of each port's program: TASK-045's
+# portrust-out/local-runs.txt line 18 ("no argument: exit 1 stdout bytes 0", session 917ba401's archive); TASK-044's
+# and TASK-043's local runs as their dispositions cite (sessions 08c626cc and 6042fed6); before the A66 decision the
+# worker checks the probe lines' shell form on this machine with the TypeScript port under node (v24.11.1, as TASK-043's
+# local check) and with a stand-in command that exits 0, which the probe must fail.
+# Limits: the benchmark workflow runs on pushes to main only, so the changed steps' first hosted run, the Go and Rust
+# probes' first run among them, is at the landing, read after acceptance (as TASK-041, TASK-043 to TASK-045); the
+# runners' toolchain versions are not pinned; every writer and reviewer is an AI of one vendor; the docstring of
+# RustStepTests.test_ts_and_go_steps_kept says the bytes of base_commit while its constants pin the A66 bytes of this
+# task (AC10 keeps docstrings unchanged).
+# What it is not: the results are advisory (A29, A31) and feed no gate, record or evidence entry; aieos-checks.yml and
+# its two pins are not touched; src/ and bench/ are not touched.
+# Risk: critical, and change class critical_cr, computed over the base by script (risk_class46.py: risk_class45.py with
+# only the write-set and its header line changed): .github/** is R9 (critical); tests/** is R2 (medium) with R3's
+# fail-closed reading (high); .github/** and tests/unit/** are evaluator paths of GOV-003's list.
+# Profile (assurance-model.md §5, gov-AIEOS, critical): high's entries plus architecture [human_review], met for
+# gov-AIEOS by the decision agent's review, and functional [the property/fuzz entry] by the CI's property_test step over
+# the existing property suite (the task adds no property test; it changes no decision code); the cross-model entry by
+# the pair of reviews: five way-2 reviews from a review template for this task (its own request) on claude-sonnet-5-5
+# (a model other than the main session's), and the decision agent's separate review. One delegated approval (reading,
+# as TASK-043 to TASK-045).
+# Naming (D-544 Q3): every Python test this task adds names the AC ids it stands for as "TASK-046 ACn" in its docstring.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-046.yaml and has one parent equal to base_commit; the
+# task's commits, each carrying "AIEOS-Task: TASK-046", go to task/TASK-046 under their own decisions; main receives the
+# task only at its acceptance.
+# Not applicable: OPS-001 (no ref changed by the task's code); INV-004 to INV-011 (no project state, decision engine,
+# governor, evidence record, replay or policy path in the write-set); GOV-001, GOV-004 to GOV-006. SEC-003 applies (a
+# .github/ path), under A66 as above.
+# Owner-kept acts: none, on these conditions: the changed workflow grants no write, uses no secret or token, changes no
+# repository or security setting and costs nothing (public repository, hosted runners). If any of these is not so, the
+# task stops and the point is the owner's (CR-002 part 4 limit 5), fail closed.
+task: TASK-046
+contract_version: v1
+task_type: implementation
+objective: >-
+  Close the carries the three ports' reviews left to the hardening task (DEF-0063; D-890): in both jobs of
+  .github/workflows/aieos-bench.yml, keep gofmt's exit in the go step, add a no-argument fail-closed probe of each
+  port's program after its compare, and make the header's wording true and complete; in
+  tests/unit/test_export_fixtures.py, update the three port steps' pins to the new bytes and add one test class that
+  requires the three port folders, pins the bench/ts and bench/go file sets, tsconfig.json's and Cargo.lock's bytes,
+  and checks TASK-045's forbidden source forms over bench/rust. No file under bench/ changes; the results are advisory
+  and feed nothing.
+traces_to:
+  - docs/plan/m4-exit-review.md#6
+  - docs/plan/master-plan.md#4
+  - docs/plan/bench-port-brief.md
+  - docs/pre-genesis/constitution.md#SEC-003
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-046.yaml; G0 requires C's one parent to equal base_commit. It is filled by script from
+  # refs/heads/main just before C is made: the placeholder and its quotes are replaced by the 40-hex id, unquoted.
+  base_commit: 1c6117c7354bc7916d1ebc49a7f2a325d9b060c0
+  depends_on: [TASK-039, TASK-043, TASK-044, TASK-045]
+  intent_versions:
+    docs/plan/m4-exit-review.md: 6c41ca8200a4e757f04b22aa521e52cd67f7ac3122690e667ac4c864aa57c4a4
+    docs/plan/master-plan.md: 8276a587bbf6f75be8867feb97df6726379babfcdb2266344bfdb4d01e6b2d23
+    docs/plan/bench-port-brief.md: d307c6ede5080a9012c16697184437d5a579ebfd41e9bedee69dfffcd25a15e0
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/specs/conformance-files.md: 2f1c224466fe3657167b116b49f902648130bf76e1274367d7780cc38ec7b021
+write_set:
+  # One modified workflow and one modified test module; nothing else.
+  paths:
+    - .github/workflows/aieos-bench.yml
+    - tests/unit/test_export_fixtures.py
+read_set:
+  paths:
+    - bench/**
+    - docs/plan/**
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/specs/conformance-files.md
+    - docs/tasks/**
+    - tests/unit/**
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+  interfaces:
+    - tests/unit/test_export_fixtures.py (its pin constants and its test classes)
+    - .github/workflows/aieos-bench.yml (the three port steps and the header)
+  schemas:
+    - the reference document's form (TASK-041 AC1)
+forbidden:
+  - .github/workflows/aieos-checks.yml
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - bench/**
+  - docs/**
+  - src/**
+  - tests/conformance/**
+  - tests/integration/**
+  - tests/property/**
+  - tests/run_tests.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_export_reference.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      No port changes. At the task's head every file under bench/ is byte-equal to base_commit (the three ports'
+      accepted bytes: bench/ts at TASK-043's, bench/go at TASK-044's, bench/rust at TASK-045's manifests), checked by
+      script before each push.
+  - AC2: >-
+      The go step (item 6; A66). In each job, the go step's command `test -z "$(gofmt -l .)"` becomes
+      `out="$(gofmt -l .)" && test -z "$out"`, so a gofmt that fails ends the step; nothing else in the go step's
+      existing lines changes.
+  - AC3: >-
+      The probes (item 9; A66). In each job, each port step, after its compare line and before its tests, runs its
+      program once with no argument, its standard output redirected to a file in "$RUNNER_TEMP" named
+      <port>-noarg.txt: TypeScript `(cd bench/ts && node main.ts)`; Go `"$RUNNER_TEMP/go/port.exe"`; Rust the binary
+      cargo built, chosen by `p="$RUNNER_TEMP/rust/release/port"; if [ -f "$p.exe" ]; then p="$p.exe"; fi` and run
+      as `"$p"`; in the form
+      `if <program> > <file>; then echo "<port>: the port exits 0 with no argument"; false; fi` followed by
+      `test ! -s <file>`, so a zero exit or any byte on standard output ends the step (the step runs under bash -e).
+      The form holds no "exit 1" (TASK-043's test counts that string once per job, in the type-check step).
+  - AC4: >-
+      The header (item 8; A66). The header states that each job makes one download, the pinned type checker, checked
+      by its integrity value before use, and that every port's own toolchain (node, go, cargo and rustc) is the
+      runners' and is not downloaded; it names CGO_ENABLED=0 with the Go step's settings, the no-argument probes and
+      gofmt's exit; its revision line goes from 4 to 5 and names this task. Nothing else in the workflow changes: no
+      download, curl, trigger, permission, secret, token, `uses:` or type-check byte.
+  - AC5: >-
+      The earlier pins. In tests/unit/test_export_fixtures.py the constants GO_STEP, TS_PORT_STEP and RUST_STEP each
+      become the whole new step's bytes of AC2 and AC3 (an update of a pin to the A66 bytes); no assertion of any
+      earlier test is removed, weakened or reworded, and every earlier test passes over the change.
+  - AC6: >-
+      The new pins (items 1 to 5), in one new test class of tests/unit/test_export_fixtures.py whose docstrings start
+      with TASK-046: bench/ts, bench/go and bench/rust each exist as a folder; bench/ts's file set is exactly its ten
+      files and bench/go's exactly its eight (no other file, no subfolder); bench/ts/tsconfig.json's exact bytes;
+      bench/rust/Cargo.lock's exact bytes; and over every .rs file of bench/rust, none of TASK-045 AC3's forbidden forms
+      (`unsafe`, `extern`, `extern crate`, `#![feature`, `#[path`, `include!`, `include_str!`, `include_bytes!`,
+      `env!`, `option_env!`, std::process, std::net, a std::env item other than std::env::args, a std::fs item other
+      than std::fs::read), matched as whole words. Each test can fail: the scan's helper is also run over a short
+      in-memory sample holding a forbidden form and must find it.
+  - AC7: >-
+      Isolation (decision D-800 C3; the risk rules policy revision 6, R12). tests/unit/test_bench_isolation.py,
+      unchanged, passes.
+  - AC8: >-
+      The CI checks and purity. At the task's commits the existing CI steps report no finding: G0 scope,
+      deterministic_rule, OPS-003, SEC-001, SEC-002, SEC-003's record and bandit; every earlier test passes; the added
+      Python lines are scanned for the bandit test patterns the CI applies before the first push, as in TASK-045 AC9;
+      if any earlier test can pass only by a change outside the write-set, the task escalates
+      (needs_out_of_scope_change).
+  - AC9: >-
+      Local evidence before the first push. The suite on a compiled tree in a scratch clone with the head's files
+      (L-0018); each new or changed step's shell form run on this machine where its program exists: the TypeScript
+      probe under node, and the probe form with a stand-in command that exits 0 (the probe must fail) and one that
+      exits 1 with no output (the probe must pass); the earlier local no-argument probes of the Go and Rust programs
+      cited (TASK-045 local-runs.txt line 18; TASK-043's and TASK-044's local runs).
+  - AC10: >-
+      Naming. Every Python test function the task adds names "TASK-046 ACn" in its own docstring; no existing test's
+      docstring changes; tests/run_tests.py is unchanged and runs no export or port.
+  - AC11: >-
+      Stop conditions. If any step needs a secret, a token, write access, money, a setting or anything installed
+      outside the scratchpad, or any file under bench/ would change, the task stops and the point goes to the decision
+      agent, and to the owner when it is the owner's (A66, fail closed).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell:
+    allow:
+      - "timeout 110 python tests/run_tests.py < /dev/null"
+      - "node main.ts (in a scratch copy of bench/ts, no argument, for AC9's probe check)"
+  network:
+    allow: []
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: critical
+autonomy:
+  max_level: L1
+  budgets: {tokens: 500k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC5, AC6, AC7, AC10]}
+  - {gate: G3, check: constitution, args: [AC1, AC2, AC3, AC4, AC8, AC9, AC11, INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
