@@ -204,6 +204,9 @@ Occurrences in session 2026-10-15-1830 (../History/2026-10/2026-10-15-1830-the-t
 Occurrences in session 2026-10-15-2005 (../History/2026-10/2026-10-15-2005-the-go-port-accepted-and-on-main.md):
 - **2026-10-15.** Six English text blocks before tool calls: :90, :213, :737, :990, :1254 and :1623, each a short line at the start of a new piece of work; tools/tbq.sh showed each at the next call; each listed before the next gated command and told to the owner.
 
+Occurrences in session 2026-10-15-2126 (../History/2026-10/2026-10-15-2126-the-rust-port-written-and-on-its-task-branch.md):
+- **2026-10-15.** Eight English text blocks before tool calls: :496, :657, :836, :1158, :1403, :1627, :1666 and :1900, each a short line at the start of a new piece of work, the later ones right after the harness's note asking what is being done; tools/tbq.sh showed each at the next call; each listed before the next gated command and told to the owner. The practice stated after the first (write nothing at all when the note appears) did not prevent the others.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

@@ -235,6 +235,9 @@ Occurrences in session 2026-10-15-1830 (../History/2026-10/2026-10-15-1830-the-t
 Occurrences in session 2026-10-15-2005 (../History/2026-10/2026-10-15-2005-the-go-port-accepted-and-on-main.md):
 - **2026-10-15.** :319 `rm -r dec75` inside the scratchpad, to rerun a builder into an empty folder (the practice is no `rm`; a new folder name instead); :1624 a command with a no-effect part; the first calls before :91 ran before tools/tbq.sh existed in the scratchpad.
 
+Occurrences in session 2026-10-15-2126 (../History/2026-10/2026-10-15-2126-the-rust-port-written-and-on-its-task-branch.md):
+- **2026-10-15.** Four refusals by the owner's command guard, nothing run each time: :220 a here-document feeding Python from standard input; :997 Python's name followed by a dash (a version check); :1501 a sed whose text held the interpreter's name; :1562 a grep whose search pattern held it (a repeat of the search-pattern slip); also a command run outside the repository (:158) and a no-effect part (a copy of a file that did not exist).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
