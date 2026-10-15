@@ -201,6 +201,9 @@ Occurrences in session 2026-10-15-1724 (../History/2026-10/2026-10-15-1724-refer
 Occurrences in session 2026-10-15-1830 (../History/2026-10/2026-10-15-1830-the-typescript-port-accepted-and-on-main.md):
 - **2026-10-15.** Nine English text blocks before tool calls: :208, :372, :667, :894, :1042, :1520, :1761, :1782 and :1825, each a short line at the start of a new piece of work; tools/tbq.sh showed each at the next call; each listed before the next gated command and told to the owner.
 
+Occurrences in session 2026-10-15-2005 (../History/2026-10/2026-10-15-2005-the-go-port-accepted-and-on-main.md):
+- **2026-10-15.** Six English text blocks before tool calls: :90, :213, :737, :990, :1254 and :1623, each a short line at the start of a new piece of work; tools/tbq.sh showed each at the next call; each listed before the next gated command and told to the owner.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

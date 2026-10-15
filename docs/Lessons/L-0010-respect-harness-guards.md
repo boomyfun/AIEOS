@@ -232,6 +232,9 @@ Occurrences in session 2026-10-15-1724 (../History/2026-10/2026-10-15-1724-refer
 Occurrences in session 2026-10-15-1830 (../History/2026-10/2026-10-15-1830-the-typescript-port-accepted-and-on-main.md):
 - **2026-10-15.** :63 the first call ran tools/tbq.sh before it was copied into the scratchpad, no effect; :245 a placeholder command with a heredoc, refused by guard rule R1, nothing ran, also a no-effect command; :1174 the suite run under `timeout 300`, refused by guard rule R3, nothing ran; :1753 a search pattern holding the interpreter's name, refused by guard rule R3, nothing ran; each rerun only in the allowed form.
 
+Occurrences in session 2026-10-15-2005 (../History/2026-10/2026-10-15-2005-the-go-port-accepted-and-on-main.md):
+- **2026-10-15.** :319 `rm -r dec75` inside the scratchpad, to rerun a builder into an empty folder (the practice is no `rm`; a new folder name instead); :1624 a command with a no-effect part; the first calls before :91 ran before tools/tbq.sh existed in the scratchpad.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
