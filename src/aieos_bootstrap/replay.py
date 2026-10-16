@@ -46,7 +46,7 @@ Limits (AC9; task TASK-052 AC8), stated: no read-set observation in the replay s
 section 5 line 46 lists observations (their record keys are for specification 2's next revision, section 11 points 3
 and 4); a replayed STOP: violation makes every later evaluation of the task reject (task TASK-053) where the task is
 evaluable, unless a blocking record left out for being out of form or for a record_id already kept, other than one
-repeating the record_id of a kept blocking record with the same blocking_kind, makes the evaluation refused with
+repeating the record_id of a kept blocking record with the same blocking_kind and subject, makes the evaluation refused with
 reason "records" instead (task TASK-054; such a task stays in its state until it is superseded by a new task; the
 limits evaluation.py's docstring states), and the task stays READY with no lease after it;
 abnormal ends beyond the lease's expiry are not handled (section 11 point 10); the token is the grant's, not read from

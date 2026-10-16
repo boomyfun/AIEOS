@@ -35,7 +35,7 @@ Limits (AC8), stated:
   (VERIFYING or IN_REVIEW), also after a new task.approved. A blocking record that evaluation.py's _kept leaves out,
   out of form or for a record_id already kept (records.py does not check record_id uniqueness across a log), refuses
   the evaluation with reason "records" instead (task TASK-054), unless it repeats the record_id of a kept blocking
-  record with the same blocking_kind; such a task is refused at every evaluation and stays in its state until it is
+  record with the same blocking_kind and subject; such a task is refused at every evaluation and stays in its state until it is
   superseded by a new task.
 - No task.* event follows STOP: violation (specification 3 section 10), so the task stays READY (or REWORK) with no
   lease, and the next Resume Check may CONTINUE again; no bound on repeated STOP: violation (specification 5 section

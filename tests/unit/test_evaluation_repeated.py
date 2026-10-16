@@ -273,8 +273,59 @@ class R2Kinds(unittest.TestCase):
         submitted(store)
         refused_by_records(self, *evaluate(store))
 
+    def test_a_blocking_record_behind_one_of_another_subject_refuses(self):
+        """TASK-054 AC1, TASK-054 AC7 (erratum E1 to AC1, decision D-1035): in extra_records, a blocking record of
+        another task's subject and then the same record_id, kind and outcome for this task: the first is kept (the
+        governor does not read it), and the second refuses, with nothing appended and the governor not called; with
+        a kind-only exception it would be let through."""
+        store = approved(Store())
+        store.add('record.added', ci_record('ci-1'), 'r-1')
+        submitted(store)
+        extra = [dict(observation('x-9'), subject='TASK-999'), observation('x-9')]
+        payloads = evaluation._task_events(store.read_log, FS_ROOT, TASK)[5]
+        kept, _, hidden = evaluation._kept(payloads, extra)
+        self.assertEqual([(r['record_id'], r['subject']) for r in kept], [('ci-1', TASK), ('x-9', 'TASK-999')])
+        self.assertEqual(kept[1]['blocking_kind'], extra[1]['blocking_kind'])
+        self.assertTrue(hidden)
+        r, writes, calls = evaluate(store, extra)
+        refused_by_records(self, r, writes, calls)
+        self.assertTrue([f for f in r['findings'] if 'from extra_records' in f and "'x-9'" in f], r['findings'])
+
+    def test_the_same_records_with_one_subject_reject(self):
+        """TASK-054 AC1, TASK-054 AC2, TASK-054 AC7: the same two records with this task's subject (the failing case
+        of the test above): the second is excepted and the evaluation goes on to REJECT."""
+        store = approved(Store())
+        store.add('record.added', ci_record('ci-1'), 'r-1')
+        submitted(store)
+        r, writes, calls = evaluate(store, [observation('x-9'), observation('x-9')])
+        self.assertEqual((r['result'], r['decision'], writes, len(calls)),
+                         ('evaluated', 'REJECT', ['decision.acceptance'], 1))
+
 
 class R3GoesOn(unittest.TestCase):
+    def test_an_out_of_form_twin_of_a_kept_violation_goes_on(self):
+        """TASK-054 AC2, TASK-054 AC7: an out-of-form blocking record in extra_records with the record_id, kind and
+        subject of a kept violation of the log is left out with _kept's finding, excepted, and the evaluation goes on
+        to REJECT."""
+        store = approved(Store())
+        store.add('violation.detected', observation('obs-1'), 'v-1')
+        submitted(store)
+        twin = dict(observation('obs-1'))
+        del twin['recorder']
+        r, writes, calls = evaluate(store, [twin])
+        self.assertEqual((r['result'], r['decision'], len(calls)), ('evaluated', 'REJECT', 1))
+        self.assertTrue([f for f in r['findings'] if 'from extra_records is left out' in f], r['findings'])
+
+    def test_an_extra_twin_of_a_kept_violation_goes_on(self):
+        """TASK-054 AC2, TASK-054 AC7: a blocking record in extra_records repeating a kept violation of the log (the
+        same record_id, kind and subject) is left out, excepted, and the evaluation goes on to REJECT."""
+        store = approved(Store())
+        store.add('violation.detected', observation('obs-1'), 'v-1')
+        submitted(store)
+        r, writes, calls = evaluate(store, [observation('obs-1')])
+        self.assertEqual((r['result'], r['decision'], len(calls)), ('evaluated', 'REJECT', 1))
+        self.assertTrue([f for f in r['findings'] if 'repeated' in f], r['findings'])
+
     def test_a_violation_repeating_a_kept_violation_rejects(self):
         """TASK-054 AC2, TASK-054 AC7: a violation repeating a kept violation's id (the same blocking_kind) is left
         out and the evaluation goes on to REJECT."""
@@ -380,7 +431,8 @@ class R6Texts(unittest.TestCase):
             changed = code_tail(name).replace('def ', 'def  ', 1)
             self.assertNotEqual(hashlib.sha256(changed.encode('utf-8')).hexdigest(), want, name)
             doc = docstring(name)
-            for words in ('task TASK-054', 'reason "records"', 'with the same blocking_kind', 'superseded by a new task'):
+            for words in ('task TASK-054', 'reason "records"', 'with the same blocking_kind and subject',
+                          'superseded by a new task'):
                 self.assertIn(words, doc, name)
             for words in ('need not REJECT', 'a later task is to make this fail closed', 'an earlier kept record'):
                 self.assertNotIn(words, doc, name)
@@ -397,7 +449,10 @@ class R7Script(unittest.TestCase):
         tree = ast.parse((SRC / 'evaluation.py').read_bytes().decode('utf-8'))
         doc = ' '.join(ast.get_docstring(tree).split())
         for words in ('refuses the evaluation with reason "records" (task TASK-054 AC1',
-                      'with the same blocking_kind', 'store and records (the last added by task TASK-054)',
+                      'with the same blocking_kind and the same subject (erratum E1 to AC1',
+                      'its position, counted from 1 over the log\'s records and then extra_records',
+                      'a record with outcome fail whose record_id an earlier kept record has is not seen by the governor',
+                      'store and records (the last added by task TASK-054)',
                       'until it is superseded by a new task', 'refuses only while it is given',
                       'event_id_of and the governor are unchanged', "records.py's uniqueness rule is unchanged",
                       'left out with a finding as before', 'the limits of task TASK-053 (its AC7) stand'):

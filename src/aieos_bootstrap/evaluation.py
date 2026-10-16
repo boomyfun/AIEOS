@@ -31,9 +31,10 @@ task in VERIFYING (after its task.submitted) or in IN_REVIEW (re-evaluation):
    blocking and blocking_kind violation, so the governor's row 1 gives REJECT (task TASK-053 AC2). A record left out
    whose outcome is 'blocking' refuses the evaluation with reason "records" (task TASK-054 AC1; decision D-1027,
    form (ii)), unless its record_id equals that of an earlier kept record whose outcome is 'blocking' with the same
-   blocking_kind (that one already blocks with the same kind); the findings hold those of the records left out and
-   one per such record, naming its record_id (or its position when it has none) and its source; nothing is appended
-   and governor.evaluate is not called.
+   blocking_kind and the same subject (erratum E1 to AC1, decision D-1035: that one then already blocks for the same
+   subject with the same kind); the findings hold those of the records left out and one per such record, naming its
+   record_id (or, when it has none, its position, counted from 1 over the log's records and then extra_records) and
+   its source; nothing is appended and governor.evaluate is not called.
 8. The decision (AC7, AC8): governor.evaluate is called once and its record, an error record included, is appended
    once as decision.acceptance through writer.append_event, with no fencing token, under an event id derived from the
    task, the state-setting event and the kept record ids, so a rerun while the task is still evaluable gives
@@ -85,7 +86,9 @@ Limits (AC13):
   neither accepted nor rejected by evaluation and stays in VERIFYING or IN_REVIEW until it is superseded by a new
   task; one given only through extra_records refuses only while it is given. event_id_of and the governor are
   unchanged; records.py's uniqueness rule is unchanged (a repeated record_id is still accepted into the log); a
-  repeated record_id between records that are not blocking is left out with a finding as before; the limits of task
+  repeated record_id between records that are not blocking is left out with a finding as before, so a record with
+  outcome fail whose record_id an earlier kept record has is not seen by the governor, and an evaluation that would
+  give REWORK may give another decision, ACCEPT included (a later task is to close this); the limits of task
   TASK-053 (its AC7) stand; no conformance set or fixture is changed.
 - Also of task TASK-053 (its AC7): no task.* event follows STOP: violation, so until an evaluation runs the task stays
   READY with no lease and the next Resume Check may CONTINUE again; no bound on repeated STOP: violation
@@ -280,7 +283,7 @@ def _changed_paths(read, repo, commits):
 def _kept(payloads, extra_records):
     """AC7: the records the governor reads, a finding for each one left out, and (task TASK-054 AC1) a finding for
     each left-out record whose outcome is 'blocking', unless its record_id equals that of an earlier kept blocking
-    record with the same blocking_kind."""
+    record with the same blocking_kind and subject (erratum E1 to AC1)."""
     kept, found, hidden, seen, kinds = [], [], [], set(), {}
     for n, (where, rec) in enumerate([('log', p) for p in payloads] + [('extra_records', r) for r in extra_records], 1):
         problems = records.check_record(rec)
@@ -293,11 +296,11 @@ def _kept(payloads, extra_records):
             seen.add(rid)
             kept.append(rec)
             if rec.get('outcome') == 'blocking':
-                kinds[rid] = rec.get('blocking_kind')
+                kinds[rid] = (rec.get('subject'), rec.get('blocking_kind'))
             continue
         if not (isinstance(rec, dict) and rec.get('outcome') == 'blocking'):
             continue
-        if isinstance(rid, str) and rid in kinds and kinds[rid] == rec.get('blocking_kind'):
+        if isinstance(rid, str) and rid in kinds and kinds[rid] == (rec.get('subject'), rec.get('blocking_kind')):
             continue
         name = 'record_id %r' % rid if isinstance(rid, str) else 'the record at position %d' % n
         hidden.append('records: a blocking record from %s, %s, is left out; the evaluation is refused so that it '
