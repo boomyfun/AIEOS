@@ -1,0 +1,387 @@
+# Task contract TASK-052, the violation path (Master Plan revision 4, §4 M5; specification 5 revision 3, sections 2
+# item 3, 8 and 11 points 5 and 12; specification 3 revision 4, section 8 line 106 and section 10 line 154;
+# specification 1 revision 2, section 5.3 line 87; specification 2 revision 4, section 6.3).
+# Revision 0, drafted under decision D-999 (C2) and its amendment 1, from the scope note approved there with its
+# changes M1 and M2; brought for approval in its own request; whether it is approved is recorded in the decision files,
+# not in this file. Fields and value forms follow specification 2 §5.1 and the contract of TASK-051. Readings marked
+# "(reading)" are the worker's, for the decision agent's ruling.
+# Revision 1, under decision D-1000: E1 to E4.
+# Task type: implementation. What it adds: a new module src/aieos_bootstrap/violation.py, whose record() appends, for
+# the session that holds the task's lease, violation.detected with the given observation, then a decision.execution
+# STOP: violation that refers to it, then releases the lease by its token (specification 3 line 106: "The core
+# appends violation.detected (spec 1 §5.3) and a decision.execution with this value; the session stops and the lease is
+# released"); a pass-through call adapter.violation (specification 5 §2 item 3's violation half); and an optional
+# violation step in the replay document (specification 5 §8 line 81: ADV-02's fixture is written in the replay form).
+# The fence (M2 of decision D-999): no separate check of the held lease. violation.detected and the decision are
+# appended through writer.append_event with the given fencing token, so the writer's fence is the one check:
+# eventlog.py:112-114 (_needs_lease: "An event that carries a fencing_token, task.submitted always"), :125-144
+# (_lease_findings: no lease given, a lease on another task, the event's token not the lease's, a lease expired at or
+# before the append time) and :210-217 (the fence applied to any event that needs a lease); writer.py:209-223 (the
+# store's held lease on task_id passed to eventlog.append; a fence refusal appended as its own record.added, with the
+# derived event_id of _digest('refusal', event_id)). A session that does not hold the lease therefore gets reason
+# "fence", the writer's refusal record stays in the log, and nothing further runs. Known label limit (decision D-999
+# amendment 1): eventlog.py:117-122 builds every fence refusal's record with evidence_type 'refused_submission', so a
+# refused violation append is labelled a refused submission; eventlog.py is not changed here, and the tests assert the
+# label as it is, so a later change shows.
+# The decision record (point 1 of decision D-999, with its addition, and M1): built by violation.py under its own
+# RECORDER, 'the violation path (aieos_bootstrap.violation)', with record_id, fact_kind interpretation, source_class
+# deterministic_tool_local, recorder, subject the task, decision 'STOP: violation', outcomes_fired ['STOP: violation'],
+# state_effect [] (specification 3 line 154 lists no further event), refers_to the violation.detected event's event_id
+# (specification 2 §6.2: "for a record about another record, an event …: its id"; records.py RECORD_KEYS), and
+# uncovered naming what it does not have (it is not a Resume Check record: no contract hash, head commit, log seq or
+# checks) and, when the observation's source_class is agent_declared, that the stop rests on a declared claim; checked
+# by records.check_decision before any append.
+# Limits (point 6 (a) of decision D-999; carried at acceptance): "the change is rejected at acceptance" (specification
+# 3 line 106) does not yet follow: evaluation.py:179 passes the governor only the task's record.added payloads, so a
+# violation.detected payload never reaches governor.py's row 1 (ROW_1_KINDS, governor.py:44); widening it is a later
+# task; violation.record is called only by adapter.violation, and adapter.violation only by replay and the tests, and
+# no other caller of either is added before that later task is accepted. No
+# task.* event follows STOP: violation (specification 3 line 154), so execution's projection leaves the task READY (or
+# REWORK) with no lease, and the next Resume Check may CONTINUE again; a bound on repeated STOP: violation
+# (specification 5 §11 point 12) is not addressed. F-a (decision D-988) is kept: replay needs a fresh root from its
+# caller. A passing replay with a violation shows how the core records a recorded violation and stops the session,
+# never that any hook observes anything (specification 5 line 80; C6 unmeasured). No observed read-set call; no hook;
+# no setting; no measurement.
+# Readers of the changed paths (D-263 C3's practice): tests/unit/test_adapter.py and tests/unit/test_replay.py (in the
+# write-set; every changed test is listed in the first task commit's request with its reason, and none is weakened,
+# GOV-003); tests/unit/test_writer.py's R8 test and tests/unit/test_gitread.py's subprocess test read every module of
+# src/ and keep passing. No other module imports adapter, replay or violation.
+# Risk: high (risk rules revision 6, policy v4, §2 point 3: R3 matches every path under src/** and tests/**), computed
+# over the base by script. Change class normal: the governor is not touched. Profile (assurance-model.md §5, gov-AIEOS,
+# high): functional [unit_test], architecture [deterministic_rule], functional [integration_test], security
+# [static_security_analysis] and architecture [ai_review (cross-model)], plus the evidence_required of the applicable
+# articles. Reviews as TASK-051's: five way-2 reviews on a model other than the implementer's and the main session's,
+# and the decision agent's own review for the cross-model entry.
+# Naming (D-544 Q3): every test of the new or changed test modules names the AC ids it stands for as "TASK-052 ACn"
+# (or, for a TASK-051 test left unchanged, its "TASK-051 ACn") in its own docstring.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-052.yaml and has one parent equal to base_commit; the
+# task's commits, each carrying "AIEOS-Task: TASK-052", go to task/TASK-052 under their own decisions; main receives
+# the task only at its acceptance.
+# Not applicable: OPS-001 (the task changes no ref); INV-005 to INV-008, INV-010 and INV-011 (decision contracts as
+# the governor reads them, acceptance, evidence and the policy meet no path of the write-set: the execution decision
+# record written here is checked by records.check_decision, unchanged); GOV-001, GOV-004 to GOV-006 and SEC-003 (the
+# concept file, the bound artifacts, the decision matrix, the records and pre-genesis documents, and .github/, meet no
+# path of the write-set). INV-004 applies: the modules write only through the writer's functions. INV-009 applies
+# through the writer, which this task does not change.
+# Owner-kept acts: none. No hook, no Claude Code setting, nothing under .github/, no push of its own; it weakens no
+# evidence requirement; so its acceptance is one delegated approval of the decision agent (Master Plan section 6).
+task: TASK-052
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add the violation path in standard-library Python 3. A new module src/aieos_bootstrap/violation.py gives
+  record(root, task_id, fencing_token, observation, event_id, recorder, now): it checks every argument and builds and
+  checks the STOP: violation execution decision before any call, then appends violation.detected with the observation
+  and the given fencing token through writer.append_event, then the decision.execution that refers to it with the same
+  token, then releases the lease through writer.release_lease_token by that token. src/aieos_bootstrap/adapter.py gains
+  violation(...), a pass-through to violation.record with the adapter's argument checks. src/aieos_bootstrap/replay.py
+  takes an optional violation step in the replay document, exclusive with a submission. With unit, integration and
+  property tests in tests/unit/test_violation.py and the changed tests/unit/test_adapter.py and test_replay.py, each
+  test naming its AC ids in its own docstring; the tests use stand-ins for the writer's functions and write no file.
+traces_to:
+  - docs/specs/spec-05-adapter-contract.md#2
+  - docs/specs/spec-05-adapter-contract.md#8
+  - docs/specs/spec-05-adapter-contract.md#11
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#8
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#10
+  - docs/specs/spec-01-state-and-event-model.md#5.3
+  - docs/specs/spec-02-aieos-file-format.md#6.3
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-052.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id.
+  base_commit: 74c3c8367306a97f4c28740d4c2578a60af3ba17
+  depends_on: [TASK-001, TASK-011, TASK-016, TASK-025, TASK-028, TASK-032, TASK-051]
+  intent_versions:
+    docs/specs/spec-05-adapter-contract.md: 6392a747dfab0f5b0c8f8103842bfeffdc5020e1828a4d5e97407ba5e07f1e94
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 80c91e47ef0a1dbe7f77c677cd2261d5b5ede20bcb0735cf06438bddbde85f8b
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 05c53318cd756a3acfc13e5adaffbfaede8f05be3d00289e9fd45fef08c63c73
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # violation.py and test_violation.py are new; the other four are TASK-051's (decision D-999 point 5).
+  paths:
+    - src/aieos_bootstrap/violation.py
+    - src/aieos_bootstrap/adapter.py
+    - src/aieos_bootstrap/replay.py
+    - tests/unit/test_violation.py
+    - tests/unit/test_adapter.py
+    - tests/unit/test_replay.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/specs/conformance-files.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/pre-genesis/conformance-scenarios-initial.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/Deferred/DEF-0030-event-log-writer-and-workflow-revision-6.md
+    - docs/Deferred/DEF-0064-the-carried-acceptance-of-task-051.md
+    - docs/tasks/**
+    - docs/records/**
+    - src/aieos_bootstrap/**
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.writer.append_event, aieos_bootstrap.writer.release_lease_token, aieos_bootstrap.writer.held_lease, aieos_bootstrap.writer.read_log, aieos_bootstrap.records.check_payload, aieos_bootstrap.records.check_decision, aieos_bootstrap.eventlog.append, aieos_bootstrap.adapter.start, aieos_bootstrap.adapter.end, aieos_bootstrap.replay.replay]
+  schemas: [spec-02 event payloads (6.3), spec-02 decision contract (6.4), spec-05 replay document (TASK-051 AC6, this contract AC7)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_writer.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The arguments of violation.record. Before anything is called: root a non-empty string; task_id "TASK-"
+      followed by digits; fencing_token a mapping with exactly epoch (a non-empty string) and counter (an int, not a
+      bool, at least 0); event_id and recorder non-empty strings; now a timezone-aware datetime in UTC with whole
+      seconds; observation a mapping for which records.check_payload('violation.detected', observation) gives no
+      finding, whose subject is task_id, whose source_class is deterministic_tool_local or agent_declared, and whose
+      record_id is a non-empty string. A wrong argument gives the result of AC5 with result "refused", reason
+      "argument" and a finding naming it, and no function is called. append and release are keyword arguments
+      defaulting, at call time, to writer.append_event and writer.release_lease_token; the module keeps no state.
+  - AC2: >-
+      The decision record (decision D-999 point 1 and M1). Before any append, record builds one decision.execution
+      payload with exactly the keys record_id (event_id followed by "/decision-record"), fact_kind interpretation,
+      source_class deterministic_tool_local, recorder violation.RECORDER ('the violation path
+      (aieos_bootstrap.violation)'), subject task_id, decision 'STOP: violation', outcomes_fired ['STOP: violation'],
+      refers_to event_id (the violation.detected event's event_id), state_effect [] and uncovered (a list of texts
+      that names the inputs a Resume Check record has and this one has not, and, when the observation's source_class
+      is agent_declared, that the stop rests on a declared claim); records.check_decision('decision.execution', it)
+      gives no finding, else "refused", reason "decision", and nothing is appended.
+  - AC3: >-
+      The order (specification 3 line 106; M2 of decision D-999). append(root, 'violation.detected', observation,
+      event_id, now, recorder, task_id=task_id, fencing_token=fencing_token) once; then append(root,
+      'decision.execution', the AC2 payload, event_id followed by "/decision", now, recorder, task_id=task_id,
+      fencing_token=fencing_token) once; then release(root, task_id, fencing_token) once. No separate check of the held
+      lease: the writer's fence is the one check. A WriteResult other than "appended" or "duplicate" for an append, or
+      a raised exception, stops the call with reason "violation" or "decision" (or "fence" when the writer refused by
+      the fence, its refusal record then in the log), and no later step runs. A release refused with reason "none" or
+      "token" is no error: released stays None and a finding notes it (as TASK-051 AC4 and adapter.NO_ERROR_RELEASE);
+      any other release result, or a raised exception, gives reason "release" (the lease's expiry is the fallback, a
+      limit). "duplicate" for both appends (the same event_id given again) is no error, and the release then runs
+      (idempotent: a repeat of a completed call gives "done", both event_ids under duplicate, nothing appended,
+      released None).
+  - AC4: >-
+      The fence and its label (decision D-999 amendment 1). A fencing token that is not the held lease's, a lease on
+      another task, an expired lease or no lease gives reason "fence" at the first append, with the writer's
+      record.added refusal in the log, and neither the decision nor the release is attempted. That refusal's record
+      carries evidence_type 'refused_submission' (eventlog.py:117-122, unchanged here), and a test asserts the label as
+      it is.
+  - AC5: >-
+      The result. record returns a mapping with exactly the keys result ("done" or "refused"), reason (None or one of
+      "argument", "decision", "violation", "fence", "release"), findings (a list of texts), appended (the event_ids
+      appended, in order), duplicate (the event_ids the writer gave "duplicate") and released (the released lease, or
+      None). An exception raised by a called function is caught and becomes a result with the step's reason; none
+      escapes.
+  - AC6: >-
+      adapter.violation(root, task_id, fencing_token, observation, event_id, recorder, now, append=None,
+      release=None) checks its arguments as AC1 (a wrong one gives the adapter's result of TASK-051 AC5 with reason
+      "argument"), calls violation.record once with the given functions, and returns its result under "core" in the
+      adapter's result form (TASK-051 AC5: result, reason, findings, core, decision, fencing_token, released), the
+      decision 'STOP: violation' when the decision event is in the log after the call (appended, or "duplicate"),
+      else None, released copied out; a core result "refused" gives
+      "refused", reason "core". The adapter's other calls are unchanged.
+  - AC7: >-
+      The replay document (decision D-999 point 4). The document may carry the key violation: absent, or a mapping
+      with exactly observation, event_id and at (a time text as TASK-051 AC6); every other key and form as TASK-051
+      AC6. A document with a violation and a non-null submission is refused "document"; so is one whose observation's
+      source_class is not agent_declared or deterministic_tool_local, or whose observation's recorder is not the
+      document's recorder. With a violation, the run is: read_log, open_store and the setup as TASK-051 AC7; adapter.start;
+      on a granted lease, the token comparison as TASK-051 AC7, then adapter.violation with the granted token, the
+      document's event_id and at, then adapter.end with the token (end's release then finds no lease: "none", no
+      error, TASK-051 AC4). A violation refused by the core gives reason "violation" and end is still called (TASK-051
+      AC8). The replay result's reason gains "violation". A document without violation runs exactly as before. E1
+      (decision D-987) is extended: the recorders named in the log's records are a subset of {the document's
+      recorder, resume_check.RECORDER, violation.RECORDER}, violation.RECORDER only on the STOP: violation decision
+      record, and every record's source_class is deterministic_tool_local, agent_declared or none.
+  - AC8: >-
+      Limits, stated in the three modules' docstrings and carried at acceptance: a STOP: violation does not yet make
+      acceptance reject (evaluation.py:179 passes the governor only record.added payloads); violation.record is
+      called only by adapter.violation, and adapter.violation only by replay and the tests, and no other caller of
+      either is added before the later task that widens evaluation.py:179 is accepted; no task.* event follows
+      STOP: violation, so the task stays READY (or REWORK) with no lease and the next Resume Check may CONTINUE again;
+      no bound on repeated STOP: violation (specification 5 §11 point 12); the fence refusal labelled
+      refused_submission (AC4); F-a kept (a caller must give replay a fresh root); a passing replay with a violation
+      shows the core's handling of a recorded violation, never that any hook observes anything (C6 unmeasured); no
+      observed read-set call; a run against the real writer's files not tested; __init__.py not changed. Every
+      existing module other than the write-set is unchanged, and if one can pass only by a change the task escalates
+      (needs_out_of_scope_change).
+  - AC9: >-
+      Purity and the CI checks (INV-001 to INV-004). violation.py imports only the Python 3 standard library and
+      aieos_bootstrap's records and writer; adapter.py adds only violation to its imports; replay.py's imports are
+      unchanged. None of the three starts a process, opens a file, reads a clock or the environment, builds an
+      event-log line itself, or makes a network or model call; no exec, eval, compile, __import__ or importlib; no
+      assert in src (bandit B101); no string that names the project-state directory; tests/unit/test_writer.py's R8
+      test and tests/unit/test_gitread.py's subprocess test pass unchanged. At the task's commits the CI steps report
+      no finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit.
+  - AC10: >-
+      Its own tests and the added text. Every test function of tests/unit/test_violation.py, and every test added or
+      changed in test_adapter.py and test_replay.py, names the AC ids it stands for as "TASK-052 ACn" in its own
+      docstring; a TASK-051 test left unchanged keeps its "TASK-051 ACn"; no other task's AC is named in qualified
+      form. No TASK-051 test is removed or weakened (GOV-003); each changed one is listed with its reason in the
+      first task commit's request. Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002
+      and OPS-003 patterns, and each count is 0; the file names are scanned with the same patterns and the records
+      executors' pre-push pattern (D-282). The tests write and remove no file.
+  - AC11: >-
+      Tests, each rule with at least one passing and one failing case, with stand-ins for the writer's functions bound
+      to the real signatures (inspect.signature(...).bind): R1 AC1 (each wrong argument refused before any call; the
+      defaults at call time); R2 AC2 (the record's keys and values; refers_to; uncovered with and without
+      agent_declared; a record check_decision refuses gives "decision" with no append); R3 AC3 (the order of the two
+      appends and the release, each with the token; a refusal or exception at each step stops there; a release
+      refused "none" or "token" is no error; a repeat of a completed call gives "done", two duplicates, nothing
+      appended, released None); R4 AC4 (a foreign, stale or expired token and no lease each give "fence" with the
+      refusal record, labelled refused_submission, and no decision or release), over the real writer's append_event
+      logic through eventlog.append with an in-memory log and held lease; R5 AC5 (the keys; no exception escapes); R6
+      AC6 (adapter.violation's argument checks and pass-through); R7 AC7 (the document's violation forms; exclusive
+      with submission; the run order with a violation; end after it with "none"; a refused violation still ends; the
+      extended E1 sets over the log of an end-to-end replay over the real adapter, execution.execute,
+      resume_check.check and violation.record with in-memory stand-ins built on eventlog.append; a document without
+      violation unchanged); R8 AC8 and AC9 (a script check of the imports and of the absence of open, write,
+      subprocess, clock and environment calls, and of the docstrings' words); and a property test (standard library
+      only, fixed seeds) that two replays with a violation over equal documents give equal steps and equal logs.
+      tests/run_tests.py, unchanged, runs them.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC11]}
+  - {gate: G3, check: constitution, args: [AC8, AC9, AC10, INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
