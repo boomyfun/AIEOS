@@ -319,9 +319,10 @@ class R5Result(unittest.TestCase):
 
 class R9Purity(unittest.TestCase):
     def test_imports_and_no_file_process_clock_or_environment(self):
-        """TASK-051 AC10, TASK-051 AC9, TASK-052 AC9, TASK-052 AC8: adapter.py imports only datetime, re and
-        aieos_bootstrap's execution, gitread, submit, violation (TASK-052) and writer; it calls no open, no
-        subprocess, no clock and no environment; its docstring states the limits."""
+        """TASK-051 AC10, TASK-051 AC9, TASK-052 AC9, TASK-052 AC8, TASK-053 AC6: adapter.py imports only datetime,
+        re and aieos_bootstrap's execution, gitread, submit, violation (TASK-052) and writer; it calls no open, no
+        subprocess, no clock and no environment; its docstring states the limits, task TASK-053's in place of the
+        caller bar."""
         text = (SRC / 'adapter.py').read_bytes().decode('utf-8')
         tree = ast.parse(text)
         imports = set()
@@ -338,16 +339,18 @@ class R9Purity(unittest.TestCase):
         self.assertFalse(names & {'open', 'exec', 'eval', 'compile', '__import__'})
         doc = ast.get_docstring(tree)
         for words in ('No observation call', 'section 11 point 10', 'write-set is neither passed',
-                      'INV-004', 'One run at a time', 'violation.record is\ncalled only by this function'):
+                      'INV-004', 'One run at a time',
+                      'makes every later evaluation of the task reject (task TASK-053)'):
             self.assertIn(words, doc)
+        self.assertNotIn('called only by this function', doc)
 
 
 class R9OwnTests(unittest.TestCase):
     def test_every_test_names_its_criteria_and_no_other_tasks(self):
-        """TASK-051 AC11, TASK-051 AC12, TASK-052 AC10: every test function of the three test modules (TASK-052 adds
-        test_violation.py) names at least one "TASK-051 ACn" or "TASK-052 ACn" in its own docstring and no other
-        task's AC in qualified form; together they name TASK-051's AC1 to AC12 and TASK-052's AC1 to AC11 (the failing
-        case: a docstring naming another task's AC is found)."""
+        """TASK-051 AC11, TASK-051 AC12, TASK-052 AC10, TASK-053 AC9: every test function of the three test modules
+        (TASK-052 adds test_violation.py) names at least one "TASK-051 ACn" or "TASK-052 ACn" in its own docstring and
+        no other task's AC in qualified form but TASK-053's; together they name TASK-051's AC1 to AC12 and TASK-052's
+        AC1 to AC11 (the failing case: a docstring naming another task's AC is found)."""
         here = pathlib.Path(__file__).resolve().parent
         named = {'051': set(), '052': set()}
         for name in ('test_adapter.py', 'test_replay.py', 'test_violation.py'):
@@ -356,12 +359,12 @@ class R9OwnTests(unittest.TestCase):
                 doc = ast.get_docstring(fn) or ''
                 ids = re.findall(r'TASK-(051|052) (AC[0-9]+)', doc)
                 self.assertTrue(ids, (name, fn.name))
-                self.assertEqual(re.findall(r'TASK-(?!051 |052 )[0-9]+ AC[0-9]+', doc), [], (name, fn.name))
+                self.assertEqual(re.findall(r'TASK-(?!051 |052 |053 )[0-9]+ AC[0-9]+', doc), [], (name, fn.name))
                 for task, ac in ids:
                     named[task].add(ac)
         self.assertEqual(named['051'], {'AC%d' % i for i in range(1, 13)})
         self.assertEqual(named['052'], {'AC%d' % i for i in range(1, 12)})
-        self.assertEqual(re.findall(r'TASK-(?!051 |052 )[0-9]+ AC[0-9]+', 'TASK-032 AC6'), ['TASK-032 AC6'])
+        self.assertEqual(re.findall(r'TASK-(?!051 |052 |053 )[0-9]+ AC[0-9]+', 'TASK-032 AC6'), ['TASK-032 AC6'])
 
 
 if __name__ == '__main__':

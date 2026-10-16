@@ -35,9 +35,8 @@ A fourth call (task TASK-052 AC6; specification 5 section 2 item 3's violation h
 ``violation(root, task_id, fencing_token, observation, event_id, recorder, now)`` checks its arguments as
 violation.argument_findings does and passes them to violation.record, which appends violation.detected and the
 decision STOP: violation with the session's token and releases the lease; the result's decision is 'STOP: violation'
-when that decision event is in the log after the call (appended, or "duplicate"), else None. violation.record is
-called only by this function, and this function only by replay and the tests; no other caller of either is added
-before a later task widens the evaluation so that a violation makes acceptance reject (task TASK-052 AC8).
+when that decision event is in the log after the call (appended, or "duplicate"), else None. A recorded violation
+makes every later evaluation of the task reject (task TASK-053).
 
 Limits (AC9), stated:
 - No observation call (specification 5 section 2 item 3, section 7; the record keys are for specification 2's next

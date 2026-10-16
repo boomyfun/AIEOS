@@ -503,9 +503,9 @@ class R10Violation(unittest.TestCase):
 
 class R9Purity(unittest.TestCase):
     def test_imports_and_no_file_process_clock_or_environment(self):
-        """TASK-051 AC10, TASK-051 AC9, TASK-052 AC9, TASK-052 AC8: replay.py imports only datetime, re and
-        aieos_bootstrap's adapter and writer; it calls no open, no subprocess, no clock and no environment; its
-        docstring states the limits."""
+        """TASK-051 AC10, TASK-051 AC9, TASK-052 AC9, TASK-052 AC8, TASK-053 AC6: replay.py imports only datetime, re
+        and aieos_bootstrap's adapter and writer; it calls no open, no subprocess, no clock and no environment; its
+        docstring states the limits, task TASK-053's in place of the old one."""
         tree = ast.parse((SRC / 'replay.py').read_bytes().decode('utf-8'))
         imports = set()
         for n in ast.walk(tree):
@@ -520,8 +520,10 @@ class R9Purity(unittest.TestCase):
         self.assertFalse(names & {'open', 'exec', 'eval', 'compile', '__import__'})
         doc = ast.get_docstring(tree)
         for words in ('no read-set observation', 'section 11 point 10', 'line 49', 'C6 stays unmeasured',
-                      'N1 of', 'opens no file', 'one run at a time', 'does not yet make acceptance reject'):
+                      'N1 of', 'opens no file', 'one run at a time',
+                      'makes every later evaluation of the task reject (task TASK-053)'):
             self.assertIn(words, doc)
+        self.assertNotIn('does not yet make acceptance reject', doc)
 
 
 if __name__ == '__main__':
