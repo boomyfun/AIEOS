@@ -314,7 +314,7 @@ class R7Limits(unittest.TestCase):
     def test_evaluation_docstring_and_imports(self):
         """TASK-053 AC7, TASK-053 AC8, TASK-053 AC10: evaluation.py's docstring states the selection and the span's
         limit, and evaluation.py's and violation.py's docstrings state the limits of AC7 and the repeated record_id
-        limit; evaluation.py's imports are the base's."""
+        limit, which adapter.py's and replay.py's docstrings also name; evaluation.py's imports are the base's."""
         tree = ast.parse((SRC / 'evaluation.py').read_bytes().decode('utf-8'))
         doc = ast.get_docstring(tree)
         for words in ('record.added and violation.detected payloads', 'over\n   the whole log',
@@ -330,6 +330,10 @@ class R7Limits(unittest.TestCase):
                 self.assertIn(words, flat)
         self.assertIn('rerun while the task is still evaluable gives "duplicate"', ' '.join(doc.split()))
         self.assertNotIn('so a rerun gives "duplicate"', ' '.join(doc.split()))
+        for name in ('adapter.py', 'replay.py'):
+            flat = ' '.join(ast.get_docstring(ast.parse((SRC / name).read_bytes().decode('utf-8'))).split())
+            for words in ('where the task is evaluable', 'an earlier kept record'):
+                self.assertIn(words, flat, name)
         mods = set()
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
