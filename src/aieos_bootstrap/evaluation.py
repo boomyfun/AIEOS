@@ -83,7 +83,8 @@ Limits (AC13):
 - A violation.detected of the task anywhere in the log makes every later evaluation of the task REJECT, also after a
   later task.approved and a new submission, as a blocking record.added does (task TASK-053 AC4; decision D-1012 M1),
   where the task is evaluable (VERIFYING or IN_REVIEW; elsewhere the evaluation is refused with reason "state"),
-  unless a blocking record left out refuses it with reason "records" (task TASK-054).
+  unless a blocking record left out (task TASK-054), or an in-form 'fail' record left out that differs from the kept
+  record (task TASK-055), refuses it with reason "records".
   A session fenced out leaves no violation.detected, only the writer's refusal record, read as before.
 - Of task TASK-054 (its AC3 and AC8), the cost of failing closed: a blocking record left out, out of form or for a
   repeated record_id, refuses every evaluation of the task with reason "records" and nothing appended, the rerun
@@ -99,10 +100,11 @@ Limits (AC13):
   governor; the cost is TASK-054's: such a task is refused at every
   evaluation, the rerun included and also after a later task.approved and a new submission, and stays in VERIFYING
   or IN_REVIEW until it is superseded by a new task; one given only through extra_records refuses only while it is
-  given. The rule over-refuses: a left-out 'fail' whose absence would change no decision (a stale record, an
-  authority record, a record that is not an observation or has no evidence type or binding) refuses too (fail
-  closed). A left-out 'pass' record and an out-of-form record that is not blocking are left out with a finding, as
-  their absence can only lower the decision. Records are still selected by the event envelope's task_id, not by the
+  given. The rule over-refuses: a left-out 'fail' whose absence would change no decision (a record about another
+  subject (governor.py skips it), a stale record, an authority record, a record that is not an observation or has no
+  evidence type or binding) refuses too (fail closed). A left-out 'pass' record is left out with a finding, as its
+  absence can only lower the decision, and so is an out-of-form record that is not blocking, which the governor does
+  not use. Records are still selected by the event envelope's task_id, not by the
   record's subject. event_id_of, the governor and records.py's uniqueness rule are unchanged; the limits of task
   TASK-054 (its AC8) stand.
 - Also of task TASK-053 (its AC7): no task.* event follows STOP: violation, so until an evaluation runs the task stays
