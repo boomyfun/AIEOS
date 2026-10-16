@@ -44,8 +44,9 @@ time to the writer's function (and resume_check.check to execute's own default).
 
 Limits (AC9; task TASK-052 AC8), stated: no read-set observation in the replay sequence, although specification 5
 section 5 line 46 lists observations (their record keys are for specification 2's next revision, section 11 points 3
-and 4); a replayed STOP: violation makes every later evaluation of the task reject (task TASK-053), and the task
-stays READY with no lease after it;
+and 4); a replayed STOP: violation makes every later evaluation of the task reject (task TASK-053) where the task is
+evaluable, except a violation whose record_id an earlier kept record of the task already has (the limits
+evaluation.py's docstring states), and the task stays READY with no lease after it;
 abnormal ends beyond the lease's expiry are not handled (section 11 point 10); the token is the grant's, not read from
 the document (M2 of decision D-983, a stated departure from line 49's wording, with the same outcome: two runs give
 equal records); the commit is read from the document, so a replay shows the core's handling of a recorded commit,
