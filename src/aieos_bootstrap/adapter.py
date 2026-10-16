@@ -31,10 +31,17 @@ writer.release_lease_token, writer.held_lease); end's release_lease_token and en
 Purity (AC10): this module starts no process except through gitread.run, which submit.submit calls, opens no file,
 reads no clock and no environment, builds no event-log line itself and makes no network or model call.
 
+A fourth call (task TASK-052 AC6; specification 5 section 2 item 3's violation half, section 8):
+``violation(root, task_id, fencing_token, observation, event_id, recorder, now)`` checks its arguments as
+violation.argument_findings does and passes them to violation.record, which appends violation.detected and the
+decision STOP: violation with the session's token and releases the lease; the result's decision is 'STOP: violation'
+when that decision event is in the log after the call (appended, or "duplicate"), else None. violation.record is
+called only by this function, and this function only by replay and the tests; no other caller of either is added
+before a later task widens the evaluation so that a violation makes acceptance reject (task TASK-052 AC8).
+
 Limits (AC9), stated:
-- No observation and no violation call (specification 5 section 2 item 3, sections 7 and 8; the record keys are for
-  specification 2's next revision, section 11 points 3 and 4, and the core has no path yet from a hook's refusal to
-  violation.detected).
+- No observation call (specification 5 section 2 item 3, section 7; the record keys are for specification 2's next
+  revision, section 11 points 3 and 4).
 - Abnormal ends beyond the lease's expiry are not handled (section 11 point 10): the lease's expiry stays the fallback.
 - The lease's write-set is neither passed nor enforced here (left open, a reading): enforcement while running is the
   Claude Code adapter's hooks (section 6), whose install is the owner's; the gates read the contract's write-set after.
@@ -50,6 +57,7 @@ import re
 from aieos_bootstrap import execution
 from aieos_bootstrap import gitread
 from aieos_bootstrap import submit as submission
+from aieos_bootstrap import violation as violations
 from aieos_bootstrap import writer
 
 RESULT_KEYS = ('result', 'reason', 'findings', 'core', 'decision', 'fencing_token', 'released')
@@ -259,3 +267,31 @@ def end(root, task_id, session_id, fencing_token, now, release_lease_token=None,
         return _result('refused', 'session', ['session: end_session gave %r (%r)' % (state, reason)] + found,
                        released=released)
     return _result('done', None, notes, released=released)
+
+
+# ---- violation (task TASK-052 AC6) ----
+
+def violation(root, task_id, fencing_token, observation, event_id, recorder, now, append=None, release=None):
+    """Record a violation for the session holding the lease through violation.record (TASK-052 AC6); returns a
+    mapping with RESULT_KEYS: core is record's result, decision 'STOP: violation' when the decision event is in the
+    log after the call, released copied out."""
+    try:
+        found = violations.argument_findings(root, task_id, fencing_token, observation, event_id, recorder, now)
+    except Exception as exc:  # AC5
+        found = ['argument: checking the arguments raised %s' % type(exc).__name__]
+    if found:
+        return _result('refused', 'argument', found)
+    try:
+        core = violations.record(root, task_id, fencing_token, observation, event_id, recorder, now, append=append,
+                                 release=release)
+    except Exception as exc:  # record catches its own, so this is a last guard
+        return _result('refused', 'core', ['core: record raised %s' % type(exc).__name__])
+    if not isinstance(core, dict):
+        return _result('refused', 'core', ['core: record gave %r' % (core,)])
+    logged = violations.decision_ids(event_id)[0]
+    in_log = logged in (core.get('appended') or []) or logged in (core.get('duplicate') or [])
+    decision = violations.DECISION if in_log else None
+    if core.get('result') != 'done':
+        return _result('refused', 'core', ['core: record gave %r (%r)' % (core.get('result'), core.get('reason'))]
+                       + _core_findings(core), core, decision)
+    return _result('done', None, [], core, decision, released=core.get('released'))

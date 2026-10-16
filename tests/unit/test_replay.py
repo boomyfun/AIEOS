@@ -17,6 +17,7 @@ from aieos_bootstrap import eventlog
 from aieos_bootstrap import records
 from aieos_bootstrap import replay
 from aieos_bootstrap import resume_check
+from aieos_bootstrap import violation
 from aieos_bootstrap import writer
 
 SRC = pathlib.Path(__file__).resolve().parents[2] / 'src' / 'aieos_bootstrap'
@@ -413,10 +414,98 @@ class R8Refusals(unittest.TestCase):
         self.assertIn(('refused', 'submit'), outcomes)
 
 
+def violation_doc(**over):
+    """A document whose session is stopped by a violation (TASK-052 AC7): no submission."""
+    obs = {'record_id': 'obs-1', 'fact_kind': 'observation', 'source_class': 'agent_declared', 'recorder': REC,
+           'subject': TASK, 'evidence_type': 'write_outside_write_set', 'outcome': 'blocking',
+           'blocking_kind': 'violation', 'refers_to': 'src/outside.py'}
+    v = {'observation': obs, 'event_id': 'violation-1', 'at': '2026-10-16T10:20:00Z'}
+    v.update(over.pop('violation', {}))
+    return document(submission=None, violation=v, **over)
+
+
+class R10Violation(unittest.TestCase):
+    def test_the_document_forms_of_a_violation(self):
+        """TASK-052 AC7: a violation mapping of the wrong form, a violation with a submission, an observation of
+        another class, and an observation recorded under another recorder are each refused "document" before any
+        call; a document without violation is unchanged."""
+        bad = [document(violation={'observation': {}, 'event_id': 'v'}),
+               dict(violation_doc(), submission=document()['submission']),
+               violation_doc(violation={'observation': dict(violation_doc()['violation']['observation'],
+                                                            source_class='human_authority')}),
+               violation_doc(violation={'observation': dict(violation_doc()['violation']['observation'],
+                                                            recorder='replay:another')}),
+               violation_doc(violation={'event_id': ''}), violation_doc(violation={'at': '2026-10-16 10:20'})]
+        for doc in bad:
+            store = Store()
+            mem = Memory(store)
+            r, _, _ = run(doc, store, mem)
+            self.assertEqual((r['result'], r['reason'], r['steps'], mem.roots), ('refused', 'document', [], []))
+        self.assertEqual(run(document())[0]['result'], 'done')
+
+    def test_the_run_with_a_violation(self):
+        """TASK-052 AC7, TASK-052 AC3, TASK-052 AC11: start, the violation with the granted token, then end, whose
+        release finds no lease ("none", no error); the log holds violation.detected and the STOP: violation decision
+        that refers to it; no lease is left; the extended E1 sets hold."""
+        r, store, mem = run(violation_doc())
+        self.assertEqual((r['result'], r['reason']), ('done', None))
+        self.assertEqual([s['step'] for s in r['steps']], ['read_log', 'open_store', 'append_event', 'append_event',
+                                                           'start', 'violation', 'end'])
+        self.assertEqual(r['steps'][5]['result']['decision'], 'STOP: violation')
+        self.assertEqual(store.leases, {})
+        events = [line.event for line in mem.lines()]
+        types = [e['type'] for e in events]
+        self.assertEqual(types[-2:], ['violation.detected', 'decision.execution'])
+        stop = events[-1]['payload']
+        self.assertEqual((stop['decision'], stop['refers_to'], stop['recorder']),
+                         ('STOP: violation', 'violation-1', violation.RECORDER))
+        recorders, classes = set(), set()
+        for e in events:
+            p = e['payload']
+            if e['type'] in records.RECORD_PAYLOAD_TYPES:
+                recorders.add(p.get('recorder'))
+                classes.add(p.get('source_class'))
+                if p.get('recorder') == violation.RECORDER:
+                    self.assertEqual((e['type'], p.get('decision')), ('decision.execution', 'STOP: violation'))
+        self.assertLessEqual(recorders, {REC, resume_check.RECORDER, violation.RECORDER})
+        self.assertLessEqual(classes, {'deterministic_tool_local', 'agent_declared', None})
+        self.assertNotIn('task.submitted', types)
+
+    def test_a_refused_violation_still_ends(self):
+        """TASK-052 AC7, TASK-052 AC4, TASK-052 AC11: when the core refuses the violation (here by the fence, the
+        lease gone before it), the replay gives "violation" and end is still called."""
+        store = Store()
+        mem = Memory(store)
+        fns = functions(store, mem)
+        real = mem.append_event
+
+        def drop_then_append(*args, **kwargs):
+            if args[1] == 'violation.detected':
+                store.leases.clear()
+            return real(*args, **kwargs)
+        fns['append_event'] = drop_then_append
+        r = replay.replay(violation_doc(), ROOT, fns)
+        self.assertEqual((r['result'], r['reason'], r['steps'][-1]['step']), ('refused', 'violation', 'end'))
+        self.assertIn('record.added', [line.event['type'] for line in mem.lines()])
+
+    def test_two_runs_with_a_violation_are_equal(self):
+        """TASK-052 AC7, TASK-052 AC11: two replays with a violation over equal documents and equal empty stand-in
+        roots give equal steps and equal logs (fixed seeds)."""
+        rng = random.Random(52)
+        for _ in range(10):
+            doc = violation_doc(violation={'event_id': 'violation-%d' % rng.randrange(1000)})
+            r1, _, m1 = run(copy.deepcopy(doc))
+            r2, _, m2 = run(copy.deepcopy(doc))
+            self.assertEqual(r1, r2)
+            self.assertEqual(m1.log, m2.log)
+            self.assertEqual(r1['result'], 'done')
+
+
 class R9Purity(unittest.TestCase):
     def test_imports_and_no_file_process_clock_or_environment(self):
-        """TASK-051 AC10, TASK-051 AC9: replay.py imports only datetime, re and aieos_bootstrap's adapter and writer;
-        it calls no open, no subprocess, no clock and no environment; its docstring states the limits."""
+        """TASK-051 AC10, TASK-051 AC9, TASK-052 AC9, TASK-052 AC8: replay.py imports only datetime, re and
+        aieos_bootstrap's adapter and writer; it calls no open, no subprocess, no clock and no environment; its
+        docstring states the limits."""
         tree = ast.parse((SRC / 'replay.py').read_bytes().decode('utf-8'))
         imports = set()
         for n in ast.walk(tree):
@@ -430,8 +519,8 @@ class R9Purity(unittest.TestCase):
         self.assertFalse(attrs & {'now', 'utcnow', 'today', 'environ', 'getenv', 'system', 'popen', 'open'})
         self.assertFalse(names & {'open', 'exec', 'eval', 'compile', '__import__'})
         doc = ast.get_docstring(tree)
-        for words in ('no observation and no violation', 'section 11 point 10', 'line 49', 'C6 stays unmeasured',
-                      'N1 of', 'opens no file', 'one run at a time'):
+        for words in ('no read-set observation', 'section 11 point 10', 'line 49', 'C6 stays unmeasured',
+                      'N1 of', 'opens no file', 'one run at a time', 'does not yet make acceptance reject'):
             self.assertIn(words, doc)
 
 

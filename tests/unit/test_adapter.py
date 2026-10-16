@@ -319,9 +319,9 @@ class R5Result(unittest.TestCase):
 
 class R9Purity(unittest.TestCase):
     def test_imports_and_no_file_process_clock_or_environment(self):
-        """TASK-051 AC10, TASK-051 AC9: adapter.py imports only datetime, re and aieos_bootstrap's execution, gitread,
-        submit and writer; it calls no open, no subprocess, no clock and no environment; its docstring states the
-        limits."""
+        """TASK-051 AC10, TASK-051 AC9, TASK-052 AC9, TASK-052 AC8: adapter.py imports only datetime, re and
+        aieos_bootstrap's execution, gitread, submit, violation (TASK-052) and writer; it calls no open, no
+        subprocess, no clock and no environment; its docstring states the limits."""
         text = (SRC / 'adapter.py').read_bytes().decode('utf-8')
         tree = ast.parse(text)
         imports = set()
@@ -331,34 +331,37 @@ class R9Purity(unittest.TestCase):
             elif isinstance(n, ast.ImportFrom):
                 imports |= {'%s.%s' % (n.module, a.name) for a in n.names}
         self.assertEqual(imports, {'datetime', 're', 'aieos_bootstrap.execution', 'aieos_bootstrap.gitread',
-                                   'aieos_bootstrap.submit', 'aieos_bootstrap.writer'})
+                                   'aieos_bootstrap.submit', 'aieos_bootstrap.violation', 'aieos_bootstrap.writer'})
         attrs = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
         names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
         self.assertFalse(attrs & {'now', 'utcnow', 'today', 'time', 'environ', 'getenv', 'system', 'popen', 'open'})
         self.assertFalse(names & {'open', 'exec', 'eval', 'compile', '__import__'})
         doc = ast.get_docstring(tree)
-        for words in ('No observation and no violation call', 'section 11 point 10', 'write-set is neither passed',
-                      'INV-004', 'One run at a time'):
+        for words in ('No observation call', 'section 11 point 10', 'write-set is neither passed',
+                      'INV-004', 'One run at a time', 'violation.record is\ncalled only by this function'):
             self.assertIn(words, doc)
 
 
 class R9OwnTests(unittest.TestCase):
     def test_every_test_names_its_criteria_and_no_other_tasks(self):
-        """TASK-051 AC11, TASK-051 AC12: every test function of the two new test modules names at least one "TASK-051
-        ACn" in its own docstring and no other task's AC in qualified form; together they name AC1 to AC12 (the
-        failing case: a docstring naming another task's AC is found)."""
+        """TASK-051 AC11, TASK-051 AC12, TASK-052 AC10: every test function of the three test modules (TASK-052 adds
+        test_violation.py) names at least one "TASK-051 ACn" or "TASK-052 ACn" in its own docstring and no other
+        task's AC in qualified form; together they name TASK-051's AC1 to AC12 and TASK-052's AC1 to AC11 (the failing
+        case: a docstring naming another task's AC is found)."""
         here = pathlib.Path(__file__).resolve().parent
-        named = set()
-        for name in ('test_adapter.py', 'test_replay.py'):
+        named = {'051': set(), '052': set()}
+        for name in ('test_adapter.py', 'test_replay.py', 'test_violation.py'):
             tree = ast.parse((here / name).read_bytes().decode('utf-8'))
             for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name.startswith('test')]:
                 doc = ast.get_docstring(fn) or ''
-                ids = set(re.findall(r'TASK-051 (AC[0-9]+)', doc))
+                ids = re.findall(r'TASK-(051|052) (AC[0-9]+)', doc)
                 self.assertTrue(ids, (name, fn.name))
-                self.assertEqual(re.findall(r'TASK-(?!051 )[0-9]+ AC[0-9]+', doc), [], (name, fn.name))
-                named |= ids
-        self.assertEqual(named, {'AC%d' % i for i in range(1, 13)})
-        self.assertEqual(re.findall(r'TASK-(?!051 )[0-9]+ AC[0-9]+', 'TASK-032 AC6'), ['TASK-032 AC6'])
+                self.assertEqual(re.findall(r'TASK-(?!051 |052 )[0-9]+ AC[0-9]+', doc), [], (name, fn.name))
+                for task, ac in ids:
+                    named[task].add(ac)
+        self.assertEqual(named['051'], {'AC%d' % i for i in range(1, 13)})
+        self.assertEqual(named['052'], {'AC%d' % i for i in range(1, 12)})
+        self.assertEqual(re.findall(r'TASK-(?!051 |052 )[0-9]+ AC[0-9]+', 'TASK-032 AC6'), ['TASK-032 AC6'])
 
 
 if __name__ == '__main__':
