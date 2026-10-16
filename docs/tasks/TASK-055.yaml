@@ -1,0 +1,362 @@
+# Task contract TASK-055, a 'fail' record that the evaluation would leave out for a repeated record_id refuses the
+# evaluation (Master Plan revision 4, §4 M5; governor-spec.md sections 4 and 5; constitution INV-003).
+# Revision 0, drafted under decisions D-1043 and D-1044 (Q3), from the scope note approved at decision D-1040 (with the
+# order of its two cases as corrected at decision D-1042 Q2) and carried in DEF-0070; brought for approval in its own
+# request; whether it is approved is recorded in the decision files, not in this file. Fields and value forms follow
+# specification 2 §5.1 and the contract of TASK-054.
+# Task type: implementation. Why: TASK-054's reviews (R2, R5; its H2, decision D-1035) and decision D-1039 found a
+# fail-open path of the acceptance left by TASK-054: evaluation._kept leaves out, with a finding only, a record whose
+# record_id an earlier kept record has; when that record's outcome is 'fail', the governor does not see the failed gate
+# or entry, so an evaluation that would give NEEDS_REWORK (and REWORK) may give another decision, NEEDS_REVIEW and, on
+# re-evaluation with an approval, ACCEPTED included. Constitution INV-003 asks the rule to fail closed.
+# What it changes: after _kept, src/aieos_bootstrap/evaluation.py refuses the evaluation with the reason "records"
+# (reused) when _kept has left out, for a record_id an earlier kept record has, a record that records.check_record finds
+# in form and whose outcome is 'fail', unless the left-out record equals the earlier kept record with that record_id as
+# a whole mapping (==). Nothing is appended and the governor is not called. TASK-054's rule for blocking records stands.
+# Which left-out records refuse, from the governor's use of each (decision D-1040, governor.py read at 56675042): a
+# left-out 'pass' record and a left-out out-of-form record that is not blocking stay left out, because their absence can
+# only lower the decision, never raise it: another subject is skipped (governor.py 334-336); an out-of-form record is
+# not used (344-346); an authority record whose outcome is not pass is noted only (351-353 with 384-386); rows 1 and 2
+# depend only on blocking and 'fail' records (309, 317-318, 429-430, 463-466), so a missing pass can only add missing
+# types and move row 5 to row 3; an approval counts only at row 5 when re-evaluating (476-482). A left-out in-form
+# 'fail' can raise the decision from row 2 (NEEDS_REWORK) to row 3 or row 5, so it refuses.
+# The same function (decision D-1040 C3): evaluation reads records through `from aieos_bootstrap import records`
+# (evaluation.py:109) and the governor through `from aieos_bootstrap import records as record_forms` (governor.py:33),
+# calling record_forms.check_record (governor.py:337); so "in form" here is the governor's own form check.
+# The orders (decision D-1042 Q2, correcting D-1040 C5): a 'pass' record then a 'fail' record with the same record_id:
+# the pass is kept and the fail is left out, so the evaluation is refused; a 'fail' then a 'pass' with the same
+# record_id: the fail is kept and the pass is left out, so the evaluation goes on as at the base (the governor sees the
+# fail). A 'fail' left out after an equal 'fail' (the whole mapping) goes on: the governor sees the same record.
+# The cost, stated (a limit): the span is the whole log, so a task with such a record is refused at every evaluation:
+# it can be neither accepted nor rejected by evaluation and stays in VERIFYING or IN_REVIEW until superseded by a new
+# task. The rule over-refuses: a left-out 'fail' whose absence changes nothing (a stale record, an authority record
+# whose outcome is not pass, a record that is not an observation or has no evidence type or binding) refuses too (fail
+# closed; decision D-1040 option (b), passing the commit and versions into _kept, was rejected). One given only through
+# extra_records refuses only while it is given.
+# A change of earlier accepted behaviour, stated: TASK-027 AC7 ("a repeated record_id ... left out with a finding") and
+# TASK-054 AC2 ("a record that is not blocking and ... repeats a kept record's id is left out with _kept's finding and
+# the evaluation goes on") prescribed leaving such a record out and evaluating on; for an in-form 'fail' record (other
+# than the whole-mapping twin of the kept record) this task refuses instead. The concept and the decision matrix are
+# not changed.
+# The texts that state the old limit become false and change (OPS-003): evaluation.py's docstring item 7 and its
+# TASK-054 limit sentence "a record with outcome fail whose record_id an earlier kept record has is not seen by the
+# governor, and an evaluation that would give REWORK may give another decision, ACCEPT included (a later task is to
+# close this)". tests/unit/test_evaluation_repeated.py's R7Script asserts that sentence (line 454) and "left out with a
+# finding as before" (line 458); only those two requirements change, to the new words, keeping every other requirement
+# (GOV-003).
+# Checks before the contract (decision D-1040 C2 to C4, read at decision D-1041; grep output in the decision files):
+# only test_evaluation_repeated.py and test_evaluation_violation.py read evaluation.py's docstring, and only the former
+# asserts the sentences that change; no 'fail' record in tests/integration/test_evaluation_repo.py or
+# tests/property/test_evaluation_properties.py. tests/unit/test_evaluation.py's R7Records (lines 423-434) and R8Append
+# (lines 454-460) use only records with outcome 'pass' and an out-of-form record without an outcome, so they keep
+# passing.
+# Limits (carried at acceptance): the stuck task and the over-refusal above; event_id_of and the governor unchanged;
+# records.py's uniqueness rule unchanged; a left-out 'pass' record and an out-of-form record that is not blocking left
+# out as before; records still selected by the event envelope's task_id, not by the record's subject (H5, DEF-0070);
+# the limits of TASK-053 (its AC7) and TASK-054 (its AC8) stand; no conformance set or fixture changed.
+# Readers of the changed paths (D-263 C3's practice): tests/unit/test_evaluation.py, tests/unit/
+# test_evaluation_violation.py, tests/integration/test_evaluation_repo.py and tests/property/
+# test_evaluation_properties.py read evaluation.py and keep passing unchanged (forbidden here); src/aieos_bootstrap/
+# verification_records.py names evaluation.evaluate_task in its docstring only; tests/unit/test_writer.py's R8 test and
+# tests/unit/test_gitread.py's subprocess test read every module of src/ and keep passing.
+# Risk: high (risk rules revision 6, policy v4, §2 point 3: R3 matches every path under src/** and tests/**), computed
+# over the base by script (risk_class55.py: every path R2 medium and R3 high). Change class critical_cr, computed by
+# script and read as for TASK-054 (gov003_class55.py: "GOV-003 evaluator change: yes (3 of 3 paths)"; the evaluation
+# path's decision inputs change); decided by decision D-1040; the approval form is ruled at acceptance (decision
+# D-492's precedent). Profile (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture
+# [deterministic_rule], functional [integration_test], security [static_security_analysis] and architecture
+# [ai_review (cross-model)], plus the evidence_required of the applicable articles. Reviews as TASK-054's: five way-2
+# reviews on a model other than the implementer's and the main session's, and the decision agent's own review for the
+# cross-model entry.
+# Naming (D-544 Q3): every test of the new test module names the AC ids it stands for as "TASK-055 ACn" in its own
+# docstring; a changed test names "TASK-055 ACn" beside its earlier ids.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-055.yaml and has one parent equal to base_commit; the
+# task's commits, each carrying "AIEOS-Task: TASK-055", go to task/TASK-055 under their own decisions; main receives
+# the task only at its acceptance.
+# Not applicable: OPS-001 (the task changes no ref); INV-005 to INV-008, INV-010 and INV-011 (the governor, its
+# decision contracts and the policy are not changed); GOV-001, GOV-004 to GOV-006 and SEC-003 (the concept file, the
+# bound artifacts, the decision matrix, the records and pre-genesis documents, and .github/, meet no path of the
+# write-set). INV-004 applies: the module writes only through the writer's functions. INV-009 applies through the
+# writer, which this task does not change.
+# Owner-kept acts: none. No hook, no Claude Code setting, nothing under .github/, no push of its own; it weakens no
+# evidence requirement; the approval form is ruled at acceptance (Master Plan section 6).
+task: TASK-055
+contract_version: v1
+task_type: implementation
+objective: >-
+  Make an in-form 'fail' record that the evaluation would leave out for a repeated record_id refuse the evaluation, in
+  standard-library Python 3. src/aieos_bootstrap/evaluation.py, after _kept, refuses with reason "records" when a
+  record that records.check_record finds in form and whose outcome is 'fail' was left out for a record_id an earlier
+  kept record has, unless it equals that kept record as a whole mapping; nothing is appended and the governor is not
+  called. Its docstring states the new rule, its cost and its over-refusal in place of the old limit. With unit and
+  property tests in a new tests/unit/test_evaluation_failed.py, each test naming its AC ids in its own docstring, and
+  R7Script of tests/unit/test_evaluation_repeated.py brought to the new words; the tests use stand-ins for the writer's
+  and Git's functions and write no file.
+traces_to:
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#8
+  - docs/specs/spec-05-adapter-contract.md#8
+  - docs/pre-genesis/governor-spec.md#4
+  - docs/pre-genesis/constitution.md#INV-003
+  - docs/specs/spec-02-aieos-file-format.md#6.3
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-055.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id.
+  base_commit: 3df5bbfe8a1a47b6ed165a19e9faa3b288aabe32
+  depends_on: [TASK-001, TASK-011, TASK-016, TASK-027, TASK-053, TASK-054]
+  intent_versions:
+    docs/specs/spec-05-adapter-contract.md: 6392a747dfab0f5b0c8f8103842bfeffdc5020e1828a4d5e97407ba5e07f1e94
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 80c91e47ef0a1dbe7f77c677cd2261d5b5ede20bcb0735cf06438bddbde85f8b
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 05c53318cd756a3acfc13e5adaffbfaede8f05be3d00289e9fd45fef08c63c73
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # test_evaluation_failed.py is new; the other two exist at the base (decision D-1040).
+  paths:
+    - src/aieos_bootstrap/evaluation.py
+    - tests/unit/test_evaluation_repeated.py
+    - tests/unit/test_evaluation_failed.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/Deferred/**
+    - docs/tasks/**
+    - docs/records/**
+    - src/aieos_bootstrap/**
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.evaluation.evaluate_task, aieos_bootstrap.governor.evaluate, aieos_bootstrap.records.check_record, aieos_bootstrap.records.check_log, aieos_bootstrap.eventlog.append, aieos_bootstrap.writer.append_event, aieos_bootstrap.writer.read_log]
+  schemas: [spec-02 event payloads (6.3), spec-02 decision contract (6.4), spec-02 evaluation request (6.5)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The rule (decision D-1040). After _kept, evaluation.evaluate_task refuses with result "refused" and reason
+      "records" when _kept has left out a record, from the log or from extra_records, that records.check_record finds
+      in form, whose outcome is 'fail' and whose record_id an earlier kept record has, unless the left-out record
+      equals that earlier kept record as a whole mapping (==); the findings hold _kept's findings, those of TASK-054's
+      rule, and one finding per such record naming its record_id and its source; nothing is appended and
+      governor.evaluate is not called. TASK-054's rule for blocking records is unchanged; both rules are applied
+      together, and either refuses.
+  - AC2: >-
+      What does not change. With no such record the result, decision, next_task_state and event id are those of the
+      base (TASK-027 AC1 to AC11, TASK-053 AC1 to AC10 and TASK-054 AC1 to AC8): tests/unit/test_evaluation.py,
+      tests/unit/test_evaluation_violation.py, tests/integration/test_evaluation_repo.py and
+      tests/property/test_evaluation_properties.py pass unchanged. A left-out record whose outcome is 'pass', and an
+      out-of-form record that is not blocking, are left out with _kept's finding and the evaluation goes on; a 'fail'
+      record followed by a 'pass' record with the same record_id goes on as the base (the fail is kept and the
+      governor sees it); a 'fail' record left out after a kept record equal to it as a whole mapping goes on.
+      RESULT_KEYS, event_id_of and the governor are unchanged; the reason "records" is reused and no new value is
+      added.
+  - AC3: >-
+      The cost and the over-refusal (limits). A task with such a record in the log is refused at every evaluation, the
+      rerun included, with nothing appended, also after a later task.approved and a new submission (the whole-log
+      span); it is neither accepted nor rejected by evaluation and stays in its state until superseded by a new task.
+      A left-out in-form 'fail' record whose absence would change no decision (a stale record, an authority record,
+      a record that is not an observation or has no evidence type or binding) refuses too (fail closed). A record
+      given only through extra_records refuses only while it is given.
+  - AC4: >-
+      The texts (OPS-003). evaluation.py's docstring states the rule (its item 7, naming task TASK-055 AC1, and the
+      reason "records" as reused) and AC3's cost and over-refusal as limits, in place of TASK-054's limit sentence that
+      a record with outcome fail whose record_id an earlier kept record has is not seen by the governor (a later task
+      is to close this); it keeps stating that a left-out 'pass' record is left out with a finding.
+      tests/unit/test_evaluation_repeated.py's R7Script requires the new words in place of the two phrases at its
+      lines 454 and 458, keeping every other requirement, and names "TASK-055 AC4" beside its earlier ids; no other
+      test of that module changes; the change is listed with its reason in the first task commit's request.
+  - AC5: >-
+      Purity and the CI checks (INV-001 to INV-004). evaluation.py's imports are unchanged (test_evaluation.py's
+      import test and R7Script pass); no module starts a process except as at the base, opens a file, reads a clock
+      or the environment, builds an event-log line itself, or makes a network or model call; no exec, eval, compile,
+      __import__ or importlib; no assert in src (bandit B101); no string that names the project-state directory. At
+      the task's commits the CI steps report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit.
+  - AC6: >-
+      Its own tests and the added text. Every test function of tests/unit/test_evaluation_failed.py names the AC ids
+      it stands for as "TASK-055 ACn" in its own docstring; the changed R7Script names "TASK-055 AC4" beside its
+      earlier ids; no other task's AC is named in qualified form in the new module. No earlier test is removed or
+      weakened (GOV-003). Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and
+      OPS-003 patterns, and for constant values beside password- or token-like names (decision D-1003 amendment 1),
+      each count 0; the file names are scanned with the same patterns and the records executors' pre-push pattern
+      (D-282). The tests write and remove no file.
+  - AC7: >-
+      Tests, each rule with at least one passing and one failing case, with stand-ins for the writer's and Git's
+      functions bound to the real signatures (inspect.signature(...).bind): R1 AC1 (in the log, a passing
+      record.added then an in-form 'fail' record.added with the same record_id gives "refused", "records", nothing
+      appended, the governor not called; the failing case: the base's steps alone would leave the fail out and give a
+      decision other than NEEDS_REWORK); R2 AC1 (through extra_records: a 'fail' repeating a log record's id, and a
+      'fail' repeating an earlier extra record's id, each refuse; a 'fail' that differs from its kept 'fail' twin in
+      one field refuses); R3 AC2 (a 'fail' then a 'pass' with the same record_id gives the base's NEEDS_REWORK; a
+      'fail' left out after its whole-mapping twin goes on to the same decision; a left-out 'pass' and an out-of-form
+      record that is not blocking are left out and the evaluation goes on; a left-out blocking record still refuses
+      by TASK-054's rule); R4 AC3 (the rerun refused again with nothing appended; a new task.approved and submission
+      refused again; a stale left-out 'fail' refuses, the over-refusal); R5 AC2 (a property test over generated logs
+      and extra_records, standard library only, fixed seeds, with outcomes pass, fail and blocking and repeated ids:
+      with no record left out that either rule names, the result equals what the base's steps give, and with one it
+      is refused); R6 AC4 and AC5 (a script check of evaluation.py's docstring words, the old limit sentence absent,
+      and the imports); and an end-to-end test whose in-memory log, built with the real eventlog.append, holds the
+      task's task.approved, a passing record.added, a 'fail' record.added reusing its record_id, a lease and a
+      task.submitted, then evaluate_task giving "refused", "records", with its failing case under a fresh record_id
+      giving NEEDS_REWORK. tests/run_tests.py, unchanged, runs them.
+  - AC8: >-
+      Limits, stated in evaluation.py's docstring and carried at acceptance: AC3's cost and over-refusal; event_id_of
+      and the governor unchanged; records.py's uniqueness rule unchanged; a left-out 'pass' record and an out-of-form
+      record that is not blocking left out as before; records still selected by the event envelope's task_id (H5);
+      the limits of TASK-053 (its AC7) and TASK-054 (its AC8) stand; no conformance set or fixture changed. Every
+      existing module other than the write-set is unchanged, and if one can pass only by a change the task escalates
+      (needs_out_of_scope_change).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC7]}
+  - {gate: G3, check: constitution, args: [AC5, AC6, AC8, INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
