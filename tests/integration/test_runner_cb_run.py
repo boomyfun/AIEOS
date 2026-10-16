@@ -179,7 +179,8 @@ class WithFixture(unittest.TestCase):
 
     def test_a_core_that_does_not_stop_or_does_not_reject_fails(self):
         """TASK-056 AC17: a core stand-in that does not stop the session, and one whose evaluation does not reject:
-        ADV-02 FAIL and the run does not count."""
+        ADV-02 FAIL; the run does not count because a stand-in entry is used (a stand-in never counts), not because
+        of the FAIL, and the outcome is fail."""
         cb, status = conformance.load_cb(ROOT)
         self.assertEqual(status, conformance.LOADED)
 

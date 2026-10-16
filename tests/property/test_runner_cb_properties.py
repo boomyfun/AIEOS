@@ -1,10 +1,12 @@
 """Property tests of the conformance runner's Capability Boundaries entry (TASK-056 AC17), standard library only, with
-fixed seeds: the same inputs always give the same result; a one-byte change of the fixture never gives PASS; varied
+fixed seeds: the same inputs always give the same result, and two runs over the same in-memory files the same run
+record; a one-byte change of the fixture never gives PASS; varied
 placeholders never give PASS where the core does not stop or does not reject, and a log_seq mismatch is NOT_RUN, never
 FAIL; and the invariants INV-005 to INV-008 as they apply to this entry. The case builder is a copy of
 tests/unit/test_runner_cb.py's (the test folders share no module). No file is written.
 """
 import hashlib
+import json
 import pathlib
 import random
 import unittest
@@ -138,6 +140,37 @@ def core():
     return cb
 
 
+def freeze_line(digest):
+    rec = {'approval_binding': {'hash': digest, 'kind': 'change_request'}, 'decision_ref': 'D-000',
+           'fact_kind': 'authority', 'record_id': 'TEST-freeze-' + digest[:16], 'recorder': 'a property test',
+           'source_class': 'decision_agent', 'subject': 'TASK-056'}
+    return (json.dumps(rec, sort_keys=True) + '\n').encode('utf-8')
+
+
+def files_with_fixture(c):
+    """The repository's own files that a run reads, with an in-memory fixture under fixtures_cb/ and a set file naming
+    it (a copy of tests/integration/test_runner_cb_run.py's)."""
+    files = {}
+    for p in ROOT.glob('**/*'):
+        rel = p.relative_to(ROOT).as_posix()
+        if p.is_file() and (rel.startswith(('docs/records/', 'tests/conformance/', 'src/aieos_bootstrap/'))
+                            or rel == conformance.SCENARIO_FILE):
+            files[rel] = p.read_bytes()
+    value = conformance.unwrap(files[conformance.SET_FILE])
+    e = next(x for x in value['scenarios'] if x['id'] == 'ADV-02')
+    data = wrap({'scenario': 'ADV-02', 'row_hash': e['row_hash'], 'cases': [c]})
+    files[CB_PATH] = data
+    e['fixture'] = {'path': CB_PATH, 'sha256': conformance.sha256(data)}
+    files[conformance.SET_FILE] = wrap(value)
+    files['docs/records/TEST-56.jsonl'] = freeze_line(conformance.sha256(files[conformance.SET_FILE]))
+    return files
+
+
+def run_files(files):
+    return conformance.run(ROOT, 'a' * 40, 'TASK-056', read=files.get,
+                           listing=lambda: sorted(p for p in files if p.startswith('docs/records/')))
+
+
 class Properties(unittest.TestCase):
     def test_same_inputs_same_result(self):
         """TASK-056 AC17: the same inputs always give the same result and reason (fixed seed)."""
@@ -193,6 +226,17 @@ class Properties(unittest.TestCase):
         r = conformance.run(ROOT, 'a' * 40, 'TASK-056', cb=core())
         self.assertFalse(r.value['counts'])
         self.assertNotIn('capability_boundaries', r.value)
+
+    def test_the_same_files_give_the_same_run_record(self):
+        """TASK-056 AC17 (decision D-1079, M16): two runs over the same in-memory files, with an in-memory fixture under
+        fixtures_cb/ and the root's core, give equal run-record values and records (fixed seed for the varied ids)."""
+        rng = random.Random(5604)
+        for _ in range(2):
+            files = files_with_fixture(case(violation_id='violation-%d' % rng.randrange(1000)))
+            first, second = run_files(files), run_files(files)
+            self.assertEqual(first.value, second.value)
+            self.assertEqual(first.record, second.record)
+            self.assertEqual(first.results['ADV-02'], conformance.PASS)
 
 
 if __name__ == '__main__':

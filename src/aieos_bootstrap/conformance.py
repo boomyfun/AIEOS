@@ -14,11 +14,18 @@ Limits of TASK-056 (its AC16):
 - It checks its inputs and compares values; it never decides an execution decision or an acceptance.
 - A passing ADV-02 shows only the core's handling of a recorded observation, never that any hook observes anything
   (C6 and the T3 tier stay unmeasured).
-- The fixture's values depend on the exact count of lines the core appends (log_seq), so a core change that adds a
-  line shows as NOT_RUN, never FAIL and never PASS.
+- The fixture's values depend on the exact count of lines the core appends (log_seq): a change in the number of
+  lines the core appends before the second session shows as NOT_RUN at step 2 (the second session gets no lease),
+  never PASS; a core change that breaks step 1 still shows as FAIL or NOT_RUN under step 1's rules.
 - In the CI channel the base run takes the runner from the base, so this entry first runs there after it lands on
   main; running ADV-02 needs its fixture and the set file's entry (DEF-0072 step 3).
-- The stand-ins copy test code into the runner (a known cost; no new module).
+- The stand-ins copy test code into the runner (a known cost; no new module). They are a reduced copy of the
+  writer's rules: a fence refusal's ids are not the writer's digests, and the store stand-ins raise no ValueError on
+  bad arguments (decision D-1079, M3 and M4).
+- The Given is checked from the fixture's values alone, without the check that given.write_set equals the contract
+  text's write_set.paths (section 11's Given names it; TASK-056's AC4 does not).
+- The in-memory integration test in which the root's core gives ADV-02 PASS tests the runner, not the core's
+  conformance, and is not conformance evidence.
 
 Limits of TASK-017 (its AC15):
 - No Risk Engine fixture exists and RISK-01's set entry is null, so a run over the repository's tree gives RISK-01
@@ -1152,8 +1159,9 @@ def _check_cb_given(case):
 
 def check_cb_fixture(value, entry):
     """The form of one Capability Boundaries fixture's JSON object against its set entry, and the Given (TASK-056 AC4;
-    conformance-files.md section 11). The replay document's other keys are replay.replay's to check (reading).
-    Returns a list of errors."""
+    conformance-files.md section 11). The replay document's other keys are replay.replay's to check (reading). The
+    Given's condition that given.write_set equals the contract text's write_set.paths is not checked (a stated
+    limit). Returns a list of errors."""
     if not isinstance(value, dict) or set(value) != {'scenario', 'row_hash', 'cases'}:
         return ['the fixture is not exactly scenario, row_hash and cases']
     errors = []
@@ -1244,14 +1252,19 @@ def cb_core_root(root):
 
 
 class _CbStore:
-    """The writer's store in memory, by its rules (TASK-056 AC5): the epoch and counter, the leases and the sessions;
-    every result is the writer's own StoreResult. It opens and writes no file."""
+    """The writer's store in memory, a reduced copy of the writer's rules (TASK-056 AC5): the epoch and counter, the
+    leases and the sessions; a lease is granted only on a task in a grant state, with expires_at after now, when no
+    lease on the task is held ("held") and the session is the holder's, started and not ended; end_session releases
+    the session's leases; every result is the writer's own StoreResult. It opens and writes no file.
+    Limits (decision D-1079, M4): it raises no ValueError on the arguments the writer refuses that way (the core's own
+    argument checks run first), and it keeps no file of the writer's form."""
 
     def __init__(self, entry):
         self.entry = entry
         self.epoch = None
         self.counter = 0
         self.leases = {}
+        self.lease_sessions = {}
         self.sessions = {}
 
     def _r(self, *args, **kwargs):
@@ -1272,20 +1285,33 @@ class _CbStore:
 
     def end_session(self, root, session_id, now):
         s = self.sessions.get(session_id)
-        if s is None or s[1] is not None:
-            return self._r('refused', 'session', ['not started or ended'])
+        if s is None:
+            return self._r('refused', 'session', ['the session was never started'])
+        if s[1] is not None:
+            return self._r('refused', 'ended', ['the session was already ended'])
         s[1] = now
-        return self._r('done', value=[])
+        mine = sorted((t for t, sid in self.lease_sessions.items() if sid == session_id),
+                      key=lambda t: self.leases[t]['fencing_token']['counter'])
+        released = []
+        for t in mine:
+            released.append(self.leases.pop(t))
+            del self.lease_sessions[t]
+        return self._r('done', value=released)
 
     def grant_lease(self, root, task_id, task_state, holder, session_id, now, expires_at):
-        if task_state not in self.entry['GRANT_STATES'] or task_id in self.leases:
-            return self._r('refused', 'state', ['no grant'])
+        if task_state not in self.entry['GRANT_STATES']:
+            return self._r('refused', 'state', ['a lease is granted only on a task in a grant state'])
+        if not expires_at > now:
+            return self._r('refused', 'expiry', ['expires_at is not after now'])
+        if task_id in self.leases:
+            return self._r('refused', 'held', ['a lease on the task is held'])
         s = self.sessions.get(session_id)
         if s is None or s[0] != holder or s[1] is not None:
             return self._r('refused', 'session', ['not a started session of the holder'])
         self.counter += 1
         self.leases[task_id] = {'task_id': task_id, 'fencing_token': {'epoch': self.epoch, 'counter': self.counter},
                                 'expires_at': expires_at}
+        self.lease_sessions[task_id] = session_id
         return self._r('done', value=copy.deepcopy(self.leases[task_id]))
 
     def release_lease_token(self, root, task_id, fencing_token):
@@ -1294,6 +1320,7 @@ class _CbStore:
             return self._r('refused', 'none', ['no lease is held'])
         if lease['fencing_token'] != fencing_token:
             return self._r('refused', 'token', ['another token is held'])
+        del self.lease_sessions[task_id]
         return self._r('done', value=self.leases.pop(task_id))
 
     def held_lease(self, root, task_id):
@@ -1303,8 +1330,11 @@ class _CbStore:
 
 class _CbLog:
     """The event log as bytes in memory (TASK-056 AC5): every append is decided by eventlog.append over the log bytes,
-    with the store's held lease for a fenced event, and a fence refusal's record appended as the writer appends it;
-    every result is the writer's own WriteResult. It opens and writes no file."""
+    with the store's held lease for a fenced event, and a fence refusal's record appended as a record.added event;
+    every result is the writer's own WriteResult. It opens and writes no file.
+    Limit (decision D-1079, M3): a fence refusal's record_id and event_id are 'refusal-' and 'refusal-of-' followed by
+    the refused event's id, not the writer's digests; eventlog checks a record_id only as a non-empty string, and no
+    comparison of the entry reads them."""
 
     def __init__(self, entry, store):
         self.entry = entry
