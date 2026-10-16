@@ -1,0 +1,460 @@
+# Task contract TASK-056, the conformance runner's Capability Boundaries entry (Master Plan revision 4, §4 M5; DEF-0072
+# step 2, the route of decision D-1056; specification 2 §5.1). Revision 0, drafted under decision D-1067 (the scope
+# note, with its additions (i) and (ii)), brought for approval in its own request; whether it is approved is recorded in
+# the decision files, not in this file. Fields and value forms follow specification 2 §5.1 and TASK-017's contract, the
+# same kind of change to the same runner. Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# Task type: implementation. Constitution GOV-002 applies: tests/conformance/** (the fixtures and the set file,
+# scenario files in the sense of conformance-files.md section 8) is in the forbidden set, so the task can read them but
+# never change them.
+# What it changes (conformance-files.md revision 10, section 11, DM F48): the runner routes the capability Capability
+# Boundaries to the fixture folder tests/conformance/fixtures_cb/; it checks a Capability Boundaries fixture's form and
+# section 11's Given from the fixture's values alone; per case it builds one in-memory stand-in for the writer (a store
+# and a log whose append decisions are eventlog.append's, returning the writer's own result types, opening and writing
+# no file) and a read stand-in that answers from the fixture's commit table; then it calls replay.replay, then
+# adapter.start, adapter.submit and adapter.end (the continuation), then evaluation.evaluate_task, and compares as
+# section 11 says, with its FAIL and NOT_RUN order. No Capability Boundaries fixture exists, and the set file's ADV-02
+# entry is null until DEF-0072 step 3's fixture task, so over the repository's own tree every run record is unchanged by
+# this task, byte for byte except the runner's own sha256 (AC11).
+# Readers of the changed paths (D-263 C3's practice): src/aieos_bootstrap/conformance.py is read by the CI workflow's
+# conformance base run (from the base) and candidate run (from the base too; only the governor files come from the
+# head), and imported by the runner's test modules. Of these, three assertions assert the very limit this task lifts:
+# tests/unit/test_runner_rc.py lines 315 to 327 (ADV-02 "the entry point of Capability Boundaries is absent until its
+# milestone", and expected_path None for it) and tests/unit/test_runner_risk.py line 137 (expected_path None); they
+# change by AC12 and in no other way (decision D-1067). Every other assertion of the existing modules must keep passing
+# unchanged (AC14), among them those that stay true while ADV-02's set entry is null (test_runner_risk.py:151,
+# test_runner_rc_run.py:81, test_runner_run.py:72, test_runner_risk_run.py:135-154) and test_conformance_files.py's
+# guard that the set file names no ADV-02 fixture (lines 558 to 621), which is step 3's to change. The run record gains
+# one key, capability_boundaries, only when a run includes this entry (section 11), so over the repository's tree it
+# gains none. The workflow (.github/workflows/aieos-checks.yml) reads named fields of the run record (its record checks
+# at lines 868 and 1204, the runner's sha256 at 1007 and 1343, resume_check at 1012 and 1348), not an exact key set
+# (reading, to be shown in full in the approval request, with a script that passes a record holding the added key
+# through those check functions); no file under .github/ changes. src/aieos_bootstrap/__init__.py's docstring
+# describes the runner's entries and gains this one (as TASK-017 changed it); __all__ does not change.
+# Risk: high. Computed over the base by script (risk_class56.py, output pasted unedited in the approval request): every
+# path of the write set matches R2 (medium) and R3 read fail closed (high, risk rules section 2 point 3); no path meets
+# R11 (tests/conformance/**); the highest wins: "task risk class: high". Profile (assurance-model.md §5, gov-AIEOS,
+# high): functional [unit_test], architecture [deterministic_rule], functional [integration_test], security
+# [static_security_analysis] and architecture [ai_review (cross-model)], plus the evidence_required of the applicable
+# articles.
+# Change class: critical_cr (an evaluator part that enforces acceptance, not bound: DM B1; A29; constitution GOV-003;
+# governor-spec.md §8), computed over the base by script (gov003_class56.py: "GOV-003 evaluator change: yes (7 of 7
+# paths)"; the runner is on the workflow's pinned evaluator list).
+# Reviews (as TASK-017's): five way-2 reviews by a Claude model other than the implementer's (claude-sonnet-5-5), and
+# the decision agent's own review, each brief naming for testing: that a core that does not stop a recorded violation,
+# or a governor that does not reject after one, is FAIL and never PASS or a silent NOT_RUN; that a NOT_RUN for a
+# fixture failure can never hide such a FAIL; that the stand-ins decide appends exactly as eventlog.append does and
+# write no file; that the two changed test modules lose nothing but the lifted limit; that a run over the repository's
+# tree is byte-equal before and after; the limits of AC16. Each reviewer's prompt is self-sufficient, with the
+# scratchpad's absolute path in its first line (D-277).
+# Evaluation path (A61; as TASK-006 to TASK-055): the approved contract is committed on main as its own commit C, which
+# changes only docs/tasks/TASK-056.yaml and has one parent equal to base_commit, and is pushed normally; the files are
+# drafted and tested in scratchpad clones (push URL disabled, the no-reply identity set first); the task's commits,
+# each carrying the trailer "AIEOS-Task: TASK-056" and no e-mail address in its message, go to the branch
+# task/TASK-056 on GitHub, each push under its own decision of the decision agent after a secret scan and a dry run
+# against a bare single-branch copy, never by force and never deleting; the CI channel runs on each push and its
+# records are re-fetched into docs/records/TASK-056.jsonl; main receives the task only at its acceptance, by a
+# fast-forward under its own decision.
+# Not applicable: OPS-001 (the task changes no ref); INV-009, INV-011, GOV-001, GOV-004, GOV-005, GOV-006 and SEC-003
+# (their scopes, the event log, the policy, the concept file, the bound artifacts, the decision matrix, the records and
+# pre-genesis documents, and .github/, meet no path of the write-set).
+# Owner-kept acts: none. The task carries out or changes no act that A51 item (4) keeps: nothing under .github/, no
+# Claude Code setting or hook, no measurement, no push of its own (CR-002 part 4 limit 5 does not apply).
+# Uncovered and stated limits (AC16): no Capability Boundaries fixture exists and ADV-02's set entry is null, so ADV-02
+# stays NOT_RUN in every run over the repository's tree and nothing here shows that the core meets ADV-02; a passing
+# ADV-02 will show only the core's handling of a recorded observation, never that any hook observes anything (C6 and
+# the T3 tier unmeasured, the owner's); in the CI channel the base run takes the runner from the base, so this entry
+# first runs there after it lands on main; the stand-ins copy test code into the runner (a known cost; no new module,
+# so the workflow's pinned list does not change); every review is by AI of one vendor.
+task: TASK-056
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add to the conformance runner (src/aieos_bootstrap/conformance.py, TASK-003, TASK-006 and TASK-017) the Capability
+  Boundaries entry of docs/specs/conformance-files.md revision 10, section 11: the expected fixture path for the
+  capability Capability Boundaries; the form check of a Capability Boundaries fixture, with section 11's Given checked
+  from the fixture's values alone; per case, an in-memory stand-in for the writer and a read stand-in, then
+  replay.replay, the continuation through adapter.start, adapter.submit and adapter.end, and evaluation.evaluate_task,
+  all taken from the root, with the comparison and the FAIL and NOT_RUN order of section 11; the run record's
+  capability_boundaries key when a run includes this entry; with unit, integration and property tests in new test
+  modules, and the change of exactly the assertions of tests/unit/test_runner_rc.py and tests/unit/test_runner_risk.py
+  that assert the limit this task lifts. It adds no fixture, changes no set file, changes nothing a run over the
+  repository's own tree reports but the runner's own hash, and does not wire the CI channel.
+traces_to:
+  - docs/specs/conformance-files.md#2
+  - docs/specs/conformance-files.md#6
+  - docs/specs/conformance-files.md#11
+  - docs/specs/spec-05-adapter-contract.md#5
+  - docs/specs/spec-05-adapter-contract.md#8
+  - docs/specs/spec-02-aieos-file-format.md#6.4
+  - docs/pre-genesis/conformance-methodology.md#3
+  - docs/pre-genesis/conformance-scenarios-initial.md#1
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-056.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id, unquoted, with nothing after it on the line (G0 reads the line raw).
+  base_commit: 2049aeec28d162db0109b9bed0de4dc077f43b87
+  depends_on: [TASK-003, TASK-006, TASK-017, TASK-027, TASK-051, TASK-052, TASK-053, TASK-054, TASK-055]
+  intent_versions:
+    docs/specs/conformance-files.md: 2abbd276efb09509a970838cdde803c9d68efdc48aa86463a448422feedbd7ff
+    docs/pre-genesis/conformance-scenarios-initial.md: 6b5c0666a1f364f5ecec9ad516c9a749969a1963f4e5dbef566adcbc8c80e24d
+    docs/pre-genesis/conformance-methodology.md: a11928199da9b908fad5805b44d341b21f961f0bc925350b0d46ac9adc454c87
+    docs/specs/spec-02-aieos-file-format.md: 80c91e47ef0a1dbe7f77c677cd2261d5b5ede20bcb0735cf06438bddbde85f8b
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 05c53318cd756a3acfc13e5adaffbfaede8f05be3d00289e9fd45fef08c63c73
+    docs/specs/spec-05-adapter-contract.md: 6392a747dfab0f5b0c8f8103842bfeffdc5020e1828a4d5e97407ba5e07f1e94
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+write_set:
+  # Four modified paths: the runner; the package docstring, which describes the runner's entries (as TASK-017 changed
+  # it; __all__ does not change); tests/unit/test_runner_rc.py and tests/unit/test_runner_risk.py, the assertions of
+  # the lifted limit only, by AC12 (decision D-1067). Every other path is new.
+  paths:
+    - src/aieos_bootstrap/__init__.py
+    - src/aieos_bootstrap/conformance.py
+    - tests/unit/test_runner_rc.py
+    - tests/unit/test_runner_risk.py
+    - tests/unit/test_runner_cb.py
+    - tests/integration/test_runner_cb_run.py
+    - tests/property/test_runner_cb_properties.py
+read_set:
+  paths:
+    - docs/specs/conformance-files.md
+    - docs/pre-genesis/conformance-scenarios-initial.md
+    - docs/pre-genesis/conformance-methodology.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/pre-genesis/decision-matrix.md
+    - docs/tasks/TASK-017.yaml
+    - tests/conformance/set.py
+    - tests/conformance/fixtures/
+    - tests/conformance/fixtures_rc/
+    - tests/conformance/fixtures_risk/
+    - src/aieos_bootstrap/replay.py
+    - src/aieos_bootstrap/adapter.py
+    - src/aieos_bootstrap/evaluation.py
+    - src/aieos_bootstrap/execution.py
+    - src/aieos_bootstrap/violation.py
+    - src/aieos_bootstrap/submit.py
+    - src/aieos_bootstrap/resume_check.py
+    - src/aieos_bootstrap/governor.py
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/eventlog.py
+    - src/aieos_bootstrap/writer.py
+    - tests/unit/test_replay.py
+    - tests/unit/test_evaluation_violation.py
+    - tests/unit/test_runner_rc.py
+    - tests/unit/test_runner_risk.py
+    - tests/integration/test_runner_risk_run.py
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.replay.replay, aieos_bootstrap.adapter.start, aieos_bootstrap.adapter.submit, aieos_bootstrap.adapter.end, aieos_bootstrap.evaluation.evaluate_task, aieos_bootstrap.eventlog.append]
+  schemas: [conformance-files set file (3), conformance-files Capability Boundaries fixture file (11), conformance-files run record (6), replay document (replay.py), spec-02 decision contract (6.4)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-005, INV-006, INV-007, INV-008, INV-010, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      Unchanged where the task does not reach (TASK-003's AC1 to AC9 and AC11, TASK-006's AC1 to AC8, TASK-017's AC1 to
+      AC10). The run's inputs, the reader and listing, the wrapped-file and canonical-form rules, the set file's form, its
+      freeze approval, the governor entry point, the Verification, Resume Check and Risk Engine entries and comparisons,
+      the run record's keys and its record, and the command-line entry stay as those contracts say, apart from the
+      changes AC2 to AC11 name. Every result of a Verification, Resume Check or Risk Engine scenario is the same as before
+      this task for the same tree, governor, Resume Check and stand-ins.
+  - AC2: >-
+      The route (section 11, "Where the file is"). expected_path gives tests/conformance/fixtures_cb/<module name>.py for
+      the capability Capability Boundaries, the module name formed as section 2 says; Verification, Resume Check and Risk
+      Engine keep their paths; any other capability gives none and its scenario stays NOT_RUN for "the entry point of
+      <capability> is absent until its milestone". TASK-006's order is kept: the path, then the row hash, then the
+      capability against the bound scenario file, all before the fixture file is read.
+  - AC3: >-
+      The entry point (section 11, "The entry and the comparison"; GS §4 rule 1). The entry calls replay.replay,
+      adapter.start, adapter.submit, adapter.end and evaluation.evaluate_task of the root's src/aieos_bootstrap/ modules,
+      loaded by plain import statements guarded as TASK-003's AC6 guards the governor's; no other module is loaded for
+      it but aieos_bootstrap.eventlog and aieos_bootstrap.writer (for eventlog.append and the writer's result types,
+      AC5). When one of them is absent, failed to load, or lacks a callable of that name, every Capability Boundaries
+      scenario with a fixture is NOT_RUN for "the entry point is absent" (reading: the run's counting stays as TASK-003's
+      AC6 gives it). The run function also takes a Capability Boundaries entry function as a test seam (reading): a run
+      with a stand-in entry never counts; the command-line entry never takes one.
+  - AC4: >-
+      A Capability Boundaries fixture's form and the Given (section 11, the fixture file, its table, "Faithfulness" and
+      the Given; section 5 applied). After the conditions of TASK-003's AC5 that read the set entry, the row and the
+      file's bytes and hash, and the wrapped-file and canonical-form rules, the fixture is malformed, and its scenario
+      NOT_RUN with no call made, unless: its object is exactly scenario, row_hash and cases, those two equal to the set
+      entry; cases is a list of exactly one case; the case is exactly document, continuation, evaluation, given and
+      expected; document is an object holding the key violation and submission null (its other keys are replay.replay's
+      to check, reading); continuation is exactly session, submission and end_at, submission not null; evaluation is
+      exactly task_id, contract_text, declared, values, extra_records, recorder, now and commits, contract_text a string
+      that encodes as UTF-8, commits a non-empty list of objects exactly {id, text, paths} (id 40 lowercase hex, text a
+      string, paths a list of strings); given is exactly outside_path and write_set; expected is exactly stop, decision,
+      next_state and not_fixed, with stop exactly ["STOP: violation"], decision exactly ["REJECT"], next_state exactly
+      ["REJECTED"] and not_fixed exactly ["metrics"] (reading of section 4's rule that a key is present with a value or
+      named in not_fixed, never both: metrics, the one key section 11 never gives a value, is named in not_fixed and is
+      absent as a key). The Given, checked from these values alone before any call: the violation's
+      observation is an object with fact_kind observation, outcome blocking, blocking_kind violation, source_class
+      deterministic_tool_local and recorder equal to the document's recorder; given.outside_path is matched by no pattern
+      of given.write_set, by the runner's own matcher of TASK-017's AC5 (the same forms; never imported from the
+      governor); outside_path is among the paths of the commit whose id is continuation.submission.commit_id; the
+      SHA-256 of contract_text encoded as UTF-8 equals the contract_hash of the document's last setup event of type
+      task.approved; and values.changed_paths equals that commit's paths, sorted. A fixture whose values break the Given
+      is malformed (NOT_RUN).
+  - AC5: >-
+      The stand-ins (section 11, "The entry and the comparison"; decision D-1067 addition (i)). Per case the runner
+      builds one in-memory store and log: open_store, read_log, append_event, start_session, end_session, grant_lease,
+      release_lease_token and held_lease as replay.replay's functions and the adapter's and evaluation's keyword
+      arguments take them, with the signatures of the writer's functions (bound with inspect.signature(...).bind in the
+      tests); every append is decided by eventlog.append over the in-memory log bytes; every result is the writer's own
+      result type (writer.WriteResult, writer.StoreResult and the others the core checks); the root given to the core is
+      an absolute path on every CI platform that names no existing folder (reading: built from the run's root and a
+      fixed name; nothing is created there). The read stand-in answers only "cat-file -t" and "cat-file -p" of a commit
+      of evaluation.commits (its text) and the pinned diff-tree form of evaluation.py's DIFF_FORM followed by such a
+      commit (its paths, NUL-separated), and gives an error result for every other read. The runner opens and writes no
+      file for the entry and starts no process; a test checks, with the stand-ins bound to the real signatures, that a
+      case runs with every write of the writer replaced by a function that fails the test if called.
+  - AC6: >-
+      Step (1), the replay (section 11). replay.replay is called with a copy of the document, the root and the
+      stand-ins. Observed stop is the decision of the step named violation in the result's steps. The case fails if the
+      result is done and that decision is not in expected.stop; or if the result is refused with reason violation after
+      a violation step whose result is refused with reason core, also when the decision event is already in the log
+      (decision D-1067 addition (ii): fail closed). The scenario is NOT_RUN, with the reason in the runner's output, if
+      the result is refused for any other reason (document, store, setup, start, token, end), or with reason violation
+      and no violation step (no lease was granted) or a violation step refused with reason argument.
+  - AC7: >-
+      Step (2), the continuation (section 11). Only when step (1) gave done: adapter.start with the continuation's
+      session values, the document's recorder and the stand-ins; then, only on a granted lease whose token equals
+      continuation.session.expected_token, adapter.submit with the root as repository, the read stand-in and the
+      continuation's submission values; then adapter.end with the granted token. No lease (also when the session's
+      inputs, such as log_seq, do not agree with the log step (1) left), a differing token, or a refused submission or
+      end makes the scenario NOT_RUN with the reason in the runner's output, never FAIL.
+  - AC8: >-
+      Step (3), the evaluation (section 11). Only when step (2) submitted: evaluation.evaluate_task with the root, the
+      root as repository, evaluation's task_id, contract_text encoded as UTF-8, declared, values, extra_records, recorder
+      and now (each a copy), the read stand-in and the stand-ins' read_log and append. The case fails if the result is
+      evaluated and its decision is not in expected.decision or its next_task_state not in expected.next_state; it is
+      NOT_RUN, with the reason shown, if the result is refused or duplicate.
+  - AC9: >-
+      The scenario's result (section 11; CM §3). A call that raises makes the scenario NOT_RUN with the raised error's
+      type as the reason, unless a failure has been found; a failure is FAIL whatever a later step does, and no later
+      step runs after a failure or a NOT_RUN of steps (1) to (3); otherwise NOT_RUN under AC2 to AC8 and the conditions of
+      section 6 with "the entry point" read as this entry; otherwise PASS.
+  - AC10: >-
+      The run record's key (section 11). When a run includes this entry (a Capability Boundaries scenario whose set
+      entry is not null and whose fixture is read), the run record holds capability_boundaries: one {path, sha256} for
+      each of src/aieos_bootstrap/replay.py, adapter.py and evaluation.py at the root, in that order; otherwise the key
+      is absent. The record of spec 2 §6.2 keeps TASK-003's keys and rules: outcome pass exactly when the run counts, at
+      least one scenario has a fixture and every scenario with a fixture is PASS, a Capability Boundaries scenario
+      included; for ADV-02, "a scenario with a fixture" is one whose set entry is not null.
+  - AC11: >-
+      Byte-equality over the repository's tree (as TASK-017's AC10). Over the repository's own tree (ADV-02's entry
+      null), a run with no stand-in gives the run record the runner at base_commit gives for the same tree, the same
+      commit and the same task, byte for byte except the runner's own sha256 in its runner key: the same keys (no
+      capability_boundaries), counts true, every Verification, Resume Check and Risk Engine scenario as at base_commit,
+      ADV-02 NOT_RUN for "no fixture", and the record's outcome as at base_commit. A test checks the keys, the counts,
+      every result and reason and the outcome; a script run at the task's last commit runs the runner of base_commit and
+      the runner of that commit over that commit's tree and compares the two run records' bytes after setting
+      runner.sha256 to the same placeholder, its output recorded in the acceptance request.
+  - AC12: >-
+      The change of the two existing test modules (decision D-1067). In tests/unit/test_runner_rc.py, the assertions at
+      base_commit's lines 315 to 327 that ADV-02's entry point is absent until its milestone and that
+      expected_path('ADV-02', 'Capability Boundaries') is None change to assert instead an unrouted capability's absence
+      with a capability no entry names, and nothing else; in tests/unit/test_runner_risk.py, line 137's assertion that
+      expected_path('ADV-02', 'Capability Boundaries') is None changes to assert the fixtures_cb path, and nothing else.
+      The exact lines at base_commit and after the task are quoted in the approval request of the first task commit; a
+      script at each task commit compares each file with base_commit's and prints the diff, which must be exactly those
+      changes; its output is recorded in the acceptance request.
+  - AC13: >-
+      Purity and the CI checks (INV-001, INV-002, INV-004). The module and its tests import only the Python 3 standard
+      library, aieos_bootstrap.records, the tests also aieos_bootstrap.conformance and the modules AC3 names (replay, adapter, evaluation, eventlog and writer), for the stand-ins' signatures and the end-to-end runs, and, in the module only, the guarded
+      imports of TASK-003's AC6, TASK-006's AC4 and AC3 here; they use no exec, eval, compile, __import__ or importlib,
+      start no process, open no network connection, call no model, and write no file; they read files only with
+      pathlib's read_bytes and list them only with pathlib's glob; the tests build fixtures and malformed inputs in memory
+      and pass them through the byte reader and listing, never through files under tests/conformance/. The CI steps at
+      the task's commits report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit.
+  - AC14: >-
+      The existing test modules unchanged and passing. Every existing test module other than the two of AC12 is
+      unchanged (forbidden), and all pass at the task's commits. If one of them can pass only by another change, the
+      task escalates (needs_out_of_scope_change) instead of changing it.
+  - AC15: >-
+      The added text. Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003
+      patterns, and each count is 0; the file names are scanned with the same patterns and the records executors'
+      pre-push pattern. The approval request of the first task commit also shows the workflow's record-check functions
+      quoted in full and a script passing a run record holding capability_boundaries through them; if any change under
+      .github/ is needed, the task stops and it is brought as its own decision (A66).
+  - AC16: >-
+      Limits, stated and tested as such: no Capability Boundaries fixture exists and ADV-02's set entry is null, so a
+      run over the repository's tree gives ADV-02 NOT_RUN and its run record is unchanged (AC11); the runner checks its
+      inputs and compares values, and never decides an execution decision or an acceptance; a passing ADV-02 shows only
+      the core's handling of a recorded observation, never that any hook observes anything (C6, T3 unmeasured); the
+      fixture's values depend on the exact count of lines the core appends (log_seq), so a core change that adds a line
+      shows as NOT_RUN, never FAIL and never PASS; the entry first runs in the CI's base run after it lands on main;
+      running ADV-02 needs its fixture and the set file's entry (DEF-0072 step 3); the in-memory integration test of
+      AC17 in which the root's core gives ADV-02 PASS tests the runner, not the core's conformance, and is not
+      conformance evidence.
+  - AC17: >-
+      Tests, with this rule-to-test list, each rule with at least one passing case and one failing case, the failing
+      cases built in memory: R1 AC2's route (Capability Boundaries' path, a fixture under another folder, an unnamed
+      capability still absent); R2 AC3's entry point (absent, failed, no callable, a stand-in entry that never counts);
+      R3 each malformed condition of AC4, one failing case per rule, and each Given condition; R4 AC5's stand-ins (bound
+      to the real signatures; eventlog.append's decisions; the writer's result types; a read outside the commit table
+      refused; no file written); R5 AC6 (stop observed, a done replay without STOP: violation FAIL, a core refusal of the
+      violation step FAIL also with its decision in the log, no lease NOT_RUN, an argument refusal NOT_RUN, each other
+      refusal NOT_RUN); R6 AC7 (no lease, a log_seq mismatch, a token mismatch, a refused submission, each NOT_RUN); R7
+      AC8 (REJECT and REJECTED pass; a governor stand-in that does not reject FAIL; refused and duplicate NOT_RUN); R8
+      AC9 (FAIL before NOT_RUN; a raise NOT_RUN with its reason; no step after a failure); R9 AC10 and AC11 (the key
+      present only with the entry run; the run record over the repository's tree: keys, counts, every result and
+      reason, outcome). AC11's byte comparison and AC12's diffs are checked by the scripts those criteria name, not by
+      tests. Unit tests in tests/unit/test_runner_cb.py; integration tests in tests/integration/test_runner_cb_run.py,
+      end to end over the repository's own tree: AC11 with no stand-in; with an in-memory set file whose ADV-02 entry
+      names an in-memory fixture under fixtures_cb/ built as section 11 says, and the root's core, ADV-02 PASS; with a
+      core stand-in that does not stop the session, and with one whose evaluation does not reject, ADV-02 FAIL and the
+      run does not count. Property tests (tests/property/test_runner_cb_properties.py; standard library only, fixed
+      seeds): the same inputs always give the same run record; any one-byte change of the fixture never gives ADV-02
+      PASS; varied placeholders and log lengths never give PASS where the core does not stop or does not reject, and a
+      log_seq mismatch is NOT_RUN, never FAIL; and these properties of the invariants the task relates to: for INV-005,
+      every Capability Boundaries result is PASS, FAIL or NOT_RUN; for INV-006, with no core module no Capability
+      Boundaries scenario is PASS; for INV-007, a fixture whose bytes differ from its set entry's hash is never run; for
+      INV-008, a stand-in entry never makes a run count. tests/run_tests.py, unchanged, runs all three groups.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1000k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9, AC10, AC11, AC12, AC14, AC16, AC17]}
+  - {gate: G3, check: constitution, args: [AC13, AC15, INV-001, INV-002, INV-004, INV-010, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
