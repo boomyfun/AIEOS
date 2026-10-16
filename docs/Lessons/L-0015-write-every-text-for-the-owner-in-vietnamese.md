@@ -219,6 +219,10 @@ Occurrences in session 2026-10-16-0402 (../History/2026-10/2026-10-16-0402-round
 Occurrences in session 2026-10-16-0611 (../History/2026-10/2026-10-16-0611-the-rust-round-2-port-on-main-and-the-go-round-2-port-scoped.md):
 - **2026-10-16.** Two English text blocks before tool calls: :399 "Run C2 now.", which made the gated write stop before anything was written, and :776 "Now read the branch run (C4)."; each listed by its own decision (D-930 amendment 1, D-934); a third would come with a proposed safeguard (D-934 C5).
 
+Occurrences in session 2026-10-16-0815 (../History/2026-10/2026-10-16-0815-the-go-round-2-port-written-and-on-its-task-branch.md):
+- **2026-10-16.** Session cebf61d1 had a third English text block before a tool call, at its :1459 after its push ("Now C3: the CI read, then the archive."), with no effect; its records commit says two; the decision agent's answer to it (D-939 amendment 2) was found in this session.
+- **2026-10-16.** Three English text blocks before tool calls in this session: :127 "Now the handbacks.", :739 "Now the commit message, executor and dry run." and :1352 "Now the History draft.", each at the start of a new step right after a decision arrived, each listed by its own decision. A safeguard was put in force after the first (D-942): the quick check exits non-zero on an unlisted text block or when the check itself gives no PASS line, and every command chains its work after it, so the second and third stopped the next command and nothing ran. From D-948 amendment 1, the first act after any decision is a command that saves the handback, with the check first.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 
