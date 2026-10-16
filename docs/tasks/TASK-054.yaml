@@ -1,0 +1,359 @@
+# Task contract TASK-054, a blocking record that the evaluation would leave out refuses the evaluation (Master Plan
+# revision 4, §4 M5; specification 3 revision 4, section 8 line 106; governor-spec.md section 4; constitution INV-003).
+# Revision 0, drafted under decision D-1027 (C2), from the scope note approved there with form (ii) and its conditions
+# C-a and C-b; brought for approval in its own request; whether it is approved is recorded in the decision files, not
+# in this file. Fields and value forms follow specification 2 §5.1 and the contract of TASK-053.
+# Revision 1: errata E1 and E2 of decision D-1028.
+# Task type: implementation. Why: the five way-2 reviews of TASK-053 and decision D-1021 (its D1) found a fail-open
+# path of the acceptance: evaluation._kept leaves out, with a finding only, a record whose record_id an earlier kept
+# record has (records.py does not check record_id uniqueness across a log), so a violation.detected or a blocking
+# record.added that reuses the id of an earlier passing record of the task never reaches the governor, and the
+# evaluation may ACCEPT. Constitution INV-003 asks the rule to fail closed.
+# What it changes: after _kept, src/aieos_bootstrap/evaluation.py refuses the evaluation with the new reason "records"
+# when _kept has left out a record whose outcome is 'blocking', for being out of form or for a repeated record_id,
+# except a record whose record_id equals that of an earlier kept record whose outcome is 'blocking' with the same
+# blocking_kind (the first already blocks with the same kind; this keeps TASK-053's R3LeftOut test true). Nothing is
+# appended and the governor is not called.
+# Form (ii) of decision D-1027, chosen over (i) (keep every blocking record: the governor then refuses the request for
+# a record id used twice, governor.py:197-208, an error record each time) and (iii) (a blocking record replaces the
+# earlier kept one: the event id is then unchanged, so in IN_REVIEW, where a NEEDS_REVIEW decision keeps the setter,
+# an evaluation after the blocking record gives "duplicate" and appends no REJECT; closing that needs a change to
+# event_id_of, TASK-027 AC8 and a forbidden test).
+# C-a (decision D-1027): in the log, an out-of-form record cannot be present: eventlog.append checks every payload with
+# records.check_payload (eventlog.py:198) and evaluation's _task_events refuses a log with any check_log finding
+# (evaluation.py:169-172, reason "log"); through extra_records (the caller's data) it can, so the rule covers both
+# kinds of leaving out.
+# C-b (decision D-1027): no module of src calls evaluate_task (verification_records.py names it in its docstring only);
+# its callers are the three forbidden evaluation tests and TASK-053's module, none of which switches on a closed set of
+# reasons; the reasons used are argument, store, bound, contract, git, governor, log, merge, state and values; so a new
+# reason "records" is added. RESULT_KEYS are unchanged.
+# A change of earlier accepted behaviour, stated: TASK-027 AC7 ("a repeated record_id ... left out with a finding") and
+# TASK-053 AC3 ("a violation.detected whose record_id an earlier kept record has is left out with the finding _kept
+# gives at the base") prescribed leaving such a record out and evaluating on; for a blocking record (other than one
+# repeating the id of a kept blocking record of the same blocking_kind) this task refuses instead. A repeated or
+# out-of-form record that is not blocking is left out as before. The concept and the decision matrix are not changed.
+# The cost, stated (a limit): the span is the whole log, so a task with such a record is refused at every evaluation:
+# it can be neither accepted nor rejected by evaluation and stays in VERIFYING or IN_REVIEW until it is superseded by a
+# new task. A blocking record given only through extra_records stops refusing when the caller stops giving it.
+# The texts that state the old limit become false and change (OPS-003): evaluation.py's docstring item 7 and its limit
+# on a repeated record_id, violation.py's first limit, adapter.py's and replay.py's sentence; each keeps the words that
+# test_violation R8Purity ("every later evaluation of it reject") and test_replay and test_adapter R9Purity ("makes
+# every later evaluation of the task reject (task TASK-053)") require, so those three test modules do not change. The
+# code of violation.py, adapter.py and replay.py does not change (tested by the SHA-256 of each module's text after its
+# docstring). tests/unit/test_evaluation_violation.py's R7Limits requires the new words in place of the old limit's
+# ("need not REJECT", "a later task is to make this fail closed", "an earlier kept record"), keeping every other
+# requirement (GOV-003).
+# Check before the contract (M2 of decision D-1012, repeated at D-1027): the forbidden test_evaluation.py's R7Records
+# (lines 423-434) and R8Append (lines 454-460) use only records with outcome 'pass' (its record() helper, lines
+# 143-148) and an out-of-form record without an outcome, so they keep passing; test_evaluation_repo.py and
+# test_evaluation_properties.py name no repeated record_id; no forbidden test reads evaluation.py's docstring.
+# Limits (carried at acceptance): the stuck task above; event_id_of and the governor unchanged; records.py's uniqueness
+# rule unchanged (a repeated record_id is still accepted into the log); a repeated id between records that are not
+# blocking is left out as before; the limits of TASK-053 (AC7) stand; no conformance set or fixture changed.
+# Readers of the changed paths (D-263 C3's practice): tests/unit/test_evaluation.py, tests/integration/
+# test_evaluation_repo.py and tests/property/test_evaluation_properties.py read evaluation.py and keep passing unchanged
+# (forbidden here); src/aieos_bootstrap/verification_records.py names evaluation.evaluate_task in its docstring only;
+# tests/unit/test_violation.py, test_adapter.py and test_replay.py read the docstrings of violation.py, adapter.py and
+# replay.py and keep passing unchanged (forbidden here); tests/unit/test_writer.py's R8 test and tests/unit/
+# test_gitread.py's subprocess test read every module of src/ and keep passing.
+# Risk: high (risk rules revision 6, policy v4, §2 point 3: R3 matches every path under src/** and tests/**), computed
+# over the base by script (risk_class54.py: every path R2 medium and R3 high). Change class critical_cr, computed by
+# script and read as for TASK-053 (gov003_class54.py: "GOV-003 evaluator change: yes (6 of 6 paths)"; the evaluation
+# path's decision inputs change); decided by decision D-1027; the approval form is ruled at acceptance (decision
+# D-492's precedent). Profile (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture
+# [deterministic_rule], functional [integration_test], security [static_security_analysis] and architecture
+# [ai_review (cross-model)], plus the evidence_required of the applicable articles. Reviews as TASK-053's: five way-2
+# reviews on a model other than the implementer's and the main session's, and the decision agent's own review for the
+# cross-model entry.
+# Naming (D-544 Q3): every test of the new test module names the AC ids it stands for as "TASK-054 ACn" in its own
+# docstring; a changed test names "TASK-054 ACn" beside its earlier ids.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-054.yaml and has one parent equal to base_commit; the
+# task's commits, each carrying "AIEOS-Task: TASK-054", go to task/TASK-054 under their own decisions; main receives
+# the task only at its acceptance.
+# Not applicable: OPS-001 (the task changes no ref); INV-005 to INV-008, INV-010 and INV-011 (the governor, its
+# decision contracts and the policy are not changed); GOV-001, GOV-004 to GOV-006 and SEC-003 (the concept file, the
+# bound artifacts, the decision matrix, the records and pre-genesis documents, and .github/, meet no path of the
+# write-set). INV-004 applies: the modules write only through the writer's functions. INV-009 applies through the
+# writer, which this task does not change.
+# Owner-kept acts: none. No hook, no Claude Code setting, nothing under .github/, no push of its own; it weakens no
+# evidence requirement; the approval form is ruled at acceptance (Master Plan section 6).
+task: TASK-054
+contract_version: v1
+task_type: implementation
+objective: >-
+  Make a blocking record that the evaluation would leave out refuse the evaluation, in standard-library Python 3.
+  src/aieos_bootstrap/evaluation.py, after _kept, refuses with reason "records" when a record whose outcome is
+  'blocking' was left out (out of form, or for a record_id an earlier kept record has), except one whose record_id
+  equals that of an earlier kept blocking record with the same blocking_kind; nothing is appended and the governor is
+  not called. The docstrings
+  of evaluation.py, violation.py, adapter.py and replay.py state the new rule and its cost in place of the old limit;
+  the code of violation.py, adapter.py and replay.py does not change. With unit and property tests in a new
+  tests/unit/test_evaluation_repeated.py, each test naming its AC ids in its own docstring, and R7Limits of
+  tests/unit/test_evaluation_violation.py brought to the new words; the tests use stand-ins for the writer's and Git's
+  functions and write no file.
+traces_to:
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#8
+  - docs/specs/spec-05-adapter-contract.md#8
+  - docs/pre-genesis/governor-spec.md#4
+  - docs/pre-genesis/constitution.md#INV-003
+  - docs/specs/spec-02-aieos-file-format.md#6.3
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-054.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id.
+  base_commit: f640db3e635c3c4740881c9e39ba5d56c7584d2d
+  depends_on: [TASK-001, TASK-011, TASK-016, TASK-027, TASK-051, TASK-052, TASK-053]
+  intent_versions:
+    docs/specs/spec-05-adapter-contract.md: 6392a747dfab0f5b0c8f8103842bfeffdc5020e1828a4d5e97407ba5e07f1e94
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 80c91e47ef0a1dbe7f77c677cd2261d5b5ede20bcb0735cf06438bddbde85f8b
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 05c53318cd756a3acfc13e5adaffbfaede8f05be3d00289e9fd45fef08c63c73
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # test_evaluation_repeated.py is new; the other five exist at the base (decision D-1027).
+  paths:
+    - src/aieos_bootstrap/evaluation.py
+    - src/aieos_bootstrap/violation.py
+    - src/aieos_bootstrap/adapter.py
+    - src/aieos_bootstrap/replay.py
+    - tests/unit/test_evaluation_violation.py
+    - tests/unit/test_evaluation_repeated.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/Deferred/**
+    - docs/tasks/**
+    - docs/records/**
+    - src/aieos_bootstrap/**
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.evaluation.evaluate_task, aieos_bootstrap.governor.evaluate, aieos_bootstrap.records.check_record, aieos_bootstrap.records.check_log, aieos_bootstrap.violation.record, aieos_bootstrap.eventlog.append, aieos_bootstrap.writer.append_event, aieos_bootstrap.writer.read_log]
+  schemas: [spec-02 event payloads (6.3), spec-02 decision contract (6.4), spec-02 evaluation request (6.5)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The rule (decision D-1027, form (ii), with C-a). After _kept, evaluation.evaluate_task refuses with result
+      "refused" and reason "records" when _kept has left out a record, from the log or from extra_records, whose
+      outcome is 'blocking', for being out of form or for a record_id an earlier kept record has, unless its record_id
+      equals that of an earlier kept record whose outcome is 'blocking' and whose blocking_kind is the same; the
+      findings hold _kept's findings and one
+      finding per such record naming its record_id (or its position when it has none) and its source; nothing is
+      appended and governor.evaluate is not called.
+  - AC2: >-
+      What does not change. With no such record the result, decision, next_task_state and event id are those of the
+      base (TASK-027 AC1 to AC11 and TASK-053 AC1 to AC10): tests/unit/test_evaluation.py,
+      tests/integration/test_evaluation_repo.py and tests/property/test_evaluation_properties.py pass unchanged; a
+      record that is not blocking and is out of form or repeats a kept record's id is left out with _kept's finding
+      and the evaluation goes on; a blocking record repeating the id of a kept blocking record with the same
+      blocking_kind is left out and the evaluation goes on (a violation repeating a kept violation gives REJECT, as
+      TASK-053's R3LeftOut test shows). RESULT_KEYS, event_id_of and the governor are
+      unchanged; the new reason is the only new value.
+  - AC3: >-
+      The cost (a limit). A task with such a record in the log is refused at every evaluation, the rerun included,
+      with nothing appended, also after a later task.approved and a new submission (the whole-log span); it is
+      neither accepted nor rejected by evaluation and stays in its state until superseded by a new task. A blocking
+      record given only through extra_records refuses only while it is given.
+  - AC4: >-
+      The texts (OPS-003). evaluation.py's docstring states the rule (its item 7, the new reason in its result
+      section) and AC3's cost as a limit, in place of the limit that a violation whose record_id an earlier kept
+      record has is left out and need not REJECT; violation.py's first limit, adapter.py's and replay.py's sentence
+      state the same in place of that exception, each keeping the words test_violation R8Purity ("every later
+      evaluation of it reject") and test_replay and test_adapter R9Purity ("makes every later evaluation of the task
+      reject (task TASK-053)") require. The code of violation.py, adapter.py and replay.py does not change: each
+      module's text after the line that closes its module docstring is byte-equal to the base's.
+      tests/unit/test_evaluation_violation.py's R7Limits requires the new words in place of "need not REJECT", "a
+      later task is to make this fail closed" and "an earlier kept record", keeping every other requirement; the
+      change is listed with its reason in the first task commit's request.
+  - AC5: >-
+      Purity and the CI checks (INV-001 to INV-004). evaluation.py's imports are unchanged (test_evaluation.py's
+      import test and R7Limits pass); no module starts a process except as at the base, opens a file, reads a clock
+      or the environment, builds an event-log line itself, or makes a network or model call; no exec, eval, compile,
+      __import__ or importlib; no assert in src (bandit B101); no string that names the project-state directory. At
+      the task's commits the CI steps report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit.
+  - AC6: >-
+      Its own tests and the added text. Every test function of tests/unit/test_evaluation_repeated.py names the AC
+      ids it stands for as "TASK-054 ACn" in its own docstring; the changed R7Limits names "TASK-054 AC4" beside its
+      earlier ids; no other task's AC is named in qualified form in the new module. No earlier test is removed or
+      weakened (GOV-003). Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and
+      OPS-003 patterns, and for constant values beside password- or token-like names (decision D-1003 amendment 1),
+      each count 0; the file names are scanned with the same patterns and the records executors' pre-push pattern
+      (D-282). The tests write and remove no file.
+  - AC7: >-
+      Tests, each rule with at least one passing and one failing case, with stand-ins for the writer's and Git's
+      functions bound to the real signatures (inspect.signature(...).bind): R1 AC1 (a violation.detected reusing
+      the record_id of an earlier passing record.added of the task gives "refused", "records", nothing appended, the
+      governor not called; the failing case: the base's _kept alone would leave it out and evaluate); R2 AC1 (a
+      blocking record.added reusing such an id, and a blocking record in extra_records that is out of form or
+      repeats a log record's id, each refuse; a violation.detected reusing the id of an earlier kept blocking
+      record.added of another blocking_kind refuses); R3 AC2 (a violation repeating a kept violation's id gives
+      REJECT; a passing record repeating an id, and an out-of-form passing record, are left out and the evaluation
+      goes on); R4 AC3 (the rerun refused again with nothing appended; a new task.approved and submission refused
+      again); R5 AC2 (a property test over generated logs and extra_records, standard library only, fixed seeds:
+      with no blocking record left out, the result equals what the base's steps give, and with one it is refused);
+      R6 AC4 (for each of violation.py, adapter.py and replay.py, the SHA-256 of its text after the line that closes
+      its module docstring equals a value recorded in the test module, computed from the base's file, with a real
+      failing case; the docstrings' new words present and the old absent); R7 AC5 (a script check of evaluation.py's
+      docstring words and of the imports); and an end-to-end test whose in-memory log, built with the real
+      eventlog.append, holds the task's task.approved, a passing record.added, a first lease, violation.record whose
+      observation reuses that record's record_id, a second lease and a task.submitted, then evaluate_task giving
+      "refused", "records". tests/run_tests.py, unchanged, runs them.
+  - AC8: >-
+      Limits, stated in evaluation.py's docstring and carried at acceptance: AC3's cost; event_id_of and the
+      governor unchanged; records.py's uniqueness rule unchanged; a repeated id between records that are not
+      blocking left out as before; the limits of TASK-053 (its AC7) stand; no conformance set or fixture changed.
+      Every existing module other than the write-set is unchanged, and if one can pass only by a change the task
+      escalates (needs_out_of_scope_change).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC7]}
+  - {gate: G3, check: constitution, args: [AC5, AC6, AC8, INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
