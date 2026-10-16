@@ -226,6 +226,9 @@ Occurrences in session 2026-10-16-0815 (../History/2026-10/2026-10-16-0815-the-g
 Occurrences in session 2026-10-16-0937 (../History/2026-10/2026-10-16-0937-the-go-round-2-port-on-main-and-the-typescript-round-2-port-scoped.md):
 - **2026-10-16.** Three text blocks before tool calls: :104 (English, at the session setup, right after a harness note asking what was being done), :167 (in Vietnamese, a status line before a command, with no harness note) and :859 (English, at a step boundary right after a harness note, before a file write the quick check could not see); each stopped by the quick check at the next command and listed by its own decision (D-950, its amendment 1, D-955). From D-955: a command with the check first comes before every file write or agent call, not only before commands, and after a harness note the next call is the check alone. A stronger block, a hook in the tool's settings, is the owner's and was not asked (an open option).
 
+Occurrences in session 2026-10-16-1021 (../History/2026-10/2026-10-16-1021-the-typescript-round-2-port-on-main-and-round-2-complete.md):
+- **2026-10-16.** Two text blocks before tool calls, both in English: :415, right after a decision arrived, in the same message as a file edit, so the quick check could stop only the next command; and :1209, after a run of reads, with no harness note just before it. Each was stopped at the next command and listed by its own decision (D-960 amendment 1, D-966 amendment 1). The second weakens the harness-note explanation; a hook that refuses a tool call in a message holding text was designed and tested by replay over this and the last session's transcripts (five refusals, exactly the five slips, no false refusal) and brought with the session-end request; installing it is the owner's.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 
