@@ -238,6 +238,9 @@ Occurrences in session 2026-10-16-1250 (../History/2026-10/2026-10-16-1250-the-d
 Occurrences in session 2026-10-16-1451 (../History/2026-10/2026-10-16-1451-the-adapter-and-replay-on-main-and-the-violation-path-on-its-branch.md):
 - **2026-10-16.** Six text blocks before tool calls, all in English, each announcing the next step: :490 ("Now the commit message."), in the same message as a write of a draft in the scratchpad; :702 ("Now the pause reply carrying D-995's text.") and :1653 ("Now the commit message and dry run."), right after a harness note; :1029 ("Now the contract draft."), :1793 ("Progress and lesson fragments next.") and :1836 ("Now update the History for the fifth slip and build the files."), with no harness note just before them; :1836 came right after the pattern had been named to the decision agent. The quick check stopped each one at the next command, and each was listed by its own decision; the count did not decrease from the earlier sessions.
 
+Occurrences in session 2026-10-16-1712 (../History/2026-10/2026-10-16-1712-the-violation-path-on-main-and-the-rejection-task-on-its-branch.md):
+- **2026-10-16.** Three text blocks before tool calls, all in English, each announcing the next step, with no harness note just before them: :368 ("Now the request file."), :1467 ("Now R9OwnTests.") and :1874 ("Now the commit message and dry run."). The quick check stopped each one at the next command, and each was listed by its own decision. The many harness notes asking what was being done were not answered in text. The same kind of slip keeps recurring across sessions despite the stop.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

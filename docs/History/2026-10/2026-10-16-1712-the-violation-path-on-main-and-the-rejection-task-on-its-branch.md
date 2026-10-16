@@ -1,0 +1,48 @@
+# Session 2026-10-16 17:12 (UTC+7): decision files D-993 to D-1005; TASK-052 (the violation path) reviewed, accepted and on main; M5's third task, TASK-053 (a violation makes acceptance reject), scoped, contracted, written and on its task branch; its reviews and acceptance carried
+
+> - **Status:** working record, non-authoritative. Claude wrote it during this session. It is a claim, not evidence. Owner decisions are in `docs/pre-genesis/decision-matrix.md` (DM). Delegated decisions are in the decision files, kept outside the repository.
+> - **Session and transcript:** session `fcb8a600-9380-4a22-8b56-4c4567a61929`. A reference such as (:3) is a line in its transcript; "267a :N" is a line of session 267a7d61's transcript.
+> - **Models, by machine:** the worker `claude-opus-5-5`, the owner's choice (reported, not judged); one decision-agent instance on `claude-opus-5-5`, whose own context held the definition's revision 10 (5228fe63…, A41's last value; D-1006), "model check: PASS" at every request from the second on; TASK-052's five way-2 reviewers on `claude-sonnet-5-5`, a model other than the main session's (review_models2 "cross-model and rule check: PASS"); no writer agent (the worker wrote the code, D-1014, D-1015).
+> - **Repository:** local and GitHub `main` b57662cd at start; fe95a1e9 (TASK-052 landed, two rebuilt commits) and 12349ef7 (TASK-053's contract, commit C) during the session; then this session's records commit. task/TASK-053 at c7295250 on GitHub.
+
+## Summary
+
+- **The owner's message:** :3 is the approved prompt, unchanged but for the app's paste frame (D-1006). The start check passed: the decision agent's own text is revision 10, the agents file equals A41's last value, and the models are as the owner set them.
+- **Decision files D-993 to D-1005** written (D-1007): 981 entries in the folder, the 968 earlier ones unchanged by hash; D-993's addendum and the amendments inside their files. A gap stated, not asserted: line_sent over 267a :2103 (the memory display) gave "sent as text: False"; lines 22 to 27 differ in characters the diff output does not show, the words shown are the same, and the sent text's own draft check passed; it was not brought to the decision agent in that session (D-1004's file, D-1007 Q3). It is a gap in the evidence that the text was sent, not a finding that the owner was shown something wrong.
+- **TASK-052** (DEF-0066): five way-2 review briefs at 31071c15 (D-1008), the reviews on claude-sonnet-5-5, all "pass", no blocking finding; dispositions D1 to D16, no code change, D11 carried (D-1009); the decision agent's own review at 31071c15, pass (D-1009); **accepted** by one delegated approval (D-1010, "decided by: decision agent (A41, A51)") and **landed on main as two rebuilt commits**, 84af4192 and fe95a1e9 (merge-base 1fa22a1f); main's run 327 passing. DEF-0066 done; its limits and findings in DEF-0067; its records in docs/records/TASK-052.jsonl (run 324's bandit failure kept, answered by the head).
+- **D11, the quotation:** violation.py lines 5 to 7 quoted specification 3 line 106 in quotation marks, abridged and altered, not marked so in the code; TASK-053 marks it "(abridged, not verbatim)".
+- **M5's next step** (D-1011): a STOP: violation makes acceptance reject (W), chosen over ADV-02's fixture (which needs it), the T0 manual adapter and specification 2's next revision.
+- **TASK-053:** scope note with reading (a), the whole-log span, and M1 to M3 (D-1012); M2's grep: no forbidden evaluation test reads evaluation.py's docstring; the contract revision 0, then revision 1 with E1 to E3 (D-1013, D-1014; E1 a duplicate `forbidden:` key that PyYAML hid); commit C 12349ef7 on main, run 328 passing (D-1014); the owner told before any code (:1277, D-1015); the code by the worker: evaluation.py passes the governor the task's violation.detected payloads beside its record.added payloads, the docstrings of the violation path brought up to date, four earlier tests changed (three purity tests' words and R9OwnTests' lookahead, D-1015 amendment 1), a new module tests/unit/test_evaluation_violation.py; the local compiled suite 1266 tests, OK; read by the decision agent (D-1016, erratum E1 to AC2: after a REJECT a rerun is refused "state", not "duplicate"); first task commit c7295250 on task/TASK-053, run 329 passing every step (G0 "commits 1, paths 8, failures 0"; 1048 + 90 + 128 tests; bandit no issues). Its five way-2 reviews, the decision agent's own review, the acceptance and the landing are carried (DEF-0068).
+
+## Decisions
+
+| Date | What | Decided by | Recorded in |
+|---|---|---|---|
+| 2026-10-16 | Session start; the slip at :368 (amendment 1) | Decision agent (A41), D-1006 and its amendment 1 | `D-1006-…` |
+| 2026-10-16 | The decision files D-993 to D-1005 | Decision agent (A41), D-1007 | `D-1007-…` |
+| 2026-10-16 | TASK-052's review briefs and their launch | Decision agent (A41), D-1008 | `D-1008-…` |
+| 2026-10-16 | TASK-052's dispositions and the decision agent's own review | Decision agent (A41), D-1009 | `D-1009-…` |
+| 2026-10-16 | TASK-052's acceptance and its landing (CS-248) | Decision agent (A41, A51), D-1010 | `D-1010-…` |
+| 2026-10-16 | M5's next step: a violation makes acceptance reject | Decision agent (A41), D-1011 | `D-1011-…` |
+| 2026-10-16 | TASK-053's scope note (reading (a), M1 to M3) | Decision agent (A41), D-1012 | `D-1012-…` |
+| 2026-10-16 | TASK-053's contract revision 0: E1 to E3 | Decision agent (A41), D-1013 | `D-1013-…` |
+| 2026-10-16 | Revision 1 and CS-249, commit C; the report and the order to the code (amendment 1) | Decision agent (A41), D-1014 and its amendment 1 | `D-1014-…` |
+| 2026-10-16 | The owner notice and the code's start; the slip at :1467 and R9OwnTests (amendment 1) | Decision agent (A41), D-1015 and its amendment 1 | `D-1015-…` |
+| 2026-10-16 | The code, erratum E1 to AC2 and CS-250, the first task commit; the slip at :1874 (amendment 1) | Decision agent (A41), D-1016 and its amendment 1 | `D-1016-…` |
+| 2026-10-16 | The session end | Decision agent (A41), D-1017 | `D-1017-…` |
+
+## Problems and mistakes
+
+- **Text blocks before tool calls (L-0015), three, all in English, each announcing the next step, with no harness note just before them:** :368 ("Now the request file."), :1467 ("Now R9OwnTests.") and :1874 ("Now the commit message and dry run."). Each was stopped at the next command (the quick check alone) and listed by its own decision (D-1006 amendment 1, D-1015 amendment 1, D-1016 amendment 1). The same kind of slip keeps recurring across sessions despite the stop. The harness asked many times to say what was being done; none was answered in text, and the next call each time was the quick check alone.
+- **The first pause reply sent early:** :388 went before D-1007 was pending and with no draft check before it (a departure from D-575, D-577 and D-1006 Q4); its content was as asked, and the after-the-fact check passed (D-1007).
+- **Edits after one quick check:** several Edits that built TASK-053's revision 1 (and two that corrected r0's wording) followed one quick-check command, not one each (D-948 amendment 1); the quick check after them gave "tb ok" (D-1014). From then on one quick-check command came before each Write and Edit.
+- **Commands:** no guard refusal. Three command parts with no effect: :73 (an `ls -d */` repeating the folder names just listed), :281 (a call of line_chardiff.py with the wrong arguments, which raised before reading anything) and :404 (draft_check2.py given `--help`, which raised); one wrong-argument rerun: :357 (pre_request.sh given the decision agent's id instead of its transcript path; rerun with the path).
+- **A test assertion against the contract's wording:** TASK-053's first local suite run failed on AC2's "a rerun gives duplicate", which cannot hold after a REJECT (the task is then REJECTED, which the evaluation path does not evaluate); the test now asserts a refused rerun with nothing appended, and AC2 is corrected by the decision agent's erratum E1 (D-1016). evaluation.py's item 8 has had the same wording gap since TASK-027; carried in DEF-0068.
+- **A stated inconsistency in precedent (M3 of D-1012):** TASK-052's header read its change class "normal: the governor is not touched" for paths that GOV-003 lists as evaluator paths; TASK-027's and TASK-029's read such paths critical_cr, as TASK-053 does. TASK-052 is not reopened.
+- **Errors found by the decision agent in the worker's work:** E1 to E3 in TASK-053's contract revision 0 (D-1013: the duplicate `forbidden:` key, two broken wraps, the end-to-end test's log order). The AC2 clause that cannot hold after a REJECT was found by the worker's own test run and corrected by the decision agent's erratum E1 (D-1016).
+
+## State at the end and next step
+
+- **A14:** step 9; M5 in progress; TASK-051 and TASK-052 accepted and on main (fe95a1e9); TASK-053 contracted (12349ef7), its first task commit on task/TASK-053 (c7295250, run 329 passing), read by the decision agent, not yet reviewed or accepted.
+- **Next session:** the tools copy as the first command, then the setup script; the definition and model check; the decision files D-1006 onward; then TASK-053's five way-2 review briefs (on a model other than the main session's, naming the four changed tests, E1 to AC2, reading (a) and M1), the decision agent's own review, the acceptance and the landing (DEF-0068); then ADV-02's fixture, the step D-1011 named after it.
+- **Open:** DEF-0004, DEF-0005, DEF-0008, DEF-0011, DEF-0020, DEF-0024, DEF-0026 to DEF-0044, DEF-0046 to DEF-0052, DEF-0054 to DEF-0059, DEF-0061 to DEF-0063, DEF-0065, DEF-0067, DEF-0068.

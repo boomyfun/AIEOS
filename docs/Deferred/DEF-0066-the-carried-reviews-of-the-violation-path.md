@@ -1,6 +1,6 @@
 # DEF-0066: TASK-052's carried reviews and acceptance (the violation path)
 
-- Status: open
+- Status: done
 - Opened: 2026-10-16 (decision D-1003, with its amendments 1 and 2 and D-1004)
 - Deferred by: decision agent (A41), D-1003 Q3 (the bands).
 - Decision group: A (the order of work within an approved contract).
@@ -17,3 +17,4 @@
 
 ## Log
 - 2026-10-16: opened (D-1003, D-1004).
+- 2026-10-16: done (D-1010): five way-2 reviews at 31071c15, all pass (D-1008); the dispositions D1 to D16 and the decision agent's own review, pass (D-1009); accepted and landed on main as two rebuilt commits ending at fe95a1e9 (D-1010); its limits and findings carried in DEF-0067.
