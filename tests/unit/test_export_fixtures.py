@@ -313,7 +313,8 @@ class TypeCheckTests(unittest.TestCase):
 
 
 # TASK-044 AC8: the Go port's step (decision D-855 B3, B4), its module file, and the checks carried from TASK-043
-# (decision D-849; D-855 B5 (i)): the guard count per job and the whole TypeScript type-check step.
+# (decision D-849; D-855 B5 (i)): the guard count per job and the whole TypeScript type-check step. TASK-049 AC8:
+# GO_STEP updated in place with round 2's six lines (decisions D-938 B4, D-943).
 GO_STEP = ('          if [ -d bench/go ]; then\n'
            '            export GOTOOLCHAIN=local GOPROXY=off CGO_ENABLED=0\n'
            '            mkdir "$RUNNER_TEMP/go"\n'
@@ -325,6 +326,15 @@ GO_STEP = ('          if [ -d bench/go ]; then\n'
            ' echo "go: the port exits 0 with no argument"; false; fi\n'
            '            test ! -s "$RUNNER_TEMP/go-noarg.txt"\n'
            '            (cd bench/go && go test -count=1 . -args "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")\n'
+           '            (cd bench/go && go vet ./round2 && go build -trimpath -o "$RUNNER_TEMP/go/port2.exe" ./round2)\n'
+           '            "$RUNNER_TEMP/go/port2.exe" "$RUNNER_TEMP/round2-input.json" > "$RUNNER_TEMP/go2.json"\n'
+           '            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/round2-reference.json"'
+           ' "$RUNNER_TEMP/go2.json"\n'
+           '            if "$RUNNER_TEMP/go/port2.exe" > "$RUNNER_TEMP/go2-noarg.txt"; then'
+           ' echo "go: port2 exits 0 with no argument"; false; fi\n'
+           '            test ! -s "$RUNNER_TEMP/go2-noarg.txt"\n'
+           '            (cd bench/go && go test -count=1 ./round2 -args "$RUNNER_TEMP/round2-input.json"'
+           ' "$RUNNER_TEMP/round2-reference.json")\n'
            '          else\n'
            '            echo "no port in bench/go"\n'
            '          fi\n')
@@ -509,7 +519,9 @@ class RustStepTests(unittest.TestCase):
 BENCH_TS = REPO / 'bench' / 'ts'
 TS_FILES = ['bytes.ts', 'export.ts', 'governor.ts', 'json.ts', 'main.ts', 'node.d.ts', 'records.ts', 'resume_check.ts',
             'test.ts', 'tsconfig.json']
-GO_FILES = ['export.go', 'go.mod', 'governor.go', 'json.go', 'main.go', 'port_test.go', 'records.go', 'resume.go']
+GO_FILES = ['export.go', 'go.mod', 'governor.go', 'json.go', 'main.go', 'port_test.go', 'records.go', 'resume.go',
+            'round2', 'round2/document.go', 'round2/eventlog.go', 'round2/json.go', 'round2/logcheck.go',
+            'round2/port2.go', 'round2/pytext.go', 'round2/records.go', 'round2/recovery.go', 'round2/round2_test.go']
 TSCONFIG = (b'{\n  "compilerOptions": {\n    "noEmit": true,\n    "strict": true,\n    "erasableSyntaxOnly": true,\n'
             b'    "allowImportingTsExtensions": true,\n    "module": "preserve",\n    "moduleResolution": "bundler",\n'
             b'    "moduleDetection": "force",\n    "target": "es2022",\n    "lib": ["es2022"],\n    "types": [],\n'
@@ -563,7 +575,8 @@ class HardeningTests(unittest.TestCase):
             self.assertTrue(folder.is_dir(), folder.name)
 
     def test_ts_and_go_file_sets(self):
-        """TASK-046 AC6: bench/ts holds exactly its ten files and bench/go exactly its eight, with no subfolder."""
+        """TASK-046 AC6: bench/ts holds exactly its ten files and bench/go exactly its eight round-1 files and its one
+        subfolder round2 with round 2's nine files."""
         self.assertEqual(file_set(BENCH_TS), TS_FILES)
         self.assertEqual(file_set(BENCH_GO), GO_FILES)
 
@@ -632,6 +645,106 @@ class Round2RustTests(unittest.TestCase):
         """TASK-048 AC10: every test of this class names the AC it stands for in its docstring."""
         for name in unittest.TestLoader().getTestCaseNames(Round2RustTests):
             self.assertRegex(getattr(Round2RustTests, name).__doc__ or '', r'^TASK-048 AC\d+', name)
+
+
+# TASK-049 AC8: round 2's Go pins (decisions D-938 B2, B4, M1; D-943; D-947): bench/go/round2's exact file set, the
+# round-1 files' bytes at base_commit, the two whole-file copies of round-1 files, and in each job the go step's
+# round-1 lines before its round-2 lines.
+BENCH_GO2 = BENCH_GO / 'round2'
+GO2_FILES = ['document.go', 'eventlog.go', 'json.go', 'logcheck.go', 'port2.go',
+             'pytext.go', 'records.go', 'recovery.go', 'round2_test.go']
+GO_ROUND1_SHA256 = {
+    'export.go': '66f72d6655ac8b1a5bfa6f58ae8bff2998b8ffb98dde3f69600e34bc9b91fb6b',
+    'go.mod': 'c4e8c0e48ccfd033e30a86af3643489c18371768efd3182739fef34b98a8d808',
+    'governor.go': 'e5e1eeb49932d519f0777650cb9c9fb736362782dea38f906199ad160e0d7fd0',
+    'json.go': '001eaa6b68efb291152d50014190df0d8fbcadbe9c9a3bd8c150d5f42a7b1429',
+    'main.go': '67c2377dd041dc209a427cff8706199d0cb00f10934c1782cfc23de7751d7627',
+    'port_test.go': '1449f90c899bd745f5ec4303002e48cf17b65dfbb88a36cf9697ff68044212e7',
+    'records.go': '26ff9da5e0adf4bc5128c48ec73f1d65d84923fd10c0cd7b6253d2cf900d42c6',
+    'resume.go': '89da51ba9865cbafec5005a7d4329c1d6d0f8b3a5ea5562a09573527b652e02e',
+}
+GO_COPIES = ('json.go', 'records.go')
+
+
+_K = [int(x, 16) for x in (
+    '428a2f98 71374491 b5c0fbcf e9b5dba5 3956c25b 59f111f1 923f82a4 ab1c5ed5 d807aa98 12835b01 243185be 550c7dc3 '
+    '72be5d74 80deb1fe 9bdc06a7 c19bf174 e49b69c1 efbe4786 0fc19dc6 240ca1cc 2de92c6f 4a7484aa 5cb0a9dc 76f988da '
+    '983e5152 a831c66d b00327c8 bf597fc7 c6e00bf3 d5a79147 06ca6351 14292967 27b70a85 2e1b2138 4d2c6dfc 53380d13 '
+    '650a7354 766a0abb 81c2c92e 92722c85 a2bfe8a1 a81a664b c24b8b70 c76c51a3 d192e819 d6990624 f40e3585 106aa070 '
+    '19a4c116 1e376c08 2748774c 34b0bcb5 391c0cb3 4ed8aa4a 5b9cca4f 682e6ff3 748f82ee 78a5636f 84c87814 8cc70208 '
+    '90befffa a4506ceb bef9a3f7 c67178f2').split()]
+
+
+def sha256_hex(path):
+    """FIPS 180-4 SHA-256 of a file's bytes, written out because TASK-039 AC4 pins this module's imports (no
+    hashlib); checked against known digests by test_sha256_known_values."""
+    return _sha256(path.read_bytes())
+
+
+def _sha256(data):
+    def rot(x, n):
+        return ((x >> n) | (x << (32 - n))) & 0xffffffff
+    h = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]
+    m = data + b'\x80' + b'\x00' * ((55 - len(data)) % 64) + (len(data) * 8).to_bytes(8, 'big')
+    for i in range(0, len(m), 64):
+        w = [int.from_bytes(m[i + 4 * j:i + 4 * j + 4], 'big') for j in range(16)]
+        for j in range(16, 64):
+            s0 = rot(w[j - 15], 7) ^ rot(w[j - 15], 18) ^ (w[j - 15] >> 3)
+            s1 = rot(w[j - 2], 17) ^ rot(w[j - 2], 19) ^ (w[j - 2] >> 10)
+            w.append((w[j - 16] + s0 + w[j - 7] + s1) & 0xffffffff)
+        a, b, c, d, e, f, g, k = h
+        for j in range(64):
+            t1 = (k + (rot(e, 6) ^ rot(e, 11) ^ rot(e, 25)) + ((e & f) ^ (~e & g)) + _K[j] + w[j]) & 0xffffffff
+            t2 = ((rot(a, 2) ^ rot(a, 13) ^ rot(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) & 0xffffffff
+            a, b, c, d, e, f, g, k = (t1 + t2) & 0xffffffff, a, b, c, (d + t1) & 0xffffffff, e, f, g
+        h = [(x + y) & 0xffffffff for x, y in zip(h, (a, b, c, d, e, f, g, k))]
+    return ''.join('%08x' % x for x in h)
+
+
+class Round2GoTests(unittest.TestCase):
+    def test_go_round2_file_set(self):
+        """TASK-049 AC8: bench/go/round2 holds exactly round 2's nine .go files, with no go.mod, go.sum, vendor
+        folder or other file or folder."""
+        self.assertEqual(file_set(BENCH_GO2), GO2_FILES)
+        for name in ('go.mod', 'go.sum', 'vendor'):
+            self.assertFalse((BENCH_GO2 / name).exists(), name)
+
+    def test_go_round1_files_unchanged(self):
+        """TASK-049 AC8: each of bench/go's eight round-1 files is exactly its bytes at base_commit."""
+        for name, digest in GO_ROUND1_SHA256.items():
+            self.assertEqual(sha256_hex(BENCH_GO / name), digest, name)
+
+    def test_sha256_known_values(self):
+        """TASK-049 AC8: the written-out SHA-256 gives the FIPS 180-4 digests of the empty input, 'abc' and the
+        two-block 'abcdbcde...' message, and of a 64-byte and a 1000-byte input across the padding boundaries."""
+        self.assertEqual(_sha256(b''), 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')
+        self.assertEqual(_sha256(b'abc'), 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
+        self.assertEqual(_sha256(b'abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq'),
+                         '248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1')
+        self.assertEqual(_sha256(b'a' * 64), 'ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb')
+        self.assertEqual(_sha256(b'a' * 1000), '41edece42d63e8d9bf515a9ba6932e1c20cbc9f5a5d134645adb5db1b9737ea3')
+
+    def test_go_whole_file_copies(self):
+        """TASK-049 AC8: each whole-file copy under bench/go/round2 is byte-equal to its round-1 file (D-938 M1)."""
+        for name in GO_COPIES:
+            self.assertEqual((BENCH_GO2 / name).read_bytes(), (BENCH_GO / name).read_bytes(), name)
+
+    def test_go_step_order(self):
+        """TASK-049 AC8: in each job the go step's round-1 build, run, compare, probe and test lines come before
+        round 2's vet and build, run, compare, probe and test lines, and each round-2 command appears once."""
+        for job in jobs():
+            marks = ['go/port.exe" .)', 'go.json"\n', 'go-noarg.txt"\n', 'go test -count=1 . -args',
+                     'go vet ./round2', 'go2.json"\n', 'go2-noarg.txt"\n', 'go test -count=1 ./round2 -args']
+            order = [job.index(m) for m in marks]
+            self.assertEqual(order, sorted(order))
+            for line in ('go vet ./round2', 'go build -trimpath -o "$RUNNER_TEMP/go/port2.exe" ./round2',
+                         'go test -count=1 ./round2 -args'):
+                self.assertEqual(job.count(line), 1, line)
+
+    def test_naming(self):
+        """TASK-049 AC10: every test of this class names the AC it stands for in its docstring."""
+        for name in unittest.TestLoader().getTestCaseNames(Round2GoTests):
+            self.assertRegex(getattr(Round2GoTests, name).__doc__ or '', r'^TASK-049 AC\d+', name)
 
 
 class SuiteTests(unittest.TestCase):
