@@ -23,6 +23,7 @@ NOW = datetime.datetime(2026, 10, 16, 10, 20, 0, tzinfo=UTC)
 LATER = datetime.datetime(2026, 10, 16, 11, 0, 0, tzinfo=UTC)
 TOKEN = {'epoch': 'e1', 'counter': 3}
 REC = 'a hook (test)'
+ABSENT = None
 EVENT = 'violation-1'
 
 
@@ -104,7 +105,7 @@ class R1Arguments(unittest.TestCase):
         """TASK-052 AC1, TASK-052 AC5, TASK-052 AC11: each wrong argument gives "argument" and no call is made; a
         well-formed call passes."""
         wrong = [{'root': ''}, {'task_id': 'TASK-x'}, {'fencing_token': {'epoch': '', 'counter': 1}},
-                 {'fencing_token': {'epoch': 'e1', 'counter': True}}, {'fencing_token': None}, {'event_id': ''},
+                 {'fencing_token': {'epoch': 'e1', 'counter': True}}, {'fencing_token': ABSENT}, {'event_id': ''},
                  {'recorder': None}, {'now': NOW.replace(tzinfo=None)}, {'now': NOW.replace(microsecond=5)},
                  {'observation': 'x'}, {'observation': observation(outcome='fail')},
                  {'observation': observation(subject='TASK-201')},
