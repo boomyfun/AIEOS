@@ -1,6 +1,24 @@
 """The conformance runner of gov-AIEOS (task TASK-003; docs/specs/conformance-files.md revision 2, section 6), with
-the Resume Check entry of task TASK-006 (conformance-files.md revision 4, section 9) and the Risk Engine entry of task
-TASK-017 (conformance-files.md revision 7, section 10).
+the Resume Check entry of task TASK-006 (conformance-files.md revision 4, section 9), the Risk Engine entry of task
+TASK-017 (conformance-files.md revision 7, section 10) and the Capability Boundaries entry of task TASK-056
+(conformance-files.md revision 10, section 11).
+
+The Capability Boundaries entry (TASK-056): per case, one in-memory stand-in for the writer (a store and a log whose
+appends eventlog.append decides, returning the writer's own result types, opening and writing no file) and a read
+stand-in answering from the fixture's commit table; then replay.replay, the continuation through adapter.start,
+adapter.submit and adapter.end, and evaluation.evaluate_task, all taken from the root, compared as section 11 says.
+
+Limits of TASK-056 (its AC16):
+- No Capability Boundaries fixture exists and ADV-02's set entry is null, so a run over the repository's tree gives
+  ADV-02 NOT_RUN and its run record is unchanged but for the runner's own hash.
+- It checks its inputs and compares values; it never decides an execution decision or an acceptance.
+- A passing ADV-02 shows only the core's handling of a recorded observation, never that any hook observes anything
+  (C6 and the T3 tier stay unmeasured).
+- The fixture's values depend on the exact count of lines the core appends (log_seq), so a core change that adds a
+  line shows as NOT_RUN, never FAIL and never PASS.
+- In the CI channel the base run takes the runner from the base, so this entry first runs there after it lands on
+  main; running ADV-02 needs its fixture and the set file's entry (DEF-0072 step 3).
+- The stand-ins copy test code into the runner (a known cost; no new module).
 
 Limits of TASK-017 (its AC15):
 - No Risk Engine fixture exists and RISK-01's set entry is null, so a run over the repository's tree gives RISK-01
@@ -45,6 +63,7 @@ Readings that the contract marks "(reading)" are noted where they are applied.
 """
 
 import copy
+import datetime
 import hashlib
 import json
 import pathlib
@@ -102,6 +121,20 @@ RISK_VALUE_KEYS = frozenset({'contract', 'changed_paths', 'risk_rules', 'owner_k
 RISK_EXPECTED_KEYS = frozenset({'risk_not', 'profile_excludes', 'not_fixed'})
 RISKS = ('low', 'medium', 'high', 'critical')
 LOW_PAIRS = frozenset({('functional', 'build'), ('functional', 'lint')})
+# TASK-056 (conformance-files.md section 11).
+CAPABILITY_BOUNDARIES = 'Capability Boundaries'
+CB_FIXTURE_DIR = 'tests/conformance/fixtures_cb'
+CB_MODULES = ('replay', 'adapter', 'evaluation', 'eventlog', 'writer')
+CB_RECORDED = ('replay', 'adapter', 'evaluation')
+CB_ROOT_NAME = 'conformance-cb-no-such-root'
+CB_CASE_KEYS = frozenset({'document', 'continuation', 'evaluation', 'given', 'expected'})
+CB_CONTINUATION_KEYS = frozenset({'session', 'submission', 'end_at'})
+CB_EVALUATION_KEYS = frozenset({'task_id', 'contract_text', 'declared', 'values', 'extra_records', 'recorder', 'now',
+                                'commits'})
+CB_EXPECTED = {'stop': ['STOP: violation'], 'decision': ['REJECT'], 'next_state': ['REJECTED'],
+               'not_fixed': ['metrics']}
+_TIME = re.compile(r'([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})Z')
+_HEX40 = re.compile(r'[0-9a-f]{40}')
 _PATTERN_NAME = re.compile(r'[A-Za-z0-9._*-]+')
 _PATH_NAME = re.compile(r'[A-Za-z0-9._-]+')
 
@@ -223,9 +256,10 @@ def module_path(scenario_id):
 
 def expected_path(scenario_id, capability):
     """The fixture path the runner expects for a set entry's capability (TASK-006 AC3; conformance-files.md section 9;
-    TASK-017 AC2, section 10): the Verification folder for Verification, the Resume Check folder for Resume Check, the
-    Risk Engine folder for Risk Engine, None for any other capability (its entry point is absent until its
-    milestone). The module name is formed as section 2 says."""
+    TASK-017 AC2, section 10; TASK-056 AC2, section 11): the Verification folder for Verification, the Resume Check
+    folder for Resume Check, the Risk Engine folder for Risk Engine, the Capability Boundaries folder for Capability
+    Boundaries, None for any other capability (its entry point is absent until its milestone). The module name is
+    formed as section 2 says."""
     name = scenario_id.lower().replace('-', '_') + '.py'
     if capability == VERIFICATION:
         return FIXTURE_DIR + '/' + name
@@ -233,6 +267,8 @@ def expected_path(scenario_id, capability):
         return RC_FIXTURE_DIR + '/' + name
     if capability == RISK_ENGINE:
         return RISK_FIXTURE_DIR + '/' + name
+    if capability == CAPABILITY_BOUNDARIES:
+        return CB_FIXTURE_DIR + '/' + name
     return None
 
 
@@ -907,12 +943,14 @@ def compare(expected, observed, case_records):
     return out
 
 
-def run_scenario(tree, entry, rows, evaluate, caps=None, check=None, derive=None):
-    """One scenario's result and its reason (AC5, AC7; TASK-006 AC3 to AC6; TASK-017 AC2 to AC9): NOT_RUN, with none
-    of its cases run, for a fixture condition; NOT_RUN for no entry point; otherwise each case is called and compared,
-    and a failed case makes it FAIL before any NOT_RUN of a call. ``caps`` is the capability the bound scenario file
-    gives each id (scenario_capabilities); ``evaluate`` is the Verification entry and the Risk Engine's acceptance
-    function, ``check`` the Resume Check entry and ``derive`` the Risk Engine's derivation."""
+def run_scenario(tree, entry, rows, evaluate, caps=None, check=None, derive=None, cb=None, reads=None):
+    """One scenario's result and its reason (AC5, AC7; TASK-006 AC3 to AC6; TASK-017 AC2 to AC9; TASK-056 AC2 to AC9):
+    NOT_RUN, with none of its cases run, for a fixture condition; NOT_RUN for no entry point; otherwise each case is
+    called and compared, and a failed case makes it FAIL before any NOT_RUN of a call. ``caps`` is the capability the
+    bound scenario file gives each id (scenario_capabilities); ``evaluate`` is the Verification entry and the Risk
+    Engine's acceptance function, ``check`` the Resume Check entry, ``derive`` the Risk Engine's derivation and ``cb``
+    the Capability Boundaries entry (load_cb's mapping). ``reads``, when given, is a list to which the id is added
+    when the fixture file is read."""
     sid, fixture = entry['id'], entry['fixture']
     if fixture is None:
         return NOT_RUN, 'no fixture'
@@ -932,6 +970,8 @@ def run_scenario(tree, entry, rows, evaluate, caps=None, check=None, derive=None
     data = tree.read(fixture['path'])
     if data is None:
         return NOT_RUN, 'the fixture file is missing'
+    if reads is not None:
+        reads.append(sid)
     if sha256(data) != fixture['sha256']:
         return NOT_RUN, 'the fixture\'s SHA-256 differs from its set entry'
     try:
@@ -942,6 +982,8 @@ def run_scenario(tree, entry, rows, evaluate, caps=None, check=None, derive=None
         return _run_rc_cases(value, entry, check)
     if capability == RISK_ENGINE:
         return _run_risk_cases(value, entry, derive, evaluate)
+    if capability == CAPABILITY_BOUNDARIES:
+        return _run_cb_cases(value, entry, cb, tree.root)
     errors = check_fixture(value, entry)
     if errors:
         return NOT_RUN, 'the fixture is malformed: %s' % errors[0]
@@ -1041,19 +1083,391 @@ def _run_risk_cases(value, entry, derive, evaluate):
     return PASS, ''
 
 
+def _time_ok(value):
+    """Whether a value is a time text "YYYY-MM-DDTHH:MM:SSZ" naming a real date and time (UTC, whole seconds)."""
+    return _utc(value) is not None
+
+
+def _utc(value):
+    m = _TIME.fullmatch(value) if isinstance(value, str) else None
+    if m is None:
+        return None
+    try:
+        return datetime.datetime(*(int(g) for g in m.groups()), tzinfo=datetime.timezone.utc)
+    except ValueError:
+        return None
+
+
+def _utf8(text):
+    try:
+        text.encode('utf-8')
+    except UnicodeError:
+        return False
+    return True
+
+
+def _commit_ok(c):
+    return (isinstance(c, dict) and set(c) == {'id', 'text', 'paths'} and isinstance(c['id'], str)
+            and _HEX40.fullmatch(c['id']) is not None and isinstance(c['text'], str) and _utf8(c['text'])
+            and isinstance(c['paths'], list) and all(isinstance(p, str) for p in c['paths']))
+
+
+def _check_cb_given(case):
+    """The Given of section 11, from the fixture's values alone (TASK-056 AC4)."""
+    doc, cont, ev, given = case['document'], case['continuation'], case['evaluation'], case['given']
+    errors = []
+    vio = doc.get('violation')
+    obs = vio.get('observation') if isinstance(vio, dict) else None
+    if not (isinstance(obs, dict) and obs.get('fact_kind') == 'observation' and obs.get('outcome') == 'blocking'
+            and obs.get('blocking_kind') == 'violation' and obs.get('source_class') == 'deterministic_tool_local'
+            and 'recorder' in doc and obs.get('recorder') == doc.get('recorder')):
+        errors.append('the Given does not hold: the violation is not a blocking violation observation of class '
+                      'deterministic_tool_local recorded by the document\'s recorder')
+    outside, write_set = given['outside_path'], given['write_set']
+    if not (path_ok(outside) and _patterns_ok(write_set)):
+        errors.append('the Given does not hold: outside_path or write_set is not well formed')
+    elif any(path_matches(p, outside) for p in write_set):
+        errors.append('the Given does not hold: outside_path is matched by a pattern of write_set')
+    sub = cont['submission']
+    cid = sub.get('commit_id') if isinstance(sub, dict) else None
+    commit = [c for c in ev['commits'] if c['id'] == cid]
+    if len(commit) != 1:
+        errors.append('the Given does not hold: the submitted commit is not exactly once in the commit table')
+    else:
+        if outside not in commit[0]['paths']:
+            errors.append('the Given does not hold: outside_path is not among the submitted commit\'s paths')
+        values = ev['values']
+        if not (isinstance(values, dict) and values.get('changed_paths') == sorted(commit[0]['paths'])):
+            errors.append('the Given does not hold: values changed_paths is not the submitted commit\'s paths, sorted')
+    setup = doc.get('setup')
+    approved = [e for e in setup if isinstance(e, dict) and e.get('type') == 'task.approved'] \
+        if isinstance(setup, list) else []
+    payload = approved[-1].get('payload') if approved else None
+    if not (isinstance(payload, dict)
+            and payload.get('contract_hash') == sha256(ev['contract_text'].encode('utf-8'))):
+        errors.append('the Given does not hold: the contract text does not hash to the last task.approved '
+                      'contract_hash')
+    return errors
+
+
+def check_cb_fixture(value, entry):
+    """The form of one Capability Boundaries fixture's JSON object against its set entry, and the Given (TASK-056 AC4;
+    conformance-files.md section 11). The replay document's other keys are replay.replay's to check (reading).
+    Returns a list of errors."""
+    if not isinstance(value, dict) or set(value) != {'scenario', 'row_hash', 'cases'}:
+        return ['the fixture is not exactly scenario, row_hash and cases']
+    errors = []
+    if value['scenario'] != entry['id'] or value['row_hash'] != entry['row_hash']:
+        errors.append('scenario or row_hash differs from the set entry')
+    cases = value['cases']
+    if not isinstance(cases, list) or len(cases) != 1:
+        return errors + ['cases is not a list of exactly one case']
+    case = cases[0]
+    if not isinstance(case, dict) or set(case) != CB_CASE_KEYS:
+        return errors + ['the case is not exactly document, continuation, evaluation, given and expected']
+    doc = case['document']
+    if not (isinstance(doc, dict) and 'violation' in doc and 'submission' in doc and doc['submission'] is None):
+        errors.append('document is not an object holding violation and a null submission')
+    cont = case['continuation']
+    if not (isinstance(cont, dict) and set(cont) == CB_CONTINUATION_KEYS and isinstance(cont['session'], dict)
+            and isinstance(cont['submission'], dict) and _time_ok(cont['end_at'])):
+        errors.append('continuation is not exactly session, submission (not null) and end_at')
+    ev = case['evaluation']
+    if not (isinstance(ev, dict) and set(ev) == CB_EVALUATION_KEYS):
+        errors.append('evaluation is not exactly the keys of section 11')
+    else:
+        if not (isinstance(ev['contract_text'], str) and _utf8(ev['contract_text'])):
+            errors.append('evaluation contract_text is not a string that encodes as UTF-8')
+        if not (isinstance(ev['commits'], list) and ev['commits'] and all(_commit_ok(c) for c in ev['commits'])):
+            errors.append('evaluation commits is not a non-empty list of {id, text, paths}')
+        if not _time_ok(ev['now']):
+            errors.append('evaluation now is not a time "YYYY-MM-DDTHH:MM:SSZ"')
+    given = case['given']
+    if not (isinstance(given, dict) and set(given) == {'outside_path', 'write_set'}):
+        errors.append('given is not exactly outside_path and write_set')
+    exp = case['expected']
+    if not (isinstance(exp, dict) and set(exp) == set(CB_EXPECTED)):
+        errors.append('expected is not exactly stop, decision, next_state and not_fixed')
+    else:
+        for key, want in sorted(CB_EXPECTED.items()):
+            if exp[key] != want:
+                errors.append('expected %s is not %s' % (key, json.dumps(want)))
+    if errors:
+        return errors
+    return _check_cb_given(case)
+
+
+def load_cb(root):
+    """The Capability Boundaries entry (TASK-056 AC3): (entry, status). The modules replay, adapter, evaluation, eventlog
+    and writer are loaded by plain import statements, guarded as load_governor guards the governor's; each is the
+    base's only when its file is the root's src/aieos_bootstrap/<name>.py (reading). It is absent when an import raises
+    ModuleNotFoundError naming one of them; any other failure, or a missing callable, is FAILED. The entry is a mapping
+    of the functions and values the run calls."""
+    try:
+        import aieos_bootstrap.replay as cb_replay
+        import aieos_bootstrap.adapter as cb_adapter
+        import aieos_bootstrap.evaluation as cb_evaluation
+        import aieos_bootstrap.eventlog as cb_eventlog
+        import aieos_bootstrap.writer as cb_writer
+    except ModuleNotFoundError as exc:
+        return None, (ABSENT if exc.name in ['aieos_bootstrap.' + m for m in CB_MODULES] else FAILED)
+    except Exception:
+        return None, FAILED
+    modules = (('replay', cb_replay), ('adapter', cb_adapter), ('evaluation', cb_evaluation),
+               ('eventlog', cb_eventlog), ('writer', cb_writer))
+    for name, module in modules:
+        path = getattr(module, '__file__', None)
+        if not isinstance(path, str) or pathlib.Path(path).resolve() != (root / cb_path(name)).resolve():
+            return None, FAILED
+    entry = {'replay': getattr(cb_replay, 'replay', None), 'start': getattr(cb_adapter, 'start', None),
+             'submit': getattr(cb_adapter, 'submit', None), 'end': getattr(cb_adapter, 'end', None),
+             'evaluate_task': getattr(cb_evaluation, 'evaluate_task', None),
+             'append': getattr(cb_eventlog, 'append', None), 'WriteResult': getattr(cb_writer, 'WriteResult', None),
+             'StoreResult': getattr(cb_writer, 'StoreResult', None),
+             'GRANT_STATES': getattr(cb_writer, 'GRANT_STATES', None),
+             'DIFF_FORM': getattr(cb_evaluation, 'DIFF_FORM', None)}
+    if not all(callable(entry[k]) for k in ('replay', 'start', 'submit', 'end', 'evaluate_task', 'append',
+                                            'WriteResult', 'StoreResult')) \
+            or not isinstance(entry['GRANT_STATES'], tuple) or not isinstance(entry['DIFF_FORM'], list):
+        return None, FAILED
+    return entry, LOADED
+
+
+def cb_path(name):
+    return 'src/aieos_bootstrap/%s.py' % name
+
+
+def cb_core_root(root):
+    """The root given to the core (TASK-056 AC5; decision D-1075 C3): an absolute path built from the absolute form of
+    the run's root and a fixed name; nothing is created there."""
+    return str(pathlib.Path(root).absolute() / CB_ROOT_NAME)
+
+
+class _CbStore:
+    """The writer's store in memory, by its rules (TASK-056 AC5): the epoch and counter, the leases and the sessions;
+    every result is the writer's own StoreResult. It opens and writes no file."""
+
+    def __init__(self, entry):
+        self.entry = entry
+        self.epoch = None
+        self.counter = 0
+        self.leases = {}
+        self.sessions = {}
+
+    def _r(self, *args, **kwargs):
+        return self.entry['StoreResult'](*args, **kwargs)
+
+    def open_store(self, root, epoch=None):
+        if self.epoch is None:
+            self.epoch = epoch
+        elif epoch is not None and epoch != self.epoch:
+            raise ValueError('the given epoch differs from the store\'s own epoch')
+        return {'epoch': self.epoch, 'counter': self.counter}
+
+    def start_session(self, root, session_id, holder, now):
+        if session_id in self.sessions:
+            return self._r('refused', 'started', ['started'])
+        self.sessions[session_id] = [holder, None]
+        return self._r('done')
+
+    def end_session(self, root, session_id, now):
+        s = self.sessions.get(session_id)
+        if s is None or s[1] is not None:
+            return self._r('refused', 'session', ['not started or ended'])
+        s[1] = now
+        return self._r('done', value=[])
+
+    def grant_lease(self, root, task_id, task_state, holder, session_id, now, expires_at):
+        if task_state not in self.entry['GRANT_STATES'] or task_id in self.leases:
+            return self._r('refused', 'state', ['no grant'])
+        s = self.sessions.get(session_id)
+        if s is None or s[0] != holder or s[1] is not None:
+            return self._r('refused', 'session', ['not a started session of the holder'])
+        self.counter += 1
+        self.leases[task_id] = {'task_id': task_id, 'fencing_token': {'epoch': self.epoch, 'counter': self.counter},
+                                'expires_at': expires_at}
+        return self._r('done', value=copy.deepcopy(self.leases[task_id]))
+
+    def release_lease_token(self, root, task_id, fencing_token):
+        lease = self.leases.get(task_id)
+        if lease is None:
+            return self._r('refused', 'none', ['no lease is held'])
+        if lease['fencing_token'] != fencing_token:
+            return self._r('refused', 'token', ['another token is held'])
+        return self._r('done', value=self.leases.pop(task_id))
+
+    def held_lease(self, root, task_id):
+        lease = self.leases.get(task_id)
+        return copy.deepcopy(lease) if lease else None
+
+
+class _CbLog:
+    """The event log as bytes in memory (TASK-056 AC5): every append is decided by eventlog.append over the log bytes,
+    with the store's held lease for a fenced event, and a fence refusal's record appended as the writer appends it;
+    every result is the writer's own WriteResult. It opens and writes no file."""
+
+    def __init__(self, entry, store):
+        self.entry = entry
+        self.store = store
+        self.log = b''
+
+    def read_log(self, root):
+        return self.log
+
+    def append_event(self, root, event_type, payload, event_id, appended_at, recorder, task_id=None,
+                     fencing_token=None, corrects=None):
+        append, result = self.entry['append'], self.entry['WriteResult']
+        lease = self.store.leases.get(task_id) if task_id else None
+        r = append(self.log, event_type, payload, event_id, appended_at, task_id=task_id, fencing_token=fencing_token,
+                   lease=lease, recorder=recorder, record_id='refusal-' + event_id, corrects=corrects)
+        if r.result == 'appended':
+            self.log += r.line
+            return result(r)
+        if r.result == 'refused' and r.reason == 'fence' and r.record is not None:
+            rec = append(self.log, 'record.added', r.record, 'refusal-of-' + event_id, appended_at, task_id=task_id,
+                         recorder=recorder)
+            if rec.result == 'appended':
+                self.log += rec.line
+            return result(r, refusal=rec)
+        return result(r)
+
+    def functions(self):
+        s = self.store
+        return {'open_store': s.open_store, 'append_event': self.append_event, 'start_session': s.start_session,
+                'end_session': s.end_session, 'read_log': self.read_log, 'grant_lease': s.grant_lease,
+                'release_lease_token': s.release_lease_token, 'held_lease': s.held_lease}
+
+
+def cb_commit_read(commits, diff_form):
+    """The read stand-in (TASK-056 AC5): a function in gitread.run's form that answers only "cat-file -t" and
+    "cat-file -p" of a commit of the table (its text) and the pinned diff-tree form followed by such a commit (its
+    paths, NUL-separated), and gives an error result for every other read."""
+    table = {c['id']: c for c in commits}
+
+    def read(repo, args):
+        args = list(args)
+        c = table.get(args[-1]) if args else None
+        if c is not None and args == ['cat-file', '-t', c['id']]:
+            return {'exit': 0, 'out': b'commit\n', 'err': b'', 'error': None}
+        if c is not None and args == ['cat-file', '-p', c['id']]:
+            return {'exit': 0, 'out': c['text'].encode('utf-8'), 'err': b'', 'error': None}
+        if c is not None and args == list(diff_form) + [c['id']]:
+            return {'exit': 0, 'out': b''.join(p.encode('utf-8') + b'\0' for p in c['paths']), 'err': b'',
+                    'error': None}
+        return {'exit': None, 'out': b'', 'err': b'', 'error': 'the runner answers only the reads of its commit table'}
+    return read
+
+
+def _violation_step(result):
+    steps = result.get('steps') if isinstance(result, dict) else None
+    found = [s.get('result') for s in steps if isinstance(s, dict) and s.get('step') == 'violation'] \
+        if isinstance(steps, list) else []
+    return found[-1] if found and isinstance(found[-1], dict) else None
+
+
+def _run_cb_case(case, cb, core_root):
+    """Steps (1) to (3) of section 11 for one well-formed case (TASK-056 AC6 to AC9): (result, reason). A failure is
+    FAIL whatever a later step does; no later step runs after a failure or a NOT_RUN; a call that raises is NOT_RUN
+    with the raised error's type."""
+    store = _CbStore(cb)
+    log = _CbLog(cb, store)
+    fns = log.functions()
+    doc = case['document']
+    # (1) The replay of the stopped session.
+    try:
+        r1 = cb['replay'](copy.deepcopy(doc), core_root, fns)
+    except Exception as exc:
+        return NOT_RUN, 'step 1: the call raised %s' % type(exc).__name__
+    if not isinstance(r1, dict):
+        return NOT_RUN, 'step 1: the replay returned no mapping'
+    vstep = _violation_step(r1)
+    if r1.get('result') == 'done':
+        stop = vstep.get('decision') if vstep is not None else None
+        if stop not in case['expected']['stop']:
+            return FAIL, 'not met: step 1: the replay was done and its violation step\'s decision is %r' % (stop,)
+    elif r1.get('result') == 'refused' and r1.get('reason') == 'violation':
+        if vstep is None:
+            return NOT_RUN, 'step 1: refused with reason violation and no violation step (no lease was granted)'
+        if vstep.get('reason') == 'core':
+            return FAIL, 'not met: step 1: the core refused the violation step (it did not stop the session)'
+        return NOT_RUN, 'step 1: the violation step was refused with reason %r' % (vstep.get('reason'),)
+    else:
+        return NOT_RUN, 'step 1: the replay gave %r with reason %r' % (r1.get('result'), r1.get('reason'))
+    # (2) The continuation: a second session on the same log submits the change.
+    cont = case['continuation']
+    s, sub = cont['session'], cont['submission']
+    recorder = doc['recorder']
+    read = cb_commit_read(case['evaluation']['commits'], cb['DIFF_FORM'])
+    try:
+        started = cb['start'](core_root, s.get('task_id'), s.get('session_id'), s.get('holder'),
+                              copy.deepcopy(s.get('inputs')), s.get('code_sha256'), _utc(s.get('expires_at')),
+                              recorder, _utc(s.get('start_at')), start_session=store.start_session,
+                              read_log=log.read_log, append=log.append_event, grant=store.grant_lease,
+                              release=store.release_lease_token, held=store.held_lease)
+        token = started.get('fencing_token') if isinstance(started, dict) else None
+        if not isinstance(started, dict) or started.get('result') != 'done' or token is None:
+            return NOT_RUN, 'step 2: the second session got no lease'
+        if token != s.get('expected_token'):
+            return NOT_RUN, 'step 2: the granted token %r is not the expected %r' % (token, s.get('expected_token'))
+        submitted = cb['submit'](core_root, core_root, sub.get('commit_id'), s.get('task_id'), sub.get('event_id'),
+                                 recorder, _utc(sub.get('at')), read=read, append=log.append_event,
+                                 release=store.release_lease_token, held=store.held_lease)
+        if not isinstance(submitted, dict) or submitted.get('result') != 'done':
+            return NOT_RUN, 'step 2: the submission was refused'
+        ended = cb['end'](core_root, s.get('task_id'), s.get('session_id'), token, _utc(cont['end_at']),
+                          release_lease_token=store.release_lease_token, end_session=store.end_session)
+        if not isinstance(ended, dict) or ended.get('result') != 'done':
+            return NOT_RUN, 'step 2: the end was refused'
+    except Exception as exc:
+        return NOT_RUN, 'step 2: a call raised %s' % type(exc).__name__
+    # (3) The evaluation.
+    ev = case['evaluation']
+    try:
+        r3 = cb['evaluate_task'](core_root, core_root, ev['task_id'], ev['contract_text'].encode('utf-8'),
+                                 copy.deepcopy(ev['declared']), copy.deepcopy(ev['values']),
+                                 copy.deepcopy(ev['extra_records']), ev['recorder'], _utc(ev['now']), read=read,
+                                 read_log=log.read_log, append=log.append_event)
+    except Exception as exc:
+        return NOT_RUN, 'step 3: the call raised %s' % type(exc).__name__
+    if not isinstance(r3, dict) or r3.get('result') != 'evaluated':
+        return NOT_RUN, 'step 3: the evaluation gave %r with reason %r' % (
+            r3.get('result') if isinstance(r3, dict) else None, r3.get('reason') if isinstance(r3, dict) else None)
+    failed = []
+    if r3.get('decision') not in case['expected']['decision']:
+        failed.append('step 3: decision %r' % (r3.get('decision'),))
+    if r3.get('next_task_state') not in case['expected']['next_state']:
+        failed.append('step 3: next_state %r' % (r3.get('next_task_state'),))
+    if failed:
+        return FAIL, 'not met: ' + ', '.join(failed)
+    return PASS, ''
+
+
+def _run_cb_cases(value, entry, cb, root):
+    """The Capability Boundaries case of one well-formed fixture file (TASK-056 AC4 to AC9; conformance-files.md section
+    11): the form check and the Given; then, with the entry, steps (1) to (3) over one in-memory store and log."""
+    errors = check_cb_fixture(value, entry)
+    if errors:
+        return NOT_RUN, 'the fixture is malformed: %s' % errors[0]
+    if cb is None:
+        return NOT_RUN, 'the entry point is absent'
+    return _run_cb_case(value['cases'][0], cb, cb_core_root(root))
+
+
 def outcome(counts, results, with_fixture):
     """The record's outcome (AC8): pass exactly when the run counts and every scenario with a fixture is PASS; a run
     with no scenario that has a fixture is fail (reading)."""
     return 'pass' if counts and with_fixture and all(results[i] == PASS for i in with_fixture) else 'fail'
 
 
-def run(root, commit, task, read=None, listing=None, evaluate=None, check=None, derive=None):
+def run(root, commit, task, read=None, listing=None, evaluate=None, check=None, derive=None, cb=None):
     """One conformance run over the tree at ``root``, the base (AC1). ``commit`` and ``task`` are only recorded.
     ``read`` and ``listing`` replace the default byte reader and records listing; ``evaluate`` is a test seam: a run
     with it never counts and its governor_identity is null (AC6). ``check`` is the Resume Check's test seam (TASK-006
     AC4, reading): a run with it never counts, and the run record's resume_check sha256 is null. ``derive`` is the
-    Risk Engine derivation's test seam (TASK-017 AC3, reading): a run with it never counts. Raises ValueError for a
-    commit or task id of the wrong form."""
+    Risk Engine derivation's test seam (TASK-017 AC3, reading): a run with it never counts. ``cb`` is the Capability
+    Boundaries entry's test seam, a mapping in load_cb's form (TASK-056 AC3, reading): a run with it never counts, and
+    the sha256 values of the run record's capability_boundaries are null. Raises ValueError for a commit or task id of
+    the wrong form."""
     if not (isinstance(commit, str) and _COMMIT.fullmatch(commit)):
         raise ValueError('the commit is not a full lowercase hex commit id')
     if not (isinstance(task, str) and _TASK.fullmatch(task)):
@@ -1138,8 +1552,23 @@ def run(root, commit, task, read=None, listing=None, evaluate=None, check=None, 
                                        for e in set_value['scenarios']) and status == LOADED:
         derive = load_derive(root)
 
+    # TASK-056 AC3, AC10: the Capability Boundaries entry is loaded only when at least one Capability Boundaries entry
+    # of the set file has a fixture; a stand-in entry never counts; a failed load does not count either, and its
+    # scenarios are NOT_RUN for "the entry point is absent".
+    cb_used = set_value is not None and any(e['capability'] == CAPABILITY_BOUNDARIES and e['fixture'] is not None
+                                            for e in set_value['scenarios'])
+    cb_status = None
+    if cb is not None:
+        cb_status = STAND_IN
+        problems.append('a stand-in Capability Boundaries entry (reading)')
+    elif cb_used:
+        cb, cb_status = load_cb(root)
+        if cb_status == FAILED:
+            problems.append('the Capability Boundaries entry could not be loaded from the root (reading)')
+    cb_entry = cb if cb_status in (LOADED, STAND_IN) else None
+
     entries = set_value['scenarios'] if set_value is not None else [{'id': i, 'fixture': None} for i in order]
-    results, reasons, with_fixture = [], {}, []
+    results, reasons, with_fixture, cb_reads = [], {}, [], []
     for entry in entries:
         if set_value is not None and entry['fixture'] is not None:
             with_fixture.append(entry['id'])
@@ -1148,8 +1577,9 @@ def run(root, commit, task, read=None, listing=None, evaluate=None, check=None, 
         elif entry['fixture'] is not None and entry['capability'] == RESUME_CHECK and rc_status == FAILED:
             result, reason = NOT_RUN, 'the run does not count: the Resume Check could not be loaded from the root (reading)'
         else:
+            reads = cb_reads if entry.get('capability') == CAPABILITY_BOUNDARIES else None
             result, reason = run_scenario(tree, entry, rows, evaluate if status in (LOADED, STAND_IN) else None,
-                                          caps, rc_entry, derive)
+                                          caps, rc_entry, derive, cb_entry, reads)
         results.append({'id': entry['id'], 'result': result})
         reasons[entry['id']] = reason
     counts = not problems
@@ -1165,6 +1595,12 @@ def run(root, commit, task, read=None, listing=None, evaluate=None, check=None, 
     }
     if rc_record is not None:
         value['resume_check'] = rc_record
+    if cb_reads:
+        recorded = []
+        for name in CB_RECORDED:
+            data = tree.read(cb_path(name)) if cb_status != STAND_IN else None
+            recorded.append({'path': cb_path(name), 'sha256': sha256(data) if data is not None else None})
+        value['capability_boundaries'] = recorded
     text = canonical_text(value)
     text_sha = sha256(text)
     by_id = {r['id']: r['result'] for r in results}

@@ -5,11 +5,12 @@ TASK-032, TASK-033, TASK-034, TASK-035 and TASK-036).
 It holds twenty-one modules:
 - ``records`` (TASK-001): a checker of the form of event-log lines, records and event payloads of specification 2
   sections 6.1 to 6.4. It reads only the text it is given, writes nothing and decides nothing.
-- ``conformance`` (TASK-003, with TASK-006's Resume Check entry and TASK-017's Risk Engine entry): the conformance runner of
-  docs/specs/conformance-files.md sections 6, 9 and 10. It reads the frozen set, the fixtures and the bound scenario file
-  from the tree it is given, chooses each scenario's entry by its capability, compares a governor's decision records,
-  or a Resume Check's execution decisions, with the expected values, and returns the run record; it writes nothing and
-  decides no acceptance and no execution.
+- ``conformance`` (TASK-003, with TASK-006's Resume Check entry, TASK-017's Risk Engine entry and TASK-056's Capability
+  Boundaries entry): the conformance runner of docs/specs/conformance-files.md sections 6, 9, 10 and 11. It reads the
+  frozen set, the fixtures and the bound scenario file from the tree it is given, chooses each scenario's entry by its
+  capability, compares a governor's decision records, or a Resume Check's execution decisions, or, for a Capability
+  Boundaries case, the core's stop and acceptance over in-memory stand-ins for the writer, with the expected values,
+  and returns the run record; it writes nothing and decides no acceptance and no execution.
 - ``governor`` (TASK-004): the bootstrap governor of docs/pre-genesis/governor-spec.md, its first version. It reads only
   its arguments and returns one acceptance decision record, which is advisory; it writes nothing.
 - ``eventlog`` (TASK-007): the event log's append rules of specifications 1 and 2. Given a log's bytes and one new
