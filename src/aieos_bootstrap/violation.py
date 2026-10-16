@@ -31,7 +31,11 @@ line itself and makes no network or model call.
 Limits (AC8), stated:
 - A STOP: violation makes acceptance reject (task TASK-053): evaluation.py passes the governor the task's
   violation.detected payloads beside its record.added payloads, over the whole log, and the governor's row 1 gives
-  REJECT; so a violation of the task makes every later evaluation of it reject, also after a new task.approved.
+  REJECT; so a violation of the task makes every later evaluation of it reject where the task is evaluable
+  (VERIFYING or IN_REVIEW), also after a new task.approved, except one whose record_id an earlier kept record of the
+  task already has: evaluation.py's _kept leaves that one out with a finding, so that evaluation does not see the
+  violation and need not REJECT (records.py does not check record_id uniqueness across a log); a later task is to
+  make this fail closed.
 - No task.* event follows STOP: violation (specification 3 section 10), so the task stays READY (or REWORK) with no
   lease, and the next Resume Check may CONTINUE again; no bound on repeated STOP: violation (specification 5 section
   11 point 12).
@@ -43,6 +47,10 @@ Limits (AC8), stated:
   so in its uncovered entries.
 - A run against the real writer's files is not tested in task TASK-052 (its tests write no file). __init__.py is not
   changed, so __all__ does not name this module.
+- Also of task TASK-053 (its AC7): F-a is kept (replay needs a fresh root from its caller); a passing replay with a
+  violation shows the core's handling of a recorded violation, never that any hook observes anything (C6
+  unmeasured); no conformance set or fixture is changed (ADV-02's fixture is a later task); no observed read-set call
+  is made.
 """
 
 import datetime
