@@ -336,7 +336,9 @@ class R5Replay(unittest.TestCase):
             def fn(*args, **kwargs):
                 steps = [] if step is None else [{'step': 'violation', 'result': {'result': 'refused',
                                                                                  'reason': step}}]
-                return {'result': 'refused', 'reason': reason, 'findings': [], 'steps': steps, 'fencing_token': None}
+                out = dict.fromkeys(replay.RESULT_KEYS)
+                out.update(result='refused', reason=reason, findings=[], steps=steps)
+                return out
             return fn
         for fn in [refused('violation'), refused('violation', 'argument')] + [
                 refused(r) for r in ('document', 'store', 'setup', 'start', 'token', 'end')]:
