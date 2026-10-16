@@ -7,11 +7,12 @@ opens no file) and, in order (AC7):
 
 1. checks the document's form (AC6): exactly the keys replay_id, recorder (starting with "replay:", so that its
    records are never taken for a live session's), epoch, setup, session, submission and end_at; every time a text in
-   UTC with whole seconds, "YYYY-MM-DDTHH:MM:SSZ";
-2. reads the log through read_log and opens the store with the document's epoch through open_store; unless the log is
+   UTC with whole seconds, "YYYY-MM-DDTHH:MM:SSZ"; a submission's commit_text a str that encodes as UTF-8;
+2. reads the log through read_log and, only when it is empty, opens the store with the document's epoch through
+   open_store (so no store is created under a root whose log is used; a reading of AC7's order); unless the log is
    empty and the store is new (the document's epoch, counter 0), it refuses with reason "store" before any append and
-   calls nothing else, so replayed records never enter a project's event log (specification 5 line 48; N1 of
-   decision D-984);
+   calls nothing else, so replayed records do not enter a used event log (specification 5 line 48; N1 of decision
+   D-984); see the limit F-a below;
 3. appends each setup event through append_event, with the document's recorder;
 4. calls adapter.start with the session's values; when a lease is granted and the document states an expected token,
    compares the two, a difference giving "refused", reason "token" (M2 of decision D-983: the epoch, the times and the
@@ -21,7 +22,9 @@ opens no file) and, in order (AC7):
    process (submit.submit's repo argument is the root, which that read function never reads; so a submission is
    replayed only under an absolute root, as submit.submit requires of a repository path);
 6. calls adapter.end with the session's id, the granted token (or None) and end_at; end is called after a granted
-   lease even when a later step refused, so a replay leaves no lease it could release (AC8).
+   lease even when a later step refused, so a replay leaves no lease it could release (AC8). A start refused by the
+   core (its session row opened, no token known) stops the run with no end call (AC8; reading R3): the row is left
+   open for the caller, a stated limit.
 
 Every call passes the root it was given and the document's recorder; this module names no other root and no
 project-state directory. The result (AC8) is a mapping with exactly RESULT_KEYS; its steps list one entry per call
@@ -37,7 +40,10 @@ the document (M2 of decision D-983, a stated departure from line 49's wording, w
 equal records); the commit is read from the document, so a replay shows the core's handling of a recorded commit,
 never that a runtime made it; a passing replay shows how the core handles a recorded session, never that any hook
 observes anything (C6 stays unmeasured); a run against the real writer's files is not tested in task TASK-051 (its
-tests open no file; N2 of decision D-984); one run at a time (the writer's limit).
+tests write no file; N2 of decision D-984); one run at a time (the writer's limit); F-a (decision D-988): the
+repository has no project-state directory yet, so N1 cannot tell a fresh scratch root from the self-build's own root
+before its first event, and a replay given that root would create a store and a log there; replay has no caller in
+task TASK-051, and a caller must give a fresh root; __init__.py is not changed, so __all__ does not name this module.
 """
 
 import datetime
@@ -147,6 +153,11 @@ def _read_document(document):
             found.append('document: submission commit_id is not 40 lowercase hex characters')
         if not isinstance(sub['commit_text'], str):
             found.append('document: submission commit_text is not a string')
+        else:
+            try:
+                sub['commit_text'].encode('utf-8')
+            except UnicodeError:
+                found.append('document: submission commit_text cannot be encoded as UTF-8')
         if not _text(sub['event_id']):
             found.append('document: submission event_id is not a non-empty string')
         u = dict(sub, at=_time(sub['at'], 'submission at', found))
@@ -264,8 +275,12 @@ def replay(document, root, functions=None):
 
     u = d['submission']
     if u is not None:
+        try:
+            read = _commit_reader(u['commit_id'], u['commit_text'])
+        except Exception as exc:  # AC8: no exception escapes after a grant; end is still called
+            return finish('submit', ['submit: building the commit reader raised %s' % type(exc).__name__])
         submitted = adapter.submit(root, root, u['commit_id'], s['task_id'], u['event_id'],
-                                   d['recorder'], u['at'], read=_commit_reader(u['commit_id'], u['commit_text']),
+                                   d['recorder'], u['at'], read=read,
                                    append=f.get('append_event'), release=f.get('release_lease_token'),
                                    held=f.get('held_lease'))
         steps.append({'step': 'submit', 'result': _summary(submitted)})

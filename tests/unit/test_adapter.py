@@ -1,5 +1,5 @@
 """Unit tests of aieos_bootstrap.adapter (task TASK-051, rules R1 to R5 and R9): the three calls start, submit and end
-with stand-ins for every function they call; no process starts and no file is opened. Every call a stand-in records
+with stand-ins for every function they call; no process starts and no file is written or created. Every call a stand-in records
 is bound to the real function's signature. Each test names its criteria in its own docstring."""
 
 import ast
@@ -56,6 +56,11 @@ def done(value=None):
 
 def refused(reason):
     return writer.StoreResult('refused', reason, ['a finding'])
+
+
+def bound(real, args):
+    """Bind a stand-in's call to the real function's signature (raises TypeError when it does not fit); None."""
+    inspect.signature(real).bind(*args)
 
 
 def decided(lease=LEASE, decision='CONTINUE'):
@@ -165,9 +170,9 @@ class R1Arguments(unittest.TestCase):
         seen = {}
         saved = {n: getattr(writer, n) for n in ('start_session', 'end_session', 'release_lease_token')}
         try:
-            writer.start_session = lambda *a: seen.setdefault('start_session', done())
-            writer.release_lease_token = lambda *a: seen.setdefault('release', done())
-            writer.end_session = lambda *a: seen.setdefault('end_session', done())
+            writer.start_session = lambda *a: bound(saved['start_session'], a) or seen.setdefault('start_session', done())
+            writer.release_lease_token = lambda *a: bound(saved['release_lease_token'], a) or seen.setdefault('release', done())
+            writer.end_session = lambda *a: bound(saved['end_session'], a) or seen.setdefault('end_session', done())
             with StubExecute(decided()) as ex:
                 adapter.start(ROOT, TASK, 'session-1', 'agent-1', {}, CODE, LATER, REC, NOW)
             kw = ex.calls[0][1]
