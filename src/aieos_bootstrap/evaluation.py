@@ -34,7 +34,11 @@ task in VERIFYING (after its task.submitted) or in IN_REVIEW (re-evaluation):
    blocking_kind and the same subject (erratum E1 to AC1, decision D-1035: that one then already blocks for the same
    subject with the same kind); the findings hold those of the records left out and one per such record, naming its
    record_id (or, when it has none, its position, counted from 1 over the log's records and then extra_records) and
-   its source; nothing is appended and governor.evaluate is not called.
+   its source; nothing is appended and governor.evaluate is not called. A record that records.check_record finds in
+   form, whose outcome is 'fail' and which is left out for a record_id an earlier kept record has, refuses the
+   evaluation with reason "records" in the same way (task TASK-055 AC1; decision D-1040), unless it equals that kept
+   record as a whole mapping (the governor then sees the same record): so a 'pass' record then a 'fail' record with
+   one record_id refuses, and a 'fail' then a 'pass' goes on (the fail is kept and the governor sees it).
 8. The decision (AC7, AC8): governor.evaluate is called once and its record, an error record included, is appended
    once as decision.acceptance through writer.append_event, with no fencing token, under an event id derived from the
    task, the state-setting event and the kept record ids, so a rerun while the task is still evaluable gives
@@ -42,7 +46,8 @@ task in VERIFYING (after its task.submitted) or in IN_REVIEW (re-evaluation):
 
 The result (AC11) is a mapping with exactly the keys result ("evaluated", "duplicate" or "refused"), reason, findings,
 event_id, changed_paths, decision and next_task_state. A refusal's reason is one of argument, log, state, contract,
-git, merge, bound, values, governor, store and records (the last added by task TASK-054). An exception raised by a
+git, merge, bound, values, governor, store and records (the last added by task TASK-054), which task TASK-055 also
+uses. An exception raised by a
 called function is caught and becomes a result; none escapes.
 
 ``read``, ``read_log`` and ``append`` default, at call time, to gitread.run, writer.read_log and writer.append_event
@@ -86,10 +91,20 @@ Limits (AC13):
   neither accepted nor rejected by evaluation and stays in VERIFYING or IN_REVIEW until it is superseded by a new
   task; one given only through extra_records refuses only while it is given. event_id_of and the governor are
   unchanged; records.py's uniqueness rule is unchanged (a repeated record_id is still accepted into the log); a
-  repeated record_id between records that are not blocking is left out with a finding as before, so a record with
-  outcome fail whose record_id an earlier kept record has is not seen by the governor, and an evaluation that would
-  give REWORK may give another decision, ACCEPT included (a later task is to close this); the limits of task
-  TASK-053 (its AC7) stand; no conformance set or fixture is changed.
+  repeated record_id between records that are not blocking is left out with a finding as before, except an in-form
+  'fail' record that differs from the kept record, which task TASK-055 makes refuse; the limits of task TASK-053 (its
+  AC7) stand; no conformance set or fixture is changed.
+- Of task TASK-055 (its AC3 and AC8): a record with outcome fail left out for a repeated record_id refuses the
+  evaluation unless it equals the kept record as a whole mapping, so a differing 'fail' is never hidden from the
+  governor; the cost is TASK-054's: such a task is refused at every
+  evaluation, the rerun included and also after a later task.approved and a new submission, and stays in VERIFYING
+  or IN_REVIEW until it is superseded by a new task; one given only through extra_records refuses only while it is
+  given. The rule over-refuses: a left-out 'fail' whose absence would change no decision (a stale record, an
+  authority record, a record that is not an observation or has no evidence type or binding) refuses too (fail
+  closed). A left-out 'pass' record and an out-of-form record that is not blocking are left out with a finding, as
+  their absence can only lower the decision. Records are still selected by the event envelope's task_id, not by the
+  record's subject. event_id_of, the governor and records.py's uniqueness rule are unchanged; the limits of task
+  TASK-054 (its AC8) stand.
 - Also of task TASK-053 (its AC7): no task.* event follows STOP: violation, so until an evaluation runs the task stays
   READY with no lease and the next Resume Check may CONTINUE again; no bound on repeated STOP: violation
   (specification 5 section 11 point 12); a fence refusal's record is labelled refused_submission; F-a is kept (replay
@@ -283,8 +298,10 @@ def _changed_paths(read, repo, commits):
 def _kept(payloads, extra_records):
     """AC7: the records the governor reads, a finding for each one left out, and (task TASK-054 AC1) a finding for
     each left-out record whose outcome is 'blocking', unless its record_id equals that of an earlier kept blocking
-    record with the same blocking_kind and subject (erratum E1 to AC1)."""
-    kept, found, hidden, seen, kinds = [], [], [], set(), {}
+    record with the same blocking_kind and subject (erratum E1 to AC1); and (task TASK-055 AC1) a finding for each
+    in-form record whose outcome is 'fail' left out for a record_id an earlier kept record has, unless it equals that
+    kept record as a whole mapping."""
+    kept, found, hidden, seen, kinds, by_id = [], [], [], set(), {}, {}
     for n, (where, rec) in enumerate([('log', p) for p in payloads] + [('extra_records', r) for r in extra_records], 1):
         problems = records.check_record(rec)
         rid = rec.get('record_id') if isinstance(rec, dict) else None
@@ -292,8 +309,13 @@ def _kept(payloads, extra_records):
             found.append('records: a record from %s is left out: %s' % (where, '; '.join(str(f) for f in problems)))
         elif not isinstance(rid, str) or rid in seen:
             found.append('records: a record from %s is left out: its record_id %r is repeated' % (where, rid))
+            if isinstance(rid, str) and rid in by_id and rec.get('outcome') == 'fail' and rec != by_id[rid]:
+                hidden.append('records: a record with outcome fail from %s, record_id %r, is left out for a repeated '
+                              'record_id; the evaluation is refused so that it is not hidden from the governor'
+                              % (where, rid))
         else:
             seen.add(rid)
+            by_id[rid] = rec
             kept.append(rec)
             if rec.get('outcome') == 'blocking':
                 kinds[rid] = (rec.get('subject'), rec.get('blocking_kind'))

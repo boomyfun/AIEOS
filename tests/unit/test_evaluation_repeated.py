@@ -443,21 +443,24 @@ class R6Texts(unittest.TestCase):
 
 class R7Script(unittest.TestCase):
     def test_evaluation_docstring_and_imports(self):
-        """TASK-054 AC5, TASK-054 AC7, TASK-054 AC8: evaluation.py's docstring states the rule (item 7), the new reason
-        in its result section and AC3's cost with AC8's limits in place of the old limit; its imports are the base's
-        and it holds no assert."""
+        """TASK-054 AC5, TASK-054 AC7, TASK-054 AC8, TASK-055 AC4: evaluation.py's docstring states the rule (item 7),
+        the new reason in its result section and AC3's cost with AC8's limits in place of the old limit; its imports
+        are the base's and it holds no assert. TASK-055 AC4 (erratum E1 of decision D-1047): the limit that a record
+        with outcome fail left out is not seen by the governor is replaced by task TASK-055's rule, and its old words
+        are absent."""
         tree = ast.parse((SRC / 'evaluation.py').read_bytes().decode('utf-8'))
         doc = ' '.join(ast.get_docstring(tree).split())
         for words in ('refuses the evaluation with reason "records" (task TASK-054 AC1',
                       'with the same blocking_kind and the same subject (erratum E1 to AC1',
                       'its position, counted from 1 over the log\'s records and then extra_records',
-                      'a record with outcome fail whose record_id an earlier kept record has is not seen by the governor',
+                      'a record with outcome fail left out for a repeated record_id refuses the evaluation',
                       'store and records (the last added by task TASK-054)',
                       'until it is superseded by a new task', 'refuses only while it is given',
                       'event_id_of and the governor are unchanged', "records.py's uniqueness rule is unchanged",
                       'left out with a finding as before', 'the limits of task TASK-053 (its AC7) stand'):
             self.assertIn(words, doc)
-        for words in ('need not REJECT', 'a later task is to make this fail closed'):
+        for words in ('need not REJECT', 'a later task is to make this fail closed', 'a later task is to close this',
+                      'is not seen by the governor'):
             self.assertNotIn(words, doc)
         mods = set()
         for node in ast.walk(tree):
