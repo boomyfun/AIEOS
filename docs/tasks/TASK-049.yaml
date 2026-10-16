@@ -1,0 +1,287 @@
+# Task contract TASK-049, the stack benchmark's second round-2 port: Go (Master Plan revision 4, §4 "The benchmark and
+# the stack ADR"; docs/plan/m4-exit-review.md §6, line 70; docs/plan/bench-port-brief.md revision 3, §6; decisions
+# D-794, D-800 C3, D-814 Q4, D-905, D-919, D-934 C4, D-935 C2, D-938; DEF-0063).
+# Revision 0, drafted under decision D-938 (the scope note, B1 to B9, with its rulings M1 and M2); brought for approval
+# in its own request; whether it is approved is recorded in the decision files, not in this file. Fields and value
+# forms follow specification 2 §5.1 and the contracts of TASK-007 to TASK-048. Readings marked "(reading)" are the
+# worker's, for the decision agent's ruling.
+# Task type: implementation, with two writers on two path sets (as TASK-044 and TASK-048):
+# - the round-2 code, bench/go/round2/** (AC3), is written by a fresh agent (claude-opus-5-5, started for this task
+# only) given only the inputs of the port brief's §6.2: the brief at revision 3 (its hash below), the four Python files
+# at commit 6b026569b4c62ec5d5b061138d8522d2ab651542 by the hashes the brief names, the round-2 input and reference
+# documents made at that commit and checked against their pins (with the source of tests/unit/test_export_round2.py,
+# 6fd0c9d2…), bench/go's round-1 code at base_commit, and this contract. It works only in a scratch folder of the
+# worker's scratchpad holding a copy of bench/go at base_commit, with no access to the repository, the archives, the
+# other ports (bench/rust's round 2 included) or any review, and runs only the go command there, through the worker's
+# wrapper script (TASK-044's go_wrapper.sh, decision D-860, with this session's paths);
+# - everything else (the workflow step and the tests of AC8) is written by the worker.
+# Round 1 unchanged (brief §6.3; decision D-938 B2): bench/go's eight round-1 files (export.go, go.mod, governor.go,
+# json.go, main.go, port_test.go, records.go, resume.go) stay byte-equal to base_commit; checked by script before any
+# writer file is used.
+# The second program (a reading of §6.3 for Go; decision D-938 B2 and M1): bench/go's round-1 code is one `package main`
+# in the module root (module aieosbench, go 1.24). Go builds one program per package folder and cannot import a
+# `package main`, so round 2 is a second `package main` in a new folder bench/go/round2/ of the same module (its own
+# main, its modules and its test file round2_test.go; no go.mod change), and "reuses" (§6.2 item 4) is met for Go as
+# follows (M1): where round 2 needs a round-1 source file whole (for example the canonical text or the JSON reading), the
+# writer uses a byte-equal copy of that round-1 file under bench/go/round2/, each copy checked by its SHA-256 against
+# the round-1 file at base_commit and named in the writer's report and in the acceptance record; code written anew is
+# allowed only where a whole-file copy cannot compile in round2/ or would carry round-1's `main` or its argument rule,
+# and the writer states each such case. The duplication and every rewritten form are stated limits and review points.
+# The alternative, moving round-1's computation into an importable package, is rejected: it changes round-1 files.
+# The toolchain (brief §3; D-938 B6): in CI, the go command the hosted runners provide (go1.24.13 on both in the
+# benchmark's run 8), not downloaded, its version printed by the toolchain-versions step; locally, go1.24.13 for
+# windows-amd64 from the zip already fetched in session 08c626cc (decisions D-858 and D-859: checked then against the
+# SHA-256 that go.dev's download listing published), copied into this session's scratchpad and checked against the
+# value in that session's archived listing before anything is unpacked or run, then unpacked with that session's
+# go_unzip.py with this session's paths only, its own decision; no network. Every go run, in CI and locally, has
+# GOTOOLCHAIN=local, GOPROXY=off and CGO_ENABLED=0; locally also GOCACHE, GOPATH, GOMODCACHE, APPDATA, TMP and TEMP under
+# the scratchpad. No go telemetry, go get, go install or go mod command.
+# The workflow change (A66, its own element at code time; D-938 B3): in both jobs of .github/workflows/aieos-bench.yml,
+# identically, the step "port go (only if bench/go exists)" keeps its one guard, its export line and its round-1 lines
+# unchanged (reading: `go vet .`, `go build ... .` and `go test -count=1 . -args …` name the root package only, so the
+# round-2 folder does not enter them; `gofmt -l .` recurses into bench/go/round2 and so already checks it), and after
+# the round-1 test line adds the round-2 vet and build, run, compare, no-argument probe and tests (AC6); the header
+# names the round-2 lines; the revision line goes from 7 to 8. No download, trigger, permission, secret, token or
+# `uses:`; the TypeScript and Rust steps' bytes, the export steps and the round-2 export step are unchanged. TASK-048's
+# carried D4 (the probe header's "print nothing", meaning standard output) is applied to the new header words only
+# ("print nothing to standard output"); the round-1 header wording stays for D4's own decision (D-935 C2).
+# Limits: the benchmark workflow runs on pushes to main only, so the round-2 port's hosted evidence on Linux and Windows
+# comes from the landing's run, read after acceptance; before acceptance, the evidence of byte equality is the worker's
+# local run (go1.24.13, windows-amd64) and the reviews; the runners' go version is not pinned (brief §3); the download
+# listing's hash was self-attested by its publisher; the texts the Python builds naming a Python type fail closed (brief
+# §6.3), reached by no generated input; no file behaviour is compared; Go's no-import rule (M1), with round-1 files
+# copied whole or their forms written again; round 2's ports are written one after another, Go second after Rust (order
+# bias); every writer and reviewer is an AI of one vendor; TASK-046's carried limit (a probe passes when its program is
+# missing) holds for the new probe as for the others, and the landing's log is read for the round-2 program's own usage
+# line; TASK-048's D1 and D6 kinds (fail-closed inputs tested in-process only; a refusal the Python does not state) are
+# review points here.
+# What it is not: the results are advisory (A29, A31) and feed no gate, record or evidence entry; aieos-checks.yml and
+# its two pins are not touched; src/ is not touched; no TypeScript or Rust change; the round-1 port's results do not
+# change.
+# Risk: critical, and change class critical_cr, computed over the base by script (risk_class49.py: risk_class48.py with
+# only the write-set and its header line changed): .github/** is R9 (critical); bench/** is R12 (high); tests/** is R2
+# (medium) with R3's fail-closed reading (high); .github/** and tests/unit/** are evaluator paths of GOV-003's list.
+# Profile (assurance-model.md §5, gov-AIEOS, critical): high's entries plus architecture [human_review], met for
+# gov-AIEOS by the decision agent's review, and functional [the property/fuzz entry] by the CI's property_test step over
+# the existing property suite (the task adds no property test; it changes no decision code); the cross-model entry by
+# the pair of reviews: five way-2 reviews from the port review template (revision 1, unchanged, brief §6.5) with D-934
+# C4's five round-2 fill texts, only their task facts changed, on claude-sonnet-5-5 (a model other than the port
+# writer's and the main session's), and the decision agent's separate review. One delegated approval (reading, as
+# TASK-048). Round 2's findings are counted apart from round 1's (§6.5).
+# Naming (D-544 Q3): every Python test this task adds names the AC ids it stands for as "TASK-049 ACn" in its docstring.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-049.yaml and has one parent equal to base_commit; the
+# task's commits, each carrying "AIEOS-Task: TASK-049", go to task/TASK-049 under their own decisions; main receives the
+# task only at its acceptance.
+# Not applicable: OPS-001 (no ref changed by the task's code); INV-004 to INV-011 (no project state, decision engine,
+# governor, evidence record, replay or policy path in the write-set); GOV-001, GOV-004 to GOV-006. SEC-003 applies (a
+# .github/ path), under A66 as above.
+# Owner-kept acts: none, on these conditions: the changed workflow grants no write, uses no secret or token, changes no
+# repository or security setting and costs nothing (public repository, hosted runners); the local toolchain needs no
+# network and installs nothing outside the scratchpad. If any of these is not so, the task stops and the point is the
+# owner's (CR-002 part 4 limit 5), fail closed.
+task: TASK-049
+contract_version: v1
+task_type: implementation
+objective: >-
+  Extend bench/go with round 2 of the benchmark (the brief's §6): a second program in bench/go/round2/, written from the
+  port brief (revision 3) by a fresh agent, which prints a document byte-equal to round 2's reference from round 2's
+  input, with its own tests, round 1's eight files unchanged; extend the go step of both jobs of
+  .github/workflows/aieos-bench.yml to vet, build, run, compare and test it and probe it with no argument; update
+  TASK-044's and TASK-046's pins in tests/unit/test_export_fixtures.py. Nothing else changes; the results are advisory
+  and feed nothing.
+traces_to:
+  - docs/plan/m4-exit-review.md#6
+  - docs/plan/master-plan.md#4
+  - docs/plan/bench-port-brief.md
+  - docs/pre-genesis/constitution.md#SEC-003
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-049.yaml; G0 requires C's one parent to equal base_commit. It is filled by script from
+  # refs/heads/main just before C is made: the placeholder and its quotes are replaced by the 40-hex id, unquoted.
+  base_commit: 8d8fee5dec7c4cb87e93c0b9c121daf61b8d657b
+  depends_on: [TASK-039, TASK-044, TASK-046, TASK-047, TASK-048]
+  intent_versions:
+    docs/plan/m4-exit-review.md: 6c41ca8200a4e757f04b22aa521e52cd67f7ac3122690e667ac4c864aa57c4a4
+    docs/plan/master-plan.md: 8276a587bbf6f75be8867feb97df6726379babfcdb2266344bfdb4d01e6b2d23
+    docs/plan/bench-port-brief.md: 1f5376c7113c3286cfe67dfa1567da31ed0dfae74b7d43f4ff455ea3141d4450
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/specs/conformance-files.md: 2f1c224466fe3657167b116b49f902648130bf76e1274367d7780cc38ec7b021
+write_set:
+  # The round-2 folder under bench/go/ (the writer's files), one modified workflow, one modified test module.
+  paths:
+    - bench/go/round2/**
+    - .github/workflows/aieos-bench.yml
+    - tests/unit/test_export_fixtures.py
+read_set:
+  paths:
+    - docs/plan/**
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/specs/conformance-files.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/unit/**
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+    - bench/go/**
+  interfaces:
+    - tests/unit/test_export_round2.py (the round-2 input and reference documents, run as a script)
+    - tests/unit/test_export_reference.py (--compare, run as a script)
+    - bench/go/round2 (the round-2 program, built from bench/go by `go build -trimpath -o <file> ./round2` and run as
+      `<file> <round-2 input document>`)
+  schemas:
+    - conformance-files canonical form (2)
+    - the round-2 documents' forms (TASK-047 AC1, AC2)
+forbidden:
+  - .github/workflows/aieos-checks.yml
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - bench/ts/**
+  - bench/rust/**
+  - bench/go/export.go
+  - bench/go/go.mod
+  - bench/go/go.sum
+  - bench/go/governor.go
+  - bench/go/json.go
+  - bench/go/main.go
+  - bench/go/port_test.go
+  - bench/go/records.go
+  - bench/go/resume.go
+  - bench/go/vendor/**
+  - bench/go/round2/go.mod
+  - docs/**
+  - src/**
+  - tests/conformance/**
+  - tests/integration/**
+  - tests/property/**
+  - tests/run_tests.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The round-2 program's output. Built from bench/go by `go build -trimpath -o <file> ./round2` and run as `<file>
+      <round-2 input document>`, the program prints a document byte-equal to round 2's reference document
+      (tests/unit/test_export_round2.py at base_commit, REFERENCE2_SHA256 unchanged) and exits 0; on a missing or extra
+      argument, a file that is not a round-2 input document, or a call or case it cannot compute (the texts naming a
+      Python type among them, brief §6.3), it exits non-zero and prints nothing to standard output. Evidence before
+      acceptance: the worker's run with go1.24.13 (windows-amd64) on this machine, compared by `--compare`, its output
+      saved; the hosted runners' compare at the landing is read after acceptance (a stated limit).
+  - AC2: >-
+      The writer and its inputs (the brief's §6.2; decision D-938 B1). The round-2 code is written by a fresh agent on
+      claude-opus-5-5, given only the brief's §6.2 inputs (the documents made at 6b026569 and checked against
+      INPUT_SHA256 and REFERENCE2_SHA256) and a copy of bench/go at base_commit, in a scratch folder; its tool calls are
+      only file reads there, writes inside its own folder and go commands there through the worker's wrapper (checked by
+      script over its transcript before any of its files is used); its file set holds no file of another port; every
+      file it writes is committed byte-equal to the hash the decision agent accepts after that check. No file under
+      bench/go/round2 holds a 64-hex value, record id or line of the round-2 reference document that the input document
+      and the given Python sources do not hold, nor any entry's expected values (checked by script against the two
+      documents, by the rule as corrected in decision D-927).
+  - AC3: >-
+      The port's form (the brief's §3 and §6.3; D-938 B2, B5, M1). bench/go holds its eight round-1 files byte-equal to
+      base_commit and one folder round2/ holding only .go files in one `package main` written by the port writer: its
+      entry (the argument, the single write, the exit code), its modules, and its tests in round2_test.go (and any other
+      *_test.go file); no go.mod, go.sum, vendor folder or other module, and no further subfolder. Each file under
+      round2/ that is a copy of a round-1 file is byte-equal to that file at base_commit, checked by SHA-256 and named in
+      the writer's report; every other file states, in the writer's report, why a whole-file copy could not serve (M1).
+      The code imports only Go's standard library and holds none of TASK-044's forbidden forms: no os/exec, net, unsafe,
+      cgo, syscall, time, math/rand, crypto/rand, plugin or reflect-based call of a name; os only for os.Args, reading
+      the one argument path, os.Stdout, os.Stderr and os.Exit (its tests only reading the two documents given as
+      arguments); it writes nothing but standard output and standard error, reads no clock, environment variable or
+      random value and starts no process; its SHA-256 is the standard library's crypto/sha256 (brief §6.4).
+  - AC4: >-
+      The static checks and the build. In bench/go, with GOTOOLCHAIN=local, GOPROXY=off and CGO_ENABLED=0: `go vet .` and
+      `go vet ./round2` report nothing and exit 0; `gofmt -l .` prints nothing (it covers round2/); `go build -trimpath`
+      builds the round-1 and the round-2 binaries. Before the first push the worker runs the go step's exact lines of
+      AC6, round 1 and round 2, on this machine with go1.24.13 for windows-amd64 (the zip of D-938 B6, checked by its
+      SHA-256 before it is unpacked), in the scratchpad only, with GOCACHE, GOPATH, GOMODCACHE, APPDATA, TMP and TEMP
+      under the scratchpad.
+  - AC5: >-
+      The round-2 program's own tests. bench/go/round2 holds tests run as `go test -count=1 ./round2 -args <round-2
+      input document> <round-2 reference document>` that check at least: the byte equality over the whole input against
+      the reference; one append call and one reconcile case field by field; the carried log (an entry after an appended
+      one and after a refused one); each fail-closed input of AC1. `go test -count=1 . -args <fixture document>
+      <reference document>` still passes unchanged. Both pass on the worker's machine, and the workflow runs both.
+  - AC6: >-
+      The workflow (A66, its own element). In each of the two jobs of .github/workflows/aieos-bench.yml, identically,
+      the step "port go (only if bench/go exists)", under its one existing guard, keeps its lines unchanged and after
+      its round-1 test line runs, from bench/go, `go vet ./round2` and `go build -trimpath -o "$RUNNER_TEMP/go/port2.exe"
+      ./round2`; then the binary on "$RUNNER_TEMP/round2-input.json" into "$RUNNER_TEMP/go2.json"; then, from the
+      checkout's root, `$PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/round2-reference.json"
+      "$RUNNER_TEMP/go2.json"`; then one run of the built port2 program with no argument that must exit non-zero and
+      print nothing to standard output, its output kept in the job's temporary folder, in TASK-046's probe form; then,
+      from bench/go, `go test -count=1 ./round2 -args "$RUNNER_TEMP/round2-input.json"
+      "$RUNNER_TEMP/round2-reference.json"`. The header names the round-2 lines; the revision line goes from 7 to 8.
+      Nothing else changes: no download, trigger, permission, secret, token, `uses:`, TypeScript or Rust byte, export
+      step or round-2 export step. The earlier tests of tests/unit/test_export_fixtures.py pass over it, with only the
+      pins of AC8 updated.
+  - AC7: >-
+      Isolation (decision D-800 C3; the risk rules policy revision 6, R12). tests/unit/test_bench_isolation.py,
+      unchanged, passes: no file under src/ or tests/ outside its allow-list, nor aieos-checks.yml, names bench/ or
+      imports from it, and aieos-bench.yml is the only workflow naming bench/.
+  - AC8: >-
+      The pins (D-938 B4), in tests/unit/test_export_fixtures.py: TASK-044's pin of the go step's lines (GoStepTests'
+      GO_STEP, updated in place to the step of AC6, its lines in order, GOTOOLCHAIN=local, GOPROXY=off and
+      CGO_ENABLED=0 set before the first go command, and no `go get`, `go install`, `go mod`, `go env -w` or go
+      telemetry command) and TASK-046's pin of bench/go's file set (GO_FILES, updated to the exact new set, the eight
+      round-1 files, the folder round2 and its files) are each updated to their one exact new value, as pin updates and
+      not a loosening; go.mod's pin unchanged; and a new test class whose docstrings start with TASK-049 pins
+      bench/go/round2's exact file set, the round-2 lines' order in each job, each round-1 file byte-equal to its bytes
+      at base_commit by SHA-256, each M1 copy byte-equal to its round-1 file, and no go.mod, go.sum or vendor folder
+      under bench/go/round2. The TypeScript and Rust steps of each job unchanged from base_commit. No earlier assertion
+      is removed or loosened beyond these updates; the module's export, its other tests and its main guard are
+      unchanged.
+  - AC9: >-
+      The CI checks and purity. At the task's commits the existing CI steps report no finding: G0 scope,
+      deterministic_rule, OPS-003, SEC-001, SEC-002, SEC-003's record and bandit; every earlier test passes; the added
+      Python lines are scanned for the bandit test patterns the CI applies before the first push (a stated limit: that
+      scan is not bandit; the branch run's bandit step is the evidence); the forbidden forms of AC3 are checked by
+      script over bench/go/round2 before the first push; if any earlier test can pass only by a change outside the
+      write-set, the task escalates (needs_out_of_scope_change).
+  - AC10: >-
+      Naming. Every Python test function the task adds names "TASK-049 ACn" in its own docstring; no existing test's
+      docstring changes, with one exception (D-938 M2): the docstring of HardeningTests.test_ts_and_go_file_sets
+      changes only to state bench/go's new exact set (its eight round-1 files and the folder round2 with its files),
+      the rest of that docstring and its assertions staying unchanged apart from GO_FILES's exact new value; keeping
+      the old docstring ("exactly its eight, with no subfolder") is rejected, since it would become false (OPS-003);
+      tests/run_tests.py is unchanged and runs no export or port.
+  - AC11: >-
+      Stop conditions. If any step needs a secret, a token, write access, money, a setting, the network or anything
+      installed outside the scratchpad, or the copied zip's SHA-256 differs from the value in session 08c626cc's
+      archived listing, the task stops and the point goes to the decision agent, and to the owner when it is the
+      owner's (A66, fail closed).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell:
+    allow:
+      - "timeout 110 python tests/run_tests.py < /dev/null"
+      - >-
+        go vet . / go vet ./round2 / gofmt -l . / go build -trimpath -o <file> <. or ./round2> / go test -count=1 <. or
+        ./round2> -args <file> <file> (with GOTOOLCHAIN=local, GOPROXY=off, CGO_ENABLED=0 and, locally, the scratchpad
+        environment of AC4)
+      - "<binary> <file>"
+      - "sha256sum <SP>/go/go1.24.13.windows-amd64.zip (compared with the archived listing's value before unpacking)"
+      - "timeout 110 python <SP script> < /dev/null (the standard library's zipfile, unpacking into <SP>/go only)"
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: critical
+autonomy:
+  max_level: L1
+  budgets: {tokens: 900k, wall_time: 5h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC7, AC8, AC10]}
+  - {gate: G3, check: constitution, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC9, AC11, INV-001, INV-002, INV-003, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
