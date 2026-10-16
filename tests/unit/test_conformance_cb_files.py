@@ -396,9 +396,14 @@ def amount(text, key):
 
 
 def rc_problems(i, label, approved):
-    """AC5: section 9's placeholders for a READY task, every check passing, in one session's Resume Check inputs."""
+    """AC5: the placeholders of section 9 for a READY task that the checks below cover, in one session's Resume Check
+    inputs (not covered here: the interface and schema entries' place against the changed paths, a null intent entity,
+    the read-set lists)."""
     out = []
     c = i['contract']
+    for cm in i['commits']:
+        if not cm['submitted'] and any(matches(p, x['path']) for p in c['write_set']['paths'] for x in cm['paths']):
+            out.append('%s an unsubmitted commit changes a write_set path' % label)
     if i['task_state'] != 'READY':
         out.append('%s task_state is not READY' % label)
     if not (i['approved_contract_hash'] == i['contract_hash'] == approved):
@@ -464,6 +469,8 @@ def placeholder_problems(value):
     recs = ev['extra_records']
     for rec in recs:
         out.extend(record_problems(rec))
+    if any(not isinstance(r, dict) or r.get('outcome') != 'pass' for r in recs):
+        out.append('an extra record does not pass')
     ids = [r.get('record_id') for r in recs if isinstance(r, dict)]
     if len(ids) != len(set(ids)):
         out.append('a repeated record id')
@@ -519,6 +526,35 @@ def consistency_problems(value):
                 below = commit_parts(c['text'])
                 if below is None or any(k == 'AIEOS-Task' for k, _ in trailers(below[1])):
                     out.append('the commit below the submitted one carries an AIEOS-Task trailer')
+    out.extend(task_problems(value))
+    out.extend(time_problems(value))
+    return out
+
+
+def task_problems(value):
+    """AC6 (the review fixes, decision D-1096): every task id of the case is the evaluation's task_id."""
+    case = value['cases'][0]
+    doc, cont, task = case['document'], case['continuation'], case['evaluation']['task_id']
+    ids = [doc['violation']['observation']['subject']] + [e['task_id'] for e in doc['setup']]
+    for s in (doc['session'], cont['session']):
+        ids += [s['task_id'], s['inputs']['task_id'], s['inputs']['contract']['task']]
+    return [] if all(x == task for x in ids) else ['a task id of the case is not the evaluation task_id']
+
+
+def time_problems(value):
+    """AC6 (the review fixes, decision D-1096): the times are in the order the route needs: the setup events, then the
+    first session from its start through the violation to its end, then the second session from its start through the
+    submission to its end, then the evaluation's now; and each session's lease expires after its end."""
+    case = value['cases'][0]
+    doc, cont, ev = case['document'], case['continuation'], case['evaluation']
+    times = [e['appended_at'] for e in doc['setup']] + [doc['session']['start_at'], doc['violation']['at'], doc['end_at'],
+                                                        cont['session']['start_at'], cont['submission']['at'],
+                                                        cont['end_at'], ev['now']]
+    out = []
+    if any(a >= b for a, b in zip(times, times[1:])):
+        out.append('the times of the case are not in order')
+    if not (doc['session']['expires_at'] > doc['end_at'] and cont['session']['expires_at'] > cont['end_at']):
+        out.append("a session's lease does not expire after its end")
     return out
 
 
@@ -794,6 +830,11 @@ class Ac5PlaceholdersTest(unittest.TestCase):
             (lambda v: recs(v)[4].update(subject='TASK-101'),
              'no passing external-CI record of the submitted commit for type lint'),
             (lambda v: recs(v)[1].update(record_id=recs(v)[0]['record_id']), 'a repeated record id'),
+            (lambda v: recs(v).append(dict(recs(v)[0], record_id='g0-2', outcome='fail')), 'an extra record does not pass'),
+            (lambda v: recs(v).append(dict(recs(v)[3], record_id='build-2', outcome='blocking')),
+             'an extra record does not pass'),
+            (lambda v: rc(v, 1)['commits'][0]['paths'].append({'path': 'docs/notes/a.md', 'change': 'added'}),
+             'the first session an unsubmitted commit changes a write_set path'),
             (lambda v: recs(v)[0].update(extra=1),
              'an extra record is not exactly the keys of a gate result or of a typed record'),
             (lambda v: recs(v)[0].update(fact_kind='claim'), 'an extra record is not an observation'),
@@ -879,6 +920,47 @@ class Ac6ConsistencyTest(unittest.TestCase):
             v = copy.deepcopy(self.value)
             change(v)
             self.assertIn(why, consistency_problems(v), why)
+
+    def test_the_task_ids_and_times_agree(self):
+        self.assertEqual(task_problems(self.value), [])
+        self.assertEqual(time_problems(self.value), [])
+
+    def test_a_task_id_out_of_step_fails(self):
+        def doc(v):
+            return v['cases'][0]['document']
+
+        def cont(v):
+            return v['cases'][0]['continuation']
+        why = 'a task id of the case is not the evaluation task_id'
+        for change in (lambda v: doc(v)['violation']['observation'].update(subject='TASK-101'),
+                       lambda v: doc(v)['setup'][1].update(task_id='TASK-101'),
+                       lambda v: doc(v)['session'].update(task_id='TASK-101'),
+                       lambda v: cont(v)['session']['inputs'].update(task_id='TASK-101'),
+                       lambda v: cont(v)['session']['inputs']['contract'].update(task='TASK-101')):
+            v = copy.deepcopy(self.value)
+            change(v)
+            self.assertIn(why, task_problems(v))
+            self.assertIn(why, consistency_problems(v))
+
+    def test_times_out_of_order_fail(self):
+        def doc(v):
+            return v['cases'][0]['document']
+
+        def cont(v):
+            return v['cases'][0]['continuation']
+        why = 'the times of the case are not in order'
+        for change in (lambda v: doc(v)['violation'].update(at='2026-10-16T09:30:00Z'),
+                       lambda v: doc(v)['violation'].update(at='2026-10-16T10:50:00Z'),
+                       lambda v: doc(v)['setup'][1].update(appended_at='2026-10-16T10:05:00Z'),
+                       lambda v: cont(v)['session'].update(start_at='2026-10-16T10:30:00Z'),
+                       lambda v: cont(v)['submission'].update(at='2026-10-16T12:50:00Z'),
+                       lambda v: v['cases'][0]['evaluation'].update(now='2026-10-16T12:35:00Z')):
+            v = copy.deepcopy(self.value)
+            change(v)
+            self.assertIn(why, time_problems(v))
+        v = copy.deepcopy(self.value)
+        cont(v)['session'].update(expires_at='2026-10-16T12:40:00Z')
+        self.assertIn("a session's lease does not expire after its end", time_problems(v))
 
     def test_the_trailer_reader(self):
         self.assertEqual(trailers('Subject\n\nBody.\n\nA-B: c\nD: e f\n'), [('A-B', 'c'), ('D', 'e f')])
