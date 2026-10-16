@@ -253,6 +253,9 @@ Occurrences in session 2026-10-16-0611 (../History/2026-10/2026-10-16-0611-the-r
 Occurrences in session 2026-10-16-2307 (../History/2026-10/2026-10-16-2307-the-capability-boundaries-section-approved-and-task-056-contracted.md):
 - **2026-10-16 and 2026-10-17.** Two responses stopped by the app's safety classifier, each right after a text block before a tool call (:255, :1500); in each, only the quick check had run. Nothing was retried. The first went to the owner, who answered at :372 that from then on such a stop of a reply, when nothing has to be redone, is the decision agent's to decide and the owner is told after, while a stop during an action still goes to the owner (D-1061 amendments 1 to 3). The second was decided that way (D-1069 amendment 1). One placeholder command was refused by the guard (:462), the worker's error; nothing ran.
 
+Occurrences in session 2026-10-17-0027 (../History/2026-10/2026-10-17-0027-the-classifier-stop-rule-recorded-and-task-056-reviewed.md):
+- **2026-10-17.** One command was refused by the guard before it ran (:283): it held Python's name followed by a dash, the worker's error, not a correct command refused; the program was written to a file and run. No classifier stop and no permission prompt in the session. The owner's rule of 2026-10-16 on classifier stops of a reply was written into the decision agent's definition (revision 11) and DM A70; decision-agent instances started in the same session kept revision 10, so every classifier stop stayed with the owner until the next session (D-1074).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
