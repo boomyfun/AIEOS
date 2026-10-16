@@ -297,7 +297,10 @@ class R6Texts(unittest.TestCase):
         docstring; their docstrings carry the new limit and not the old one."""
         for name, want in CODE_AT_BASE.items():
             self.assertEqual(code_hash(name), want, name)
-        self.assertNotEqual(hashlib.sha256(b'x').hexdigest(), CODE_AT_BASE['violation.py'])
+        tail = (SRC / 'violation.py').read_bytes().decode('utf-8').split('"""', 2)[2]
+        changed = tail.replace('def ', 'def  ', 1)
+        self.assertNotEqual(changed, tail)
+        self.assertNotEqual(hashlib.sha256(changed.encode('utf-8')).hexdigest(), CODE_AT_BASE['violation.py'])
         for name in CODE_AT_BASE:
             doc = ast.get_docstring(ast.parse((SRC / name).read_bytes().decode('utf-8')))
             self.assertIn('TASK-053', doc, name)
@@ -310,12 +313,23 @@ class R6Texts(unittest.TestCase):
 class R7Limits(unittest.TestCase):
     def test_evaluation_docstring_and_imports(self):
         """TASK-053 AC7, TASK-053 AC8, TASK-053 AC10: evaluation.py's docstring states the selection and the span's
-        limit; its imports are the base's."""
+        limit, and evaluation.py's and violation.py's docstrings state the limits of AC7 and the repeated record_id
+        limit; evaluation.py's imports are the base's."""
         tree = ast.parse((SRC / 'evaluation.py').read_bytes().decode('utf-8'))
         doc = ast.get_docstring(tree)
         for words in ('record.added and violation.detected payloads', 'over\n   the whole log',
                       'makes every later evaluation of the task REJECT', 'A session fenced out leaves no'):
             self.assertIn(words, doc)
+        vdoc = ast.get_docstring(ast.parse((SRC / 'violation.py').read_bytes().decode('utf-8')))
+        limits = ('where the task is evaluable', 'need not REJECT', 'a later task is to make this fail closed',
+                  'stays READY', 'section 11 point 12', 'refused_submission', 'F-a is kept', 'C6 unmeasured',
+                  'no conformance set or fixture is changed', 'no observed read-set call', "real writer's files")
+        for d in (doc, vdoc):
+            flat = ' '.join(d.split())
+            for words in limits:
+                self.assertIn(words, flat)
+        self.assertIn('rerun while the task is still evaluable gives "duplicate"', ' '.join(doc.split()))
+        self.assertNotIn('so a rerun gives "duplicate"', ' '.join(doc.split()))
         mods = set()
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):

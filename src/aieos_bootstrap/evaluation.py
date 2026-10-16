@@ -31,7 +31,8 @@ task in VERIFYING (after its task.submitted) or in IN_REVIEW (re-evaluation):
    blocking and blocking_kind violation, so the governor's row 1 gives REJECT (task TASK-053 AC2).
 8. The decision (AC7, AC8): governor.evaluate is called once and its record, an error record included, is appended
    once as decision.acceptance through writer.append_event, with no fencing token, under an event id derived from the
-   task, the state-setting event and the kept record ids, so a rerun gives "duplicate" (AC9).
+   task, the state-setting event and the kept record ids, so a rerun while the task is still evaluable gives
+   "duplicate" (AC9); after a REJECT the rerun is refused with reason "state" (task TASK-053, erratum E1 to its AC2).
 
 The result (AC11) is a mapping with exactly the keys result ("evaluated", "duplicate" or "refused"), reason, findings,
 event_id, changed_paths, decision and next_task_state. An exception raised by a called function is caught and becomes
@@ -68,8 +69,19 @@ Limits (AC13):
 - The tests use stand-ins for the writer, so the real store's path is covered by the writer's tests and not end to
   end.
 - A violation.detected of the task anywhere in the log makes every later evaluation of the task REJECT, also after a
-  later task.approved and a new submission, as a blocking record.added does (task TASK-053 AC4; decision D-1012 M1).
+  later task.approved and a new submission, as a blocking record.added does (task TASK-053 AC4; decision D-1012 M1),
+  where the task is evaluable (VERIFYING or IN_REVIEW; elsewhere the evaluation is refused with reason "state").
   A session fenced out leaves no violation.detected, only the writer's refusal record, read as before.
+- A violation.detected whose record_id an earlier kept record of the task already has is left out by _kept with a
+  finding, so that evaluation does not see the violation and need not REJECT (records.py does not check record_id
+  uniqueness across a log); a later task is to make this fail closed.
+- Also of task TASK-053 (its AC7): no task.* event follows STOP: violation, so until an evaluation runs the task stays
+  READY with no lease and the next Resume Check may CONTINUE again; no bound on repeated STOP: violation
+  (specification 5 section 11 point 12); a fence refusal's record is labelled refused_submission; F-a is kept (replay
+  needs a fresh root from its caller); a passing replay with a violation shows the core's handling of a recorded
+  violation, never that any hook observes anything (C6 unmeasured); no conformance set or fixture is changed
+  (ADV-02's fixture is a later task); no observed read-set call is made; a run against the real writer's files is not
+  tested.
 """
 
 import datetime
