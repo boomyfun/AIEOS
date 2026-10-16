@@ -216,6 +216,9 @@ Occurrences in session 2026-10-15-2351 (../History/2026-10/2026-10-15-2351-the-h
 Occurrences in session 2026-10-16-0402 (../History/2026-10/2026-10-16-0402-round-2s-export-on-main-and-the-rust-round-2-port-written.md):
 - **2026-10-16.** Four English text blocks before tool calls: :320, :1339, :1646 and :1797, each a short line at the start of a new piece of work; each listed with its own command and named in a request.
 
+Occurrences in session 2026-10-16-0611 (../History/2026-10/2026-10-16-0611-the-rust-round-2-port-on-main-and-the-go-round-2-port-scoped.md):
+- **2026-10-16.** Two English text blocks before tool calls: :399 "Run C2 now.", which made the gated write stop before anything was written, and :776 "Now read the branch run (C4)."; each listed by its own decision (D-930 amendment 1, D-934); a third would come with a proposed safeguard (D-934 C5).
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

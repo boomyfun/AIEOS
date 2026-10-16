@@ -247,6 +247,9 @@ Occurrences in session 2026-10-15-2351 (../History/2026-10/2026-10-15-2351-the-h
 Occurrences in session 2026-10-16-0402 (../History/2026-10/2026-10-16-0402-round-2s-export-on-main-and-the-rust-round-2-port-written.md):
 - **2026-10-16.** Four guard refusals, all the worker's errors, none ran: a placeholder command holding a here-document and Python's name with a dash (:322), two grep patterns holding the interpreter's name (:856, :894), and a sed text holding "command -v" and the interpreter's name (:1461), whose change was then made with the Edit tool; command slips with no effect: the placeholder itself, `cat >> /dev/null < /dev/null` (:1567), `python_check=0;` (:1629), and five Bash calls before tbq.sh existed. Correction (decision D-913 amendment 1): session 100674e8 had three guard refusals, not two (its transcript's :266, :358 and :1769).
 
+Occurrences in session 2026-10-16-0611 (../History/2026-10/2026-10-16-0611-the-rust-round-2-port-on-main-and-the-go-round-2-port-scoped.md):
+- **2026-10-16.** Two guard refusals, the worker's errors, nothing ran: a Bash command holding Python's name followed by a dash (:207), the program then written to a file; a command holding a here-document (:1273), the file then written with the Write tool. Three PowerShell calls and one Bash call (:95) ran before tbq.sh existed or ran it after their writes.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
