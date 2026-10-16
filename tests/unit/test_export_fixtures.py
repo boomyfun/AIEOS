@@ -443,6 +443,14 @@ TS_PORT_STEP = ('      - name: port ts (only if bench/ts exists)\n'
                 ' echo "ts: the port exits 0 with no argument"; false; fi\n'
                 '            test ! -s "$RUNNER_TEMP/ts-noarg.txt"\n'
                 '            (cd bench/ts && node test.ts "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")\n'
+                '            (cd bench/ts && node main2.ts "$RUNNER_TEMP/round2-input.json") > "$RUNNER_TEMP/ts2.json"\n'
+                '            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/round2-reference.json"'
+                ' "$RUNNER_TEMP/ts2.json"\n'
+                '            if (cd bench/ts && node main2.ts) > "$RUNNER_TEMP/ts2-noarg.txt"; then'
+                ' echo "ts: main2 exits 0 with no argument"; false; fi\n'
+                '            test ! -s "$RUNNER_TEMP/ts2-noarg.txt"\n'
+                '            (cd bench/ts && node test2.ts "$RUNNER_TEMP/round2-input.json"'
+                ' "$RUNNER_TEMP/round2-reference.json")\n'
                 '          else\n'
                 '            echo "no port in bench/ts"\n'
                 '          fi\n')
@@ -517,8 +525,9 @@ class RustStepTests(unittest.TestCase):
 # TASK-046 AC6: the hardening pins (decisions D-890, D-891): the three port folders required, the TypeScript and Go
 # file sets, tsconfig.json's and Cargo.lock's bytes, and TASK-045 AC3's forbidden source forms over bench/rust.
 BENCH_TS = REPO / 'bench' / 'ts'
-TS_FILES = ['bytes.ts', 'export.ts', 'governor.ts', 'json.ts', 'main.ts', 'node.d.ts', 'records.ts', 'resume_check.ts',
-            'test.ts', 'tsconfig.json']
+TS_FILES = ['bytes.ts', 'export.ts', 'governor.ts', 'json.ts', 'main.ts', 'main2.ts', 'node.d.ts', 'r2_document.ts',
+            'r2_eventlog.ts', 'r2_pyjson.ts', 'r2_records.ts', 'r2_recovery.ts', 'records.ts', 'resume_check.ts',
+            'test.ts', 'test2.ts', 'tsconfig.json']
 GO_FILES = ['export.go', 'go.mod', 'governor.go', 'json.go', 'main.go', 'port_test.go', 'records.go', 'resume.go',
             'round2', 'round2/document.go', 'round2/eventlog.go', 'round2/json.go', 'round2/logcheck.go',
             'round2/port2.go', 'round2/pytext.go', 'round2/records.go', 'round2/recovery.go', 'round2/round2_test.go']
@@ -575,8 +584,8 @@ class HardeningTests(unittest.TestCase):
             self.assertTrue(folder.is_dir(), folder.name)
 
     def test_ts_and_go_file_sets(self):
-        """TASK-046 AC6: bench/ts holds exactly its ten files and bench/go exactly its eight round-1 files and its one
-        subfolder round2 with round 2's nine files."""
+        """TASK-046 AC6: bench/ts holds exactly its ten round-1 files and round 2's seven files, and bench/go exactly
+        its eight round-1 files and its one subfolder round2 with round 2's nine files."""
         self.assertEqual(file_set(BENCH_TS), TS_FILES)
         self.assertEqual(file_set(BENCH_GO), GO_FILES)
 
@@ -745,6 +754,76 @@ class Round2GoTests(unittest.TestCase):
         """TASK-049 AC10: every test of this class names the AC it stands for in its docstring."""
         for name in unittest.TestLoader().getTestCaseNames(Round2GoTests):
             self.assertRegex(getattr(Round2GoTests, name).__doc__ or '', r'^TASK-049 AC\d+', name)
+
+
+# TASK-050 AC8: round 2's TypeScript pins (decisions D-957 B2, B4; D-962; D-966): the round-2 files' exact names, the
+# ten round-1 files' bytes at base_commit, the ts port step's whole bytes (its round-1 lines before its round-2 lines),
+# and the round-2 files' imports.
+TS2_FILES = ['main2.ts', 'r2_document.ts', 'r2_eventlog.ts', 'r2_pyjson.ts', 'r2_records.ts', 'r2_recovery.ts', 'test2.ts']
+TS_ROUND1_SHA256 = {
+    'bytes.ts': '6c2f4990a95c75b4f6233fadc9a8c1f4c1a66587b848b9583e5c10c77b7b194c',
+    'export.ts': '8f83d9bd8b685fe94ef7257a37b8f289a1e9b9a8cab6bb1c4efb23b5e204bed5',
+    'governor.ts': '957e666310397e3f099676a73474fe10d498a4301cd1eac9b00af638e27f0190',
+    'json.ts': 'f8c04724fda2729d14dddca2e837bf007957eefd43b8d15e189002dd11304f87',
+    'main.ts': 'eaef9f87d3429010e5258a285cef7880236b28f8f7f8dac0e54e648bea29b47b',
+    'node.d.ts': 'e50cd9ba7fde8ecc988ba04ec40df977f909b3db71c19ea6e1a083a9953cc4ef',
+    'records.ts': 'def4cb2da59cd355c7cecfd3cd93316e3083702b9fe1087fced966e4d2efb399',
+    'resume_check.ts': 'fff90363dda6cee561447fd1fbf5b3aa0e1b5d5e44af8f0cc5be6e2d5ee93563',
+    'test.ts': '3266da05717b1c50c4f4ad597773f61bc82e05da9d1dec1506c2ab2caeb53a2d',
+    'tsconfig.json': '4303f427ec85242568ae0db63b50dddcb64ed9172b27ef6bca4cfa207984e18d',
+}
+TS2_NO_IMPORT = ('main.ts', 'export.ts', 'test.ts', 'governor.ts', 'resume_check.ts', 'main2.ts', 'test2.ts')
+
+
+def ts_imports(text):
+    """The module names of a TypeScript file's import statements: the quoted name after `from` (or after `import` in a
+    bare import), over statements that may span lines, up to their semicolon."""
+    names = []
+    for part in text.split('import ')[1:]:
+        stmt = part.split(';', 1)[0]
+        tail = stmt.rsplit(' from ', 1)[-1].strip()
+        if tail[:1] in ('"', "'"):
+            names.append(tail[1:].split(tail[0], 1)[0])
+    return names
+
+
+class Round2TsTests(unittest.TestCase):
+    def test_ts_round2_file_names(self):
+        """TASK-050 AC8: beside its ten round-1 files, bench/ts holds exactly round 2's seven files."""
+        self.assertEqual(sorted(set(file_set(BENCH_TS)) - set(TS_ROUND1_SHA256)), TS2_FILES)
+        self.assertEqual(sorted(set(file_set(BENCH_TS)) & set(TS_ROUND1_SHA256)), sorted(TS_ROUND1_SHA256))
+
+    def test_ts_round1_files_unchanged(self):
+        """TASK-050 AC8: each of bench/ts's ten round-1 files is exactly its bytes at base_commit."""
+        for name, digest in TS_ROUND1_SHA256.items():
+            self.assertEqual(sha256_hex(BENCH_TS / name), digest, name)
+
+    def test_ts_step_whole(self):
+        """TASK-050 AC8: in each job the ts port step, from its name line, is exactly TS_PORT_STEP, and in it the round-1
+        test line comes before each round-2 line, compared as whole lines (not by first-occurrence marks)."""
+        for job in jobs():
+            self.assertEqual(job.count('      - name: port ts (only if bench/ts exists)\n'), 1)
+            self.assertEqual(job.count(TS_PORT_STEP), 1)
+        lines = TS_PORT_STEP.split('\n')
+        r1 = lines.index('            (cd bench/ts && node test.ts "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")')
+        r2 = [i for i, ln in enumerate(lines) if 'main2.ts' in ln or 'test2.ts' in ln or 'ts2' in ln]
+        self.assertEqual(len(r2), 5)
+        self.assertLess(r1, min(r2))
+
+    def test_ts_round2_imports(self):
+        """TASK-050 AC8: no round-2 file imports main.ts, export.ts, test.ts, governor.ts, resume_check.ts, main2.ts or
+        test2.ts, and the import reader finds the names of a sample statement."""
+        self.assertEqual(ts_imports("import { a } from './json.ts';\nimport type {\n  B } from \"./r2_x.ts\";\n"),
+                         ['./json.ts', './r2_x.ts'])
+        for name in TS2_FILES:
+            found = ts_imports((BENCH_TS / name).read_bytes().decode('utf-8'))
+            for bad in TS2_NO_IMPORT:
+                self.assertNotIn('./' + bad, found, name)
+
+    def test_naming(self):
+        """TASK-050 AC10: every test of this class names the AC it stands for in its docstring."""
+        for name in unittest.TestLoader().getTestCaseNames(Round2TsTests):
+            self.assertRegex(getattr(Round2TsTests, name).__doc__ or '', r'^TASK-050 AC\d+', name)
 
 
 class SuiteTests(unittest.TestCase):

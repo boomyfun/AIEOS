@@ -1,4 +1,4 @@
-# AIEOS: the stack benchmark (TASK-039; Master Plan revision 4 §4; docs/plan/m4-exit-review.md §6), revision 8
+# AIEOS: the stack benchmark (TASK-039; Master Plan revision 4 §4; docs/plan/m4-exit-review.md §6), revision 9
 # (decisions D-765 to D-767, with erratum E1 of decision D-773; the reference export of TASK-041; the TypeScript
 # port's type check and run of TASK-043; the Go port's vet, format check, build, run, compare and tests of TASK-044,
 # with GOTOOLCHAIN=local, GOPROXY=off and CGO_ENABLED=0; the Rust port's format check, lint, build, run, compare and
@@ -18,6 +18,9 @@
 # The Go port's step (TASK-049) then vets and builds round 2's program port2 from bench/go/round2, runs it over
 # that input, compares its output with round 2's reference, runs it once with no argument, which must exit
 # non-zero and print nothing to standard output, and runs its tests; its round-1 lines are unchanged.
+# The TypeScript port's step (TASK-050) then runs round 2's program main2.ts from bench/ts over that input,
+# compares its output with round 2's reference, runs it once with no argument, which must exit non-zero and
+# print nothing to standard output, and runs its tests test2.ts; its round-1 lines are unchanged.
 # Its results are advisory (DM A29, A31): they are this run's
 # job logs only, and no record of the governor or of the CI workflow aieos-checks.yml reads them. It is not a
 # trust-boundary measurement (Master Plan §9 item 3). Who decides a change to this file: the decision agent under DM A66,
@@ -98,6 +101,11 @@ jobs:
             if (cd bench/ts && node main.ts) > "$RUNNER_TEMP/ts-noarg.txt"; then echo "ts: the port exits 0 with no argument"; false; fi
             test ! -s "$RUNNER_TEMP/ts-noarg.txt"
             (cd bench/ts && node test.ts "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")
+            (cd bench/ts && node main2.ts "$RUNNER_TEMP/round2-input.json") > "$RUNNER_TEMP/ts2.json"
+            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/round2-reference.json" "$RUNNER_TEMP/ts2.json"
+            if (cd bench/ts && node main2.ts) > "$RUNNER_TEMP/ts2-noarg.txt"; then echo "ts: main2 exits 0 with no argument"; false; fi
+            test ! -s "$RUNNER_TEMP/ts2-noarg.txt"
+            (cd bench/ts && node test2.ts "$RUNNER_TEMP/round2-input.json" "$RUNNER_TEMP/round2-reference.json")
           else
             echo "no port in bench/ts"
           fi
@@ -203,6 +211,11 @@ jobs:
             if (cd bench/ts && node main.ts) > "$RUNNER_TEMP/ts-noarg.txt"; then echo "ts: the port exits 0 with no argument"; false; fi
             test ! -s "$RUNNER_TEMP/ts-noarg.txt"
             (cd bench/ts && node test.ts "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/reference.json")
+            (cd bench/ts && node main2.ts "$RUNNER_TEMP/round2-input.json") > "$RUNNER_TEMP/ts2.json"
+            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/round2-reference.json" "$RUNNER_TEMP/ts2.json"
+            if (cd bench/ts && node main2.ts) > "$RUNNER_TEMP/ts2-noarg.txt"; then echo "ts: main2 exits 0 with no argument"; false; fi
+            test ! -s "$RUNNER_TEMP/ts2-noarg.txt"
+            (cd bench/ts && node test2.ts "$RUNNER_TEMP/round2-input.json" "$RUNNER_TEMP/round2-reference.json")
           else
             echo "no port in bench/ts"
           fi
