@@ -32,10 +32,11 @@ Limits (AC8), stated:
 - A STOP: violation makes acceptance reject (task TASK-053): evaluation.py passes the governor the task's
   violation.detected payloads beside its record.added payloads, over the whole log, and the governor's row 1 gives
   REJECT; so a violation of the task makes every later evaluation of it reject where the task is evaluable
-  (VERIFYING or IN_REVIEW), also after a new task.approved, except one whose record_id an earlier kept record of the
-  task already has: evaluation.py's _kept leaves that one out with a finding, so that evaluation does not see the
-  violation and need not REJECT (records.py does not check record_id uniqueness across a log); a later task is to
-  make this fail closed.
+  (VERIFYING or IN_REVIEW), also after a new task.approved. A blocking record that evaluation.py's _kept leaves out,
+  out of form or for a record_id already kept (records.py does not check record_id uniqueness across a log), refuses
+  the evaluation with reason "records" instead (task TASK-054), unless it repeats the record_id of a kept blocking
+  record with the same blocking_kind; such a task is refused at every evaluation and stays in its state until it is
+  superseded by a new task.
 - No task.* event follows STOP: violation (specification 3 section 10), so the task stays READY (or REWORK) with no
   lease, and the next Resume Check may CONTINUE again; no bound on repeated STOP: violation (specification 5 section
   11 point 12).

@@ -312,28 +312,35 @@ class R6Texts(unittest.TestCase):
 
 class R7Limits(unittest.TestCase):
     def test_evaluation_docstring_and_imports(self):
-        """TASK-053 AC7, TASK-053 AC8, TASK-053 AC10: evaluation.py's docstring states the selection and the span's
-        limit, and evaluation.py's and violation.py's docstrings state the limits of AC7 and the repeated record_id
-        limit, which adapter.py's and replay.py's docstrings also name; evaluation.py's imports are the base's."""
+        """TASK-053 AC7, TASK-053 AC8, TASK-053 AC10, TASK-054 AC4: evaluation.py's docstring states the selection and
+        the span's limit, and evaluation.py's and violation.py's docstrings state the limits of AC7 and task TASK-054's
+        rule for a blocking record left out (reason "records", the same blocking_kind, the cost of a task superseded),
+        which adapter.py's and replay.py's docstrings also name, in place of the earlier limit (its words absent);
+        evaluation.py's imports are the base's."""
         tree = ast.parse((SRC / 'evaluation.py').read_bytes().decode('utf-8'))
         doc = ast.get_docstring(tree)
         for words in ('record.added and violation.detected payloads', 'over\n   the whole log',
                       'makes every later evaluation of the task REJECT', 'A session fenced out leaves no'):
             self.assertIn(words, doc)
         vdoc = ast.get_docstring(ast.parse((SRC / 'violation.py').read_bytes().decode('utf-8')))
-        limits = ('where the task is evaluable', 'need not REJECT', 'a later task is to make this fail closed',
-                  'stays READY', 'section 11 point 12', 'refused_submission', 'F-a is kept', 'C6 unmeasured',
+        limits = ('where the task is evaluable', 'reason "records"', 'with the same blocking_kind',
+                  'superseded by a new task', 'stays READY', 'section 11 point 12', 'refused_submission', 'F-a is kept', 'C6 unmeasured',
                   'no conformance set or fixture is changed', 'no observed read-set call', "real writer's files")
         for d in (doc, vdoc):
             flat = ' '.join(d.split())
             for words in limits:
                 self.assertIn(words, flat)
+            for words in ('need not REJECT', 'a later task is to make this fail closed'):
+                self.assertNotIn(words, flat)
+        self.assertNotIn('an earlier kept record', ' '.join(vdoc.split()))
         self.assertIn('rerun while the task is still evaluable gives "duplicate"', ' '.join(doc.split()))
         self.assertNotIn('so a rerun gives "duplicate"', ' '.join(doc.split()))
         for name in ('adapter.py', 'replay.py'):
             flat = ' '.join(ast.get_docstring(ast.parse((SRC / name).read_bytes().decode('utf-8'))).split())
-            for words in ('where the task is evaluable', 'an earlier kept record'):
+            for words in ('where the task is evaluable', 'reason "records"', 'with the same blocking_kind',
+                          'superseded by a new task'):
                 self.assertIn(words, flat, name)
+            self.assertNotIn('an earlier kept record', flat, name)
         mods = set()
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):

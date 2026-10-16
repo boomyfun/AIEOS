@@ -36,8 +36,10 @@ A fourth call (task TASK-052 AC6; specification 5 section 2 item 3's violation h
 violation.argument_findings does and passes them to violation.record, which appends violation.detected and the
 decision STOP: violation with the session's token and releases the lease; the result's decision is 'STOP: violation'
 when that decision event is in the log after the call (appended, or "duplicate"), else None. A recorded violation
-makes every later evaluation of the task reject (task TASK-053) where the task is evaluable, except a violation
-whose record_id an earlier kept record of the task already has (the limits evaluation.py's docstring states).
+makes every later evaluation of the task reject (task TASK-053) where the task is evaluable; a blocking record left
+out for being out of form or for a record_id already kept, other than one repeating the record_id of a kept blocking
+record with the same blocking_kind, makes the evaluation refused with reason "records" instead (task TASK-054), and
+such a task stays in its state until it is superseded by a new task (the limits evaluation.py's docstring states).
 
 Limits (AC9), stated:
 - No observation call (specification 5 section 2 item 3, section 7; the record keys are for specification 2's next

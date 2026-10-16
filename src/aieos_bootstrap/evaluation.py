@@ -28,15 +28,21 @@ task in VERIFYING (after its task.submitted) or in IN_REVIEW (re-evaluation):
 7. The records (AC7; task TASK-053 AC1): the task's record.added and violation.detected payloads in log order, over
    the whole log, then extra_records; a record that records.check_record finds out of form, or whose record_id an
    earlier kept record has, is left out with a finding. A violation.detected payload is an observation with outcome
-   blocking and blocking_kind violation, so the governor's row 1 gives REJECT (task TASK-053 AC2).
+   blocking and blocking_kind violation, so the governor's row 1 gives REJECT (task TASK-053 AC2). A record left out
+   whose outcome is 'blocking' refuses the evaluation with reason "records" (task TASK-054 AC1; decision D-1027,
+   form (ii)), unless its record_id equals that of an earlier kept record whose outcome is 'blocking' with the same
+   blocking_kind (that one already blocks with the same kind); the findings hold those of the records left out and
+   one per such record, naming its record_id (or its position when it has none) and its source; nothing is appended
+   and governor.evaluate is not called.
 8. The decision (AC7, AC8): governor.evaluate is called once and its record, an error record included, is appended
    once as decision.acceptance through writer.append_event, with no fencing token, under an event id derived from the
    task, the state-setting event and the kept record ids, so a rerun while the task is still evaluable gives
    "duplicate" (AC9); after a REJECT the rerun is refused with reason "state" (task TASK-053, erratum E1 to its AC2).
 
 The result (AC11) is a mapping with exactly the keys result ("evaluated", "duplicate" or "refused"), reason, findings,
-event_id, changed_paths, decision and next_task_state. An exception raised by a called function is caught and becomes
-a result; none escapes.
+event_id, changed_paths, decision and next_task_state. A refusal's reason is one of argument, log, state, contract,
+git, merge, bound, values, governor, store and records (the last added by task TASK-054). An exception raised by a
+called function is caught and becomes a result; none escapes.
 
 ``read``, ``read_log`` and ``append`` default, at call time, to gitread.run, writer.read_log and writer.append_event
 (AC10); tests pass stand-ins.
@@ -70,11 +76,17 @@ Limits (AC13):
   end.
 - A violation.detected of the task anywhere in the log makes every later evaluation of the task REJECT, also after a
   later task.approved and a new submission, as a blocking record.added does (task TASK-053 AC4; decision D-1012 M1),
-  where the task is evaluable (VERIFYING or IN_REVIEW; elsewhere the evaluation is refused with reason "state").
+  where the task is evaluable (VERIFYING or IN_REVIEW; elsewhere the evaluation is refused with reason "state"),
+  unless a blocking record left out refuses it with reason "records" (task TASK-054).
   A session fenced out leaves no violation.detected, only the writer's refusal record, read as before.
-- A violation.detected whose record_id an earlier kept record of the task already has is left out by _kept with a
-  finding, so that evaluation does not see the violation and need not REJECT (records.py does not check record_id
-  uniqueness across a log); a later task is to make this fail closed.
+- Of task TASK-054 (its AC3 and AC8), the cost of failing closed: a blocking record left out, out of form or for a
+  repeated record_id, refuses every evaluation of the task with reason "records" and nothing appended, the rerun
+  included and also after a later task.approved and a new submission (the span is the whole log), so such a task is
+  neither accepted nor rejected by evaluation and stays in VERIFYING or IN_REVIEW until it is superseded by a new
+  task; one given only through extra_records refuses only while it is given. event_id_of and the governor are
+  unchanged; records.py's uniqueness rule is unchanged (a repeated record_id is still accepted into the log); a
+  repeated record_id between records that are not blocking is left out with a finding as before; the limits of task
+  TASK-053 (its AC7) stand; no conformance set or fixture is changed.
 - Also of task TASK-053 (its AC7): no task.* event follows STOP: violation, so until an evaluation runs the task stays
   READY with no lease and the next Resume Check may CONTINUE again; no bound on repeated STOP: violation
   (specification 5 section 11 point 12); a fence refusal's record is labelled refused_submission; F-a is kept (replay
@@ -266,9 +278,11 @@ def _changed_paths(read, repo, commits):
 
 
 def _kept(payloads, extra_records):
-    """AC7: the records the governor reads, and a finding for each one left out."""
-    kept, found, seen = [], [], set()
-    for where, rec in [('log', p) for p in payloads] + [('extra_records', r) for r in extra_records]:
+    """AC7: the records the governor reads, a finding for each one left out, and (task TASK-054 AC1) a finding for
+    each left-out record whose outcome is 'blocking', unless its record_id equals that of an earlier kept blocking
+    record with the same blocking_kind."""
+    kept, found, hidden, seen, kinds = [], [], [], set(), {}
+    for n, (where, rec) in enumerate([('log', p) for p in payloads] + [('extra_records', r) for r in extra_records], 1):
         problems = records.check_record(rec)
         rid = rec.get('record_id') if isinstance(rec, dict) else None
         if problems:
@@ -278,7 +292,17 @@ def _kept(payloads, extra_records):
         else:
             seen.add(rid)
             kept.append(rec)
-    return kept, found
+            if rec.get('outcome') == 'blocking':
+                kinds[rid] = rec.get('blocking_kind')
+            continue
+        if not (isinstance(rec, dict) and rec.get('outcome') == 'blocking'):
+            continue
+        if isinstance(rid, str) and rid in kinds and kinds[rid] == rec.get('blocking_kind'):
+            continue
+        name = 'record_id %r' % rid if isinstance(rid, str) else 'the record at position %d' % n
+        hidden.append('records: a blocking record from %s, %s, is left out; the evaluation is refused so that it '
+                      'is not hidden from the governor' % (where, name))
+    return kept, found, hidden
 
 
 def event_id_of(task_id, setter, record_ids):
@@ -327,7 +351,9 @@ def evaluate_task(root, repo, task_id, contract_bytes, declared, values, extra_r
                    'intent_versions': dict(declared['intent_versions']), 'task_state': state,
                    'changed_paths': list(paths), 'retry_count': {'used': used, 'limit': declared['retries']}}
         step = 'governor'
-        kept, left_out = _kept(payloads, extra_records)
+        kept, left_out, hidden = _kept(payloads, extra_records)
+        if hidden:  # task TASK-054 AC1: nothing is appended and the governor is not called
+            raise _Stop('records', left_out + hidden)
         try:
             record = governor.evaluate(request, inputs, kept)
         except Exception as exc:  # AC7
