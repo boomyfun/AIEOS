@@ -16,3 +16,4 @@
 
 ## Log
 - 2026-10-16: opened (D-1025, D-1028 amendment 1).
+- 2026-10-16: TASK-054's part done (D-1038): accepted and landed on main by a fast-forward to 56675042, after the owner notice (D-1032), five way-2 reviews (D-1034, D-1035), fix H (D-1035, D-1036) and the decision agent's review (D-1037); D1 closed for blocking records; its carried gap for 'fail' records in DEF-0070. The item stays open for TASK-053's carried findings D4, D6, D9, D10 and its limits.
