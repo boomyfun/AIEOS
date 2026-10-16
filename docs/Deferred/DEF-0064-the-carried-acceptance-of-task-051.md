@@ -1,6 +1,6 @@
 # DEF-0064: TASK-051's carried acceptance and its limits
 
-- Status: open
+- Status: done
 - Opened: 2026-10-16 (decision D-991)
 - Deferred by: decision agent (A41), D-991 (the bands of D-986 C4 and D-990 amendment 1 C3).
 - Decision group: A (the order of work within an approved contract).
@@ -15,3 +15,4 @@
 
 ## Log
 - 2026-10-16: opened (D-991).
+- 2026-10-16: done (D-997): the second task commit 790b553f (D-995), run 321 passing; the decision agent's own review PASS (D-996); accepted and landed on main as two rebuilt commits ending at 74c3c836 (D-997); its limits carried in DEF-0065.
