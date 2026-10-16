@@ -250,6 +250,9 @@ Occurrences in session 2026-10-16-0402 (../History/2026-10/2026-10-16-0402-round
 Occurrences in session 2026-10-16-0611 (../History/2026-10/2026-10-16-0611-the-rust-round-2-port-on-main-and-the-go-round-2-port-scoped.md):
 - **2026-10-16.** Two guard refusals, the worker's errors, nothing ran: a Bash command holding Python's name followed by a dash (:207), the program then written to a file; a command holding a here-document (:1273), the file then written with the Write tool. Three PowerShell calls and one Bash call (:95) ran before tbq.sh existed or ran it after their writes.
 
+Occurrences in session 2026-10-16-2307 (../History/2026-10/2026-10-16-2307-the-capability-boundaries-section-approved-and-task-056-contracted.md):
+- **2026-10-16 and 2026-10-17.** Two responses stopped by the app's safety classifier, each right after a text block before a tool call (:255, :1500); in each, only the quick check had run. Nothing was retried. The first went to the owner, who answered at :372 that from then on such a stop of a reply, when nothing has to be redone, is the decision agent's to decide and the owner is told after, while a stop during an action still goes to the owner (D-1061 amendments 1 to 3). The second was decided that way (D-1069 amendment 1). One placeholder command was refused by the guard (:462), the worker's error; nothing ran.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
