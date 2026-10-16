@@ -25,8 +25,10 @@ task in VERIFYING (after its task.submitted) or in IN_REVIEW (re-evaluation):
 6. The inputs (AC6): values["changed_paths"] must be a list equal to that union; governor.derive_inputs is given a copy
    of values holding the computed list, so no object of the caller's stands for the paths; the request is
    specification 2 section 6.5's.
-7. The records (AC7): the task's record.added payloads in log order, then extra_records; a record that
-   records.check_record finds out of form, or whose record_id an earlier kept record has, is left out with a finding.
+7. The records (AC7; task TASK-053 AC1): the task's record.added and violation.detected payloads in log order, over
+   the whole log, then extra_records; a record that records.check_record finds out of form, or whose record_id an
+   earlier kept record has, is left out with a finding. A violation.detected payload is an observation with outcome
+   blocking and blocking_kind violation, so the governor's row 1 gives REJECT (task TASK-053 AC2).
 8. The decision (AC7, AC8): governor.evaluate is called once and its record, an error record included, is appended
    once as decision.acceptance through writer.append_event, with no fencing token, under an event id derived from the
    task, the state-setting event and the kept record ids, so a rerun gives "duplicate" (AC9).
@@ -65,6 +67,9 @@ Limits (AC13):
   reconciliation are not made here.
 - The tests use stand-ins for the writer, so the real store's path is covered by the writer's tests and not end to
   end.
+- A violation.detected of the task anywhere in the log makes every later evaluation of the task REJECT, also after a
+  later task.approved and a new submission, as a blocking record.added does (task TASK-053 AC4; decision D-1012 M1).
+  A session fenced out leaves no violation.detected, only the writer's refusal record, read as before.
 """
 
 import datetime
@@ -85,6 +90,7 @@ _ZERO = datetime.timedelta(0)
 ID_PREFIX = 'evaluation'
 EVENT_TYPE = 'decision.acceptance'
 EVALUABLE = ('VERIFYING', 'IN_REVIEW')
+RECORD_EVENTS = ('record.added', 'violation.detected')  # task TASK-053 AC1
 RESULT_KEYS = frozenset({'result', 'reason', 'findings', 'event_id', 'changed_paths', 'decision', 'next_task_state'})
 DIFF_FORM = ['diff-tree', '--no-commit-id', '--name-only', '-r', '--no-renames', '--no-ext-diff', '--no-textconv', '-z',
              '--root']
@@ -176,7 +182,7 @@ def _task_events(read_log, root, task_id):
     if state not in EVALUABLE or commit is None:
         raise _Stop('state', ['state: the task is in %s with %s; only VERIFYING or IN_REVIEW after a submission is '
                               'evaluated' % (state, 'no submission' if commit is None else 'a submission')])
-    payloads = [e['payload'] for e in events if e['type'] == 'record.added' and e.get('task_id') == task_id]
+    payloads = [e['payload'] for e in events if e['type'] in RECORD_EVENTS and e.get('task_id') == task_id]
     return contract_hash, state, setter, commit, used, payloads
 
 

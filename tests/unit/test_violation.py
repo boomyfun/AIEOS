@@ -294,8 +294,9 @@ class R6Adapter(unittest.TestCase):
 
 class R8Purity(unittest.TestCase):
     def test_imports_and_no_file_process_clock_or_environment(self):
-        """TASK-052 AC9, TASK-052 AC8: violation.py imports only datetime, re and aieos_bootstrap's records and writer;
-        it calls no open, no subprocess, no clock and no environment; its docstring states the limits."""
+        """TASK-052 AC9, TASK-052 AC8, TASK-053 AC6: violation.py imports only datetime, re and aieos_bootstrap's
+        records and writer; it calls no open, no subprocess, no clock and no environment; its docstring states the
+        limits, the new one of task TASK-053 in place of the old, and marks its quotation as abridged."""
         tree = ast.parse((SRC / 'violation.py').read_bytes().decode('utf-8'))
         imports = set()
         for n in ast.walk(tree):
@@ -310,9 +311,12 @@ class R8Purity(unittest.TestCase):
         self.assertFalse(names & {'open', 'exec', 'eval', 'compile', '__import__'})
         self.assertFalse([n for n in ast.walk(tree) if isinstance(n, ast.Assert)])
         doc = ast.get_docstring(tree)
-        for words in ('does not yet make acceptance reject', 'record is called only by\n  adapter.violation',
-                      'section\n  11 point 12', 'refused_submission', 'stays READY', 'Purity'):
+        for words in ('makes acceptance reject (task TASK-053)', 'every later evaluation of it reject',
+                      '(abridged, not verbatim)', 'section\n  11 point 12', 'refused_submission', 'stays READY',
+                      'Purity'):
             self.assertIn(words, doc)
+        for words in ('does not yet make acceptance reject', 'record is called only by'):
+            self.assertNotIn(words, doc)
 
 
 if __name__ == '__main__':

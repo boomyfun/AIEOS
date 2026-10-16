@@ -4,7 +4,7 @@ revision 4, section 6.3): the core's record of a violation seen while a session 
 
 ``record(root, task_id, fencing_token, observation, event_id, recorder, now)`` does, in order (specification 3
 section 8: "The core appends violation.detected (spec 1 section 5.3) and a decision.execution with this value; the session
-stops and the lease is released"):
+stops and the lease is released" (abridged, not verbatim)):
 
 1. Arguments (AC1): every argument is checked, and the execution decision is built and checked by
    records.check_decision (AC2), before anything is called; a wrong one gives a refusal result.
@@ -29,10 +29,9 @@ Purity (AC9): this module starts no process, opens no file, reads no clock and n
 line itself and makes no network or model call.
 
 Limits (AC8), stated:
-- A STOP: violation does not yet make acceptance reject: evaluation.py passes the governor only the task's
-  record.added payloads, so a violation.detected payload never reaches the governor's row 1. record is called only by
-  adapter.violation, and adapter.violation only by replay and the tests; no other caller of either is added before the
-  later task that widens the evaluation is done.
+- A STOP: violation makes acceptance reject (task TASK-053): evaluation.py passes the governor the task's
+  violation.detected payloads beside its record.added payloads, over the whole log, and the governor's row 1 gives
+  REJECT; so a violation of the task makes every later evaluation of it reject, also after a new task.approved.
 - No task.* event follows STOP: violation (specification 3 section 10), so the task stays READY (or REWORK) with no
   lease, and the next Resume Check may CONTINUE again; no bound on repeated STOP: violation (specification 5 section
   11 point 12).
