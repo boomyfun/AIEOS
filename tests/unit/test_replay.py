@@ -1,7 +1,7 @@
 """Unit tests of aieos_bootstrap.replay (task TASK-051, rules R6 to R9): replays of documents built in the test, over
 the real adapter, execution.execute, resume_check.check and submit.submit, with the event log kept in memory and
 appended by eventlog.append as the writer decides it, and an in-memory stand-in store (its epoch, counter, leases and
-sessions by the writer's rules). No process starts and no file is opened. Each test names its criteria in its own
+sessions by the writer's rules). No process starts and no file is written or created. Each test names its criteria in its own
 docstring."""
 
 import ast
@@ -296,12 +296,39 @@ class R7Run(unittest.TestCase):
         mem = Memory(store, log=line)
         r, _, _ = run(document(), store, mem)
         self.assertEqual((r['reason'], mem.log), ('store', line))
-        for store in (Store('e-replay', counter=3), Store('another-epoch')):
+        self.assertEqual(([s['step'] for s in r['steps']], store.roots), (['read_log'], []))  # open_store not called
+
+        class OtherEpoch(Store):
+            def open_store(self, *args, **kwargs):
+                bound(writer.open_store, args, kwargs)
+                return {'epoch': 'another-epoch', 'counter': 0}  # no raise: replay's own comparison refuses
+
+        for store in (Store('e-replay', counter=3), Store('another-epoch'), OtherEpoch()):
             mem = Memory(store)
             r, _, _ = run(document(), store, mem)
             self.assertEqual((r['result'], r['reason'], mem.log), ('refused', 'store', b''))
             self.assertNotIn('start', [s['step'] for s in r['steps']])
         self.assertEqual(run(document())[0]['result'], 'done')
+
+    def test_a_commit_text_that_cannot_be_encoded(self):
+        """TASK-051 AC6, TASK-051 AC8 (D-990, the reviews' blocking finding): a commit_text with a lone surrogate is
+        refused "document" before any call; and if building the commit reader raised after a grant, end is still
+        called and no lease is left held."""
+        doc = document(submission=dict(document()['submission'], commit_text='Subject\ud800'))
+        store = Store()
+        mem = Memory(store)
+        r, _, _ = run(doc, store, mem)
+        self.assertEqual((r['result'], r['reason'], r['steps'], mem.roots, store.roots),
+                         ('refused', 'document', [], [], []))
+        saved = replay._commit_reader
+        try:
+            def broken(commit_id, text):
+                raise UnicodeEncodeError('utf-8', text, 0, 1, 'a test')
+            replay._commit_reader = broken
+            r, store, _ = run(document())
+        finally:
+            replay._commit_reader = saved
+        self.assertEqual((r['result'], r['reason'], r['steps'][-1]['step'], store.leases), ('refused', 'submit', 'end', {}))
 
     def test_the_commit_stand_in_answers_only_the_two_reads(self):
         """TASK-051 AC7: the read function given to submit answers cat-file -t and -p of the document's commit, and
@@ -332,13 +359,24 @@ class R8Refusals(unittest.TestCase):
         doc = document(session=dict(document()['session'], inputs=inputs(7)))
         r, store, _ = run(doc)
         self.assertEqual((r['reason'], store.leases), ('start', {}))
+        self.assertEqual(r['steps'][-1]['step'], 'start')  # AC8 and reading R3: no end; the row is left open
+        self.assertIsNone(store.sessions['session-1'][1])
         store = Store()
         mem = Memory(store)
         fns = functions(store, mem)
-        fns['end_session'] = lambda *a: writer.StoreResult('refused', 'ended', ['ended'])
+
+        def end_refused(*args, **kwargs):
+            bound(writer.end_session, args, kwargs)
+            return writer.StoreResult('refused', 'ended', ['ended'])
+
+        def read_raises(*args, **kwargs):
+            bound(writer.read_log, args, kwargs)
+            raise RuntimeError('x')
+
+        fns['end_session'] = end_refused
         self.assertEqual(replay.replay(document(), ROOT, fns)['reason'], 'end')
         fns = functions(Store(), Memory(Store()))
-        fns['read_log'] = lambda root: (_ for _ in ()).throw(RuntimeError('x'))
+        fns['read_log'] = read_raises
         self.assertEqual(replay.replay(document(), ROOT, fns)['reason'], 'store')
 
     def test_end_after_a_granted_lease_when_the_submission_is_refused(self):
@@ -356,6 +394,7 @@ class R8Refusals(unittest.TestCase):
         not, a fence that fits or not), two runs over equal documents and equal empty stand-in roots give equal steps
         and equal logs."""
         rng = random.Random(51)
+        outcomes = set()
         for _ in range(40):
             doc = document()
             if rng.random() < 0.3:
@@ -368,6 +407,10 @@ class R8Refusals(unittest.TestCase):
             r2, _, m2 = run(copy.deepcopy(doc))
             self.assertEqual(r1, r2)
             self.assertEqual(m1.log, m2.log)
+            self.assertIn('decision.execution', [line.event['type'] for line in m1.lines()])
+            outcomes.add((r1['result'], r1['reason']))
+        self.assertIn(('done', None), outcomes)  # not vacuous: runs end done and refused alike
+        self.assertIn(('refused', 'submit'), outcomes)
 
 
 class R9Purity(unittest.TestCase):

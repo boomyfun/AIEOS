@@ -41,6 +41,7 @@ Limits (AC9), stated:
 - The store is the caller's to open (writer.open_store), with its epoch; leases are expired by the caller
   (writer.expire_leases). One run at a time (the writer's limit).
 - A start that grants no lease leaves the session row open, for end to close.
+- __init__.py is not changed, so __all__ does not name this module.
 """
 
 import datetime
