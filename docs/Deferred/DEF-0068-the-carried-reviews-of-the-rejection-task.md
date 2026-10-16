@@ -1,6 +1,6 @@
 # DEF-0068: TASK-053's carried reviews and acceptance (a violation makes acceptance reject)
 
-- Status: open
+- Status: done
 - Opened: 2026-10-16 (decision D-1016)
 - Deferred by: decision agent (A41), D-1016 Q4 (the bands: the reviews would cross the session's 80% line).
 - Decision group: A (the order of work within an approved contract).
@@ -16,3 +16,4 @@
 
 ## Log
 - 2026-10-16: opened (D-1016).
+- 2026-10-16: done (D-1025): five way-2 reviews at c7295250, all pass (D-1020); the dispositions, the worker's finding W1 and fix F (D-1021, D-1022); the decision agent's own review, finding G1 and fix G (D-1023, D-1024); accepted and landed on main as three rebuilt commits ending at f640db3e (D-1025); the item-8 wording point closed by fix F; its findings and limits carried in DEF-0069.

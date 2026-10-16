@@ -241,6 +241,10 @@ Occurrences in session 2026-10-16-1451 (../History/2026-10/2026-10-16-1451-the-a
 Occurrences in session 2026-10-16-1712 (../History/2026-10/2026-10-16-1712-the-violation-path-on-main-and-the-rejection-task-on-its-branch.md):
 - **2026-10-16.** Three text blocks before tool calls, all in English, each announcing the next step, with no harness note just before them: :368 ("Now the request file."), :1467 ("Now R9OwnTests.") and :1874 ("Now the commit message and dry run."). The quick check stopped each one at the next command, and each was listed by its own decision. The many harness notes asking what was being done were not answered in text. The same kind of slip keeps recurring across sessions despite the stop.
 
+Occurrences in session 2026-10-16-1822 (../History/2026-10/2026-10-16-1822-the-rejection-on-main-and-the-hidden-record-contract.md):
+- **2026-10-16.** Two text blocks before tool calls, in English, each announcing the next step, with no harness note just before them: :232 ("Now the builder. Let me read make_decision_files_87.py.") and :1726 ("Now the commit message and executor."), the second after an explicit instruction to write no text in any message with a tool call. The quick check stopped each one at the next command, and each was listed by its own decision. The same kind of slip keeps recurring across sessions.
+- **2026-10-16.** A reply to the owner in English, a new kind: :494 rendered the checked Vietnamese draft's sentences in English instead of copying the draft. line_sent caught it, and a corrected Vietnamese reply copied from a checked draft followed at :547. Two more replies (:267, :1739) went with no draft check before them while the quick check blocked commands; each passed the check after the fact.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 
