@@ -26,6 +26,15 @@ opens no file) and, in order (AC7):
    core (its session row opened, no token known) stops the run with no end call (AC8; reading R3): the row is left
    open for the caller, a stated limit.
 
+The violation step (task TASK-052 AC7; specification 5 section 8 line 81): the document may also carry the key
+violation, a mapping with exactly observation, event_id and at; a document with a violation and a submission that is
+not None is refused "document" (a stopped session submits nothing), and so is one whose observation's source_class is
+not agent_declared or deterministic_tool_local or whose observation's recorder is not the document's recorder. With a
+violation, step 5 is replaced: on a granted lease, after the token comparison, adapter.violation is called with the
+granted token, the violation's event_id and at; then adapter.end with the token (its release then finds no lease,
+"none", no error). A violation refused by the core gives reason "violation", and end is still called. A document
+without violation runs exactly as before.
+
 Every call passes the root it was given and the document's recorder; this module names no other root and no
 project-state directory. The result (AC8) is a mapping with exactly RESULT_KEYS; its steps list one entry per call
 made, in order, each a mapping with exactly the keys step and result, in a form that two runs over equal inputs give
@@ -33,8 +42,10 @@ equal. ``functions``, when given, replaces any of open_store, append_event, star
 grant_lease, release_lease_token, held_lease and resume_check.check (under that key), for tests; each defaults at call
 time to the writer's function (and resume_check.check to execute's own default).
 
-Limits (AC9), stated: no observation and no violation in the replay sequence, although specification 5 section 5 line
-46 lists observations (their record keys are for specification 2's next revision, section 11 points 3 and 4);
+Limits (AC9; task TASK-052 AC8), stated: no read-set observation in the replay sequence, although specification 5
+section 5 line 46 lists observations (their record keys are for specification 2's next revision, section 11 points 3
+and 4); a replayed STOP: violation does not yet make acceptance reject (the evaluation passes the governor only
+record.added payloads), and the task stays READY with no lease after it;
 abnormal ends beyond the lease's expiry are not handled (section 11 point 10); the token is the grant's, not read from
 the document (M2 of decision D-983, a stated departure from line 49's wording, with the same outcome: two runs give
 equal records); the commit is read from the document, so a replay shows the core's handling of a recorded commit,
@@ -58,6 +69,8 @@ SETUP_KEYS = frozenset({'type', 'payload', 'event_id', 'appended_at', 'task_id'}
 SESSION_KEYS = frozenset({'task_id', 'session_id', 'holder', 'inputs', 'code_sha256', 'start_at', 'expires_at',
                           'expected_token'})
 SUBMISSION_KEYS = frozenset({'commit_id', 'commit_text', 'event_id', 'at'})
+VIOLATION_KEYS = frozenset({'observation', 'event_id', 'at'})
+OBSERVATION_CLASSES = ('agent_declared', 'deterministic_tool_local')
 FUNCTION_KEYS = frozenset({'open_store', 'append_event', 'start_session', 'end_session', 'read_log', 'grant_lease',
                            'release_lease_token', 'held_lease', 'resume_check.check'})
 RECORDER_PREFIX = 'replay:'
@@ -104,7 +117,8 @@ def _token_form(token):
 def _read_document(document):
     """AC6: the document's values, with its times read into datetimes; raises _Bad with the findings."""
     found = []
-    if not _keys(document, DOCUMENT_KEYS, 'the document', found):
+    has_violation = isinstance(document, dict) and 'violation' in document
+    if not _keys(document, DOCUMENT_KEYS | {'violation'} if has_violation else DOCUMENT_KEYS, 'the document', found):
         raise _Bad(found)
     if not _text(document['replay_id']):
         found.append('document: replay_id is not a non-empty string')
@@ -161,11 +175,28 @@ def _read_document(document):
         if not _text(sub['event_id']):
             found.append('document: submission event_id is not a non-empty string')
         u = dict(sub, at=_time(sub['at'], 'submission at', found))
+    v = None
+    if has_violation and _keys(document['violation'], VIOLATION_KEYS, 'violation', found):
+        vio = document['violation']
+        if sub is not None:
+            found.append('document: a violation and a submission together (a stopped session submits nothing)')
+        obs = vio['observation']
+        if not isinstance(obs, dict):
+            found.append('document: violation observation is not a mapping')
+        else:
+            if obs.get('source_class') not in OBSERVATION_CLASSES:
+                found.append('document: violation observation source_class is not agent_declared or '
+                             'deterministic_tool_local')
+            if obs.get('recorder') != rec:
+                found.append('document: violation observation recorder is not the document\'s recorder')
+        if not _text(vio['event_id']):
+            found.append('document: violation event_id is not a non-empty string')
+        v = dict(vio, at=_time(vio['at'], 'violation at', found))
     end_at = _time(document['end_at'], 'end_at', found)
     if found:
         raise _Bad(found)
     return {'replay_id': document['replay_id'], 'recorder': rec, 'epoch': document['epoch'], 'setup': setup,
-            'session': s, 'submission': u, 'end_at': end_at}
+            'session': s, 'submission': u, 'violation': v, 'end_at': end_at}
 
 
 def _commit_reader(commit_id, commit_text):
@@ -272,6 +303,17 @@ def replay(document, root, functions=None):
     expected = s['expected_token']
     if token is not None and expected is not None and token != expected:
         return finish('token', ['token: the granted token %r is not the document\'s expected %r' % (token, expected)])
+
+    v = d['violation']
+    if v is not None:
+        if token is None:
+            return finish('violation', ['violation: no lease was granted, so no session can be stopped'])
+        stopped = adapter.violation(root, s['task_id'], token, v['observation'], v['event_id'], d['recorder'], v['at'],
+                                    append=f.get('append_event'), release=f.get('release_lease_token'))
+        steps.append({'step': 'violation', 'result': _summary(stopped)})
+        if stopped['result'] != 'done':
+            return finish('violation', ['violation: %s' % x for x in stopped['findings']])
+        return finish(None, [])
 
     u = d['submission']
     if u is not None:
