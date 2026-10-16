@@ -193,13 +193,22 @@ class R2EntryPoint(unittest.TestCase):
                          (conformance.NOT_RUN, 'the entry point is absent'))
 
 
+def no_calls():
+    """A core whose every function fails the test when called."""
+    def fail(*args, **kwargs):
+        raise AssertionError('a core function was called')
+    return stand_in(**{k: fail for k in ('replay', 'start', 'submit', 'end', 'evaluate_task', 'append')})
+
+
 class R3Form(unittest.TestCase):
     def assert_malformed(self, change):
         c = case()
         change(c)
         errors = conformance.check_cb_fixture(fixture(c), entry())
         self.assertTrue(errors, change)
-        self.assertEqual(go(c)[0], conformance.NOT_RUN)
+        result, reason = go(c, cb=no_calls())
+        self.assertEqual(result, conformance.NOT_RUN)
+        self.assertTrue(reason.startswith('the fixture is malformed: '), reason)
 
     def test_the_well_formed_case(self):
         """TASK-056 AC4: the built case is well formed and its Given holds."""
@@ -210,6 +219,12 @@ class R3Form(unittest.TestCase):
         self.assertTrue(conformance.check_cb_fixture(dict(fixture(), extra=1), entry()))
         self.assertTrue(conformance.check_cb_fixture(dict(fixture(), scenario='ADV-03'), entry()))
         self.assertTrue(conformance.check_cb_fixture(dict(fixture(), cases=[case(), case()]), entry()))
+        other_row = dict(fixture(), row_hash='e' * 64)
+        self.assertEqual(conformance.check_cb_fixture(other_row, entry()),
+                         ['scenario or row_hash differs from the set entry'])
+        result, reason = conformance._run_cb_cases(other_row, entry(), no_calls(), ROOT)
+        self.assertEqual((result, reason), (conformance.NOT_RUN,
+                                            'the fixture is malformed: scenario or row_hash differs from the set entry'))
         changes = [
             lambda c: c.update(extra=1),
             lambda c: c['document'].pop('violation'),
@@ -223,6 +238,8 @@ class R3Form(unittest.TestCase):
             lambda c: c['evaluation'].update(commits=[]),
             lambda c: c['evaluation']['commits'][0].update(id='X' * 40),
             lambda c: c['evaluation']['commits'][0].update(paths='src/outside.py'),
+            lambda c: c['evaluation']['commits'][0].update(text=7),
+            lambda c: c['evaluation'].update(now='2026-10-16 13:00'),
             lambda c: c['given'].update(extra=1),
             lambda c: c['expected'].update(stop=['CONTINUE']),
             lambda c: c['expected'].update(decision=['REJECT', 'ACCEPT']),
@@ -245,6 +262,12 @@ class R3Form(unittest.TestCase):
             lambda c: c['given'].update(outside_path='src/elsewhere.py'),
             lambda c: c['evaluation'].update(contract_text=CONTRACT + '#'),
             lambda c: c['evaluation']['values'].update(changed_paths=['src/x.py']),
+            lambda c: c['continuation']['submission'].update(commit_id='9' * 40),
+            lambda c: c['evaluation']['commits'].append(dict(c['evaluation']['commits'][0])),
+            lambda c: c['document'].update(setup=[e for e in c['document']['setup'] if e['type'] != 'task.approved']),
+            lambda c: c['document']['setup'].append(
+                dict(c['document']['setup'][1], event_id='approved-2', appended_at='2026-10-16T09:02:00Z',
+                     payload=dict(c['document']['setup'][1]['payload'], contract_hash='d' * 64))),
         ]
         for change in changes:
             self.assert_malformed(change)
@@ -252,8 +275,28 @@ class R3Form(unittest.TestCase):
 
 class R4StandIns(unittest.TestCase):
     def test_bound_to_the_real_signatures_and_types(self):
-        """TASK-056 AC5: each stand-in binds to the writer's function's signature; results are the writer's types;
-        appends are eventlog.append's decisions (a repeated event is a duplicate)."""
+        """TASK-056 AC5 (decision D-1079, M5): every call the core makes to a stand-in in a passing case is bound with
+        inspect.signature(...).bind to the writer's function of that name and to the stand-in; results are the writer's
+        types; appends are eventlog.append's decisions (a repeated event is a duplicate)."""
+        calls = []
+        real_functions = conformance._CbLog.functions
+
+        def recording(self_log):
+            out = {}
+            for name, fn in real_functions(self_log).items():
+                def rec(*args, _name=name, _fn=fn, **kwargs):
+                    calls.append((_name, _fn, args, kwargs))
+                    return _fn(*args, **kwargs)
+                out[name] = rec
+            return out
+        with mock.patch.object(conformance._CbLog, 'functions', recording):
+            self.assertEqual(go(), (conformance.PASS, ''))
+        called = {n for n, _, _, _ in calls}
+        self.assertLessEqual({'open_store', 'append_event', 'start_session', 'end_session', 'read_log', 'grant_lease',
+                              'release_lease_token'}, called)
+        for name, fn, args, kwargs in calls:
+            inspect.signature(getattr(writer, name)).bind(*args, **kwargs)
+            inspect.signature(fn).bind(*args, **kwargs)
         cb = core()
         store = conformance._CbStore(cb)
         log = conformance._CbLog(cb, store)
@@ -271,6 +314,26 @@ class R4StandIns(unittest.TestCase):
                                                        conformance._utc('2026-10-16T09:00:00Z'), task_id=TASK,
                                                        recorder=REC).result)
         self.assertIsInstance(store.start_session('/r', 's', 'h', None), writer.StoreResult)
+
+    def test_the_store_rules_copied_from_the_writer(self):
+        """TASK-056 AC5 (decision D-1079, M1 and M2): grant_lease refuses an expiry not after now ("expiry") and a held
+        lease ("held"), as writer.grant_lease does; end_session releases the session's leases, oldest grant first, and
+        refuses a second end ("ended")."""
+        store = conformance._CbStore(core())
+        store.open_store('/r', epoch='e')
+        t0, t1 = conformance._utc('2026-10-16T10:00:00Z'), conformance._utc('2026-10-16T11:00:00Z')
+        self.assertEqual(store.start_session('/r', 's', 'h', t0).result, 'done')
+        self.assertEqual(store.grant_lease('/r', TASK, 'READY', 'h', 's', t1, t1).reason, 'expiry')
+        first = store.grant_lease('/r', TASK, 'READY', 'h', 's', t0, t1)
+        self.assertEqual(first.result, 'done')
+        self.assertEqual(store.grant_lease('/r', TASK, 'READY', 'h', 's', t0, t1).reason, 'held')
+        second = store.grant_lease('/r', 'TASK-101', 'READY', 'h', 's', t0, t1)
+        ended = store.end_session('/r', 's', t1)
+        self.assertEqual(ended.result, 'done')
+        self.assertEqual(ended.value, [first.value, second.value])
+        self.assertIsNone(store.held_lease('/r', TASK))
+        self.assertEqual(store.end_session('/r', 's', t1).reason, 'ended')
+        self.assertEqual(store.end_session('/r', 'never', t1).reason, 'session')
 
     def test_the_read_stand_in(self):
         """TASK-056 AC5: only cat-file -t, cat-file -p and the pinned diff-tree form of a table commit are answered."""
@@ -347,8 +410,9 @@ class R5Replay(unittest.TestCase):
 
 class R6Continuation(unittest.TestCase):
     def test_each_not_run(self):
-        """TASK-056 AC7: a log_seq mismatch (no lease), a token mismatch and a refused submission are NOT_RUN."""
-        self.assertEqual(go(case(log_seq=6))[0], conformance.NOT_RUN)
+        """TASK-056 AC7: a log_seq mismatch (no lease), a token mismatch and a refused submission or end are NOT_RUN,
+        each with its reason."""
+        self.assertEqual(go(case(log_seq=6)), (conformance.NOT_RUN, 'step 2: the second session got no lease'))
         c = case()
         c['continuation']['session']['expected_token'] = {'epoch': 'e-replay', 'counter': 9}
         self.assertEqual(go(c)[1], "step 2: the granted token {'epoch': 'e-replay', 'counter': 2} is not the "
@@ -365,6 +429,9 @@ class R7Evaluation(unittest.TestCase):
         self.assertEqual(go(), (conformance.PASS, ''))
         accept = lambda *a, **k: {'result': 'evaluated', 'decision': 'ACCEPT', 'next_task_state': 'ACCEPTED'}
         self.assertEqual(go(cb=stand_in(evaluate_task=accept))[0], conformance.FAIL)
+        for decision, state in (('REJECT', 'REWORK'), ('ACCEPT', 'REJECTED')):
+            fn = lambda *a, d=decision, s=state, **k: {'result': 'evaluated', 'decision': d, 'next_task_state': s}
+            self.assertEqual(go(cb=stand_in(evaluate_task=fn))[0], conformance.FAIL, (decision, state))
         for result in ('refused', 'duplicate'):
             fn = lambda *a, result=result, **k: {'result': result, 'reason': 'state', 'decision': 'REJECT',
                                                  'next_task_state': 'REJECTED'}
@@ -373,7 +440,8 @@ class R7Evaluation(unittest.TestCase):
 
 class R8Order(unittest.TestCase):
     def test_fail_first_and_raises(self):
-        """TASK-056 AC9: a failure stops the later steps; a raise is NOT_RUN with its type."""
+        """TASK-056 AC9: a failure stops the later steps; a NOT_RUN at step 2 stops step 3; a raise is NOT_RUN with its
+        type."""
         calls = []
 
         def no_stop(*args, **kwargs):
@@ -382,6 +450,12 @@ class R8Order(unittest.TestCase):
         start = lambda *a, **k: calls.append('start')
         self.assertEqual(go(cb=stand_in(replay=no_stop, start=start))[0], conformance.FAIL)
         self.assertEqual(calls, [])
+
+        evaluated = []
+        record = lambda *a, **k: evaluated.append('evaluate_task')
+        self.assertEqual(go(case(log_seq=6), cb=stand_in(evaluate_task=record)),
+                         (conformance.NOT_RUN, 'step 2: the second session got no lease'))
+        self.assertEqual(evaluated, [])
 
         def boom(*args, **kwargs):
             raise KeyError('x')
@@ -443,6 +517,31 @@ class R9Record(unittest.TestCase):
         plain = conformance.run(ROOT, COMMIT, 'TASK-056')
         self.assertNotIn('capability_boundaries', plain.value)
         self.assertEqual((plain.results['ADV-02'], plain.reasons['ADV-02']), (conformance.NOT_RUN, 'no fixture'))
+
+    def test_the_counting_reading_and_the_lazy_load(self):
+        """TASK-056 AC3's counting reading (decision D-1079, M11): an absent entry keeps the run counting, a failed one
+        makes it not count with its problem stated, and both give ADV-02 NOT_RUN "the entry point is absent"; with no
+        Capability Boundaries fixture, load_cb is never called."""
+        files = tree_with_fixture()
+        base = run_files(files)
+        with mock.patch.object(conformance, 'load_cb', lambda root: (None, conformance.ABSENT)):
+            absent = run_files(files)
+        self.assertEqual(absent.value['counts'], base.value['counts'])
+        self.assertTrue(absent.value['counts'])
+        self.assertEqual((absent.results['ADV-02'], absent.reasons['ADV-02']),
+                         (conformance.NOT_RUN, 'the entry point is absent'))
+        with mock.patch.object(conformance, 'load_cb', lambda root: (None, conformance.FAILED)):
+            failed = run_files(files)
+        self.assertFalse(failed.value['counts'])
+        self.assertIn('the Capability Boundaries entry could not be loaded from the root (reading)', failed.problems)
+        self.assertEqual((failed.results['ADV-02'], failed.reasons['ADV-02']),
+                         (conformance.NOT_RUN, 'the entry point is absent'))
+
+        def never(root):
+            raise AssertionError('load_cb was called')
+        with mock.patch.object(conformance, 'load_cb', never):
+            plain = conformance.run(ROOT, COMMIT, 'TASK-056')
+        self.assertTrue(plain.value['counts'])
 
 
 if __name__ == '__main__':
