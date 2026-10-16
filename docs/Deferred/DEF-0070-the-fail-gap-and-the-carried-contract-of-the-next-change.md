@@ -1,6 +1,6 @@
 # DEF-0070: the 'fail' gap of the evaluation and TASK-055's carried contract
 
-- Status: open
+- Status: done
 - Opened: 2026-10-16 (decisions D-1035, D-1041)
 - Deferred by: decision agent (A41), D-1035 (H2, H5, H8 carried at TASK-054's reviews), D-1038 (TASK-054's acceptance) and D-1041 (TASK-055's contract carried to the next session).
 - Decision group: A (a limit of an accepted task; the order of work within an approved scope).
@@ -17,3 +17,4 @@
 
 ## Log
 - 2026-10-16: opened (D-1035, D-1038, D-1041).
+- 2026-10-16: done (D-1055): TASK-055 accepted and landed on main by a fast-forward to 11831af1, after its contract (D-1045), the owner notice (D-1046, D-1047), five way-2 reviews (D-1052, D-1053), fix J and the decision agent's review (D-1053, D-1054); H5 and the limits carried in DEF-0071.
