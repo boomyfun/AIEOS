@@ -134,7 +134,7 @@ class Base(unittest.TestCase):
 class R1Route(Base):
     def test_the_expected_path(self):
         self.assertEqual(conformance.expected_path('RISK-01', 'Risk Engine'), RISK_PATH)
-        self.assertIsNone(conformance.expected_path('ADV-02', 'Capability Boundaries'))
+        self.assertEqual(conformance.expected_path('ADV-02', 'Capability Boundaries'), 'tests/conformance/fixtures_cb/adv_02.py')
 
     def test_a_risk_fixture_elsewhere(self):
         files = real_files()

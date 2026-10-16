@@ -316,15 +316,15 @@ class R2EntryAndPath(Isolated):
         put_set(files, value)
         asked = []
         r = go(files, check=stand_in(), asked=asked)
-        for sid, cap in (('ADV-02', 'Capability Boundaries'),):
-            self.assertEqual((r.results[sid], r.reasons[sid]),
+        for sid, cap in (('ADV-02', 'Telemetry'),):
+            self.assertEqual(conformance.run_scenario(None, dict(entry, capability=cap), {}, None),
                              (conformance.NOT_RUN, 'the entry point of %s is absent until its milestone' % cap))
             self.assertNotIn(conformance.module_path(sid), asked)
 
     def test_the_expected_path(self):
         self.assertEqual(conformance.expected_path('ACC-01', 'Verification'), conformance.module_path('ACC-01'))
         self.assertEqual(conformance.expected_path('RC-11', 'Resume Check'), RC_DIR + '/rc_11.py')
-        self.assertIsNone(conformance.expected_path('ADV-02', 'Capability Boundaries'))
+        self.assertIsNone(conformance.expected_path('ADV-02', 'Telemetry'))
 
 
 class R3EntryPoint(Isolated):
