@@ -278,6 +278,9 @@ Occurrences in session 2026-10-17-1302 (../History/2026-10/2026-10-17-1302-the-s
 Occurrence in session 2026-10-17-1418 (../History/2026-10/2026-10-17-1418-the-late-reviews-of-tasks-051-052-053-and-the-decision-files-d1136-to-d1145.md):
 - **2026-10-17.** One text block before tool calls, in English, at a step change while the decision agent's reply was pending: :724 ("Read the erratum texts while waiting."). The quick check stopped the next command; the slip was listed by its own decision (D-1148 amendment 1); no classifier stop. The harness's status requests of that session were otherwise answered in silence; the pattern of DEF-0073 (a text at a step change, five times in the session before) came back once.
 
+Occurrence in session 2026-10-17-1525 (../History/2026-10/2026-10-17-1525-the-late-reviews-of-tasks-054-and-055-and-the-decision-files-d1146-to-d1152.md):
+- **2026-10-17.** Two text blocks before tool calls, in English, each announcing the next step at a step change: :1321 ("Now read the five briefs of TASK-054 to paste exactly.") and :1590 ("Now models check for TASK-055 and the save run."). The quick check stopped the next command each time, and each line was listed by its own decision (D-1158, D-1159); the first was shown together with the launch of a review round, because the check cannot stop calls in the same message (D-1158 Q1); after the second, the app's safety classifier stopped the response (nothing had to be redone; D-1159). DEF-0073's pattern again.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

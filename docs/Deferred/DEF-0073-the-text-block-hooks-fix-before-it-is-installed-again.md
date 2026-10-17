@@ -17,3 +17,4 @@
 ## Log
 - 2026-10-16: opened (session 1702974f).
 - 2026-10-17: evidence: five text slips in session 797bc984 and one in session 3f57da38 (:724), each at a step change; six Bash calls before the first tbq.sh call in session 3f57da38 after five in 797bc984 (D-1146 C5); the rules lowered the cost of each slip, not their number (D-1144 amendment 3, D-1148 amendment 1).
+- 2026-10-17: evidence: two text slips in session c52ac282 (:1321, :1590), each at a step change; one Bash call before the first tbq.sh call (:76; D-1153 Q1: 5, then 6, then 1 call), and three breaches of the rule of no Bash while a decision is pending (D-1160 Q1); tbq.sh cannot stop calls in the same message as it (D-1158 Q1).
