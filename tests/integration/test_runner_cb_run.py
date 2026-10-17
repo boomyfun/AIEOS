@@ -5,6 +5,9 @@ is PASS; with a core that does not stop the session, or one whose evaluation doe
 run does not count. That PASS tests the runner, not the core's conformance, and is not conformance evidence (AC16).
 The case builder is a copy of tests/unit/test_runner_cb.py's (the test folders share no module). No file is written.
 """
+# In the present state of ADV-02's set entry (TASK-058 AC4), the run over the repository's tree gives ADV-02 PASS
+# and its record holds capability_boundaries; the docstrings above and below that say otherwise describe the null
+# state.
 import hashlib
 import json
 import pathlib
@@ -248,6 +251,8 @@ class RepositoryTree(unittest.TestCase):
         run counts, ADV-02 is NOT_RUN for "no fixture", every other scenario is PASS with no reason, and the outcome is
         pass."""
         if cb_state() == 'present':
+            # In the present state of ADV-02's entry (TASK-058 AC4), ADV-02 is PASS and the record holds
+            # capability_boundaries; the docstring above describes the null state.
             r = conformance.run(ROOT, COMMIT, 'TASK-056')
             self.assertEqual(set(r.value), BASE_KEYS | {'capability_boundaries'})
             self.assertEqual(r.value['capability_boundaries'], cb_record())
