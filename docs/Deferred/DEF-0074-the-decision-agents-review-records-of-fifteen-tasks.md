@@ -38,10 +38,14 @@
 - **TASK-058's records** use the established form with this item's limit (D-1118 Q4): its contract binds specification 2 at revision 4, so under (ii) its records would be stale against revision 5, and the mapping script did not exist. The readable form starts with TASK-059.
 - **(d) Fixes read only by the decision agent** are checked against assurance-model.md line 50 ("both are bound to the evaluated commit"): a fix after the way-2 round needs a short round of all five at the new head (D-1098 (b1), applied again by D-1123); the coverage script is to refuse a cross-model pair whose halves name different commits.
 
+- **The mapping script (session 8ecb9ff5):** map_versions.py r2 (SHA-256 d2cbb635…), a scratchpad tool archived with the session evidence (D-1125 Q4, D-1130): "v<N>" from the DM row naming a file's exact SHA-256 with "revision N" in three fixed forms, fail closed; limits L1 (form (b) binds by hash alone), L2 (a second, unbound mention in a matched row is not refused), L3 (a row's status is not read). Over TASK-058's seven entities 7 of 7 map (data; its records stay in the established form); TASK-059's contract names nine entities, all mapped.
+- **Item (d) applied to TASK-058:** the short round at ed56e79a bound both halves of the pair to the evaluated commit; cov58s.py refuses a pair whose halves name different commits (D-1128).
+
 ## Resume when
-- Next session: the mapping script, run over TASK-058's seven entities as data, before TASK-059's acceptance (D-1118 C4); TASK-059's records in the readable form; then the late reviews (v).
+- Next session: TASK-059's records in the readable form (every record carrying the mapped versions, its basis naming map_versions.py's SHA-256, article entries under the article's id); then the late reviews (v).
 
 ## Log
 - 2026-10-17: opened (D-1092); widened by the records-form finding (D-1098).
 - 2026-10-17: the first step ruled (D-1107, D-1108): the readable form, forward only, the specification 5 finding; TASK-057's records in the established form (D-1105).
 - 2026-10-17: specification 2 revision 5 (DM F50) and DM F51 on main (D-1118, D-1119); TASK-058's records in the established form (D-1118 Q4); item (d) applied (D-1123).
+- 2026-10-17: the mapping script approved (D-1130); item (d) applied to TASK-058 by its short round and cov58s.py (D-1128).
