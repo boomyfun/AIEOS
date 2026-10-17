@@ -18,6 +18,13 @@ WS = ['docs/notes/**']
 ALLOW = ['git status', 'git diff --stat']
 RID = 'obs-1'
 REC = 'a test session'
+# AC4's lists, written out from the contract's text (D-1244 B1), so that a word dropped from the module's own tuples
+# makes a test fail.
+CONTRACT_FIRST_WORDS = ('bash', 'sh', 'zsh', 'dash', 'ksh', 'fish', 'powershell', 'pwsh', 'cmd', 'wsl', 'python',
+                        'python3', 'py', 'node', 'deno', 'npx', 'perl', 'ruby', 'php', 'env', 'xargs', 'find', 'timeout',
+                        'nohup', 'exec', 'eval', 'command', 'sudo', 'time', 'nice')
+CONTRACT_SUFFIXES = ('.sh', '.ps1', '.py', '.bat', '.cmd', '.js', '.pl', '.rb')
+CONTRACT_GIT_SUBCOMMANDS = ('config', 'submodule', 'bisect', 'rebase', 'filter-branch', 'difftool', 'mergetool', 'help')
 
 
 def raw(obj):
@@ -192,19 +199,26 @@ class Output(unittest.TestCase):
 class AllowlistForm(unittest.TestCase):
     def test_well_formed(self):
         """TASK-062 AC4: an empty list and entries such as "git status" and "git diff --stat" are well formed."""
-        for a in ([], ['git status'], ['git diff --stat', 'git log --oneline', 'ls', 'make test', 'C:/tools/lint.exe x']):
+        for a in ([], ['git status'], ['git diff --stat', 'git log --oneline', 'ls', 'make test', 'C:/tools/lint.exe x'],
+                  ['git log --format=a,b+c_d']):
             self.assertEqual(claude_code_hook.allowlist_findings(a), [], a)
+
+    def test_lists_are_the_contracts(self):
+        """TASK-062 AC4, AC10: the module's lists equal AC4's words, written out here from the contract's text."""
+        self.assertEqual(claude_code_hook.REFUSED_FIRST_WORDS, CONTRACT_FIRST_WORDS)
+        self.assertEqual(claude_code_hook.REFUSED_SUFFIXES, CONTRACT_SUFFIXES)
+        self.assertEqual(claude_code_hook.REFUSED_GIT_SUBCOMMANDS, CONTRACT_GIT_SUBCOMMANDS)
 
     def test_refused_first_words(self):
         """TASK-062 AC4: each refused first word, with and without ".exe", in upper case and after a path, is refused."""
-        for w in claude_code_hook.REFUSED_FIRST_WORDS:
+        for w in CONTRACT_FIRST_WORDS:
             for form in (w, w + '.exe', w.upper(), w.upper() + '.EXE', '/usr/bin/' + w, 'C:/x/' + w + '.exe', 'C:' + w):
                 self.assertTrue(claude_code_hook.allowlist_findings([form + ' x']), form)
                 self.assertTrue(claude_code_hook.allowlist_findings([form]), form)
 
     def test_scripts(self):
         """TASK-062 AC4: a first word ending in a script suffix is refused."""
-        for s in claude_code_hook.REFUSED_SUFFIXES:
+        for s in CONTRACT_SUFFIXES:
             self.assertTrue(claude_code_hook.allowlist_findings(['run' + s]), s)
             self.assertTrue(claude_code_hook.allowlist_findings(['./tools/run' + s.upper() + ' a']), s)
 
@@ -213,8 +227,8 @@ class AllowlistForm(unittest.TestCase):
         after a path too ("C:git -c x")."""
         cases = ['git', 'git -c x', 'git -C d status', 'git --git-dir=x status', 'C:git -c x', '/usr/bin/git -c x',
                  'git.exe -c a', 'GIT']
-        cases += ['git ' + s for s in claude_code_hook.REFUSED_GIT_SUBCOMMANDS]
-        cases += ['git ' + s.upper() + ' x' for s in claude_code_hook.REFUSED_GIT_SUBCOMMANDS]
+        cases += ['git ' + s for s in CONTRACT_GIT_SUBCOMMANDS]
+        cases += ['git ' + s.upper() + ' x' for s in CONTRACT_GIT_SUBCOMMANDS]
         for a in cases:
             self.assertTrue(claude_code_hook.allowlist_findings([a]), a)
 
@@ -294,10 +308,22 @@ class Handling(unittest.TestCase):
         self.assertIs(claude_code.judge, real)
 
     def test_deep_input(self):
-        """TASK-062 AC5: an input nested too deeply for the parser gives exit code 2, never an exception."""
-        r = run(b'[' * 200000 + b']' * 200000)
-        self.assertEqual(r['exit_code'], 2)
-        self.assertNotEqual(r['verdict'], 'allow')
+        """TASK-062 AC2, AC5: an input nested too deeply for the parser, as arrays or as objects, is a parse error:
+        uncovered, reason input_json, exit code 2, never an exception."""
+        for data in (b'[' * 200000 + b']' * 200000, b'{"a":' * 200000 + b'1' + b'}' * 200000):
+            r = run(data)
+            self.assertEqual((r['verdict'], r['reason'], r['exit_code']), ('uncovered', 'input_json', 2))
+
+    def test_judge_reason_outside_its_set(self):
+        """TASK-062 AC3, AC5, AC6: a reason of judge's outside claude_code.REASONS gives uncovered, reason entry, exit
+        code 2 and the fixed line; the replaced judge is restored."""
+        real = claude_code.judge
+        for reason in ('x\n', 'read ', 'zqxwvu-made-up', 7, None):
+            r = self._with_judge(lambda *a, b=reason: {'verdict': 'allow', 'concern': 'read', 'reason': b,
+                                                       'findings': [], 'record': None})
+            self.assertEqual((r['verdict'], r['reason'], r['exit_code'], r['stderr']),
+                             ('uncovered', 'entry', 2, 'AIEOS claude_code_hook: uncovered (entry)'), reason)
+        self.assertIs(claude_code.judge, real)
 
     def test_exception_in_allowlist_findings(self):
         """TASK-062 AC5: an exception inside allowlist_findings becomes a finding with its type's name only."""
@@ -313,7 +339,8 @@ class Handling(unittest.TestCase):
 class Result(unittest.TestCase):
     CASES = [lambda: run('x'), lambda: run(b'\xff'), lambda: run(b'{'), lambda: run(b'[]'),
              lambda: run(b'{}', allow=['sh']), lambda: bash('git status'), lambda: bash('git push'),
-             lambda: write('C:\\proj\\repo\\src\\a.py'), lambda: run(hook('Read', {})), lambda: run(hook('mcp__a', {}))]
+             lambda: write('C:\\proj\\repo\\src\\a.py'), lambda: run(hook('Read', {})), lambda: run(hook('mcp__a', {})),
+             lambda: with_judge(lambda *a: None), lambda: with_judge(lambda *a: 1 // 0)]
 
     def test_keys_and_values(self):
         """TASK-062 AC6: exactly RESULT_KEYS; exit code 0 exactly for allow; a reason of claude_code.REASONS or of the

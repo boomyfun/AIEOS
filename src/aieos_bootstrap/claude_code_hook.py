@@ -18,7 +18,8 @@ What these functions show, and what they do not (AC7):
   call are unmeasured (specification 5 lines 65 and 80; C6, the owner's to measure). In session 1947b313 a hook with
   matcher "*" was seen not to refuse Read calls it was written to refuse (decisions D-1202 and D-1203).
 - The exit-code form is cited from Claude Code's documentation, not measured: the hooks reference
-  (https://code.claude.com/docs/en/hooks, read on 2026-10-18) says that exit code 0 is success and that Claude never
+  (https://code.claude.com/docs/en/hooks, as summarised by a web-reading tool on 2026-10-18: a summary, not the page)
+  says that exit code 0 is success and that Claude never
   sees standard error then; that exit code 2 on PreToolUse blocks the tool call, with the hook's standard error as the
   message unless JSON printed on standard output makes a blocking decision; and that any other exit code, a hook that
   does not start, or invalid JSON output is a non-blocking error and the action goes ahead. So the protection fails
@@ -34,13 +35,19 @@ What these functions show, and what they do not (AC7):
 - "uncovered" is never "allow", and it carries no record (no new record key is made; a marked observation waits for a
   revision of specification 2).
 - The standard-error line is fixed text, the verdict and the reason only: no path, command or tool name from the input
-  is echoed, and an exception gives only its type's name.
+  is echoed, and an exception gives only its type's name. A reason of judge's outside claude_code.REASONS gives
+  "uncovered", reason "entry", so the line holds fixed words whatever judge returns. The result's findings and record
+  may hold input text (judge names an unjudged tool in a finding, and a record's refers_to holds the path or command);
+  only the standard-error line is fixed.
 - A refusal record is returned unchanged, so a credential typed into a command stays in its refers_to
   (aieos_bootstrap.claude_code's docstring; D-1219 R2-2); redaction before any record is written is not done here.
 - The allowlist's form check refuses the first words below, a first word with "=", any character outside its set, and
   any spacing other than single spaces. Its lists are this module's minimum and not complete (D-1236): an entry not on
   them for a program that runs code (a build tool, a package runner, a script) still admits whatever that code does,
-  as aieos_bootstrap.claude_code's docstring states. A malformed allowlist refuses every call, whatever its tool, as a
+  as aieos_bootstrap.claude_code's docstring states. Names outside the lists pass even when they run code, for
+  example python3.12, pythonw, iex, Invoke-Expression, source, ".", wscript, cscript, mshta, bun, a ".vbs" or ".jar"
+  script, a name with a trailing dot such as "bash.", and git options after the subcommand such as "git log
+  --output=x"; matching them would change the name rule of the contract's AC4. A malformed allowlist refuses every call, whatever its tool, as a
   caller's error with no record. The allowlist's content stays the caller's policy (point 6), never a default here.
 - Every limit of aieos_bootstrap.claude_code holds here too, and specification 5 section 11 points 3, 4, 10 and 12 stay
   open. Nothing is installed or measured.
@@ -139,14 +146,14 @@ def _entry(stdin_bytes, root, task_id, write_set, allowlist, record_id, recorder
         return _result('uncovered', None, 'input_bytes', ['the input is not UTF-8'])
     try:
         value = json.loads(text, object_pairs_hook=_no_duplicates, parse_constant=_no_constant)
-    except ValueError:
+    except (ValueError, RecursionError):
         return _result('uncovered', None, 'input_json', ['the input is not one JSON value without duplicate keys or constants'])
     if not isinstance(value, dict):
         return _result('uncovered', None, 'input_shape', ['the input is not a JSON object'])
     hook = {k: value[k] for k in ('tool_name', 'tool_input') if k in value}
     r = claude_code.judge(hook, root, task_id, write_set, allowlist, record_id, recorder)
     if (not isinstance(r, dict) or tuple(sorted(r)) != tuple(sorted(claude_code.RESULT_KEYS))
-            or r['verdict'] not in claude_code.VERDICTS):
+            or r['verdict'] not in claude_code.VERDICTS or r['reason'] not in claude_code.REASONS):
         return _result('uncovered', None, 'entry', ['judge gave a result of another form'])
     record = r['record'] if r['verdict'] == 'refuse' else None
     return _result(r['verdict'], r['concern'], r['reason'], r['findings'], record)
