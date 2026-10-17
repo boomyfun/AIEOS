@@ -1,0 +1,418 @@
+# Task contract TASK-062, the Claude Code adapter's hook entry, part CC-2 (Master Plan revision 4, §4 M5; specification
+# 5 revision 3, sections 6 and 8 and section 11 points 5, 6 and 7; specification 2 revision 5, section 6.2).
+# Revision 0, drafted under decisions D-1235 (option (ii): parts (a), (c), (d); (b) out), D-1236 (the outline's rulings
+# Q1 to Q5 and its three further rulings) and D-1238 (Q3, C5); brought for approval in its own request; whether it is
+# approved is recorded in the decision files, not in this file. Fields and value forms follow specification 2 §5.1 and
+# the contract of TASK-061. Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# Task type: implementation. What it adds: a new module src/aieos_bootstrap/claude_code_hook.py, as pure functions only,
+# called only by its tests: (a) the hook entry, from the bytes Claude Code would write to a PreToolUse hook's standard
+# input to claude_code.judge's verdict and then to what the hook would return (an exit code and one line for standard
+# error), with the refusal's observation record returned as a value for the core; (c) the allowlist's form check, run
+# before judge is called (point 6 and DEF-0077); (d) the caller's handling of every verdict, fail closed (point 5).
+# claude_code.py, accepted at 2158df6b (TASK-061), is not changed (D-1236 Q1); judge's own AC1 check stays as it is.
+# The interface (point 7, as far as this task states it): the entry takes the standard-input bytes and, from its caller,
+# the root, the lease's task id and write-set, the allowlist, a record id and a recorder; where the caller takes them
+# from is the caller's and is not read from any file here. Of the hook input only tool_name and tool_input are read
+# (D-1236 Q2): root comes from the caller only, never from the input's cwd (D-1212 F4); session_id, cwd,
+# hook_event_name, transcript_path, permission_mode, tool_use_id and every other key are not read, and the ids that tie
+# an observation to a session and a lease are point 7's rest, out of this task. The observation leaves the function as
+# a value only: no file is written and no channel is opened (D-1236 Q3).
+# The exit-code form, cited as documentation of Claude Code, never as a measurement (D-1236 Q5): the hooks reference
+# (https://code.claude.com/docs/en/hooks, read on 2026-10-18; sections "Exit code output", "Exit code 0", "Exit code 2",
+# "Other exit codes", "Exit code 2 behavior per event" and "Common input fields") says that exit 0 is success and
+# Claude never sees standard error then; that exit 2 on PreToolUse blocks the tool call, with the hook's standard error
+# as the message, unless JSON printed on standard output makes a blocking decision, whose reason is then used; and that
+# any other exit code, a hook that does not start, or invalid JSON output is a non-blocking error and the action goes
+# ahead. So the entry gives only 0 or 2 and prints nothing on standard output; that a hook which never starts or is
+# killed lets the call go ahead is the documentation's statement, unmeasured (C6), and is carried as a limit.
+# Every "uncovered" gives exit 2 (D-1236 Q4): a tool that is not judged, a malformed input, an exception, an uncovered
+# path. The entry is meant for a hook whose matcher names only the judged tools (Write, Edit, Bash, PowerShell, Read,
+# Grep, Glob); under a matcher "*" it would block every other tool's call. Which matcher is used is part of placing the
+# hook: CC-3, the owner's act (A51 item (4)); this task places nothing and names no matcher as chosen.
+# No coverage is claimed (as TASK-061's AC9): no acceptance criterion assumes that a hook fires for a tool, that its
+# input has the documented form, or that exit 2 blocks. In session 1947b313 a hook with matcher "*" did not refuse Read
+# calls it was written to refuse (D-1202, D-1203); specification 5 lines 65 and 80 state that firing, coverage,
+# fail-open behaviour and timeouts are unmeasured and that a hook that does not fire neither refuses nor records.
+# Limits (carried at acceptance): specification 5 open points 3 (the adapter declaration), 4 (the observed read-set
+# record's evidence_type; part (b) waits for a specification 2 revision, D-1235), 10 (an abnormal session end) and 12 (a
+# bound on repeated STOP: violation); C6 and P-LOC unmeasured; every limit TASK-061 carried (its header and AC9), among
+# them: the shell checks read the command text only and over-refuse; F9's safe set unchanged (DEF-0078; D-1236); a
+# program that runs code, admitted by an entry, can do anything, a push built from parts included; AC4's list of
+# refused first words is the module's minimum and not complete, and an entry not on it that runs code is still covered
+# only by that program limit (D-1236); an "uncovered" result carries no record (D-1236: no new record key; a marked
+# observation waits for a specification 2 revision, like (b)); the entry does not check hook_event_name, so placed on
+# another hook event it would judge in the same way (stated, D-1236 Q2); a refusal record is returned unchanged,
+# so a credential typed into a command stays in its refers_to (claude_code.py's docstring; D-1219 R2-2); redaction
+# before any record is written is not done here and goes with point 7's rest, where the record is written (a
+# Deferred item); nothing is installed or measured.
+# Readers of the changed paths (D-263 C3's practice): tests/unit/test_writer.py's R8 test and tests/unit/test_gitread.py's
+# subprocess test read every module of src/ and keep passing. No existing module imports claude_code_hook.
+# Risk: high (risk rules revision 6, §2 point 3: R3 matches every path under src/** and tests/**; R2 medium; no path
+# under tests/conformance/** (R11) or .claude/** (R9)), computed over the base by SP/tools/risk_class62.py. GOV-003:
+# every path of the write-set is an evaluator path by the workflow's pinned list (.github/workflows/aieos-checks.yml:
+# 392-395), by SP/tools/gov003_class62.py, so "GOV-003 evaluator change: yes"; change class critical_cr, as for TASK-060
+# and TASK-061, ruled at acceptance. Profile (assurance-model.md §5, gov-AIEOS, high): functional [unit_test],
+# architecture [deterministic_rule], functional [integration_test], security [static_security_analysis] and
+# architecture [ai_review (cross-model)], plus the evidence_required of the applicable articles. Reviews: five way-2
+# reviews on a Claude model other than the implementer's, Opus 5.5 or Sonnet 5.5 and never Fable (the owner's words of
+# 2026-10-17, quoted in :3 item 3 of session 89ad39be); and the decision agent's own reviews: INV-003's human_review,
+# OPS-002's human_review and the cross-model half, each its own record (decision D-1148 Q2).
+# Records: in the readable form, as TASK-061's (D-1179 Q2 (6)); per-entry coverage checked by script before the
+# acceptance request (L-0022), and the governor's evaluation over the records reported (decision D-1098).
+# Naming (D-544 Q3): every test of the new test modules names the AC ids it stands for as "TASK-062 ACn" in its own
+# docstring.
+# Evaluation path (A61; as TASK-019 to TASK-061): commit C changes only docs/tasks/TASK-062.yaml and has one parent equal
+# to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-062" and no e-mail address in its message, go to
+# task/TASK-062 under their own decisions; main receives the task only at its acceptance.
+# Not applicable: OPS-001 (the task changes no ref); INV-005 to INV-008, INV-010 and INV-011; GOV-001, GOV-004 to GOV-006
+# and SEC-003 (no path of the write-set meets them). INV-004 applies: the module writes nothing.
+# Owner-kept acts: none. No hook placed, no matcher chosen, no Claude Code setting, nothing under .github/ or .claude/,
+# no push of its own; it weakens no evidence requirement; so its acceptance is one delegated approval of the decision
+# agent (Master Plan section 6).
+task: TASK-062
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add the Claude Code adapter's hook entry (part CC-2) in standard-library Python 3. A new module
+  src/aieos_bootstrap/claude_code_hook.py gives allowlist_findings(allowlist) and entry(stdin_bytes, root, task_id,
+  write_set, allowlist, record_id, recorder): entry checks the allowlist's form, decodes the bytes as one JSON object,
+  passes a mapping of only its tool_name and tool_input to claude_code.judge, and returns the exit code (0 only for
+  "allow", else 2), one line for standard error, the verdict and its reason, and for a refusal judge's observation
+  record unchanged. With unit, integration and property tests in tests/unit/test_claude_code_hook.py,
+  tests/integration/test_claude_code_hook_inputs.py and tests/property/test_claude_code_hook_properties.py, each test
+  naming its AC ids in its own docstring; the tests write no file.
+traces_to:
+  - docs/specs/spec-05-adapter-contract.md#6
+  - docs/specs/spec-05-adapter-contract.md#8
+  - docs/specs/spec-05-adapter-contract.md#11
+  - docs/specs/spec-02-aieos-file-format.md#6.2
+  - docs/specs/risk-rules-gov-aieos.md#2
+input_state:
+  # base_commit is filled by script from refs/heads/main just before commit C is made (D-198 C5).
+  base_commit: 1700ede6ab29b0625002286d271ceeb04eff5d3c
+  depends_on: [TASK-001, TASK-011, TASK-051, TASK-061]
+  intent_versions:
+    docs/specs/spec-05-adapter-contract.md: 6392a747dfab0f5b0c8f8103842bfeffdc5020e1828a4d5e97407ba5e07f1e94
+    docs/specs/spec-02-aieos-file-format.md: 95316b6292aec8af1512dc4c19d63f406b85d99500d89c8756e0968c437054bd
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 05c53318cd756a3acfc13e5adaffbfaede8f05be3d00289e9fd45fef08c63c73
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # All four paths are new.
+  paths:
+    - src/aieos_bootstrap/claude_code_hook.py
+    - tests/unit/test_claude_code_hook.py
+    - tests/integration/test_claude_code_hook_inputs.py
+    - tests/property/test_claude_code_hook_properties.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.claude_code.judge, aieos_bootstrap.claude_code.RESULT_KEYS, aieos_bootstrap.claude_code.REASONS]
+  schemas: [spec-02 records (6.2)]
+forbidden:
+  # As TASK-061's list; every existing path of src/ and tests/ is forbidden, src/aieos_bootstrap/claude_code.py and
+  # TASK-061's three test modules among them (the list is filled by script from the base's tree before commit C).
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/conformance/fixtures/acc_01.py
+  - tests/conformance/fixtures/acc_02.py
+  - tests/conformance/fixtures/acc_03.py
+  - tests/conformance/fixtures/acc_04.py
+  - tests/conformance/fixtures/acc_05.py
+  - tests/conformance/fixtures/acc_06.py
+  - tests/conformance/fixtures/acc_07.py
+  - tests/conformance/fixtures/acc_08.py
+  - tests/conformance/fixtures/acc_09.py
+  - tests/conformance/fixtures/acc_10.py
+  - tests/conformance/fixtures/acc_11.py
+  - tests/conformance/fixtures/acc_12.py
+  - tests/conformance/fixtures/acc_13.py
+  - tests/conformance/fixtures/acc_14.py
+  - tests/conformance/fixtures/acc_15.py
+  - tests/conformance/fixtures/acc_16.py
+  - tests/conformance/fixtures/acc_17.py
+  - tests/conformance/fixtures/adv_01.py
+  - tests/conformance/fixtures/adv_03.py
+  - tests/conformance/fixtures_cb/adv_02.py
+  - tests/conformance/fixtures_rc/rc_01.py
+  - tests/conformance/fixtures_rc/rc_02.py
+  - tests/conformance/fixtures_rc/rc_03.py
+  - tests/conformance/fixtures_rc/rc_04.py
+  - tests/conformance/fixtures_rc/rc_05.py
+  - tests/conformance/fixtures_rc/rc_06.py
+  - tests/conformance/fixtures_rc/rc_07.py
+  - tests/conformance/fixtures_rc/rc_08.py
+  - tests/conformance/fixtures_rc/rc_09.py
+  - tests/conformance/fixtures_rc/rc_10.py
+  - tests/conformance/fixtures_rc/rc_11.py
+  - tests/conformance/fixtures_risk/risk_01.py
+  - tests/conformance/set.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The arguments (point 7). stdin_bytes must be a bytes object; root, task_id, write_set, record_id and recorder are
+      passed to judge unchanged and checked by judge's own AC1 (TASK-061); allowlist is checked by AC4 first. stdin_bytes
+      that is not bytes gives verdict "refuse" with reason "argument", a finding naming it, exit code 2 and no record;
+      judge's "refuse" with reason "argument" is passed through with exit code 2 and no record (a wrong argument is the
+      caller's error, not a policy refusal, as in TASK-061). The module keeps no state. The checks run in this order, and the first that fails gives
+      the result: stdin_bytes's type (AC1), the allowlist's form (AC4), the decoding and parsing (AC2), then judge.
+  - AC2: >-
+      The channel's input (point 7). stdin_bytes is decoded as strict UTF-8 (a byte that is not UTF-8, or a leading
+      byte-order mark, is not accepted) and parsed as JSON with duplicate keys in any object refused and the constants
+      NaN, Infinity and -Infinity refused; a decoding error gives "uncovered" with reason "input_bytes", a parse error
+      or a refused key or constant gives "uncovered" with reason "input_json", and a value that is not an object gives
+      "uncovered" with reason "input_shape"; each with exit code 2 and no record, never "allow". From the object, only
+      the keys tool_name and tool_input are read (D-1236 Q2): judge is given a new mapping holding exactly those two
+      keys, each only if present, so judge cannot read any other key; root is the caller's argument, never the input's
+      cwd (D-1212 F4). Changing or removing any other key of the object never changes the result.
+  - AC3: >-
+      The channel's output (point 7; D-1236 Q5). For "allow", exit code 0 and an empty standard-error text. For every
+      other verdict, exit code 2 and a standard-error text of one line, "AIEOS claude_code_hook: " followed by the
+      verdict, " (", the reason and ")", in ASCII, with no line break and no text taken from the input (no path,
+      command or tool name is echoed). The entry returns no standard-output text, and no exit code other than 0 or 2.
+      A refusal's record is returned unchanged from judge (equal keys and values) for the core; how it reaches the core
+      is point 7's rest (D-1236 Q3).
+  - AC4: >-
+      The allowlist's form (point 6; DEF-0077; D-1236). allowlist_findings(allowlist) gives a list of findings, empty
+      only when allowlist is a list (possibly empty) of strings each of which: is non-empty; has only the characters
+      ASCII letters, digits, space and - _ . / : = , + (F9's safe set less tab, newline and ; & | ( ), which no
+      allowlist entry can usefully hold since judge splits commands at them); does not begin or end with a space and
+      holds no two spaces in a row; whose first word holds no "="; and whose first word's name (the part after its
+      last "/" or ":", compared without regard to letter case and with a final ".exe" removed) is not one of bash, sh, zsh, dash, ksh, fish, powershell, pwsh, cmd, wsl, python, python3, py,
+      node, deno, npx, perl, ruby, php, env, xargs, find, timeout, nohup, exec, eval, command, sudo, time, nice, and does
+      not end in ".sh", ".ps1", ".py", ".bat", ".cmd", ".js", ".pl" or ".rb"; and, when its first word's name
+      is git, it has a second word that does not begin with "-" and is not one of config, submodule, bisect,
+      rebase, filter-branch, difftool, mergetool, help. The lists are the module's minimum, not complete (D-1236); an
+      entry not on them that runs code stays under TASK-061's program limit. Any finding gives, for every call
+      whatever its tool (reading: the allowlist is the caller's configuration, so a malformed one is a caller's error
+      and judge is not called), verdict "refuse" with reason "allowlist_form", the findings, exit code 2 and no record.
+      An empty allowlist is well formed (judge then refuses every shell call, TASK-061 AC6). The allowlist's content
+      stays the caller's policy (point 6), never a default of the module.
+  - AC5: >-
+      The caller's handling, fail closed (point 5; D-1236 Q4). judge's "allow" gives exit code 0; judge's "refuse"
+      gives exit code 2 with judge's record when it has one (a blocking violation: specification 5 section 8, STOP:
+      violation follows from the record in the core, which this task does not call); judge's "uncovered", whatever its
+      reason, gives exit code 2 and no record. A result of judge that is not a mapping with exactly
+      claude_code.RESULT_KEYS and a verdict in claude_code.VERDICTS gives "uncovered" with reason "entry". Any exception
+      raised inside entry or allowlist_findings gives "uncovered" with reason "entry", the exception's type in findings,
+      exit code 2 and no record; no exception escapes either function.
+  - AC6: >-
+      The result. entry returns a mapping with exactly exit_code (0 or 2), stderr (the text of AC3), verdict ("allow",
+      "refuse" or "uncovered"), concern (judge's concern, or None when judge was not called), reason (one of
+      claude_code.REASONS, or one of the module's own reasons "allowlist_form", "input_bytes", "input_json",
+      "input_shape", "entry", kept in claude_code_hook.REASONS and not added to claude_code.REASONS), findings (a list
+      of texts) and record (judge's record, or None). exit_code is 0 exactly when verdict is "allow"; only "refuse"
+      from judge with a reason other than "argument" and "record" carries a record.
+  - AC7: >-
+      No coverage claimed. The module's docstring states: the functions judge given bytes only; whether Claude Code runs
+      the hook, with which input, and whether exit code 2 blocks are unmeasured (specification 5 lines 65 and 80; C6,
+      the owner's); the exit-code form is cited from Claude Code's documentation (the header's source), not measured;
+      the documentation says a hook that does not start, exits otherwise or prints invalid JSON lets the action go
+      ahead, so the protection fails open outside these functions (unmeasured); the entry is meant for a matcher naming
+      only the judged tools, the matcher being the owner's at placement (CC-3); only tool_name and tool_input are read;
+      "uncovered" is never "allow"; the limits of the header. No test asserts anything about a running Claude Code.
+  - AC8: >-
+      Purity and the CI checks (INV-001 to INV-004). claude_code_hook.py imports only the Python 3 standard library's
+      json module and aieos_bootstrap's claude_code. It starts no process, opens no file, reads no standard input
+      (sys.stdin is not named), prints nothing, calls no sys.exit, reads no clock or environment, and makes no network
+      or model call; no exec, eval, compile, __import__ or importlib; no assert in src (bandit B101); no string that
+      names the project-state directory; tests/unit/test_writer.py's R8 test and tests/unit/test_gitread.py's
+      subprocess test pass unchanged. At the task's commits the CI steps report no finding: deterministic_rule, OPS-003,
+      SEC-001, SEC-002 and bandit.
+  - AC9: >-
+      Its own tests and the added text. Every test function of the three new test modules names the AC ids it stands for
+      as "TASK-062 ACn" in its own docstring; no other task's AC is named in qualified form. No existing test is changed
+      (GOV-003). Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns,
+      and each count is 0. The tests write and remove no file, and no test value is a real path of this machine's user
+      folders, a real command of this project's own hooks or a real session id.
+  - AC10: >-
+      Tests, each rule with at least one passing and one failing case: R1 AC1; R2 AC2 (non-UTF-8 bytes, a byte-order
+      mark, invalid JSON, a duplicate key, NaN, a JSON array, string and number, a missing tool_name, and other keys
+      changed or removed with the result unchanged); R3 AC3 (the exact one-line text for each verdict, no echo of a path
+      or command given in the input, exit codes 0 and 2 only); R4 AC4 (each refused first word, with and without
+      ".exe" and in upper case, each script suffix, git alone, git -c, git -C, each refused git subcommand, a tab, a
+      double space, a leading space, a character outside the set, a non-string entry, a non-list, a path-prefixed refused word such
+      as "/usr/bin/bash" and "C:/x/pwsh.exe", "C:git -c x", an assignment-first entry such as "X=1 bash", an empty
+      list, and well-formed entries such as "git status" and "git diff --stat" accepted), and that a malformed allowlist refuses
+      a Read call too; R5 AC5 (each verdict and reason of judge mapped, an uncovered tool such as an mcp__ name refused
+      with exit 2, a fault injected into judge by a test double giving "entry"); R6 AC6 (the result's keys and values,
+      over every case of R1 to R5); an integration test over hook-input bytes of the documented form (the header's
+      source; values made up) for Write, Edit, Bash, PowerShell, Read, Grep and Glob, and for an unjudged tool; a script
+      check of AC7 and AC8 (imports, absent names and calls, docstring words); and a property test (standard library
+      only, fixed seeds) that entry is deterministic over equal inputs, that no generated input gives exit code 0 unless
+      judge, called on the same two keys, gives "allow" and the allowlist is well formed, that keys other than
+      tool_name and tool_input never change the result, and that every record returned equals judge's. Broken copies of
+      the module, one per rule, each fail at least one test. tests/run_tests.py, unchanged, runs them.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC10]}
+  - {gate: G3, check: constitution, args: [AC7, AC8, AC9, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
