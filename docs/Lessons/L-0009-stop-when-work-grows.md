@@ -21,6 +21,9 @@ One in session 02bd7476 (../History/2026-10/2026-10-07-0033-hardening-choice-and
 One in session 2026-10-11-2336 (../History/2026-10/2026-10-11-2336-spec-2-revision-3-and-the-git-reader-contract.md):
 - **2026-10-12 (decisions D-560 to D-563).** A specification revision grew from 20 to 37 changed lines over three drafts, and a review round then failed its counting rules on eleven blocking findings; the decision agent stopped and narrowed it to field names only (D-563), and any further design round of those rules waits for the owner's yes on cost versus value.
 
+One in session dfcb097a (../History/2026-10/2026-10-17-2313-the-pages-d1215-d1216-and-two-review-rounds-of-task-061.md):
+- **2026-10-17 to 2026-10-18 (decisions D-1219 to D-1223).** TASK-061's shell checks were fixed form by form three times (B1 and B2, then N1 and N2, then H1), each round finding a new text that the split and a shell read differently; the decision agent stopped it by narrowing to a closed safe character set (F9, D-1223), and a further boundary finding against F9 goes to the owner on cost versus value (D-1223 C6).
+
 ## Why it happens
 - No stop condition is tied to the decision the work serves.
 - Review agents always find something more.
