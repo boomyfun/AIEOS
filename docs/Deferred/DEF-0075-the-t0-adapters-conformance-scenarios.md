@@ -15,3 +15,4 @@
 
 ## Log
 - 2026-10-17: opened (session ee32c9d8; D-1179, D-1182).
+- 2026-10-17: TASK-060 accepted at ec78a88c and on main (session 2375f48d; decision D-1195, records commit 9a342e19); the resume condition is met.

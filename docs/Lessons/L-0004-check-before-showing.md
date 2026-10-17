@@ -176,6 +176,9 @@ Occurrences in session 2026-10-15-0659 (../History/2026-10/2026-10-15-0659-m4-ex
 Occurrences in session 2026-10-15-0830 (../History/2026-10/2026-10-15-0830-the-benchmark-workflow-accepted-and-on-main.md):
 - **2026-10-15 (D-772, D-773, D-777).** Five line-number corrections: :283 for :284 and ":330 and :338" for :338 and :342 (D-772); :412 for :427 (D-773); a placeholder ":?" and :834 misplaced (D-777); :1000 for :1014 (the D-777 conflict message); each corrected inline before the decision. From D-777 C4 a script (tools/linecheck.py) lists every cited line before a request is sent.
 
+Occurrences in session 2026-10-17-1820 (../History/2026-10/2026-10-17-1820-the-t0-adapter-accepted-and-the-hook-fix-replayed.md):
+- **2026-10-17 (D-1191 to D-1193).** Four times a script was run before it was written (exit 127 or 2, no effect), and review_models4.py was once called without its arguments; the fix: the Write of a script and its run in the same message, the Write first.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.
