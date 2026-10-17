@@ -75,6 +75,31 @@ class Properties(unittest.TestCase):
                 for c in cmds:
                     self.assertTrue(any(c[:len(e.split())] == e.split() for e in ALLOW), h)
 
+    def test_bypass_corpus_never_allowed(self):
+        """TASK-061 AC5, TASK-061 AC6, TASK-061 AC12 (D-1219 C3): a fixed corpus of strings that ran a command outside
+        the allowlist, or a push, under the entry each names, is never allowed; the oracle is the corpus itself, not the
+        module's split or push helpers."""
+        corpus = [('Bash', 'python -m pytest "$(G=gi;${G}t push)"', ['python -m pytest']),
+                  ('Bash', 'python -m pytest "$($(printf gi)t push)"', ['python -m pytest']),
+                  ('Bash', 'python -m pytest "`G=gi;H=t;$G$H push`"', ['python -m pytest']),
+                  ('Bash', 'bash -c "G=gi;\\${G}t push"', ['bash']),
+                  ('Bash', 'echo "$(rm x)"', ['echo']),
+                  ('Bash', 'python -m pytest \\" ; G=gi ; H=t ; $G$H push ; echo " \\" "', ['python -m pytest']),
+                  ('Bash', 'git status \\"; rm x # "', ['git status']),
+                  ('PowerShell', 'echo "a\\" ; rm x ; echo \\"b"', ['echo']),
+                  ('Bash', "echo $'a\\' ; rm x ; '", ['echo']),
+                  ('PowerShell', 'git status\rrm x', ['git status']),
+                  ('Bash', 'G=gi && ${G}t push', ['git status']),
+                  ('Bash', 'G=gi && $G' + 't push', ['git status']),
+                  ('Bash', 'echo hi # "\nrm x\n# "', ['echo']),
+                  ('PowerShell', 'echo hi # "\nrm x\n# "', ['echo']),
+                  ('PowerShell', 'echo <# " #> ; rm x ; echo <# " #>', ['echo']),
+                  ('PowerShell', 'echo "a\u201c ; rm x ; echo \u201db"', ['echo']),
+                  ('PowerShell', "echo 'a\u2019 ; rm x ; echo \u2018b'", ['echo'])]
+        for tool, cmd, allow in corpus:
+            r = claude_code.judge({'tool_name': tool, 'tool_input': {'command': cmd}}, ROOT, TASK, WS, allow, 'o', 'r')
+            self.assertNotEqual(r['verdict'], 'allow', (tool, cmd, allow))
+
     def test_refusal_records_pass(self):
         """TASK-061 AC7, TASK-061 AC8, TASK-061 AC12: every refusal on a policy concern carries a record that check_payload accepts."""
         rng = random.Random(61003)
