@@ -34,9 +34,14 @@
 - **The long-term option, not now.** Intent versions as file SHA-256 values in all five modules and specification 2 (a critical_cr governor change), recorded as (i-3).
 - **TASK-057's records** (32, on main at 6acf11a7) are in the established form too: the governor read none of them (INSUFFICIENT_EVIDENCE, "not used: no commit binding"), reported as data; the acceptance rested on the per-entry check "coverage: PASS" (L-0022, D-1105).
 
+- **Done (session fc7c3b0f):** specification 2 revision 5 (the readable form: (i) as amended, (ii) to (iv)) approved as DM F50, and DM F51 recording specification 5's current bytes (6392a747…) as revision 3 with A69's marker, on main as 46dc0907 (D-1118, D-1119, CS-276; run 38987001654).
+- **TASK-058's records** use the established form with this item's limit (D-1118 Q4): its contract binds specification 2 at revision 4, so under (ii) its records would be stale against revision 5, and the mapping script did not exist. The readable form starts with TASK-059.
+- **(d) Fixes read only by the decision agent** are checked against assurance-model.md line 50 ("both are bound to the evaluated commit"): a fix after the way-2 round needs a short round of all five at the new head (D-1098 (b1), applied again by D-1123); the coverage script is to refuse a cross-model pair whose halves name different commits.
+
 ## Resume when
-- Next session, after TASK-058's code: the specification 2 revision and the F row for specification 5 (D-1108 C3), before TASK-058's acceptance; then the mapping script and the first readable records; then the late reviews (v).
+- Next session: the mapping script, run over TASK-058's seven entities as data, before TASK-059's acceptance (D-1118 C4); TASK-059's records in the readable form; then the late reviews (v).
 
 ## Log
 - 2026-10-17: opened (D-1092); widened by the records-form finding (D-1098).
 - 2026-10-17: the first step ruled (D-1107, D-1108): the readable form, forward only, the specification 5 finding; TASK-057's records in the established form (D-1105).
+- 2026-10-17: specification 2 revision 5 (DM F50) and DM F51 on main (D-1118, D-1119); TASK-058's records in the established form (D-1118 Q4); item (d) applied (D-1123).
