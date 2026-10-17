@@ -275,6 +275,9 @@ Occurrences in session 2026-10-17-0858 (../History/2026-10/2026-10-17-0858-the-r
 Occurrences in session 2026-10-17-1302 (../History/2026-10/2026-10-17-1302-the-set-files-adv-02-entry-accepted-and-the-first-readable-records.md):
 - **2026-10-17.** Five text blocks before tool calls, in English, each announcing the next step at a step change: :253, :510, :1535, :1592 and :1631. The quick check stopped the next command each time, and each line was listed by its own decision; no classifier stop. After the second, no text at all in a message that holds a tool call (D-1138 amendment 1), which the third to the fifth broke at a step change once more; the rules lowered the cost of each slip but not their number (D-1144 amendment 3). Only a check installed on the machine, which is the owner's to allow, can block a text block before it is written (DEF-0073).
 
+Occurrence in session 2026-10-17-1418 (../History/2026-10/2026-10-17-1418-the-late-reviews-of-tasks-051-052-053-and-the-decision-files-d1136-to-d1145.md):
+- **2026-10-17.** One text block before tool calls, in English, at a step change while the decision agent's reply was pending: :724 ("Read the erratum texts while waiting."). The quick check stopped the next command; the slip was listed by its own decision (D-1148 amendment 1); no classifier stop. The harness's status requests of that session were otherwise answered in silence; the pattern of DEF-0073 (a text at a step change, five times in the session before) came back once.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 
