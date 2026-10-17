@@ -141,6 +141,14 @@ class Push(unittest.TestCase):
             self.assertEqual((r['verdict'], r['reason']), ('refuse', 'push'), c)
             self.assertEqual(r['record']['evidence_type'], 'git_push_refused', c)
 
+    def test_push_in_any_case_refused(self):
+        """TASK-061 AC5 (D-1228 F10): "push" in any letter case is refused, reason push, even with git allowed."""
+        for c in ('git PUSH origin', 'git Push', 'git pUsH', 'git -C d PUSH'):
+            r = bash(c, allow=['git'])
+            self.assertEqual((r['verdict'], r['reason'], r['record']['evidence_type']),
+                             ('refuse', 'push', 'git_push_refused'), c)
+        self.assertEqual(bash('git status', allow=['git'])['verdict'], 'allow')
+
     def test_quoted_and_assigned_push(self):
         """TASK-061 AC5 (D-1212 F1): quotes or a backslash inside a nested shell, and "push" inside an option value,
         are refused, reason push, even with bash, sh and git allowed."""
@@ -229,6 +237,10 @@ class Unsure(unittest.TestCase):
             r = bash('echo hi ' + ch, allow=['echo'])
             self.assertEqual((r['verdict'], r['reason'], r['record']['evidence_type']),
                              ('refuse', 'parse', 'shell_not_allowed'), ascii(ch))
+        # D-1228 (R5's case): balanced quotes alone, with no other character outside the set, are refused too
+        for c in ('echo "a"', "echo 'a'"):
+            r = bash(c, allow=['echo'])
+            self.assertEqual((r['verdict'], r['reason']), ('refuse', 'parse'), c)
         for c in ('git status', 'git log -n 3 --format=oneline', 'python tests/run_tests.py && git status',
                   'git diff a/b.py,c.py x:y +z', '(git status) | git status ; git status & git status'):
             self.assertEqual(bash(c, allow=['git', 'python tests/run_tests.py'])['verdict'], 'allow', c)
@@ -262,6 +274,15 @@ class Allowlist(unittest.TestCase):
         """TASK-061 AC2, TASK-061 AC6: an empty or blank command is uncovered, input (a blank command is read as one
         that is missing)."""
         self.assertEqual(bash('   ')['verdict'], 'uncovered')
+
+    def test_separators_only_refused(self):
+        """TASK-061 AC6 (D-1228 F10): a text of separators only holds no simple command and is refused, reason parse,
+        with an empty allowlist and with one that admits echo."""
+        for c in (';', '&&', '( )', ' ; ; ', ';\n;', '|', '()'):
+            for allow in ([], ['echo']):
+                r = bash(c, allow=allow)
+                self.assertEqual((r['verdict'], r['reason'], r['record']['evidence_type'], r['record']['refers_to']),
+                                 ('refuse', 'parse', 'shell_not_allowed', c), (c, allow))
 
 
 class Record(unittest.TestCase):
@@ -331,7 +352,9 @@ class Purity(unittest.TestCase):
                       'Pushes by other means', 'supported live only for Bash', 'Links and junctions are not resolved',
                       'matcher "*"', 'passes no cwd', 'admits whatever that code does', 'D-1223 F9',
                       'supersedes the form-by-form rules F5 to F8', 'no quoted argument at all', 'case-sensitively',
-                      'reserved device names', 'redaction', 'A blank command is "uncovered"', 'an alternate data stream'):
+                      'reserved device names', 'redaction', 'A blank command is "uncovered"', 'an alternate data stream',
+                      'D-1228 F10', 'A text of separators only', 'in any letter case', 'their meanings differ',
+                      'entry holding a character outside the set never', 'help.autocorrect'):
             self.assertIn(words, doc, words)
         self.assertNotIn('.aieos', text)
 

@@ -31,7 +31,8 @@ What these functions show, and what they do not (AC9):
 - The tool names are the model-side tool_use names seen in this project's transcripts; that a hook input's tool_name
   carries the same names is supported live only for Bash (D-1202, D-1203), and unmeasured for the other tools.
 - The shell checks read the command text only and refuse when unsure, so they over-refuse. First the push checks: any
-  text with a git word and "push" anywhere once quotes and backslashes are removed, or with a git word and any "$",
+  text with a git word and "push" in any letter case anywhere once quotes and backslashes are removed (D-1228 F10:
+  "git PUSH" is refused too, its effect on Windows being unmeasured), or with a git word and any "$",
   "`" or "%" anywhere, is refused with reason push; a text with an unclosed quote is refused with reason parse (push
   if it has a git word and "push"). Then the character set (D-1223 F9): a text goes to the allowlist only if every
   character is an ASCII letter or digit, a space, a tab, a newline (a carriage return only right before a newline), or
@@ -39,18 +40,27 @@ What these functions show, and what they do not (AC9):
   "%", "#", "<", ">", "{", "}", "@", glob character or non-ASCII character can reach the allowlist, and the split never
   has to agree with a shell on quoting, escapes, comments, here-documents, here-strings, substitutions or line
   continuation. This over-refuses heavily: no quoted argument at all is allowed (git commit -m "x" is refused), nor
-  "2>&1". It supersedes the form-by-form rules F5 to F8 of decisions D-1219 and D-1220. PowerShell's own syntax is not
-  parsed; the set is chosen so that what remains means the same in bash and in PowerShell.
-- A blank command is "uncovered", reason input.
+  "2>&1". It supersedes the form-by-form rules F5 to F8 of decisions D-1219 and D-1220. With this set the split and
+  both shells agree on where commands and words begin and end; their meanings differ (for example of "&", "|", "="
+  and ","), and PowerShell's own syntax is not parsed. An allowlist entry holding a character outside the set never
+  matches: the contract's own entry "timeout 110 python tests/run_tests.py < /dev/null" included, since "<" is outside.
+- A blank command is "uncovered", reason input. A text of separators only, with no simple command (";", "&&", "( )"),
+  is refused with reason parse (D-1228 F10), so under an empty allowlist every shell call with a non-blank text is
+  refused.
 - Pushes the text does not show are not seen: an alias set outside the call, and a push inside a script file or a
   program the command runs (for example "bash run.sh"). The allowlist is the backstop. An allowlist entry for a
   program that runs code (bash, sh, powershell, cmd, python, a script) admits whatever that code does, pushes built
   from parts included (for example a script that builds the word from "gi" and "t"), and an entry for git with any
-  arguments admits any git command but a literal push (D-1212 F3).
+  arguments admits any git command but a literal push in any letter case (D-1212 F3): for example git -c with
+  help.autocorrect, which may run a push from a mistyped word, or with a setting that runs a program. Entries for
+  xargs, find with -exec, timeout and other programs that run a command given to them admit that command too.
 - The allowlist is matched word by word, case-sensitively, from a simple command's first word as given: leading
   assignments and prefixes are not skipped, so "env X=1 git status" or "GIT status" is refused under an entry
   "git status" (over-refuses).
 - Wrong arguments are refused before any concern is sorted, so even a read call then gives "refuse", reason argument.
+- Also: a refusal with reason record carries no record (AC7); a tool_input that is not a mapping, or a tool_name that
+  is not a string, is "uncovered", reason tool; an exception inside judge gives "uncovered", reason input (AC8); a
+  path above the drive root is "outside"; a read call is allowed whatever its path.
 - A relative file path is "uncovered": judge relies on no hook-input key other than tool_name and tool_input, so it
   passes no cwd (D-1212 F4). A UNC, device or rooted path without a drive, an alternate data stream, a NUL, a name of
   only dots or spaces, and a trailing space or dot on a name are "uncovered", reason path.
@@ -94,7 +104,7 @@ _WORD = re.compile(r'''[^\s'"`;&|(){}<>]+''')
 _SEPARATORS = '\n;&|(){}`'
 _SAFE = re.compile(r'[A-Za-z0-9 \t\n_.,/:=+;&|()-]*')
 _STRIP = re.compile(r'''['"\\]''')
-_PUSH = re.compile(r'(?<![A-Za-z0-9_-])push(?![A-Za-z0-9_-])')
+_PUSH = re.compile(r'(?<![A-Za-z0-9_-])push(?![A-Za-z0-9_-])', re.I)
 _GIT = re.compile(r'(?<![A-Za-z0-9_-])git(?:\.exe)?(?![A-Za-z0-9_-])', re.I)
 
 
@@ -225,7 +235,7 @@ def _pushes(words):
     i = 0
     while i < len(words) and (_ASSIGN.match(words[i]) or words[i] in PREFIXES):
         i += 1
-    return i < len(words) and _is_git(words[i]) and 'push' in words[i + 1:]
+    return i < len(words) and _is_git(words[i]) and 'push' in [w.lower() for w in words[i + 1:]]
 
 
 def _text_pushes(text):
@@ -305,6 +315,9 @@ def _judge(hook_input, root, task_id, write_set, allowlist, record_id, recorder)
         if commands is None:
             if _text_pushes(text):
                 return _refuse('shell', 'push', _record(record_id, recorder, task_id, 'git_push_refused', text))
+            return _refuse('shell', 'parse', _record(record_id, recorder, task_id, 'shell_not_allowed', text))
+        # D-1228 F10: separators only, no simple command, so nothing for the allowlist to admit (AC6)
+        if not commands:
             return _refuse('shell', 'parse', _record(record_id, recorder, task_id, 'shell_not_allowed', text))
         if any(_pushes(c) for c in commands) or _text_pushes(text):
             return _refuse('shell', 'push', _record(record_id, recorder, task_id, 'git_push_refused', text))

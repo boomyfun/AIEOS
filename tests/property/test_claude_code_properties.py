@@ -72,6 +72,8 @@ class Properties(unittest.TestCase):
                 self.assertFalse(claude_code._text_pushes(text), h)
                 cmds = claude_code._split(text)
                 self.assertIsNotNone(cmds, h)
+                # D-1228 F10: an allowed shell call holds at least one simple command
+                self.assertTrue(cmds, h)
                 for c in cmds:
                     self.assertTrue(any(c[:len(e.split())] == e.split() for e in ALLOW), h)
 
