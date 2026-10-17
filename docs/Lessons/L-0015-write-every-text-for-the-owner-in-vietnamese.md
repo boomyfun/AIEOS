@@ -272,6 +272,9 @@ Occurrences in session 2026-10-17-0650 (../History/2026-10/2026-10-17-0650-the-r
 Occurrences in session 2026-10-17-0858 (../History/2026-10/2026-10-17-0858-the-runner-tests-accepted-and-the-set-files-adv-02-entry-contracted.md):
 - **2026-10-17.** Three text blocks before tool calls, in English, each announcing the next step at a step change: :655, :734 and :1417. The quick check stopped the next command each time, and each line was listed by its own decision; no classifier stop. A rule that a message opening a piece of work holds only calls whose files were written earlier (D-1127 amendment 2) was broken at :1417; then no call whose only work is the quick check plus a no-op (D-1132 amendment 1); the rules reduced the slips but did not prevent them. Only a check installed on the machine, which is the owner's to allow, can block a text block before it is written (DEF-0073).
 
+Occurrences in session 2026-10-17-1302 (../History/2026-10/2026-10-17-1302-the-set-files-adv-02-entry-accepted-and-the-first-readable-records.md):
+- **2026-10-17.** Five text blocks before tool calls, in English, each announcing the next step at a step change: :253, :510, :1535, :1592 and :1631. The quick check stopped the next command each time, and each line was listed by its own decision; no classifier stop. After the second, no text at all in a message that holds a tool call (D-1138 amendment 1), which the third to the fifth broke at a step change once more; the rules lowered the cost of each slip but not their number (D-1144 amendment 3). Only a check installed on the machine, which is the owner's to allow, can block a text block before it is written (DEF-0073).
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 
