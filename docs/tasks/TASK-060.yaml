@@ -1,0 +1,403 @@
+# Task contract TASK-060, the T0 manual adapter (Master Plan revision 4, §4 M5; specification 5 revision 3, sections 2,
+# 4 and 11 points 9 to 11; specification 2 revision 5, section 6.2; assurance-model.md section 2).
+# Revision 0, drafted under decision D-1179 (Q2 (1) to (6), C2); brought for approval in its own request; whether it is
+# approved is recorded in the decision files, not in this file. Fields and value forms follow specification 2 §5.1 and
+# the contracts of TASK-051 and TASK-052. Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# Revision 1, under decision D-1180: its edits (a) to (d).
+# Task type: implementation. What it adds: a new module src/aieos_bootstrap/t0.py, the T0 manual adapter (specification 5
+# section 4: tier T0, "Chat", "Chỉ post-hoc" [AIEOS-concept.md:649]): a human or a chat session does the work and nothing
+# is observed while it runs. Its session flow (section 11 point 9): start, through adapter.start (TASK-051), which runs
+# the Resume Check and on CONTINUE or CONTINUE_WITH grants the lease; then the agent's declared claims, what it says it
+# did and the read-set it estimates (AIEOS-concept.md:483), each passed to the core as one record.added record with
+# fact_kind claim and source_class agent_declared, appended by the core's writer (writer.append_event) with the session's
+# fencing token, never written by the adapter (INV-004; specification 5 line 19); then the submission, through
+# adapter.submit (TASK-025's path); then the end, through adapter.end (TASK-028's release and the session's close).
+# Violations are found afterwards by the gates (specification 3 section 8; specification 4's G0), never while running.
+# The record form (D-1179 Q2 (2)): specification 2 revision 5 section 6.2's existing keys only, checked at main by
+# records.check_payload('record.added', ·) with no finding for record_id, fact_kind claim, source_class agent_declared,
+# recorder, subject, evidence_type and basis (SP/tools/claim_form60.py of session ee32c9d8: 0 findings for a claim and
+# for a read-set estimate; the proposed key `session` of section 6.2 is not in records.py's RECORD_KEYS and gives an
+# unknown-key finding, so the session is named in the recorder's words and not as a key; reading). records.py is not
+# changed, so DEF-0071's items do not come in.
+# What a claim proves (assurance-model.md:22, as specification 5 line 42 cites it): nothing. A claim record carries no
+# outcome, no dimension, no gate, no stands_for, no decision_ref and no models, so it meets no evidence entry
+# (governor-spec.md §4 rule 3 counts a record only with outcome pass in the entry's dimension) and blocks nothing (rule 4
+# needs outcome blocking); the evidence that counts comes only from the gates afterwards (specification 5 line 42).
+# Point 10 (an abnormal session end; D-1179 Q2 (3)): in scope only as section 2 item 5's fallback: if the caller never
+# calls end, the lease's expiry releases it; t0 adds nothing for a crash, an expired lease or a resume after compaction,
+# and states this as a limit. Point 11 (T0's conformance scenarios; D-1179 Q2 (4)): not in this task; carried as a named
+# follow-up, a fixture task of its own.
+# Limits (carried at acceptance): the claims are an agent's statements, recorded and not checked; the read-set is an
+# estimate (AIEOS-concept.md:483) and is never the observed source (specification 5 section 7; specification 3 takes
+# the observed source only from a measured runtime of tier T3 or above); no adapter declaration exists for any runtime
+# (specification 5 section 3); t0 neither reads nor writes one, and what check 7 gives is the Resume Check's
+# (resume_check.py, unchanged by this task); specification 5 section 11 point 14 carries the marker "lifted by the owner
+# (DM A69)"; t0 is called only by its tests, and no other caller is added before a later task names one; no hook, no
+# Claude Code setting, no measurement.
+# Readers of the changed paths (D-263 C3's practice): tests/unit/test_writer.py's R8 test and tests/unit/test_gitread.py's
+# subprocess test read every module of src/ and keep passing. No existing module imports t0.
+# Risk: high (risk rules revision 6, §2 point 3: R3 matches every path under src/** and tests/**), computed over the base
+# by script (SP/tools/risk_class60.py at 377c2920: "task risk class: high"). GOV-003: every path of the write-set is an
+# evaluator path by the workflow's pinned list (SP/tools/gov003_class60.py: "GOV-003 evaluator change: yes (4 of 4
+# paths)", all added). Change class critical_cr, computed by script and read as for TASK-053 (gov003_class60.py: "GOV-003
+# evaluator change: yes (4 of 4 paths)"); the approval form is ruled at acceptance. Profile (assurance-model.md §5, gov-AIEOS,
+# high): functional [unit_test], architecture [deterministic_rule], functional [integration_test], security
+# [static_security_analysis] and architecture [ai_review (cross-model)], plus the evidence_required of the applicable
+# articles. Reviews: five way-2 reviews on a model other than the implementer's: Opus 5.5 by the owner's configuration,
+# and, for a task that Opus 5.5 implements, Sonnet 5.5, one of the two models the owner preferred at :1071 of session
+# c52ac282, as decision D-1157 took it; and the decision agent's own reviews: INV-003's
+# human_review, OPS-002's human_review and the cross-model half, each its own record (decision D-1148 Q2).
+# Records (D-1179 Q2 (6); DEF-0074 (iii)): in the readable form, as TASK-059's: every observation carries the commit and in
+# intent_versions the mapped version of every entity of input_state.intent_versions, as the self-build's script
+# map_versions.py (revision r2, SHA-256 d2cbb635c910720487b6c62ca15082319a6008ac1a27c5b5f218b814f33debb1) gives it; an
+# applicable article's entry is recorded under the article's id as the record's dimension, one record per entry. Its
+# coverage is checked by a per-entry script before the acceptance request (L-0022), and the governor's evaluation over
+# the records is reported (decision D-1098).
+# Naming (D-544 Q3): every test of the new test modules names the AC ids it stands for as "TASK-060 ACn" in its own
+# docstring.
+# Evaluation path (A61; as TASK-019 to TASK-059): commit C changes only docs/tasks/TASK-060.yaml and has one parent equal
+# to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-060" and no e-mail address in its message, go to
+# task/TASK-060 under their own decisions; main receives the task only at its acceptance.
+# Not applicable: OPS-001 (the task changes no ref); INV-005 to INV-008, INV-010 and INV-011 (decision contracts as the
+# governor reads them, acceptance, evidence and the policy meet no path of the write-set); GOV-001, GOV-004 to GOV-006 and
+# SEC-003 (the concept file, the bound artifacts, the decision matrix, the records and pre-genesis documents, and
+# .github/, meet no path of the write-set). INV-004 applies: the module writes only through the writer's functions.
+# INV-009 applies through the writer, which this task does not change.
+# Owner-kept acts: none. No hook, no Claude Code setting, nothing under .github/, no push of its own; it weakens no
+# evidence requirement; so its acceptance is one delegated approval of the decision agent (Master Plan section 6).
+task: TASK-060
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add the T0 manual adapter in standard-library Python 3. A new module src/aieos_bootstrap/t0.py gives start(...),
+  claim(...), submit(...) and end(...): start, submit and end pass through to adapter.start, adapter.submit and
+  adapter.end (TASK-051) with t0's own argument checks; claim(root, task_id, session_id, fencing_token, claims, event_id,
+  recorder, now) builds, for each declared claim, one record with fact_kind claim and source_class agent_declared, checks
+  it with records.check_payload('record.added', ·), and appends it through writer.append_event with the session's fencing
+  token, so the writer's fence is the one check. With unit, integration and property tests in tests/unit/test_t0.py,
+  tests/integration/test_t0_session.py and tests/property/test_t0_properties.py, each test naming its AC ids in its own
+  docstring; the tests use stand-ins for the writer's functions and write no file.
+traces_to:
+  - docs/specs/spec-05-adapter-contract.md#4
+  - docs/specs/spec-05-adapter-contract.md#2
+  - docs/specs/spec-05-adapter-contract.md#11
+  - docs/specs/spec-02-aieos-file-format.md#6.2
+  - docs/pre-genesis/assurance-model.md#2
+input_state:
+  # base_commit is the `main` commit on top of which the approved contract is committed as its own commit C, changing
+  # only docs/tasks/TASK-060.yaml; G0 requires C's one parent to equal base_commit, and the task starts from C. It is
+  # filled by script from refs/heads/main just before C is made (D-198 C5): the placeholder and its quotes are replaced
+  # by the 40-hex id.
+  base_commit: 377c29205916f1ec3e06910b36122510ada3d63f
+  depends_on: [TASK-001, TASK-011, TASK-016, TASK-025, TASK-028, TASK-032, TASK-051]
+  intent_versions:
+    docs/specs/spec-05-adapter-contract.md: 6392a747dfab0f5b0c8f8103842bfeffdc5020e1828a4d5e97407ba5e07f1e94
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 95316b6292aec8af1512dc4c19d63f406b85d99500d89c8756e0968c437054bd
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 05c53318cd756a3acfc13e5adaffbfaede8f05be3d00289e9fd45fef08c63c73
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # All four paths are new.
+  paths:
+    - src/aieos_bootstrap/t0.py
+    - tests/unit/test_t0.py
+    - tests/integration/test_t0_session.py
+    - tests/property/test_t0_properties.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - docs/records/**
+    - src/aieos_bootstrap/**
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.adapter.start, aieos_bootstrap.adapter.submit, aieos_bootstrap.adapter.end, aieos_bootstrap.writer.append_event, aieos_bootstrap.records.check_payload, aieos_bootstrap.eventlog.append, aieos_bootstrap.governor.evaluate]
+  schemas: [spec-02 records (6.2), spec-02 event payloads (6.3)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/conformance/fixtures/acc_01.py
+  - tests/conformance/fixtures/acc_02.py
+  - tests/conformance/fixtures/acc_03.py
+  - tests/conformance/fixtures/acc_04.py
+  - tests/conformance/fixtures/acc_05.py
+  - tests/conformance/fixtures/acc_06.py
+  - tests/conformance/fixtures/acc_07.py
+  - tests/conformance/fixtures/acc_08.py
+  - tests/conformance/fixtures/acc_09.py
+  - tests/conformance/fixtures/acc_10.py
+  - tests/conformance/fixtures/acc_11.py
+  - tests/conformance/fixtures/acc_12.py
+  - tests/conformance/fixtures/acc_13.py
+  - tests/conformance/fixtures/acc_14.py
+  - tests/conformance/fixtures/acc_15.py
+  - tests/conformance/fixtures/acc_16.py
+  - tests/conformance/fixtures/acc_17.py
+  - tests/conformance/fixtures/adv_01.py
+  - tests/conformance/fixtures/adv_03.py
+  - tests/conformance/fixtures_cb/adv_02.py
+  - tests/conformance/fixtures_rc/rc_01.py
+  - tests/conformance/fixtures_rc/rc_02.py
+  - tests/conformance/fixtures_rc/rc_03.py
+  - tests/conformance/fixtures_rc/rc_04.py
+  - tests/conformance/fixtures_rc/rc_05.py
+  - tests/conformance/fixtures_rc/rc_06.py
+  - tests/conformance/fixtures_rc/rc_07.py
+  - tests/conformance/fixtures_rc/rc_08.py
+  - tests/conformance/fixtures_rc/rc_09.py
+  - tests/conformance/fixtures_rc/rc_10.py
+  - tests/conformance/fixtures_rc/rc_11.py
+  - tests/conformance/fixtures_risk/risk_01.py
+  - tests/conformance/set.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The arguments. Before anything is called: root a non-empty string; task_id "TASK-" followed by digits; session_id
+      and recorder non-empty strings; fencing_token (for claim, submit and end) a mapping with exactly epoch (a non-empty
+      string) and counter (an int, not a bool, at least 0); event_id a non-empty string; now a timezone-aware datetime in
+      UTC with whole seconds; claims a non-empty list of at most 100 mappings, each with exactly kind ("did" or
+      "read_set") and text (a non-empty string of at most 2000 characters with no line break). A wrong argument gives the
+      result of AC5 with result "refused", reason "argument" and a finding naming it, and no function is called. The
+      called functions are keyword arguments defaulting, at call time, to adapter.start, adapter.submit, adapter.end and
+      writer.append_event; the module keeps no state.
+  - AC2: >-
+      The claim records. For the claim at position i (counted from 1) claim builds exactly the keys record_id (event_id
+      followed by "/claim-" and i), fact_kind claim, source_class agent_declared, recorder (t0.RECORDER, 'the T0 manual
+      adapter (aieos_bootstrap.t0)', followed by ", session " and session_id, and ", for " and recorder), subject task_id,
+      evidence_type ("agent_claim" for kind "did", "read_set_estimate" for kind "read_set") and basis (the text). It
+      never sets outcome, dimension, gate, blocking_kind, commit, intent_versions, stands_for, decision_ref, models,
+      approval_binding, risk_class or evidence_profile. records.check_payload('record.added', record) gives no finding
+      for every record before any append, else "refused", reason "record", naming the position, and nothing is appended.
+  - AC3: >-
+      The appends. For each record in order, append(root, 'record.added', record, event_id followed by "/claim-" and i,
+      now, recorder, task_id=task_id, fencing_token=fencing_token) once. No separate check of the held lease: the
+      writer's fence is the one check, so a token that is not the held lease's, a lease on another task, an expired lease
+      or no lease gives reason "fence" at the first append, with the writer's refusal record in the log, and no later
+      record is appended. A WriteResult other than "appended" or "duplicate", or a raised exception, stops the call with
+      reason "append" and the position. "duplicate" (the same event_id given again) is no error, so a repeat of a
+      completed call gives "done", every event_id under duplicate, nothing appended.
+  - AC4: >-
+      start, submit and end. t0.start(root, task_id, session_id, holder, inputs, code_sha256, expires_at, recorder, now),
+      t0.submit(root, repo, commit_id, task_id, event_id, recorder, now) and t0.end(root, task_id, session_id,
+      fencing_token, now) check their arguments as AC1 and TASK-051 AC1 to AC4 do, call the adapter's function once with
+      the given functions, and return its result unchanged under "core" in AC5's form, with decision, fencing_token and
+      released copied out as TASK-051 AC5 does; an adapter result "refused" gives "refused", reason "core". t0 makes no
+      fence comparison and no acceptance or execution decision of its own (specification 5 lines 24 and 26).
+  - AC5: >-
+      The result. Each function returns a mapping with exactly the keys result ("done" or "refused"), reason (None or one
+      of "argument", "record", "fence", "append", "core"), findings (a list of texts), appended (the event_ids appended,
+      in order), duplicate (the event_ids the writer gave "duplicate"), core (the adapter's result, or None), decision,
+      fencing_token and released (each copied from core, or None). An exception raised by a called function is caught
+      and becomes a result with the step's reason; none escapes.
+  - AC6: >-
+      What a claim proves (assurance-model.md:22; specification 5 line 42). Over a log that holds the task's records of
+      AC2 and nothing else, governor.evaluate, called as evaluation.evaluate_task calls it, counts none of them for any
+      evidence entry and lists no blocking record; the test asserts that adding claim records to a log changes no entry
+      the governor counts as met. The module's docstring states that a claim is an agent's statement, recorded and not
+      checked, that the read-set is an estimate and never the observed source, and that the evidence that counts comes
+      only from the gates afterwards.
+  - AC7: >-
+      Limits, stated in the module's docstring and carried at acceptance: point 10 only as section 2 item 5's fallback
+      (no end means the lease's expiry releases it; nothing for a crash, an expired lease or a resume after compaction);
+      no adapter declaration read or written (specification 5 section 3), so check 7's STOP: runtime insufficient applies
+      as the core decides it; T0's conformance scenarios not in this task (a named follow-up fixture task); the session
+      named only in the recorder's words, since records.py has no `session` key (specification 2 section 6.2's proposed
+      key; a later task); t0 called only by its tests; __init__.py not changed. Every existing module is unchanged, and if
+      one can pass only by a change the task escalates (needs_out_of_scope_change).
+  - AC8: >-
+      Purity and the CI checks (INV-001 to INV-004). t0.py imports only the Python 3 standard library and aieos_bootstrap's
+      adapter, records and writer. It starts no process except through the adapter's submit (gitread.run), opens no file,
+      reads no clock or environment, builds no event-log line itself, and makes no network or model call; no exec, eval,
+      compile, __import__ or importlib; no assert in src (bandit B101); no string that names the project-state directory;
+      tests/unit/test_writer.py's R8 test and tests/unit/test_gitread.py's subprocess test pass unchanged. At the task's
+      commits the CI steps report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit.
+  - AC9: >-
+      Its own tests and the added text. Every test function of the three new test modules names the AC ids it stands for
+      as "TASK-060 ACn" in its own docstring; no other task's AC is named in qualified form. No existing test is changed
+      (GOV-003). Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns,
+      and each count is 0; the file names are scanned with the same patterns and the records executors' pre-push pattern
+      (D-282). The tests write and remove no file.
+  - AC10: >-
+      Tests, each rule with at least one passing and one failing case, with stand-ins for the writer's and the adapter's
+      functions bound to the real signatures (inspect.signature(...).bind): R1 AC1 (each wrong argument refused before any
+      call; the defaults at call time); R2 AC2 (the keys and values of both kinds; no forbidden key; a record that
+      check_payload refuses gives "record" with no append); R3 AC3 (the order; each with the token; a refusal or exception
+      at each position stops there; a foreign, stale or expired token and no lease each give "fence" with the writer's
+      refusal record, over the real append_event logic through eventlog.append with an in-memory log and held lease; a
+      repeat of a completed call gives "done", all duplicates, nothing appended); R4 AC4 (the pass-throughs and their
+      argument checks); R5 AC5 (the keys; no exception escapes); R6 AC6 (an end-to-end session in an integration test:
+      start over the real adapter, execution.execute and resume_check.check with in-memory stand-ins built on
+      eventlog.append, reaching CONTINUE with the Resume Check inputs that TASK-051's tests supply for it
+      (tests/unit/test_replay.py:155-184, inputs(): a READY task, matching contract hashes, a done dependency, an
+      applicable article not violated, the intent versions current, and for check 7 the input runtime {'adapter':
+      'an-adapter', 'max_risk': 'high'} with the contract's risk medium, an input of the test and not a declaration
+      file), then claim with the granted token, then end, and governor.evaluate over the resulting records counting no
+      claim; and the same session with the runtime input absent, where check 7 gives STOP: runtime insufficient, start
+      grants no lease and claim with any token gives "fence");
+      R7 AC7 and AC8 (a script check of the imports and of the absence of open, write, subprocess, clock and environment
+      calls, and of the docstring's words); and a property test (standard library only, fixed seeds) that two claim calls
+      over equal inputs give equal records and equal logs, and that no generated claim list gives a record with outcome,
+      dimension or gate. tests/run_tests.py, unchanged, runs them.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC10]}
+  - {gate: G3, check: constitution, args: [AC7, AC8, AC9, INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
