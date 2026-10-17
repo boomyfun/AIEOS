@@ -1,0 +1,17 @@
+# DEF-0075: the T0 manual adapter's conformance scenarios
+
+- Status: open
+- Opened: 2026-10-17 (session ee32c9d8; decisions D-1179 Q2 (4) and D-1182 Q3)
+- Deferred by: decision agent (A41), D-1182 (a Deferred item of its own; DEF-0072 is done and carries no new open work).
+- Decision group: A (a fixture task within M5's approved plan).
+
+## What
+- Specification 5 section 11 point 11 (`docs/specs/spec-05-adapter-contract.md` line 108): which conformance scenarios each adapter must pass, beyond ADV-02, for T0 among them, set with their fixtures in tasks of their own (section 9).
+- TASK-060 (the T0 manual adapter; contract on main as commit C 59b8c76d, decisions D-1179 to D-1181) leaves them out by its scope (D-1179 Q2 (4); TASK-060.yaml AC7).
+- The work: a fixture task of its own after TASK-060's acceptance, naming the scenarios, their fixtures and their freeze approvals (DM B1, B10); TASK-060's acceptance refers to this item.
+
+## Resume when
+- After TASK-060 is accepted.
+
+## Log
+- 2026-10-17: opened (session ee32c9d8; D-1179, D-1182).
