@@ -95,7 +95,17 @@ class Properties(unittest.TestCase):
                   ('PowerShell', 'echo hi # "\nrm x\n# "', ['echo']),
                   ('PowerShell', 'echo <# " #> ; rm x ; echo <# " #>', ['echo']),
                   ('PowerShell', 'echo "a\u201c ; rm x ; echo \u201db"', ['echo']),
-                  ('PowerShell', "echo 'a\u2019 ; rm x ; echo \u2018b'", ['echo'])]
+                  ('PowerShell', "echo 'a\u2019 ; rm x ; echo \u2018b'", ['echo']),
+                  ('Bash', "echo <<EOF\necho it's\nEOF\nrm x\necho 'z", ['echo']),
+                  ('Bash', 'echo <<\'EOF\'\necho "\nEOF\nrm x\necho "', ['echo']),
+                  ('Bash', "echo <<EOF\necho it's\nEOF\nG=gi;H=t;$G$H push\necho 'z", ['echo']),
+                  ('PowerShell', 'echo hi\u2028rm x', ['echo']),
+                  ('PowerShell', 'echo hi\u2029rm x', ['echo']),
+                  ('PowerShell', 'echo hi\u0085rm x', ['echo']),
+                  ('Bash', 'git pu\\\nsh origin', ['git', 'sh']),
+                  ('PowerShell', 'python -m pytest --% "; rm x; "', ['python -m pytest']),
+                  ('PowerShell', "echo @'\nx\n'@ ; echo ok", ['echo']),
+                  ('PowerShell', 'git @a', ['git'])]
         for tool, cmd, allow in corpus:
             r = claude_code.judge({'tool_name': tool, 'tool_input': {'command': cmd}}, ROOT, TASK, WS, allow, 'o', 'r')
             self.assertNotEqual(r['verdict'], 'allow', (tool, cmd, allow))
