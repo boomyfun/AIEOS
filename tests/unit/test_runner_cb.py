@@ -550,6 +550,8 @@ class R9Record(unittest.TestCase):
         plain = conformance.run(ROOT, COMMIT, 'TASK-056')
         # TASK-058 AC2: in the present state of ADV-02's entry the run over the tree reads the frozen fixture.
         if cb_state() == 'present':
+            # In the present state of ADV-02's entry (TASK-058 AC4), ADV-02 is PASS and the record holds
+            # capability_boundaries; the docstring above describes the null state.
             self.assertEqual(plain.value['capability_boundaries'], cb_record())
             self.assertEqual((plain.results['ADV-02'], plain.reasons['ADV-02']), (conformance.PASS, ''))
         else:
