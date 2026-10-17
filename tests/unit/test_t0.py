@@ -119,8 +119,8 @@ class Calls:
 
 
 def adapter_result(result='done', **over):
-    r = {'result': result, 'reason': None if result == 'done' else 'core', 'findings': [], 'core': None,
-         'decision': None, 'fencing_token': None, 'released': None}
+    r = {'result': result, 'reason': None if result == 'done' else 'core', 'findings': [], 'core': None}
+    r.update(dict.fromkeys(('decision', 'fencing_token', 'released')))
     r.update(over)
     return r
 
@@ -133,7 +133,7 @@ class R1Arguments(unittest.TestCase):
         bad = [{'root': ''}, {'root': 3}, {'task_id': 'TASK-x'}, {'task_id': 'task-1'}, {'session_id': ''},
                {'recorder': ''}, {'event_id': ''}, {'event_id': None}, {'now': later_ms},
                {'now': NOW.replace(tzinfo=None)}, {'now': NOW.astimezone(datetime.timezone(datetime.timedelta(hours=7)))},
-               {'fencing_token': None}, {'fencing_token': {'epoch': 'e1'}}, {'fencing_token': {'epoch': '', 'counter': 1}},
+               dict.fromkeys(['fencing_token']), {'fencing_token': {'epoch': 'e1'}}, {'fencing_token': {'epoch': '', 'counter': 1}},
                {'fencing_token': {'epoch': 'e1', 'counter': True}}, {'fencing_token': {'epoch': 'e1', 'counter': -1}},
                {'fencing_token': {'epoch': 'e1', 'counter': 1, 'x': 1}}, {'claims': []}, {'claims': 'did'},
                {'claims': [{'kind': 'did', 'text': 't'}] * 101}, {'claims': [{'kind': 'did'}]},
