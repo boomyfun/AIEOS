@@ -116,6 +116,39 @@ def case(log_seq=5, session='session-2', violation_id='violation-1', submit_id='
     }
 
 
+ADV_02_SHA256 = 'f6fed8e0db041705f870631ca46b32ba50cb43ed29f6f143f97d19c152938385'
+CB_SET_SHA256 = 'd237d5dcded3fd9fa5bdacd68b098d5818a5d12d0acfa918fd29141e699d7506'
+
+
+def cb_state(value=None):
+    """The state of the set file's Capability Boundaries entries (TASK-058, contract AC1): 'null' when ADV-02, the only
+    one, names no fixture; 'present' when it names the file conformance.expected_path gives with the SHA-256 that DM row
+    F49's freeze binds, that file in the tree having that SHA-256, and the set file, written as the runner writes it,
+    has the SHA-256 d237d5dc... and fixture_set_version 5; any other value fails. Without a value it reads the tree's
+    set file."""
+    if value is None:
+        value = conformance.unwrap((ROOT / conformance.SET_FILE).read_bytes())
+    cb = [e for e in value['scenarios'] if e['capability'] == conformance.CAPABILITY_BOUNDARIES]
+    if [e['id'] for e in cb] != ['ADV-02']:
+        raise AssertionError('the Capability Boundaries entries are not exactly ADV-02')
+    if cb[0]['fixture'] is None:
+        return 'null'
+    path = conformance.expected_path('ADV-02', conformance.CAPABILITY_BOUNDARIES)
+    data = conformance.FIRST + conformance.canonical_text(value) + conformance.LAST
+    if (cb[0]['fixture'] == {'path': path, 'sha256': ADV_02_SHA256}
+            and conformance.sha256((ROOT / path).read_bytes()) == ADV_02_SHA256
+            and conformance.sha256(data) == CB_SET_SHA256 and value['fixture_set_version'] == 5):
+        return 'present'
+    raise AssertionError('the ADV-02 entry names neither no fixture nor its frozen file in the set file of AC1')
+
+
+def cb_record():
+    """The run record's capability_boundaries in the present state (TASK-058 AC4): the three recorded modules of the
+    tree, by path and SHA-256, in the order replay, adapter, evaluation."""
+    return [{'path': conformance.cb_path(n), 'sha256': conformance.sha256((ROOT / conformance.cb_path(n)).read_bytes())}
+            for n in ('replay', 'adapter', 'evaluation')]
+
+
 def wrap(value):
     return conformance.FIRST + conformance.canonical_text(value) + conformance.LAST
 
@@ -225,7 +258,13 @@ class Properties(unittest.TestCase):
                 self.assertEqual(result, conformance.NOT_RUN)
         r = conformance.run(ROOT, 'a' * 40, 'TASK-056', cb=core())
         self.assertFalse(r.value['counts'])
-        self.assertNotIn('capability_boundaries', r.value)
+        # TASK-058 AC4 with erratum E1 (decision D-1116 C2): in the present state the key is written, and its hashes are
+        # null because this run passes the root's core as a stand-in entry.
+        if cb_state() == 'present':
+            self.assertEqual(r.value['capability_boundaries'],
+                             [{'path': conformance.cb_path(n), 'sha256': None} for n in ('replay', 'adapter', 'evaluation')])
+        else:
+            self.assertNotIn('capability_boundaries', r.value)
 
     def test_the_same_files_give_the_same_run_record(self):
         """TASK-056 AC17 (decision D-1079, M16): two runs over the same in-memory files, with an in-memory fixture under

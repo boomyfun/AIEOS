@@ -65,6 +65,39 @@ def risk_state(value=None):
     raise AssertionError('the RISK-01 entry names neither no fixture nor its frozen file')
 
 
+ADV_02_SHA256 = 'f6fed8e0db041705f870631ca46b32ba50cb43ed29f6f143f97d19c152938385'
+CB_SET_SHA256 = 'd237d5dcded3fd9fa5bdacd68b098d5818a5d12d0acfa918fd29141e699d7506'
+
+
+def cb_state(value=None):
+    """The state of the set file's Capability Boundaries entries (TASK-058, contract AC1): 'null' when ADV-02, the only
+    one, names no fixture; 'present' when it names the file conformance.expected_path gives with the SHA-256 that DM row
+    F49's freeze binds, that file in the tree having that SHA-256, and the set file, written as the runner writes it,
+    has the SHA-256 d237d5dc... and fixture_set_version 5; any other value fails. Without a value it reads the tree's
+    set file."""
+    if value is None:
+        value = conformance.unwrap((ROOT / conformance.SET_FILE).read_bytes())
+    cb = [e for e in value['scenarios'] if e['capability'] == conformance.CAPABILITY_BOUNDARIES]
+    if [e['id'] for e in cb] != ['ADV-02']:
+        raise AssertionError('the Capability Boundaries entries are not exactly ADV-02')
+    if cb[0]['fixture'] is None:
+        return 'null'
+    path = conformance.expected_path('ADV-02', conformance.CAPABILITY_BOUNDARIES)
+    data = conformance.FIRST + conformance.canonical_text(value) + conformance.LAST
+    if (cb[0]['fixture'] == {'path': path, 'sha256': ADV_02_SHA256}
+            and conformance.sha256((ROOT / path).read_bytes()) == ADV_02_SHA256
+            and conformance.sha256(data) == CB_SET_SHA256 and value['fixture_set_version'] == 5):
+        return 'present'
+    raise AssertionError('the ADV-02 entry names neither no fixture nor its frozen file in the set file of AC1')
+
+
+def cb_record():
+    """The run record's capability_boundaries in the present state (TASK-058 AC4): the three recorded modules of the
+    tree, by path and SHA-256, in the order replay, adapter, evaluation."""
+    return [{'path': conformance.cb_path(n), 'sha256': conformance.sha256((ROOT / conformance.cb_path(n)).read_bytes())}
+            for n in ('replay', 'adapter', 'evaluation')]
+
+
 def present_results(governor_result):
     """Every scenario's (result, reason) in the present state, the governor's nineteen given as one pair."""
     out = {sid: governor_result for sid in GOVERNOR_IDS}
@@ -147,6 +180,24 @@ class RunnerEndToEndTest(unittest.TestCase):
         self.with_fixture = [e['id'] for e in self.set_value['scenarios'] if e['fixture'] is not None]
 
     def test_no_governor(self):
+        if cb_state() == 'present':
+            self.assertEqual(risk_state(), 'present')
+            self.assertEqual(rc_state(), 'present')
+            r = conformance.run(ROOT, COMMIT, TASK)
+            self.assertTrue(r.value['counts'])
+            self.assertEqual(r.problems, [])
+            self.assertEqual(len(r.value['results']), 32)
+            want = present_results((conformance.NOT_RUN, 'the entry point is absent'))
+            want['RISK-01'] = (conformance.NOT_RUN, 'the entry point is absent')
+            want['ADV-02'] = (conformance.PASS, '')
+            self.assertEqual({s: (v, r.reasons[s]) for s, v in r.results.items()}, want)
+            self.assertEqual(r.record['outcome'], 'fail')
+            self.assertIsNone(r.value['governor_identity'])
+            self.assertEqual(r.value['resume_check'], resume_check_record())
+            self.assertEqual(r.value['capability_boundaries'], cb_record())
+            self.assertEqual([x['id'] for x in r.value['results']], [e['id'] for e in self.set_value['scenarios']])
+            self.assertEqual(len(self.with_fixture), 32)
+            return
         if risk_state() == 'present':
             self.assertEqual(rc_state(), 'present')
             r = conformance.run(ROOT, COMMIT, TASK)
@@ -188,6 +239,23 @@ class RunnerEndToEndTest(unittest.TestCase):
             self.assertEqual(r.reasons[sid], 'the entry point is absent')
 
     def test_a_stand_in_that_answers_from_the_expected_values(self):
+        if cb_state() == 'present':
+            self.assertEqual(risk_state(), 'present')
+            self.assertEqual(rc_state(), 'present')
+            def evaluate(request, inputs, case_records):
+                sid, n, case = self.cases[json.dumps(request, sort_keys=True)]
+                return answer(request, case['expected'])
+            r = conformance.run(ROOT, COMMIT, TASK, evaluate=evaluate)
+            self.assertFalse(r.value['counts'])
+            self.assertEqual(r.problems, ['a stand-in governor (reading)'])
+            want = present_results((conformance.PASS, ''))
+            want['RISK-01'] = (conformance.NOT_RUN, 'the entry point is absent')
+            want['ADV-02'] = (conformance.PASS, '')
+            self.assertEqual({s: (v, r.reasons[s]) for s, v in r.results.items()}, want)
+            self.assertEqual(r.value['resume_check'], resume_check_record())
+            self.assertEqual(r.value['capability_boundaries'], cb_record())
+            self.assertEqual(r.record['outcome'], 'fail')
+            return
         if risk_state() == 'present':
             self.assertEqual(rc_state(), 'present')
             def evaluate(request, inputs, case_records):
@@ -224,6 +292,33 @@ class RunnerEndToEndTest(unittest.TestCase):
         self.assertEqual(r.record['outcome'], 'fail')
 
     def test_a_stand_in_with_one_decision_outside_a_list(self):
+        if cb_state() == 'present':
+            self.assertEqual(risk_state(), 'present')
+            self.assertEqual(rc_state(), 'present')
+            def evaluate(request, inputs, case_records):
+                sid, n, case = self.cases[json.dumps(request, sort_keys=True)]
+                out = answer(request, case['expected'])
+                if sid == 'ACC-01':
+                    out['decision'] = next(d for d in ('ACCEPT', 'REJECT', 'NEEDS_REWORK')
+                                           if d not in case['expected']['decision'])
+                return out
+            r = conformance.run(ROOT, COMMIT, TASK, evaluate=evaluate)
+            want = {s: v for s, (v, _) in present_results((conformance.PASS, '')).items()}
+            want['ACC-01'] = conformance.FAIL
+            want['ADV-02'] = conformance.PASS
+            self.assertEqual(r.results, want)
+            self.assertEqual(list(r.results.values()).count(conformance.PASS), 30)
+            reasons = {s: why for s, (_, why) in present_results((conformance.PASS, '')).items()}
+            reasons['ACC-01'] = 'not met: case 1: decision'
+            reasons['RISK-01'] = 'the entry point is absent'
+            reasons['ADV-02'] = ''
+            self.assertEqual(r.reasons, reasons)
+            self.assertFalse(r.value['counts'])
+            self.assertEqual(r.problems, ['a stand-in governor (reading)'])
+            self.assertEqual(r.value['resume_check'], resume_check_record())
+            self.assertEqual(r.value['capability_boundaries'], cb_record())
+            self.assertEqual(r.record['outcome'], 'fail')
+            return
         if risk_state() == 'present':
             self.assertEqual(rc_state(), 'present')
             def evaluate(request, inputs, case_records):

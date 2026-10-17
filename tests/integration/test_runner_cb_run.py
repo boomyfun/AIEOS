@@ -9,6 +9,7 @@ import hashlib
 import json
 import pathlib
 import unittest
+from unittest import mock
 
 from aieos_bootstrap import conformance
 from aieos_bootstrap import replay
@@ -118,6 +119,39 @@ def case(log_seq=5):
     }
 
 
+ADV_02_SHA256 = 'f6fed8e0db041705f870631ca46b32ba50cb43ed29f6f143f97d19c152938385'
+CB_SET_SHA256 = 'd237d5dcded3fd9fa5bdacd68b098d5818a5d12d0acfa918fd29141e699d7506'
+
+
+def cb_state(value=None):
+    """The state of the set file's Capability Boundaries entries (TASK-058, contract AC1): 'null' when ADV-02, the only
+    one, names no fixture; 'present' when it names the file conformance.expected_path gives with the SHA-256 that DM row
+    F49's freeze binds, that file in the tree having that SHA-256, and the set file, written as the runner writes it,
+    has the SHA-256 d237d5dc... and fixture_set_version 5; any other value fails. Without a value it reads the tree's
+    set file."""
+    if value is None:
+        value = conformance.unwrap((ROOT / conformance.SET_FILE).read_bytes())
+    cb = [e for e in value['scenarios'] if e['capability'] == conformance.CAPABILITY_BOUNDARIES]
+    if [e['id'] for e in cb] != ['ADV-02']:
+        raise AssertionError('the Capability Boundaries entries are not exactly ADV-02')
+    if cb[0]['fixture'] is None:
+        return 'null'
+    path = conformance.expected_path('ADV-02', conformance.CAPABILITY_BOUNDARIES)
+    data = conformance.FIRST + conformance.canonical_text(value) + conformance.LAST
+    if (cb[0]['fixture'] == {'path': path, 'sha256': ADV_02_SHA256}
+            and conformance.sha256((ROOT / path).read_bytes()) == ADV_02_SHA256
+            and conformance.sha256(data) == CB_SET_SHA256 and value['fixture_set_version'] == 5):
+        return 'present'
+    raise AssertionError('the ADV-02 entry names neither no fixture nor its frozen file in the set file of AC1')
+
+
+def cb_record():
+    """The run record's capability_boundaries in the present state (TASK-058 AC4): the three recorded modules of the
+    tree, by path and SHA-256, in the order replay, adapter, evaluation."""
+    return [{'path': conformance.cb_path(n), 'sha256': conformance.sha256((ROOT / conformance.cb_path(n)).read_bytes())}
+            for n in ('replay', 'adapter', 'evaluation')]
+
+
 def wrap(value):
     return conformance.FIRST + conformance.canonical_text(value) + conformance.LAST
 
@@ -151,11 +185,80 @@ def run_files(files, **kw):
                            listing=lambda: sorted(p for p in files if p.startswith('docs/records/')), **kw)
 
 
+def frozen_case():
+    """The frozen fixture's one case (TASK-058 AC5), read with pathlib's read_bytes and unwrapped as the runner does."""
+    data = (ROOT / CB_PATH).read_bytes()
+    if conformance.sha256(data) != ADV_02_SHA256:
+        raise AssertionError('the ADV-02 fixture is not the file DM row F49 freezes')
+    return conformance.unwrap(data)['cases'][0]
+
+
+def without_the_violation(c):
+    """AC5's control case: only the replay document's violation key removed, and the second session's log_seq set to
+    3, the value the core's log then needs."""
+    del c['document']['violation']
+    c['continuation']['session']['inputs']['log_seq'] = 3
+    return c
+
+
+def logged(c, bypass):
+    """The case through the runner's own case path with the root's core and in-memory stand-ins only: (the runner's
+    result, the violation step's decision of step 1's result, the last decision.acceptance payload of the in-memory
+    log). The log is kept by wrapping _CbLog.__init__ (it changes nothing the core does); with ``bypass``, step 1's
+    comparison is replaced for this run only by a patch of conformance._violation_step that returns the STOP decision
+    (decision D-1111 C2: scoped, checked restored by the caller)."""
+    cb, status = conformance.load_cb(ROOT)
+    if status != conformance.LOADED:
+        raise AssertionError('the root\'s core is not loaded')
+    seen, logs = [], []
+    real_init = conformance._CbLog.__init__
+    original = conformance._violation_step
+
+    def keep(log, entry, store):
+        real_init(log, entry, store)
+        logs.append(log)
+
+    def replay_kept(*args, **kwargs):
+        out = cb['replay'](*args, **kwargs)
+        seen.append(out)
+        return out
+    entry = dict(cb, replay=replay_kept)
+    with mock.patch.object(conformance._CbLog, '__init__', keep):
+        if bypass:
+            with mock.patch.object(conformance, '_violation_step', lambda result: {'decision': 'STOP: violation'}):
+                r = conformance._run_cb_case(c, entry, conformance.cb_core_root(ROOT))
+        else:
+            r = conformance._run_cb_case(c, entry, conformance.cb_core_root(ROOT))
+    step = original(seen[0])
+    events = [json.loads(x) for x in logs[-1].log.decode('utf-8').splitlines()]
+    acc = [e['payload'] for e in events if e.get('type') == 'decision.acceptance']
+    return r, (step or {}).get('decision'), acc[-1] if acc else None
+
+
+def facts(payload):
+    return {'decision': payload['decision'], 'next_task_state': payload['next_task_state'],
+            'table_row': payload['table_row'], 'missing_gates': payload['missing_gates'],
+            'failed_gates': payload['failed_gates'],
+            'missing_types': [e['missing_types'] for e in payload['profile_used']]}
+
+
 class RepositoryTree(unittest.TestCase):
     def test_the_run_over_the_repository_tree(self):
         """TASK-056 AC11, AC16: with no stand-in, the run record has the base's keys (no capability_boundaries), the
         run counts, ADV-02 is NOT_RUN for "no fixture", every other scenario is PASS with no reason, and the outcome is
         pass."""
+        if cb_state() == 'present':
+            r = conformance.run(ROOT, COMMIT, 'TASK-056')
+            self.assertEqual(set(r.value), BASE_KEYS | {'capability_boundaries'})
+            self.assertEqual(r.value['capability_boundaries'], cb_record())
+            self.assertTrue(r.value['counts'])
+            self.assertEqual(r.problems, [])
+            self.assertEqual((r.results['ADV-02'], r.reasons['ADV-02']), (conformance.PASS, ''))
+            others = {i: (res, r.reasons[i]) for i, res in r.results.items() if i != 'ADV-02'}
+            self.assertEqual(len(others), 31)
+            self.assertEqual(set(others.values()), {(conformance.PASS, '')})
+            self.assertEqual(r.record['outcome'], 'pass')
+            return
         r = conformance.run(ROOT, COMMIT, 'TASK-056')
         self.assertEqual(set(r.value), BASE_KEYS)
         self.assertTrue(r.value['counts'])
@@ -193,6 +296,79 @@ class WithFixture(unittest.TestCase):
             self.assertEqual(r.results['ADV-02'], conformance.FAIL)
             self.assertFalse(r.value['counts'])
             self.assertEqual(r.record['outcome'], 'fail')
+
+
+class M13Control(unittest.TestCase):
+    def test_the_frozen_case_passes_without_any_patch(self):
+        """TASK-058 AC5 (decision D-1111 C2): the frozen fixture's case through the runner's own case path and the root's
+        core, with no patch at all: PASS."""
+        cb, status = conformance.load_cb(ROOT)
+        self.assertEqual(status, conformance.LOADED)
+        self.assertEqual(conformance._run_cb_case(frozen_case(), cb, conformance.cb_core_root(ROOT)),
+                         (conformance.PASS, ''))
+
+    def test_the_frozen_case_stops_and_rejects(self):
+        """TASK-058 AC5: as frozen, step 1's decision is STOP: violation and the evaluation gives REJECT and REJECTED,
+        table row 1, with nothing missing."""
+        r, stop, payload = logged(frozen_case(), bypass=False)
+        self.assertEqual(r, (conformance.PASS, ''))
+        self.assertEqual(stop, 'STOP: violation')
+        self.assertEqual(facts(payload), {'decision': 'REJECT', 'next_task_state': 'REJECTED', 'table_row': 1,
+                                          'missing_gates': [], 'failed_gates': [], 'missing_types': [[]]})
+
+    def test_without_the_violation_the_profile_is_met(self):
+        """TASK-058 AC5, M13's control (decisions D-1079, D-1086, D-1109 C5, D-1111): the same case with only the
+        violation removed, log_seq 3 and step 1's comparison bypassed for this run only gives NEEDS_REVIEW and
+        IN_REVIEW, table row 5, no missing gate and no missing type; so the fixture's REJECT comes from the violation
+        alone. The bypass is restored afterwards."""
+        original = conformance._violation_step
+        r, stop, payload = logged(without_the_violation(frozen_case()), bypass=True)
+        self.assertIs(conformance._violation_step, original)
+        self.assertIsNone(stop)
+        self.assertEqual(r, (conformance.FAIL, "not met: step 3: decision 'NEEDS_REVIEW', step 3: next_state 'IN_REVIEW'"))
+        self.assertEqual(facts(payload), {'decision': 'NEEDS_REVIEW', 'next_task_state': 'IN_REVIEW', 'table_row': 5,
+                                          'missing_gates': [], 'failed_gates': [], 'missing_types': [[]]})
+
+    def test_the_named_variant_a_failing_gate(self):
+        """TASK-058 AC7 (decision D-1096 C3, D-1111): AC5's control case with the extra record of gate G1 given outcome
+        fail gives NEEDS_REWORK and REWORK, table row 2, G1 missing and failed, and the runner's FAIL at step 3; so
+        another reason moves the decision away from both NEEDS_REVIEW and REJECT. The bypass is restored afterwards."""
+        c = without_the_violation(frozen_case())
+        g1 = [x for x in c['evaluation']['extra_records'] if x.get('gate') == 'G1']
+        self.assertEqual(len(g1), 1)
+        g1[0]['outcome'] = 'fail'
+        original = conformance._violation_step
+        r, stop, payload = logged(c, bypass=True)
+        self.assertIs(conformance._violation_step, original)
+        self.assertEqual(r, (conformance.FAIL, "not met: step 3: decision 'NEEDS_REWORK', step 3: next_state 'REWORK'"))
+        self.assertEqual(facts(payload), {'decision': 'NEEDS_REWORK', 'next_task_state': 'REWORK', 'table_row': 2,
+                                          'missing_gates': ['G1'], 'failed_gates': ['G1'], 'missing_types': [[]]})
+
+
+class PresentStateRun(unittest.TestCase):
+    def test_the_present_set_file_passes(self):
+        """TASK-058 AC6 (decision D-1086): conformance.run over in-memory files equal to the tree's, with the set file
+        replaced by the present state's bytes of AC1 and one in-memory freeze record of their hash, and the root's core:
+        ADV-02 PASS, the run counts, and its record's outcome is pass."""
+        files = {}
+        for p in ROOT.glob('**/*'):
+            rel = p.relative_to(ROOT).as_posix()
+            if p.is_file() and (rel.startswith(('docs/records/', 'tests/conformance/', 'src/aieos_bootstrap/'))
+                                or rel == conformance.SCENARIO_FILE):
+                files[rel] = p.read_bytes()
+        value = conformance.unwrap(files[conformance.SET_FILE])
+        e = next(x for x in value['scenarios'] if x['id'] == 'ADV-02')
+        e['fixture'] = {'path': CB_PATH, 'sha256': ADV_02_SHA256}
+        value['fixture_set_version'] = 5
+        files[conformance.SET_FILE] = wrap(value)
+        self.assertEqual(conformance.sha256(files[conformance.SET_FILE]), CB_SET_SHA256)
+        self.assertEqual(conformance.sha256(files[CB_PATH]), ADV_02_SHA256)
+        files['docs/records/TEST-58.jsonl'] = freeze_line(CB_SET_SHA256)
+        r = run_files(files)
+        self.assertEqual((r.results['ADV-02'], r.reasons['ADV-02']), (conformance.PASS, ''))
+        self.assertTrue(r.value['counts'])
+        self.assertEqual(r.problems, [])
+        self.assertEqual(r.record['outcome'], 'pass')
 
 
 if __name__ == '__main__':
