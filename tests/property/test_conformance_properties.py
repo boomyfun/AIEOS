@@ -24,6 +24,8 @@ FIXTURE_DIR = 'tests/conformance/fixtures'
 RC_FIXTURE_DIR = 'tests/conformance/fixtures_rc'
 # TASK-020: the Risk Engine fixture folder (sections 2 and 10), whose file the set file names from TASK-020 on.
 RISK_FIXTURE_DIR = 'tests/conformance/fixtures_risk'
+# TASK-059: the Capability Boundaries fixture folder (sections 2 and 11), whose file the set file names from TASK-059 on.
+CB_FIXTURE_DIR = 'tests/conformance/fixtures_cb'
 FIRST, LAST = b"DATA = r'''", b"'''\n"
 ACCEPTANCE = ('ACCEPT', 'NEEDS_REVIEW', 'INSUFFICIENT_EVIDENCE', 'NEEDS_REWORK', 'REJECT')
 EXECUTION = ('CONTINUE', 'CONTINUE_WITH', 'REPLAN', 'STOP: scope invalid', 'STOP: runtime insufficient',
@@ -158,8 +160,10 @@ def scenario_rows(data=None):
 
 def module_path(scenario_id, capability='Verification'):
     """The fixture path of a scenario: the Resume Check folder for a Resume Check scenario (TASK-014), the Risk Engine
-    folder for a Risk Engine scenario (TASK-020), else the Verification folder."""
-    folder = {'Resume Check': RC_FIXTURE_DIR, 'Risk Engine': RISK_FIXTURE_DIR}.get(capability, FIXTURE_DIR)
+    folder for a Risk Engine scenario (TASK-020), the Capability Boundaries folder for a Capability Boundaries scenario
+    (TASK-059), else the Verification folder."""
+    folder = {'Resume Check': RC_FIXTURE_DIR, 'Risk Engine': RISK_FIXTURE_DIR,
+              'Capability Boundaries': CB_FIXTURE_DIR}.get(capability, FIXTURE_DIR)
     return folder + '/' + scenario_id.lower().replace('-', '_') + '.py'
 
 
@@ -186,8 +190,8 @@ def check_set(value, rows=None, files=None):
         errors.append('set: scenario_set_version is not 2')
     if value['scenario_set_file_hash'] != sha256(read(SCENARIO_FILE)):
         errors.append('set: scenario_set_file_hash is not the bound file\'s SHA-256')
-    if value['fixture_set_version'] != 4 or isinstance(value['fixture_set_version'], bool):
-        errors.append('set: fixture_set_version is not 4')
+    if value['fixture_set_version'] != 5 or isinstance(value['fixture_set_version'], bool):
+        errors.append('set: fixture_set_version is not 5')
     entries = value['scenarios']
     if not isinstance(entries, list) or len(entries) != len(rows):
         return errors + ['set: not one entry per scenario row']
@@ -200,9 +204,9 @@ def check_set(value, rows=None, files=None):
         fixture = entry['fixture']
         if fixture is None:
             continue
-        if capability not in ('Verification', 'Resume Check', 'Risk Engine'):
-            errors.append('set: %s is outside the Verification, Resume Check and Risk Engine capabilities and has a fixture'
-                          % sid)
+        if capability not in ('Verification', 'Resume Check', 'Risk Engine', 'Capability Boundaries'):
+            errors.append('set: %s is outside the Verification, Resume Check, Risk Engine and Capability Boundaries'
+                          ' capabilities and has a fixture' % sid)
         if not isinstance(fixture, dict) or set(fixture) != {'path', 'sha256'}:
             errors.append('set: the fixture of %s is not {path, sha256}' % sid)
             continue
@@ -342,7 +346,7 @@ def check_fixture(value, entry):
 def load_tree():
     """The set value, the fixture files' bytes by path, and the bound file's rows, as the repository holds them."""
     value = unwrap(read(SET_FILE))
-    files = {d + '/' + p.name: p.read_bytes() for d in (FIXTURE_DIR, RC_FIXTURE_DIR, RISK_FIXTURE_DIR)
+    files = {d + '/' + p.name: p.read_bytes() for d in (FIXTURE_DIR, RC_FIXTURE_DIR, RISK_FIXTURE_DIR, CB_FIXTURE_DIR)
              for p in sorted((ROOT / d).iterdir()) if p.is_file()}
     return value, files, scenario_rows()
 
@@ -404,6 +408,8 @@ class FormPropertiesTest(unittest.TestCase):
         # TASK-020 AC2, AC9: the unaltered files give no error, and the Risk Engine file is among those changed.
         self.assertEqual(check_set(value, rows, files), [])
         self.assertIn(RISK_FIXTURE_DIR + '/risk_01.py', files)
+        # TASK-059 AC2: the Capability Boundaries file is among those changed too.
+        self.assertIn(CB_FIXTURE_DIR + '/adv_02.py', files)
         for seed in SEEDS:
             rng = random.Random(seed)
             for path in sorted(files):

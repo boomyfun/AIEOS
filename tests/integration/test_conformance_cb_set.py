@@ -30,6 +30,10 @@ OWN = ('tests/unit/test_conformance_cb_files.py', 'tests/integration/test_confor
 RUNNER = 'src/aieos_bootstrap/conformance.py'
 RUNNER_TESTS = re.compile(r'tests/(?:unit|integration|property)/test_runner_cb[A-Za-z0-9_]*\.py')
 RISK_ROUTE_TEST = 'tests/unit/test_runner_risk.py'
+# TASK-059 AC5 (decision D-1131 C3): the three set-test modules of TASK-002, which name the folder to read ADV-02's
+# fixture into check_set's files, each by name.
+SET_TESTS = ('tests/unit/test_conformance_files.py', 'tests/property/test_conformance_properties.py',
+             'tests/integration/test_conformance_set.py')
 EXPECTED_CELL = "STOP: violation; the change is rejected; the violation is recorded in the runtime's and the agent's metrics"
 
 
@@ -68,7 +72,7 @@ def freeze_ids(digest):
 
 def not_allowed(paths):
     """The given repository paths that are not allowed to name the folder, sorted."""
-    return sorted(p for p in paths if p not in OWN and p not in (RUNNER, SET_FILE, RISK_ROUTE_TEST)
+    return sorted(p for p in paths if p not in OWN and p not in (RUNNER, SET_FILE, RISK_ROUTE_TEST) + SET_TESTS
                   and not RUNNER_TESTS.fullmatch(p))
 
 
@@ -132,14 +136,14 @@ class CbSetTest(unittest.TestCase):
         for other in ('src/aieos_bootstrap/governor.py', 'src/aieos_bootstrap/replay.py',
                       'tests/unit/test_not_named_in_the_contract.py', 'tests/unit/test_runner_rc.py',
                       'tests/unit/test_runner_cb.txt', 'tests/conformance/fixtures/acc_01.py',
-                      'tests/unit/test_conformance_files.py', 'tests/conformance/set_old.py'):
+                      'tests/unit/test_conformance_rc_files.py', 'tests/conformance/set_old.py'):
             self.assertEqual(not_allowed(list(OWN) + [RUNNER, SET_FILE, RISK_ROUTE_TEST, other]), [other])
 
     def test_the_allowed_modules_are_all_allowed(self):
         self.assertEqual(not_allowed(list(OWN) + [RUNNER, SET_FILE, RISK_ROUTE_TEST, 'tests/unit/test_runner_cb.py',
                                                   'tests/integration/test_runner_cb_run.py',
                                                   'tests/property/test_runner_cb_properties.py',
-                                                  'tests/unit/test_runner_cb_more.py']), [])
+                                                  'tests/unit/test_runner_cb_more.py'] + list(SET_TESTS)), [])
 
     def test_no_capability_boundaries_file_in_the_m2_folder(self):
         # Only the M2 folder is named here: the Resume Check and Risk Engine folders may be named only by the modules

@@ -23,6 +23,8 @@ FIXTURE_DIR = 'tests/conformance/fixtures'
 RC_FIXTURE_DIR = 'tests/conformance/fixtures_rc'
 # TASK-020: the Risk Engine fixture folder (sections 2 and 10), whose file the set file names from TASK-020 on.
 RISK_FIXTURE_DIR = 'tests/conformance/fixtures_risk'
+# TASK-059: the Capability Boundaries fixture folder (sections 2 and 11), whose file the set file names from TASK-059 on.
+CB_FIXTURE_DIR = 'tests/conformance/fixtures_cb'
 FIRST, LAST = b"DATA = r'''", b"'''\n"
 ACCEPTANCE = ('ACCEPT', 'NEEDS_REVIEW', 'INSUFFICIENT_EVIDENCE', 'NEEDS_REWORK', 'REJECT')
 EXECUTION = ('CONTINUE', 'CONTINUE_WITH', 'REPLAN', 'STOP: scope invalid', 'STOP: runtime insufficient',
@@ -157,8 +159,10 @@ def scenario_rows(data=None):
 
 def module_path(scenario_id, capability='Verification'):
     """The fixture path of a scenario: the Resume Check folder for a Resume Check scenario (TASK-014), the Risk Engine
-    folder for a Risk Engine scenario (TASK-020), else the Verification folder."""
-    folder = {'Resume Check': RC_FIXTURE_DIR, 'Risk Engine': RISK_FIXTURE_DIR}.get(capability, FIXTURE_DIR)
+    folder for a Risk Engine scenario (TASK-020), the Capability Boundaries folder for a Capability Boundaries scenario
+    (TASK-059), else the Verification folder."""
+    folder = {'Resume Check': RC_FIXTURE_DIR, 'Risk Engine': RISK_FIXTURE_DIR,
+              'Capability Boundaries': CB_FIXTURE_DIR}.get(capability, FIXTURE_DIR)
     return folder + '/' + scenario_id.lower().replace('-', '_') + '.py'
 
 
@@ -185,8 +189,8 @@ def check_set(value, rows=None, files=None):
         errors.append('set: scenario_set_version is not 2')
     if value['scenario_set_file_hash'] != sha256(read(SCENARIO_FILE)):
         errors.append('set: scenario_set_file_hash is not the bound file\'s SHA-256')
-    if value['fixture_set_version'] != 4 or isinstance(value['fixture_set_version'], bool):
-        errors.append('set: fixture_set_version is not 4')
+    if value['fixture_set_version'] != 5 or isinstance(value['fixture_set_version'], bool):
+        errors.append('set: fixture_set_version is not 5')
     entries = value['scenarios']
     if not isinstance(entries, list) or len(entries) != len(rows):
         return errors + ['set: not one entry per scenario row']
@@ -199,9 +203,9 @@ def check_set(value, rows=None, files=None):
         fixture = entry['fixture']
         if fixture is None:
             continue
-        if capability not in ('Verification', 'Resume Check', 'Risk Engine'):
-            errors.append('set: %s is outside the Verification, Resume Check and Risk Engine capabilities and has a fixture'
-                          % sid)
+        if capability not in ('Verification', 'Resume Check', 'Risk Engine', 'Capability Boundaries'):
+            errors.append('set: %s is outside the Verification, Resume Check, Risk Engine and Capability Boundaries'
+                          ' capabilities and has a fixture' % sid)
         if not isinstance(fixture, dict) or set(fixture) != {'path', 'sha256'}:
             errors.append('set: the fixture of %s is not {path, sha256}' % sid)
             continue
@@ -341,7 +345,7 @@ def check_fixture(value, entry):
 def load_tree():
     """The set value, the fixture files' bytes by path, and the bound file's rows, as the repository holds them."""
     value = unwrap(read(SET_FILE))
-    files = {d + '/' + p.name: p.read_bytes() for d in (FIXTURE_DIR, RC_FIXTURE_DIR, RISK_FIXTURE_DIR)
+    files = {d + '/' + p.name: p.read_bytes() for d in (FIXTURE_DIR, RC_FIXTURE_DIR, RISK_FIXTURE_DIR, CB_FIXTURE_DIR)
              for p in sorted((ROOT / d).iterdir()) if p.is_file()}
     return value, files, scenario_rows()
 
@@ -489,7 +493,11 @@ class FileKindTest(unittest.TestCase):
 
     def test_no_control_character_in_any_fixture(self):
         _value, files, _rows = load_tree()
-        for path, data in files.items():
+        # TASK-059 AC3: the Capability Boundaries fixture holds commit and contract texts whose line ends are escaped
+        # as section 2 allows; it is checked in its own form by TASK-057's modules, so exactly that one file is left out.
+        checked = {p: d for p, d in files.items() if not p.startswith(CB_FIXTURE_DIR + '/')}
+        self.assertEqual(sorted(set(files) - set(checked)), [CB_FIXTURE_DIR + '/adv_02.py'])
+        for path, data in checked.items():
             with self.subTest(path=path):
                 self.assertFalse(has_control_character(unwrap(data)))
 
@@ -552,10 +560,15 @@ class SetFileTest(unittest.TestCase):
         self.assertEqual(len(rows), 32)
         self.assertEqual([e['id'] for e in value['scenarios']], [r[0] for r in rows])
         with_fixture = [e['id'] for e in value['scenarios'] if e['fixture']]
-        self.assertEqual(with_fixture, [r[0] for r in rows if r[2] in ('Verification', 'Resume Check', 'Risk Engine')])
-        self.assertEqual(len(with_fixture), 31)
-        self.assertEqual(sum(1 for e in value['scenarios'] if e['fixture'] is None), 1)
-        self.assertEqual([e['id'] for e in value['scenarios'] if e['fixture'] is None], ['ADV-02'])
+        # TASK-059 AC2: every entry has a fixture now, ADV-02's among them, in the bound file's order.
+        self.assertEqual(with_fixture, [r[0] for r in rows if r[2] in ('Verification', 'Resume Check', 'Risk Engine',
+                                                                        'Capability Boundaries')])
+        self.assertEqual(len(with_fixture), 32)
+        self.assertEqual(sum(1 for e in value['scenarios'] if e['fixture'] is None), 0)
+        self.assertEqual([e['id'] for e in value['scenarios'] if e['fixture'] is None], [])
+        self.assertEqual([e['id'] for e in value['scenarios'] if e['fixture'] and e['capability'] == 'Verification'],
+                         [r[0] for r in rows if r[2] == 'Verification'])
+        self.assertEqual(len([e for e in value['scenarios'] if e['fixture'] and e['capability'] == 'Verification']), 19)
         self.assertEqual([e['id'] for e in value['scenarios'] if e['fixture'] and e['capability'] == 'Resume Check'],
                          ['RC-%02d' % n for n in range(1, 12)])
         # TASK-020 AC2: RISK-01 is the one Risk Engine entry with a fixture, at the Risk Engine folder's path.
@@ -563,6 +576,13 @@ class SetFileTest(unittest.TestCase):
                          ['RISK-01'])
         self.assertEqual([e['fixture']['path'] for e in value['scenarios'] if e['id'] == 'RISK-01'],
                          [RISK_FIXTURE_DIR + '/risk_01.py'])
+        # TASK-059 AC2: ADV-02 is the one Capability Boundaries entry with a fixture, at that folder's path, with the
+        # SHA-256 of the file there.
+        self.assertEqual([e['id'] for e in value['scenarios'] if e['fixture'] and e['capability'] == 'Capability Boundaries'],
+                         ['ADV-02'])
+        self.assertEqual([e['fixture'] for e in value['scenarios'] if e['id'] == 'ADV-02'],
+                         [{'path': CB_FIXTURE_DIR + '/adv_02.py', 'sha256': sha256(read(CB_FIXTURE_DIR + '/adv_02.py'))}])
+        self.assertEqual(value['fixture_set_version'], 5)
 
     def test_rows_are_read_from_the_bound_file(self):
         rows = scenario_rows()
@@ -611,7 +631,8 @@ class SetFileTest(unittest.TestCase):
                 path=FIXTURE_DIR + '/rc_01.py'),
             'a Verification fixture at the Resume Check folder': lambda v: v['scenarios'][first]['fixture'].update(
                 path=RC_FIXTURE_DIR + '/acc_01.py'),
-            # TASK-020 AC2: the Risk Engine folder is RISK-01's only, and ADV-02 still has no fixture.
+            # TASK-020 AC2: the Risk Engine folder is RISK-01's only; from TASK-059 on, ADV-02's fixture is the Capability
+            # Boundaries file, so RISK-01's fixture given to ADV-02 errs by its path.
             'a Risk Engine fixture at the Verification folder': lambda v: v['scenarios'][risk]['fixture'].update(
                 path=FIXTURE_DIR + '/risk_01.py'),
             'a Risk Engine fixture at the Resume Check folder': lambda v: v['scenarios'][risk]['fixture'].update(
@@ -619,6 +640,16 @@ class SetFileTest(unittest.TestCase):
             'a Verification fixture at the Risk Engine folder': lambda v: v['scenarios'][first]['fixture'].update(
                 path=RISK_FIXTURE_DIR + '/acc_01.py'),
             'a fixture for ADV-02': lambda v: v['scenarios'][adv].update(fixture=dict(v['scenarios'][risk]['fixture'])),
+            # TASK-059 AC2: the Capability Boundaries folder is ADV-02's only, and ADV-02's fixture cannot be dropped.
+            'the Capability Boundaries fixture at the Verification folder': lambda v: v['scenarios'][adv]['fixture'].update(
+                path=FIXTURE_DIR + '/adv_02.py'),
+            'the Capability Boundaries fixture at the Resume Check folder': lambda v: v['scenarios'][adv]['fixture'].update(
+                path=RC_FIXTURE_DIR + '/adv_02.py'),
+            'the Capability Boundaries fixture at the Risk Engine folder': lambda v: v['scenarios'][adv]['fixture'].update(
+                path=RISK_FIXTURE_DIR + '/adv_02.py'),
+            'a Verification fixture at the Capability Boundaries folder': lambda v: v['scenarios'][first]['fixture'].update(
+                path=CB_FIXTURE_DIR + '/acc_01.py'),
+            "ADV-02's fixture dropped": lambda v: v['scenarios'][adv].update(fixture=None),
         }
         for name, edit in cases.items():
             with self.subTest(case=name):

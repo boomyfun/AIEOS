@@ -1,5 +1,5 @@
 DATA = r'''{
-  "fixture_set_version": 4,
+  "fixture_set_version": 5,
   "scenario_set_file_hash": "6b5c0666a1f364f5ecec9ad516c9a749969a1963f4e5dbef566adcbc8c80e24d",
   "scenario_set_version": 2,
   "scenarios": [
@@ -275,7 +275,10 @@ DATA = r'''{
     },
     {
       "capability": "Capability Boundaries",
-      "fixture": null,
+      "fixture": {
+        "path": "tests/conformance/fixtures_cb/adv_02.py",
+        "sha256": "f6fed8e0db041705f870631ca46b32ba50cb43ed29f6f143f97d19c152938385"
+      },
       "id": "ADV-02",
       "row_hash": "d11a86217d650c426e5f3897c5cd797af656d610db573aeae4a6184292652742"
     },
