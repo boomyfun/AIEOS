@@ -463,6 +463,39 @@ class R8Order(unittest.TestCase):
         self.assertEqual(go(cb=stand_in(evaluate_task=boom)), (conformance.NOT_RUN, 'step 3: the call raised KeyError'))
 
 
+ADV_02_SHA256 = 'f6fed8e0db041705f870631ca46b32ba50cb43ed29f6f143f97d19c152938385'
+CB_SET_SHA256 = 'd237d5dcded3fd9fa5bdacd68b098d5818a5d12d0acfa918fd29141e699d7506'
+
+
+def cb_state(value=None):
+    """The state of the set file's Capability Boundaries entries (TASK-058, contract AC1): 'null' when ADV-02, the only
+    one, names no fixture; 'present' when it names the file conformance.expected_path gives with the SHA-256 that DM row
+    F49's freeze binds, that file in the tree having that SHA-256, and the set file, written as the runner writes it,
+    has the SHA-256 d237d5dc... and fixture_set_version 5; any other value fails. Without a value it reads the tree's
+    set file."""
+    if value is None:
+        value = conformance.unwrap((ROOT / conformance.SET_FILE).read_bytes())
+    cb = [e for e in value['scenarios'] if e['capability'] == conformance.CAPABILITY_BOUNDARIES]
+    if [e['id'] for e in cb] != ['ADV-02']:
+        raise AssertionError('the Capability Boundaries entries are not exactly ADV-02')
+    if cb[0]['fixture'] is None:
+        return 'null'
+    path = conformance.expected_path('ADV-02', conformance.CAPABILITY_BOUNDARIES)
+    data = conformance.FIRST + conformance.canonical_text(value) + conformance.LAST
+    if (cb[0]['fixture'] == {'path': path, 'sha256': ADV_02_SHA256}
+            and conformance.sha256((ROOT / path).read_bytes()) == ADV_02_SHA256
+            and conformance.sha256(data) == CB_SET_SHA256 and value['fixture_set_version'] == 5):
+        return 'present'
+    raise AssertionError('the ADV-02 entry names neither no fixture nor its frozen file in the set file of AC1')
+
+
+def cb_record():
+    """The run record's capability_boundaries in the present state (TASK-058 AC4): the three recorded modules of the
+    tree, by path and SHA-256, in the order replay, adapter, evaluation."""
+    return [{'path': conformance.cb_path(n), 'sha256': conformance.sha256((ROOT / conformance.cb_path(n)).read_bytes())}
+            for n in ('replay', 'adapter', 'evaluation')]
+
+
 def wrap(value):
     return conformance.FIRST + conformance.canonical_text(value) + conformance.LAST
 
@@ -515,8 +548,13 @@ class R9Record(unittest.TestCase):
         self.assertFalse(s.value['counts'])
         self.assertEqual({x['sha256'] for x in s.value['capability_boundaries']}, {None})
         plain = conformance.run(ROOT, COMMIT, 'TASK-056')
-        self.assertNotIn('capability_boundaries', plain.value)
-        self.assertEqual((plain.results['ADV-02'], plain.reasons['ADV-02']), (conformance.NOT_RUN, 'no fixture'))
+        # TASK-058 AC2: in the present state of ADV-02's entry the run over the tree reads the frozen fixture.
+        if cb_state() == 'present':
+            self.assertEqual(plain.value['capability_boundaries'], cb_record())
+            self.assertEqual((plain.results['ADV-02'], plain.reasons['ADV-02']), (conformance.PASS, ''))
+        else:
+            self.assertNotIn('capability_boundaries', plain.value)
+            self.assertEqual((plain.results['ADV-02'], plain.reasons['ADV-02']), (conformance.NOT_RUN, 'no fixture'))
 
     def test_the_counting_reading_and_the_lazy_load(self):
         """TASK-056 AC3's counting reading (decision D-1079, M11): an absent entry keeps the run counting, a failed one
@@ -539,9 +577,48 @@ class R9Record(unittest.TestCase):
 
         def never(root):
             raise AssertionError('load_cb was called')
-        with mock.patch.object(conformance, 'load_cb', never):
-            plain = conformance.run(ROOT, COMMIT, 'TASK-056')
+        # TASK-058 AC2: in the present state the entry is loaded once, from the root.
+        if cb_state() == 'present':
+            calls = []
+            real = conformance.load_cb
+
+            def counted(root):
+                calls.append(root)
+                return real(root)
+            with mock.patch.object(conformance, 'load_cb', counted):
+                plain = conformance.run(ROOT, COMMIT, 'TASK-056')
+            self.assertEqual(calls, [ROOT])
+        else:
+            with mock.patch.object(conformance, 'load_cb', never):
+                plain = conformance.run(ROOT, COMMIT, 'TASK-056')
         self.assertTrue(plain.value['counts'])
+
+
+class R10State(unittest.TestCase):
+    def test_the_state_check(self):
+        """TASK-058 AC1 and AC10 R1: the state check over in-memory set values: null, the present state of AC1, and a
+        failure for another path, another hash, another fixture_set_version or another Capability Boundaries id."""
+        value = conformance.unwrap((ROOT / conformance.SET_FILE).read_bytes())
+        e = next(x for x in value['scenarios'] if x['id'] == 'ADV-02')
+        e['fixture'] = None
+        value['fixture_set_version'] = 4
+        self.assertEqual(cb_state(value), 'null')
+        e['fixture'] = {'path': CB_PATH, 'sha256': ADV_02_SHA256}
+        value['fixture_set_version'] = 5
+        self.assertEqual(conformance.sha256(wrap(value)), CB_SET_SHA256)
+        self.assertEqual(cb_state(value), 'present')
+        for change in ({'path': conformance.module_path('ADV-02')}, {'sha256': '0' * 64}):
+            e['fixture'] = dict({'path': CB_PATH, 'sha256': ADV_02_SHA256}, **change)
+            with self.assertRaises(AssertionError):
+                cb_state(value)
+        e['fixture'] = {'path': CB_PATH, 'sha256': ADV_02_SHA256}
+        value['fixture_set_version'] = 6
+        with self.assertRaises(AssertionError):
+            cb_state(value)
+        value['fixture_set_version'] = 5
+        e['id'] = 'ADV-09'
+        with self.assertRaises(AssertionError):
+            cb_state(value)
 
 
 if __name__ == '__main__':

@@ -38,14 +38,15 @@ FIXED_SET_SHA256 = '158323324f2803bceee870403bc6c0e297c407fbe50902d60bec90624cc9
 
 def fixed_files():
     """real_files() with the set file replaced by the fixed set value of TASK-013 (contract AC2): the tree's set value
-    with every Resume Check and Risk Engine entry's fixture null (TASK-019 AC2) and fixture_set_version 1, written as
+    with every Resume Check, Risk Engine and Capability Boundaries entry's fixture null (TASK-019 AC2, TASK-058 AC2)
+    and fixture_set_version 1, written as
     the runner writes a set file.
     It is the set file at 1659a8cb, whose hash TASK-002's freeze record approves, so no freeze line is added; in the
     null state it equals real_files() byte for byte."""
     files = real_files()
     value = conformance.unwrap(files[conformance.SET_FILE])
     for entry in value['scenarios']:
-        if entry['capability'] in ('Resume Check', 'Risk Engine'):
+        if entry['capability'] in ('Resume Check', 'Risk Engine', 'Capability Boundaries'):
             entry['fixture'] = None
     value['fixture_set_version'] = 1
     files[conformance.SET_FILE] = FIRST + conformance.canonical_text(value) + LAST
@@ -53,12 +54,19 @@ def fixed_files():
 
 
 def tree_files():
-    """real_files() with the Resume Check module and the Resume Check fixtures too, as the tree holds them, so that a
+    """real_files() with the Resume Check module and fixtures and the Capability Boundaries fixtures and recorded
+    modules too, as the tree holds them, so that a
     run over these files equals the run over the tree in either state of the set file (contract AC3)."""
     files = real_files()
     files[conformance.RESUME_CHECK_PATH] = (ROOT / conformance.RESUME_CHECK_PATH).read_bytes()
     for p in sorted((ROOT / conformance.RC_FIXTURE_DIR).glob('*.py')):
         files[conformance.RC_FIXTURE_DIR + '/' + p.name] = p.read_bytes()
+    # TASK-058 AC2 (decision D-1116 (r1)): the Capability Boundaries fixtures and the three modules the run record names,
+    # as the tree holds them; a run reads them only when a Capability Boundaries entry has a fixture.
+    for p in sorted((ROOT / conformance.CB_FIXTURE_DIR).glob('*.py')):
+        files[conformance.CB_FIXTURE_DIR + '/' + p.name] = p.read_bytes()
+    for name in conformance.CB_RECORDED:
+        files[conformance.cb_path(name)] = (ROOT / conformance.cb_path(name)).read_bytes()
     return files
 
 

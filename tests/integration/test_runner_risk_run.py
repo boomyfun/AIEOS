@@ -38,6 +38,39 @@ def risk_state(value=None):
     raise AssertionError('the RISK-01 entry names neither no fixture nor its frozen file')
 
 
+ADV_02_SHA256 = 'f6fed8e0db041705f870631ca46b32ba50cb43ed29f6f143f97d19c152938385'
+CB_SET_SHA256 = 'd237d5dcded3fd9fa5bdacd68b098d5818a5d12d0acfa918fd29141e699d7506'
+
+
+def cb_state(value=None):
+    """The state of the set file's Capability Boundaries entries (TASK-058, contract AC1): 'null' when ADV-02, the only
+    one, names no fixture; 'present' when it names the file conformance.expected_path gives with the SHA-256 that DM row
+    F49's freeze binds, that file in the tree having that SHA-256, and the set file, written as the runner writes it,
+    has the SHA-256 d237d5dc... and fixture_set_version 5; any other value fails. Without a value it reads the tree's
+    set file."""
+    if value is None:
+        value = conformance.unwrap((ROOT / conformance.SET_FILE).read_bytes())
+    cb = [e for e in value['scenarios'] if e['capability'] == conformance.CAPABILITY_BOUNDARIES]
+    if [e['id'] for e in cb] != ['ADV-02']:
+        raise AssertionError('the Capability Boundaries entries are not exactly ADV-02')
+    if cb[0]['fixture'] is None:
+        return 'null'
+    path = conformance.expected_path('ADV-02', conformance.CAPABILITY_BOUNDARIES)
+    data = conformance.FIRST + conformance.canonical_text(value) + conformance.LAST
+    if (cb[0]['fixture'] == {'path': path, 'sha256': ADV_02_SHA256}
+            and conformance.sha256((ROOT / path).read_bytes()) == ADV_02_SHA256
+            and conformance.sha256(data) == CB_SET_SHA256 and value['fixture_set_version'] == 5):
+        return 'present'
+    raise AssertionError('the ADV-02 entry names neither no fixture nor its frozen file in the set file of AC1')
+
+
+def cb_record():
+    """The run record's capability_boundaries in the present state (TASK-058 AC4): the three recorded modules of the
+    tree, by path and SHA-256, in the order replay, adapter, evaluation."""
+    return [{'path': conformance.cb_path(n), 'sha256': conformance.sha256((ROOT / conformance.cb_path(n)).read_bytes())}
+            for n in ('replay', 'adapter', 'evaluation')]
+
+
 def real_files():
     files = {}
     for path in (conformance.RUNNER_PATH, conformance.SET_FILE, conformance.SCENARIO_FILE):
@@ -134,6 +167,21 @@ class RunnerRiskEndToEndTest(unittest.TestCase):
         every other result, and its outcome is pass."""
         # In the present state of RISK-01's entry (TASK-019 AC5) it runs with the root's governor and is PASS, ADV-02
         # stays NOT_RUN for "no fixture", and every other result passes.
+        # In the present state of ADV-02's entry (TASK-058 AC4) it runs with the root's core and is PASS too, and the run
+        # record gains capability_boundaries.
+        if cb_state() == 'present':
+            self.assertEqual(risk_state(), 'present')
+            r = conformance.run(ROOT, COMMIT, TASK)
+            self.assertEqual(set(r.value), {'set_file_sha256', 'scenario_set_version', 'fixture_set_version', 'runner',
+                                            'governor_identity', 'commit', 'counts', 'results', 'resume_check',
+                                            'capability_boundaries'})
+            self.assertTrue(r.value['counts'], r.problems)
+            self.assertEqual(r.value['capability_boundaries'], cb_record())
+            for sid, result in r.results.items():
+                self.assertEqual((result, r.reasons[sid]), (conformance.PASS, ''), sid)
+            self.assertEqual(len(r.results), 32)
+            self.assertEqual(r.record['outcome'], 'pass')
+            return
         if risk_state() == 'present':
             r = conformance.run(ROOT, COMMIT, TASK)
             self.assertEqual(set(r.value), {'set_file_sha256', 'scenario_set_version', 'fixture_set_version', 'runner',
