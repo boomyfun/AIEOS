@@ -31,12 +31,32 @@ What these functions show, and what they do not (AC9):
 - The tool names are the model-side tool_use names seen in this project's transcripts; that a hook input's tool_name
   carries the same names is supported live only for Bash (D-1202, D-1203), and unmeasured for the other tools.
 - The shell checks read the command text only and refuse when unsure, so they over-refuse: any text with a git word
-  and "push" anywhere once quotes and backslashes are removed, or with a git word and any "$", "`" or "%", is refused;
-  PowerShell's own syntax is not parsed. An alias or a variable set outside the call, and a push inside a script file
-  or a program the command runs (for example "bash run.sh"), are not seen: the allowlist is the backstop, and an entry
-  that admits an interpreter with any file, or git with any arguments, admits such pushes (D-1212 F3).
+  and "push" anywhere once quotes and backslashes are removed, or with a git word and any "$", "`" or "%", is refused
+  with reason push; any text with "$(", "`" or "${" anywhere, or a "$" before a name inside double quotes, is refused
+  with reason parse (D-1219 F5: a substitution the split does not cut may run commands the allowlist never sees); any
+  text with a backslash before a quote is refused with reason parse (D-1219 F6: bash and PowerShell read it
+  differently); any text with a "#" outside quotes ("<#" included) is refused with reason parse (D-1220 F7: a comment
+  may hide a quote from the shell, so "a#b" is refused too); any text with a typographic quote mark (U+2018, U+2019,
+  U+201A, U+201B, U+201C, U+201D or U+201E) is refused with reason parse (D-1220 F8: PowerShell reads them as quotes);
+  a lone carriage return, vertical tab or form feed separates commands like a newline. PowerShell's own syntax is not
+  parsed.
+- Pushes the text does not show are not seen: an alias or a variable set outside or inside the call (for example
+  "G=gi && ${G}t push" with the parts split into their own commands), and a push inside a script file or a program the
+  command runs (for example "bash run.sh"). The allowlist is the backstop. An allowlist entry for a program that runs
+  code (bash, sh, powershell, cmd, python, a script) admits whatever that code does, pushes built from parts included
+  (for example powershell -Command "& ('g'+'it') push" under an entry "powershell"), and an entry for git with any
+  arguments admits any git command but a literal push (D-1212 F3).
+- The allowlist is matched word by word, case-sensitively, from a simple command's first word as given: leading
+  assignments and prefixes are not skipped, so "env X=1 git status" or "GIT status" is refused under an entry
+  "git status" (over-refuses).
+- Wrong arguments are refused before any concern is sorted, so even a read call then gives "refuse", reason argument.
 - A relative file path is "uncovered": judge relies on no hook-input key other than tool_name and tool_input, so it
-  passes no cwd (D-1212 F4). Links and junctions are not resolved: the lexical form is what is judged.
+  passes no cwd (D-1212 F4). Links and junctions are not resolved: the lexical form is what is judged. Below the root,
+  a path is compared with the write-set case-sensitively, so a path that differs from an allowed one only in case is
+  refused (over-refuses). Windows reserved device names (for example NUL or CON, "docs/NUL.md" included) are not
+  treated specially, and 8.3 short names are judged as written.
+- A refusal record's refers_to holds up to 200 characters of the command text or the path as given, so a credential
+  typed into a command would be copied into the record; redaction before a record is written is part CC-2's.
 - Open points left as limits: specification 5 section 11 points 4 (the read-set record's evidence_type), 6 (the
   allowlist's content), 10 (an abnormal session end) and 12 (a bound on repeated STOP: violation). A record names the
   session only in the recorder's words (records.py has no ``session`` key). This module is called only by its tests;
@@ -66,7 +86,10 @@ _TASK = re.compile(r'TASK-[0-9]+')
 _PATTERN = re.compile(r'[A-Za-z0-9._*/-]+')
 _ASSIGN = re.compile(r'[A-Za-z_][A-Za-z0-9_]*=')
 _WORD = re.compile(r'''[^\s'"`;&|(){}<>]+''')
-_SEPARATORS = '\n;&|(){}`'
+_SEPARATORS = '\n\r\v\f;&|(){}`'
+_ESCAPED_QUOTE = re.compile(r'''\\['"]''')
+_NAME_START = re.compile(r'[A-Za-z_{]')
+_TYPOGRAPHIC = re.compile('[\u2018\u2019\u201a\u201b\u201c\u201d\u201e]')
 _STRIP = re.compile(r'''['"\\]''')
 _PUSH = re.compile(r'(?<![A-Za-z0-9_-])push(?![A-Za-z0-9_-])')
 _GIT = re.compile(r'(?<![A-Za-z0-9_-])git(?:\.exe)?(?![A-Za-z0-9_-])', re.I)
@@ -211,6 +234,41 @@ def _text_pushes(text):
     return bool(_PUSH.search(stripped)) or any(c in text for c in '$`%')
 
 
+def _expands(text):
+    """D-1219 F5: a command substitution or a braced expansion anywhere ("$(", "`", "${"), or a "$" before a name
+    inside double quotes, where _split does not cut: the text may run commands the allowlist never sees, so unsure."""
+    if '$(' in text or '`' in text or '${' in text:
+        return True
+    q = None
+    for i, c in enumerate(text):
+        if q == "'":
+            if c == "'":
+                q = None
+        elif q == '"':
+            if c == '"':
+                q = None
+            elif c == '$' and _NAME_START.match(text, i + 1):
+                return True
+        elif c in '\'"':
+            q = c
+    return False
+
+
+def _comment(text):
+    """D-1220 F7: a "#" outside quotes ("<#" included): bash and PowerShell may read the rest of the line, or a block,
+    as a comment in which a quote opens nothing, while _split opens a quote there, so unsure."""
+    q = None
+    for c in text:
+        if q:
+            if c == q:
+                q = None
+        elif c in '\'"':
+            q = c
+        elif c == '#':
+            return True
+    return False
+
+
 def _record(record_id, recorder, task_id, evidence_type, refers_to):
     return {'record_id': record_id, 'fact_kind': 'observation', 'source_class': 'deterministic_tool_local',
             'outcome': 'blocking', 'blocking_kind': 'violation', 'recorder': RECORDER + ', for ' + recorder,
@@ -276,6 +334,13 @@ def _judge(hook_input, root, task_id, write_set, allowlist, record_id, recorder)
             return _refuse('shell', 'parse', _record(record_id, recorder, task_id, 'shell_not_allowed', text))
         if any(_pushes(c) for c in commands) or _text_pushes(text):
             return _refuse('shell', 'push', _record(record_id, recorder, task_id, 'git_push_refused', text))
+        # D-1219 F6: a backslash before a quote is read differently by bash and PowerShell, so the split is unsure
+        # D-1219 F5: a substitution or an expansion inside double quotes is not cut by the split, so unsure
+        if _ESCAPED_QUOTE.search(text) or _expands(text):
+            return _refuse('shell', 'parse', _record(record_id, recorder, task_id, 'shell_not_allowed', text))
+        # D-1220 F7: a comment may hide a quote from the shell; F8: PowerShell reads typographic quotes as quotes
+        if _comment(text) or _TYPOGRAPHIC.search(text):
+            return _refuse('shell', 'parse', _record(record_id, recorder, task_id, 'shell_not_allowed', text))
         entries = [a.split() for a in allowlist]
         for c in commands:
             if not any(c[:len(e)] == e for e in entries):

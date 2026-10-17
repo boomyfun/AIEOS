@@ -101,9 +101,10 @@ class Paths(unittest.TestCase):
         self.assertEqual(n(ROOT, None, 'C:/../../a.md')[0], 'outside')
         for p in ('docs/a.md', 'C:/proj/repo/a.md:stream', '\\\\?\\C:\\proj\\repo\\a.md', '\\\\.\\C:\\a',
                   '\\\\server\\share\\a', '/proj/repo/a', 'C:/proj/repo/a.md.', 'C:/proj/repo/a.md ',
-                  'C:/proj/repo/.../a', 'C:/proj/repo/a\x00b', 'x:y', ''):
+                  'C:/proj/repo/.../a', 'C:/proj/repo/   /a', 'C:/proj/repo/a\x00b', 'x:y', ''):
             self.assertEqual(n(ROOT, None, p)[0], 'uncovered', p)
         self.assertEqual(n('relative', None, 'C:/a')[0], 'uncovered')
+        self.assertEqual(n(ROOT, 'rel', 'docs/a.md')[0], 'uncovered')
 
 
 class WriteSet(unittest.TestCase):
@@ -171,6 +172,55 @@ class Push(unittest.TestCase):
         self.assertEqual(r['verdict'], 'allow')
 
 
+class Unsure(unittest.TestCase):
+    def test_substitutions_refused(self):
+        """TASK-061 AC5, TASK-061 AC6 (D-1219 F5): a substitution or an expansion inside double quotes, with no literal
+        git word, is refused, reason parse, under the entry its first word needs."""
+        for c, allow in (('python -m pytest "$(G=gi;${G}t push)"', ['python -m pytest']),
+                         ('python -m pytest "$($(printf gi)t push)"', ['python -m pytest']),
+                         ('python -m pytest "`G=gi;H=t;$G$H push`"', ['python -m pytest']),
+                         ('bash -c "G=gi;\\${G}t push"', ['bash']),
+                         ('echo "$(rm x)"', ['echo']),
+                         ('echo "$X"', ['echo']),
+                         ('echo ${X}', ['echo'])):
+            r = bash(c, allow=allow)
+            self.assertEqual((r['verdict'], r['reason'], r['record']['evidence_type']),
+                             ('refuse', 'parse', 'shell_not_allowed'), c)
+        self.assertEqual(bash("echo '$X'", allow=['echo'])['verdict'], 'allow')
+
+    def test_escaped_quote_refused(self):
+        """TASK-061 AC5, TASK-061 AC6 (D-1219 F6): a backslash before a quote, in bash and in PowerShell, is refused,
+        reason parse."""
+        r = bash('git status \\"; rm x # "', allow=['git status'])
+        self.assertEqual((r['verdict'], r['reason']), ('refuse', 'parse'))
+        r = call('PowerShell', {'command': 'echo "a\\" ; rm x ; echo \\"b"'}, allow=['echo'])
+        self.assertEqual((r['verdict'], r['reason']), ('refuse', 'parse'))
+        r = bash("echo it\\'s", allow=['echo'])
+        self.assertEqual((r['verdict'], r['reason']), ('refuse', 'parse'))
+
+    def test_comments_refused(self):
+        """TASK-061 AC5, TASK-061 AC6 (D-1220 F7): a "#" outside quotes, "<#" included, is refused, reason parse, in bash
+        and in PowerShell; a "#" inside quotes is not."""
+        for tool, c in (('Bash', 'echo hi # "\nrm x\n# "'), ('PowerShell', 'echo hi # "\nrm x\n# "'),
+                        ('PowerShell', 'echo <# " #> ; rm x ; echo <# " #>'), ('Bash', 'echo a#b')):
+            r = call(tool, {'command': c}, allow=['echo'])
+            self.assertEqual((r['verdict'], r['reason']), ('refuse', 'parse'), c)
+        self.assertEqual(bash('echo "a#b"', allow=['echo'])['verdict'], 'allow')
+
+    def test_typographic_quotes_refused(self):
+        """TASK-061 AC5, TASK-061 AC6 (D-1220 F8): a typographic quote mark anywhere is refused, reason parse."""
+        for q in '\u2018\u2019\u201a\u201b\u201c\u201d\u201e':
+            r = call('PowerShell', {'command': 'echo "a' + q + ' ; rm x ; echo ' + q + 'b"'}, allow=['echo'])
+            self.assertEqual((r['verdict'], r['reason']), ('refuse', 'parse'), ascii(q))
+
+    def test_lone_line_breaks_separate(self):
+        """TASK-061 AC5, TASK-061 AC6 (D-1219 F6): a lone carriage return, vertical tab or form feed separates commands."""
+        for sep in ('\r', '\v', '\f'):
+            r = call('PowerShell', {'command': 'git status' + sep + 'rm x'}, allow=['git status'])
+            self.assertEqual((r['verdict'], r['reason'], r['record']['refers_to']), ('refuse', 'allowlist', 'rm x'), repr(sep))
+        self.assertEqual(bash('git status\r\n')['verdict'], 'allow')
+
+
 class Allowlist(unittest.TestCase):
     def test_entries(self):
         """TASK-061 AC6: each simple command must start with an entry's words; an empty allowlist refuses every call."""
@@ -184,7 +234,8 @@ class Allowlist(unittest.TestCase):
         self.assertEqual(len(r['record']['refers_to']), claude_code.REFERS_MAX)
 
     def test_empty_command_uncovered(self):
-        """TASK-061 AC2, TASK-061 AC6: an empty or blank command is uncovered, input (reading r1 of the code request)."""
+        """TASK-061 AC2, TASK-061 AC6: an empty or blank command is uncovered, input (a blank command is read as one
+        that is missing)."""
         self.assertEqual(bash('   ')['verdict'], 'uncovered')
 
 
@@ -252,7 +303,9 @@ class Purity(unittest.TestCase):
             self.assertNotIn(bad, attrs, bad)
         doc = ast.get_docstring(tree)
         for words in ('unmeasured', 'D-1202', 'D-1203', '"uncovered" is never "allow"', 'not judged against the write-set',
-                      'Pushes by other means', 'supported live only for Bash', 'Links and junctions are not resolved'):
+                      'Pushes by other means', 'supported live only for Bash', 'Links and junctions are not resolved',
+                      'matcher "*"', 'passes no cwd', 'outside or inside the call', 'admits whatever that code does',
+                      'D-1219 F5', 'D-1219 F6', 'D-1220 F7', 'D-1220 F8', 'case-sensitively', 'reserved device names', 'redaction'):
             self.assertIn(words, doc, words)
         self.assertNotIn('.aieos', text)
 
@@ -265,7 +318,7 @@ class Purity(unittest.TestCase):
             text = (tests / rel).read_text(encoding='utf-8')
             tree = ast.parse(text)
             for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name.startswith('test')]:
-                self.assertIn('TASK-061 AC', ast.get_docstring(fn) or '', fn.name)
+                self.assertRegex(ast.get_docstring(fn) or '', r'TASK-061 AC[0-9]+', fn.name)
             # the words are built from parts, so that this module's own text does not hold them
             for bad in ('Us' + 'ers', 'App' + 'Data', '.cla' + 'ude/', '.cla' + 'ude\\','aieos_' + 'bash_guard', 'aieos_' + 'callform_guard',
                         'aieos_' + 'textblock_guard'):
