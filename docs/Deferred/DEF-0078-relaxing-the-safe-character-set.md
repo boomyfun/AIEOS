@@ -15,3 +15,4 @@
 
 ## Log
 - 2026-10-18: opened (session dfcb097a; D-1223).
+- 2026-10-18: noted (session 3d8844e1; D-1231): F9 is unchanged at TASK-061's acceptance; the contract's own capabilities entry "timeout 110 python tests/run_tests.py < /dev/null" can never match under F9 ("<" is outside the set); TASK-062 takes F9 unchanged (D-1236).

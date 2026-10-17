@@ -14,3 +14,4 @@
 
 ## Log
 - 2026-10-18: opened (session dfcb097a; D-1223).
+- 2026-10-18: added (session 3d8844e1; D-1231): besides interpreters, entries for git with any arguments (git -c with help.autocorrect, or a setting that runs a program), xargs, find with -exec and timeout admit whatever they run; CC-2 checks every entry against the safe set and refuses an entry holding any whitespace other than a space (TASK-061's split treats other Unicode whitespace in an entry as a space). TASK-062's outline takes this as its AC4 (D-1236).
