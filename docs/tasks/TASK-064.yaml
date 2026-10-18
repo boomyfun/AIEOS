@@ -1,0 +1,441 @@
+# Task contract TASK-064, the core side of the observed read-set record (Master Plan revision 4, §4 M5; concept line
+# 945, "record the observed read-set"; specification 5 revision 3, sections 7 and 11 points 4 and 7; specification 2
+# revision 6, section 6.2 :180-185 and section 10 point 13).
+# Revision 0, drafted under decision D-1281 (candidate (1), C1 and C2); brought for approval in its own request; whether
+# it is approved is recorded in the decision files, not in this file. Fields and value forms follow specification 2
+# §5.1 and the contract of TASK-063. Readings marked "(reading)" are the worker's, for the decision agent's ruling;
+# values marked "(filled by script)" are written by script from the base just before commit C.
+# Task type: implementation. What it adds:
+# - records.py (TASK-001, extended by TASK-029 for the audit copies) gets the form rules of specification 2 revision 6
+#   for a record of evidence_type observed_read_set and for the key read_paths (spec 2 :181-183, "The record checker
+#   applies these form rules once a task extends it"), in the audit copies' pattern (records.py:41-48, :83-85,
+#   :315-344): read_paths joins RECORD_KEYS, and a new check_read_set(record, where) is called from check_record.
+# - A new module src/aieos_bootstrap/read_set_record.py, called only by its tests, with record_ids(task_id,
+#   session_id), build(task_id, session_id, read_paths, recorder) and observe(context, read_paths, now, append=None),
+#   which writes one observed read-set record for the session through the core's writer (INV-004).
+# claude_code.py, claude_code_hook.py, claude_code_channel.py, adapter.py, violation.py, eventlog.py and writer.py are not
+# changed.
+# The interface (specification 5 §11 point 7), as this task states it:
+# - The context: TASK-063's context, checked by claude_code_channel.context_findings unchanged (TASK-063 AC1): root,
+#   task_id, session_id, fencing_token, write_set, allowlist and recorder; this task uses root, task_id, session_id,
+#   fencing_token and recorder, and the other two only through that check. The session is tied in words, by a recorder
+#   that holds session_id verbatim (TASK-063 :16-20), and by the ids below; the lease by fencing_token.
+# - The event (spec 2 :185, "whether that event is a lease holder's action"): settled here as a lease holder's action
+#   (reading): the record is added by one record.added event with task_id the task and the context's fencing_token, so
+#   the writer's fence (writer.py:209-224; eventlog.append) accepts it only from the session that holds the task's
+#   lease; a token that is not the held lease's gives the writer's fence refusal, recorded by the writer as its own
+#   record, and nothing else. So the caller passes the read-set before the lease is released (before adapter.end, and
+#   before a violation releases it).
+# - The ids: event_id and record_id are derived from the task and the session, not given by the caller:
+#   "observed-read-set/<task_id>/<session_id>" and that text followed by "/record". So a second call for the same
+#   session with the same list gives eventlog's "duplicate" (nothing appended, no error), and with another list gives
+#   eventlog's refusal "conflict" (eventlog.py:180-184): at most one record per task and session is held by the log
+#   (spec 2 :183's limit, here checked mechanically for one task and one session_id; two session_ids for one session,
+#   or one session_id over two tasks, are not found: a limit).
+# - The paths: read_paths is the caller's list; the core removes a repeated path by exact string equality, keeping the
+#   first occurrence's order, before writing (spec 2 :182). No path is normalised, resolved or checked against the
+#   root, the write-set or the disk: the form stays open (spec 2 §10 point 13, for the contract of spec 5 §11 point
+#   8), so each path is the writer's statement, recorded and not checked. The list may be empty.
+# - Left open, stated as limits: how reads are gathered across hook calls (state across hook processes; the hook
+#   process's task, part CC-3's neighbour, the owner's for placing hooks, A51 item (4)); which tools a hook covers
+#   (spec 5 §11 point 8; DEF-0076); abnormal session ends (spec 5 §11 point 10: a crash or an expired lease may leave no
+#   record); the path form (spec 2 §10 point 13).
+# What such a record shows (spec 2 :184, stated in the docstring): a lower bound at best; a missing record proves
+# nothing; it is kept and not used: having no outcome and no dimension it meets no evidence entry, blocks nothing, is
+# no gate result and has nothing to re-verify; specification 3 takes the observed source only from a measured runtime
+# of tier T3 or above, and no runtime is measured (C6, P-LOC), so the read-set stays an estimate.
+# Limits (carried at acceptance): C6 and P-LOC unmeasured; every limit TASK-061 to TASK-063 carried; the session tie in
+# words only; a record never delivered is lost; DEF-0080's points stay with claude_code_channel.py, which is not
+# changed.
+# Deferred items: DEF-0076, DEF-0077, DEF-0078 and DEF-0080 stay open. Follow-up named, not taken: the specification 3
+# alignment of its lines 25 and 29 to specification 2 revision 6 (D-1281 C4).
+# Risk: high (risk rules revision 6, §2 point 3: R3 matches every path under src/** and tests/**), computed over the
+# base by script before commit C. GOV-003: every path of the write-set is an evaluator path by the workflow's pinned
+# list, by script; change class critical_cr, as for TASK-060 to TASK-063, ruled at acceptance. records.check_record is
+# called by the governor, the evaluation path, conformance, drift, ac_coverage, ac_tests and verification_records, so
+# a change to it changes what they accept as a record of form (reading: their results change only for records carrying
+# read_paths or the name observed_read_set, which are refused today; every other record gets the findings it got
+# before, AC2; such a record has no outcome, dimension, gate or commit, so it meets no evidence entry and no drift
+# rule). Profile (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture
+# [deterministic_rule], functional [integration_test], security [static_security_analysis] and architecture [ai_review
+# (cross-model)], plus the evidence_required of the applicable articles. Reviews: five way-2 reviews on Sonnet 5.5, a
+# Claude model other than the implementer's (Opus 5.5), never Fable (the owner's words of 2026-10-17); and the decision
+# agent's own reviews: INV-003's human_review, OPS-002's human_review and the cross-model half, each its own record
+# (D-1148 Q2).
+# Records: in the readable form, as TASK-063's; per-entry coverage checked by script before the acceptance request
+# (L-0022), and the governor's evaluation over the records reported (D-1098).
+# Naming (D-544 Q3): every test of the new test modules names the AC ids it stands for as "TASK-064 ACn" in its own
+# docstring.
+# Evaluation path (A61; as TASK-019 to TASK-063): commit C changes only docs/tasks/TASK-064.yaml and has one parent equal
+# to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-064" and no e-mail address in its message, go to
+# task/TASK-064 under their own decisions; main receives the task only at its acceptance.
+# Not applicable: OPS-001 (the task changes no ref); INV-005 to INV-008, INV-010 and INV-011; GOV-001, GOV-004 to GOV-006
+# and SEC-003 (no path of the write-set meets them). INV-004 applies: the module writes only through the core's writer.
+# Owner-kept acts: none. No hook placed, no matcher chosen, no Claude Code setting, nothing measured, nothing under
+# .github/ or .claude/, no push of its own; it weakens no evidence requirement; so its acceptance is one delegated
+# approval of the decision agent (Master Plan section 6).
+task: TASK-064
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add the core side of the observed read-set record (concept line 945; specification 5 §7; specification 2 revision 6
+  §6.2) in standard-library Python 3. records.py checks the form of a record of evidence_type observed_read_set and of
+  the key read_paths, as specification 2 :181-183 gives it. A new module src/aieos_bootstrap/read_set_record.py gives
+  record_ids(task_id, session_id), build(task_id, session_id, read_paths, recorder) and observe(context, read_paths,
+  now, append=None): observe checks TASK-063's context, builds one record from the paths the adapter passes, repeats
+  removed, and adds it by one fenced record.added event through the core's writer; it writes nothing else. With unit,
+  integration and property tests in tests/unit/test_read_set_record.py, tests/unit/test_records_read_set.py,
+  tests/integration/test_read_set_record_store.py and tests/property/test_read_set_record_properties.py, each test
+  naming its AC ids in its own docstring.
+traces_to:
+  - docs/specs/spec-05-adapter-contract.md#7
+  - docs/specs/spec-05-adapter-contract.md#11
+  - docs/specs/spec-02-aieos-file-format.md#6.2
+  - docs/specs/spec-02-aieos-file-format.md#10
+  - docs/specs/risk-rules-gov-aieos.md#2
+input_state:
+  # base_commit and the intent_versions values are filled by script from refs/heads/main just before commit C is made
+  # (D-198 C5).
+  base_commit: 38579f9ebd7e9f69c571837944b8edfeae1fd8ff
+  depends_on: [TASK-001, TASK-011, TASK-029, TASK-051, TASK-052, TASK-063]
+  intent_versions:
+    docs/specs/spec-05-adapter-contract.md: 6392a747dfab0f5b0c8f8103842bfeffdc5020e1828a4d5e97407ba5e07f1e94
+    docs/specs/spec-02-aieos-file-format.md: 690cb2ede30e34ab57abacba1a62284cac4b0225b7065678d6993d035edaf16c
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 05c53318cd756a3acfc13e5adaffbfaede8f05be3d00289e9fd45fef08c63c73
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # records.py exists and is changed; the five other paths are new.
+  paths:
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/read_set_record.py
+    - tests/unit/test_read_set_record.py
+    - tests/unit/test_records_read_set.py
+    - tests/integration/test_read_set_record_store.py
+    - tests/property/test_read_set_record_properties.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.records.check_record, aieos_bootstrap.records.check_payload, aieos_bootstrap.records.RECORD_KEYS, aieos_bootstrap.claude_code_channel.context_findings, aieos_bootstrap.claude_code_channel.RECORDER_JOIN, aieos_bootstrap.claude_code.RECORDER, aieos_bootstrap.writer.append_event, aieos_bootstrap.eventlog.append]
+  schemas: [spec-02 records (6.2), spec-02 record.added (6.3), spec-02 envelope (6.1)]
+forbidden:
+  # As TASK-063's list: .github/**, .aieos/**, .claude/**, CLAUDE.md, AIEOS-concept.md, docs/**, bench/**,
+  # tests/conformance/**, .gitattributes, .gitignore, and every existing path of src/ and tests/ except
+  # src/aieos_bootstrap/records.py, which is in the write-set; claude_code.py, claude_code_hook.py,
+  # claude_code_channel.py, adapter.py, violation.py, eventlog.py and writer.py are among the forbidden paths (the list
+  # is filled by script from the base's tree before commit C).
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/conformance/fixtures/acc_01.py
+  - tests/conformance/fixtures/acc_02.py
+  - tests/conformance/fixtures/acc_03.py
+  - tests/conformance/fixtures/acc_04.py
+  - tests/conformance/fixtures/acc_05.py
+  - tests/conformance/fixtures/acc_06.py
+  - tests/conformance/fixtures/acc_07.py
+  - tests/conformance/fixtures/acc_08.py
+  - tests/conformance/fixtures/acc_09.py
+  - tests/conformance/fixtures/acc_10.py
+  - tests/conformance/fixtures/acc_11.py
+  - tests/conformance/fixtures/acc_12.py
+  - tests/conformance/fixtures/acc_13.py
+  - tests/conformance/fixtures/acc_14.py
+  - tests/conformance/fixtures/acc_15.py
+  - tests/conformance/fixtures/acc_16.py
+  - tests/conformance/fixtures/acc_17.py
+  - tests/conformance/fixtures/adv_01.py
+  - tests/conformance/fixtures/adv_03.py
+  - tests/conformance/fixtures_cb/adv_02.py
+  - tests/conformance/fixtures_rc/rc_01.py
+  - tests/conformance/fixtures_rc/rc_02.py
+  - tests/conformance/fixtures_rc/rc_03.py
+  - tests/conformance/fixtures_rc/rc_04.py
+  - tests/conformance/fixtures_rc/rc_05.py
+  - tests/conformance/fixtures_rc/rc_06.py
+  - tests/conformance/fixtures_rc/rc_07.py
+  - tests/conformance/fixtures_rc/rc_08.py
+  - tests/conformance/fixtures_rc/rc_09.py
+  - tests/conformance/fixtures_rc/rc_10.py
+  - tests/conformance/fixtures_rc/rc_11.py
+  - tests/conformance/fixtures_risk/risk_01.py
+  - tests/conformance/set.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The record's form in records.py (spec 2 :181-183). read_paths joins RECORD_KEYS. A new check_read_set(record,
+      where='record'), called from check_record after check_audit_copy, gives findings whose rules all begin
+      "6.2:read_set": for a record whose evidence_type is observed_read_set, when fact_kind is not observation, when
+      source_class is not deterministic_tool_local, when subject is not "TASK-" followed by digits, when read_paths is
+      missing, when read_paths is not a list of
+      non-empty strings with no repeat by exact string equality (an empty list is of form), and for each of session,
+      outcome, gate, blocking_kind, dimension, commit and intent_versions that it carries; and for a record of any other
+      evidence_type, or with none, that carries read_paths. A record that carries neither read_paths nor the name gets
+      none of these findings. The values are the writer's statements and are not checked beyond their form (spec 2
+      :182); no path form is checked (spec 2 §10 point 13); how the recorder names the adapter and the session, in words,
+      is not checked (a limit). The module's docstring states these rules beside the audit
+      copies' and that check_record no longer refuses read_paths as an unknown key.
+  - AC2: >-
+      Nothing else changes in records.py. Every other function, constant and finding of records.py is unchanged; the
+      diff of records.py adds read_paths to RECORD_KEYS, adds check_read_set and its constants, adds its call in
+      check_record and its docstring paragraph, and changes no other line. Every existing test passes unchanged (GOV-003),
+      and a property test shows that over generated records carrying neither read_paths nor the name, check_read_set
+      gives no finding and no finding of check_record has a rule beginning "6.2:read_set". That the other findings are
+      the base's is shown by the unchanged existing tests and by the diff, not by a test that loads the base's copy (a
+      limit).
+  - AC3: >-
+      The ids. record_ids(task_id, session_id) returns (event_id, record_id) with event_id
+      "observed-read-set/" + task_id + "/" + session_id and record_id event_id + "/record"; it raises nothing and returns
+      None for a task_id that is not "TASK-" followed by digits or a session_id that is not a non-empty string with no
+      whitespace or "/". The docstring states that a second observe for the same task and session gives "duplicate"
+      with the same list and the writer's refusal "conflict" with another (eventlog.py:180-184), so the log holds at
+      most one such record per task and session_id, and that two session_ids for one session are not found (a limit).
+  - AC4: >-
+      The record. build(task_id, session_id, read_paths, recorder) gives None when any argument is out of form
+      (record_ids None, read_paths not a list of non-empty strings, recorder not a non-empty string holding session_id
+      verbatim), else a new mapping with exactly record_id (from record_ids), fact_kind "observation", source_class
+      "deterministic_tool_local", recorder claude_code.RECORDER + claude_code_channel.RECORDER_JOIN + recorder (TASK-063's
+      form, claude_code.py:89, claude_code_channel.py:103), subject task_id, evidence_type
+      "observed_read_set" and read_paths, the given list with each repeat after its first occurrence removed by exact
+      string equality, order kept; records.check_record gives no finding for it. The given list is never changed. No
+      path is normalised, resolved, case-folded or checked against the root, the write-set or the disk.
+  - AC5: >-
+      observe(context, read_paths, now, append=None) returns a mapping with exactly result, reason, findings, record and
+      core. In order, the first that applies gives the result: context findings (claude_code_channel.context_findings)
+      give "refused", reason "context"; now not a timezone-aware datetime in UTC with whole seconds gives "refused",
+      reason "now"; record_ids giving None for the context's task_id and session_id (a session_id holding "/", which
+      TASK-063's context allows) gives "refused", reason "session_id"; build giving None gives "refused", reason
+      "read_paths"; otherwise one call of append(root,
+      "record.added", record, event_id, now, recorder, task_id=task_id, fencing_token=fencing_token), append defaulting
+      at call time to writer.append_event, with the context's root, task_id, fencing_token and recorder; result
+      "written" when its result is "appended", "duplicate" when it is "duplicate", else "refused" with reason "core"
+      (the writer's fence refusal among them, reason "fence" in core); core holds the append result's result, reason,
+      seq and findings as texts. record is the record passed, or None when nothing was passed. append is called in no
+      other case. Any exception raised inside observe gives "refused", reason "observe", the exception's type in
+      findings, and record the record when append was already called, else None; no exception escapes. findings hold
+      only observe's own fixed words, an exception's type and the append result's findings; no path of read_paths is
+      copied into findings. The context and read_paths are never changed.
+  - AC6: >-
+      What is stated. The module's docstring states: the interface of the header (the context reused from TASK-063; the
+      event as a lease holder's action, fenced, so the caller passes the read-set before the lease is released; the
+      derived ids and the at-most-one rule with its limit; repeats removed by exact string; no path form); what a record
+      shows (a lower bound at best; a missing record proves nothing; kept and not used, citing spec 2 :184 and spec 3's
+      tier rule); that how reads are gathered across hook calls, which tools a hook covers, abnormal ends and the path
+      form are out of this task (spec 5 §11 points 8 and 10; spec 2 §10 point 13; CC-3, the owner's for placing hooks);
+      and the limits of the header. No test asserts anything about a running Claude Code.
+  - AC7: >-
+      What it imports and does (INV-001 to INV-004). read_set_record.py imports only the Python 3 standard library
+      (datetime and re, if needed) and aieos_bootstrap's claude_code, claude_code_channel, records and writer. It writes only through
+      writer.append_event (or the append given); it opens no file itself, starts no process, reads no standard input,
+      prints nothing, calls no sys.exit, reads no clock or environment, and makes no network or model call; no exec,
+      eval, compile, __import__ or importlib; no assert in src (bandit B101); no string that names the project-state
+      directory; tests/unit/test_writer.py's R8 test and tests/unit/test_gitread.py's subprocess test pass unchanged. The
+      change to records.py adds no import. At the task's commits the CI steps report no finding: deterministic_rule,
+      OPS-003, SEC-001, SEC-002 and bandit.
+  - AC8: >-
+      Its own tests and the added text. Every test function of the four new test modules names the AC ids it stands for
+      as "TASK-064 ACn" in its own docstring; no other task's AC is named in qualified form. No existing test is changed
+      (GOV-003). Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns,
+      and each count is 0. The unit and property tests write no file (append is a stand-in); the integration test writes
+      only under a temporary folder that it creates and removes, through the real writer (reading: as the existing
+      integration tests of the writer do), and no test value is a real path of this machine's user folders, a real
+      session id or a credential-shaped string other than made-up ones that the scans do not match.
+  - AC9: >-
+      Tests, each rule with at least one passing and one failing case: R1 AC1 (each finding of check_read_set: each
+      wrong fact_kind, source_class and subject, read_paths missing, not a list, holding an empty string, a non-string, a repeat;
+      an empty list of form; each forbidden key; read_paths on another type and on a record without evidence_type; a
+      record with neither, no finding); R2 AC2 (the property over generated records); R3 AC3 (each id form, each
+      refused task_id and session_id); R4 AC4 (the exact recorder text, repeats removed with order kept, the given list unchanged, each
+      argument out of form, the recorder without the session id, check_record clean); R5 AC5 (each step of the order;
+      append called exactly once only for a well-formed context and list, with the exact arguments, by a stand-in; its
+      appended, duplicate and refusals mapped; a fault injected into the stand-in giving "observe" with the record
+      kept; a fault before the call giving None; a path holding a made-up marker text, with no marker text in findings;
+      the context and the list unchanged); R6 AC6 by a script check of the docstring words; R7 AC7 by a script check of
+      imports, absent names and calls; an integration test through the real writer in a temporary root with a granted
+      lease (writer.open_store, writer.grant_lease): the record appended once, read back by writer.read_log and checked
+      by records.check_log with no finding; a second call with the same list "duplicate", with another list refused
+      "conflict"; a call with a token that is not the held lease's refused with reason "fence" and the writer's refusal
+      record in the log; and a property test (standard library only, fixed seeds) that build and observe are
+      deterministic over equal inputs, that append is called at most once, that the record's read_paths are the
+      distinct given paths in first-occurrence order, and that the inputs are never changed. Broken copies of
+      read_set_record.py and of records.py's new part, one per rule, each fail at least one test. tests/run_tests.py,
+      unchanged, runs them.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC9]}
+  - {gate: G3, check: constitution, args: [AC6, AC7, AC8, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
