@@ -17,18 +17,22 @@ The context (AC1, AC7): exactly root, task_id, session_id, fencing_token, write_
 - The lease is tied by fencing_token, the token that adapter.start's grant returns.
 - The session is tied in words only, by a recorder that holds session_id verbatim: specification 2 revision 6 keeps
   no session key on a record (section 6.2), and adapter.violation takes no session id. The core does not check it.
+  The tie is a substring test, so a very short session_id ties weakly.
 - The write-set (proposed): the caller takes it from the lease's task contract at the base, the contract's
   write_set.paths, the same key the Resume Check reads from the contract it is given (resume_check.py:290, :405).
   This module reads no file; it checks only the form, as judge does.
 - The allowlist is the caller's policy (specification 5 section 11 point 6); only its form is checked, by
   claude_code_hook.allowlist_findings.
+- The root and write-set forms are copies of judge's own argument check (claude_code.py:99, :101, :273-279), not
+  calls of it, so the two could drift apart; no test ties them.
 
 Redaction (DEF-0079; AC3, AC4):
 - A record of evidence_type git_push_refused or shell_not_allowed gets a fixed refers_to for its type: no part of the
   command text, no first word and no hash of it is kept. Judge cut the text to 200 characters, so a hash would be of
   the cut text, and a hash of a short text holding a short secret can be found by guessing. Keeping a first word or a
   hash is a later choice, not taken. So the shell command is recorded redacted, not as typed: a departure from
-  specification 5 section 6's table, whose rows for the shell allowlist and git push record "the command".
+  specification 5 section 6's table, whose row for the shell allowlist records "the command" (its git push row records
+  only "a refusal"; the command text of a git push refusal comes from judge's record).
 - A record of evidence_type write_outside_write_set keeps refers_to only in judge's root-relative form: non-empty, no
   ":", no "\\", no leading "/", and no empty, "." or ".." segment; otherwise a fixed text. Why this catches every path
   outside the root (claude_code.py:61-66, :169, :183-186): judge gives a path inside the root in the "/"-joined
@@ -36,6 +40,9 @@ Redaction (DEF-0079; AC3, AC4):
   relative and driveless rooted paths are "uncovered" there; so every path outside the root holds a ":". Limit,
   stated: a file or folder name under the root can itself hold a secret; segments are not hashed, since the path under
   the root is the evidence that scenario ADV-02 and the gates need.
+- The test is chosen by the record's evidence_type, which is trusted: judge gives write_outside_write_set only for a
+  path (claude_code.py:309), so a forged record of that type whose refers_to holds other text with no ":", no "\\" and
+  no leading "/" would be kept. The record is the caller's input; this is a stated limit.
 
 deliver (AC5, AC7):
 - entry's exit code and standard-error text are never changed: hook_result is not changed, and the caller keeps
@@ -45,12 +52,18 @@ deliver (AC5, AC7):
   records every refusal by a hook.
 - The result's findings hold only this module's own fixed words, an exception's type, and adapter.violation's findings
   for the redacted record; no text of hook_result's findings or of the original refers_to is copied into the result.
+- The result "written" means adapter.violation gave "done", which includes its "duplicate" for a repeated event_id:
+  nothing new is appended then. After an exception, the result's record is the redacted record when adapter.violation
+  was already called with it, and None otherwise.
 - The module writes only through adapter.violation, which writes through the core's writer (INV-004); append and
   release are passed on, so tests pass stand-ins. It opens no file itself, starts no process, reads no clock or
   environment and makes no network or model call; it is not pure, since adapter.violation writes.
 
 The ids (AC6): event_id and the record's record_id are the caller's, and only their form is checked. A repeated
-event_id gives adapter.violation's "duplicate": nothing is appended and it is no error. How a hook process makes the
+event_id gives adapter.violation's "duplicate": nothing is appended and it is no error. A repeated record_id of a kept
+blocking record makes a later evaluation of the task refuse (violation.py:36-38). record_id is form-checked only and is
+not redacted, so text in a forged record's record_id would reach the core; it is the caller's input, a stated limit.
+How a hook process makes the
 ids is left to the task that starts the hook process; the candidates are named, not decided: the hook input's
 tool_use_id (entry does not read it today) and a counter per session (which needs state across hook processes).
 
@@ -208,7 +221,7 @@ def _hook_result_ok(hook_result):
     return verdict == 'refuse' or hook_result['record'] is None
 
 
-def _deliver(context, hook_result, event_id, now, append, release):
+def _deliver(context, hook_result, event_id, now, append, release, state):
     found = context_findings(context)
     if found:
         return _result('refused', 'context', found)
@@ -233,6 +246,7 @@ def _deliver(context, hook_result, event_id, now, append, release):
     if found:
         return _result('refused', 'record', found)
     passed = redact(record)
+    state['passed'] = passed
     core = adapter.violation(context['root'], context['task_id'], context['fencing_token'], passed, event_id,
                              context['recorder'], now, append=append, release=release)
     if isinstance(core, dict) and core.get('result') == 'done':
@@ -245,7 +259,9 @@ def _deliver(context, hook_result, event_id, now, append, release):
 def deliver(context, hook_result, event_id, now, append=None, release=None):
     """Pass a refusal's redacted record to the core once, through adapter.violation (AC5): a mapping with exactly
     RESULT_KEYS. No exception escapes."""
+    state = {}
     try:
-        return _deliver(context, hook_result, event_id, now, append, release)
+        return _deliver(context, hook_result, event_id, now, append, release, state)
     except Exception as e:  # noqa: BLE001 - any exception becomes a result, its type only
-        return _result('refused', 'deliver', ['%s raised inside deliver' % type(e).__name__])
+        # AC5: the record passed, when adapter.violation was already called with it, else None
+        return _result('refused', 'deliver', ['%s raised inside deliver' % type(e).__name__], state.get('passed'))

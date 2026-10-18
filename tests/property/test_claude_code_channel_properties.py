@@ -1,7 +1,8 @@
 """Property tests of aieos_bootstrap.claude_code_channel (task TASK-063, AC10's property test), standard library only,
 with fixed seeds: deliver is deterministic over equal inputs, calls adapter.violation at most once and only for entry's
-refusal with a record, keeps no part of a shell refusal's original refers_to, and never changes hook_result. append
-and release are stand-ins, so no file is written. Each test names its criteria in its own docstring."""
+refusal with a record, passes a shell refusal's refers_to as exactly its fixed text with none of three marker words of
+the command anywhere in the result, and never changes hook_result. append and release are stand-ins, so no file is
+written. Each test names its criteria in its own docstring."""
 
 import copy
 import datetime
@@ -82,8 +83,8 @@ class Properties(unittest.TestCase):
                 self.assertNotEqual(r['result'], 'written')
 
     def test_no_shell_text_kept(self):
-        """TASK-063 AC10, AC3, AC5: a shell refusal's passed record keeps only the fixed text, and no word of the
-        command beyond it appears in the result."""
+        """TASK-063 AC10, AC3, AC5: a shell refusal's passed record has exactly its fixed text as refers_to, and none of
+        three marker words of the command appears in the result."""
         rng = random.Random(6303)
         for _ in range(500):
             h, _, r, _ = run(sample(rng))

@@ -46,17 +46,19 @@ def hook_result(verdict='refuse', rec=None, **kw):
 class Store:
     """Stand-ins for writer.append_event and writer.release_lease_token that record their calls."""
 
-    def __init__(self, append_state='appended', release_state='done', raise_in=None):
+    def __init__(self, append_state='appended', release_state='done', raise_in=None, findings=()):
         self.calls = []
         self.append_state = append_state
         self.release_state = release_state
         self.raise_in = raise_in
+        self.findings = findings
 
     def append(self, root, event_type, payload, event_id, now, recorder, task_id=None, fencing_token=None):
-        self.calls.append(('append', root, event_type, copy.deepcopy(payload), event_id, task_id, fencing_token))
+        self.calls.append(('append', root, event_type, copy.deepcopy(payload), event_id, task_id, fencing_token, now,
+                           recorder))
         if self.raise_in == 'append':
             raise RuntimeError('made-up fault')
-        return types.SimpleNamespace(result=self.append_state, reason=None, findings=())
+        return types.SimpleNamespace(result=self.append_state, reason=None, findings=self.findings)
 
     def release(self, root, task_id, token):
         self.calls.append(('release', root, task_id, token))
@@ -142,6 +144,7 @@ class ShellRedaction(unittest.TestCase):
         """TASK-063 AC3: a record with a finding under AC2 gives None."""
         self.assertIsNone(ch.redact(record(outcome='fail')))
         self.assertIsNone(ch.redact(None))
+        self.assertIsNone(ch.redact(record('write_outside_write_set', '')))
 
 
 class PathRedaction(unittest.TestCase):
@@ -168,10 +171,22 @@ class Deliver(unittest.TestCase):
         appends = [c for c in store.calls if c[0] == 'append']
         self.assertEqual(appends[0][1:3], ('C:\\proj\\repo', 'violation.detected'))
         self.assertEqual(appends[0][3], r['record'])
-        self.assertEqual(appends[0][4:], ('ev-1', 'TASK-100', {'epoch': 'e1', 'counter': 3}))
+        self.assertEqual(appends[0][4:], ('ev-1', 'TASK-100', {'epoch': 'e1', 'counter': 3}, NOW,
+                                          'a test session ' + SID))
         self.assertEqual(len(appends), 2)
+        self.assertEqual([c[2] for c in appends].count('violation.detected'), 1)
+        releases = [c for c in store.calls if c[0] == 'release']
+        self.assertEqual(releases, [('release', 'C:\\proj\\repo', 'TASK-100', {'epoch': 'e1', 'counter': 3})])
         self.assertEqual(r['core']['result'], 'done')
         self.assertEqual(set(r), set(ch.RESULT_KEYS))
+
+    def test_literal_fixed_texts(self):
+        """TASK-063 AC3, AC4: the fixed texts are the contract's own words, typed here."""
+        want = {'git_push_refused': 'a git push command; its text is not kept (D-1262 M2)',
+                'shell_not_allowed': 'a shell command; its text is not kept (D-1262 M2)',
+                'write_outside_write_set': 'a path outside the root; it is not kept (D-1262 M3)'}
+        for kind, text in want.items():
+            self.assertEqual(ch.redact(record(kind, 'C:/x y'))['refers_to'], text, kind)
 
     def test_order_of_checks(self):
         """TASK-063 AC5: context before hook_result before event_id; nothing is called for any refusal."""
@@ -189,7 +204,7 @@ class Deliver(unittest.TestCase):
         bad = [hook_result(rec=record(), extra=1), {}, hook_result(verdict='maybe'),
                hook_result(rec=record(), exit_code=0), hook_result(verdict='allow', exit_code=2),
                hook_result(verdict='allow', rec=record()), hook_result(verdict='uncovered', rec=record()),
-               hook_result(rec=record(), exit_code=True)]
+               hook_result(rec=record(), exit_code=True), hook_result('allow', exit_code=False)]
         for h in bad:
             r, store = deliver(hr=h)
             self.assertEqual(r['reason'], 'hook_result', h)
@@ -235,6 +250,31 @@ class Deliver(unittest.TestCase):
         finally:
             adapter.violation = real
         self.assertEqual((r['result'], r['reason'], r['findings']), ('refused', 'deliver', ['KeyError raised inside deliver']))
+        # adapter.violation was called with the redacted record, so the result keeps it (AC5)
+        self.assertEqual(r['record'], ch.redact(record()))
+
+    def test_fault_before_the_call_keeps_no_record(self):
+        """TASK-063 AC5: an exception before adapter.violation is called gives record None."""
+        real = ch.redact
+
+        def broken(rec):
+            raise KeyError('made-up')
+        ch.redact = broken
+        try:
+            r, store = deliver()
+        finally:
+            ch.redact = real
+        self.assertEqual((r['result'], r['reason'], r['record']), ('refused', 'deliver', None))
+        self.assertEqual(store.calls, [])
+
+    def test_no_text_through_a_refusing_core(self):
+        """TASK-063 AC5: with a core that refuses, no text of hook_result's findings or of the original refers_to is in
+        the result."""
+        marker = 'MARKER-TEXT-43'
+        h = hook_result(rec=record(refers_to='x ' + marker), findings=[marker])
+        r, _ = deliver(hr=h, store=Store(append_state='weird'))
+        self.assertEqual((r['result'], r['reason']), ('refused', 'core'))
+        self.assertNotIn(marker, repr(r))
 
     def test_hook_result_unchanged_and_no_text_copied(self):
         """TASK-063 AC5: hook_result is never changed, and no text of its findings or of the original refers_to is
@@ -258,7 +298,8 @@ class Statements(unittest.TestCase):
                       'write_set.paths', 'resume_check.py:290', 'writer.py:11', 'never changed',
                       'specification 5 section 8', "specification 5 section 6's table", 'neither refuses nor records',
                       'CC-3', 'No observed read-set record', 'claude_code.py:61-66, :169, :183-186',
-                      'can itself hold a secret', 'not pure'):
+                      'can itself hold a secret', 'not pure', 'ties weakly', 'only "a refusal"', 'violation.py:36-38',
+                      'not redacted', 'claude_code.py:309', 'could drift apart', 'includes its "duplicate"'):
             self.assertIn(words, doc, words)
 
     def test_imports_and_absent_calls(self):
