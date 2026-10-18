@@ -28,6 +28,9 @@ One occurrence in session 2026-10-10-0451 (../History/2026-10/2026-10-10-0451-de
 One occurrence in session 2026-10-18-2107 (../History/2026-10/2026-10-18-2107-the-pages-d1318-to-d1339-and-spec-5-revision-4-and-spec-2-revision-7-on-main.md):
 - **2026-10-18 (:367, D-1342).** After the app's auto mode flagged a decision-agent handback as "[Auto-Mode Bypass]", Claude ended a turn to ask the owner whether to list a slip and rerun an approved step, a question that DM A71 gives to the decision agent. The owner answered (:371): "hãy luôn hỏi agent quyết định xem quyết định thế nào, đây là bài học đã được rút ra từ những phiên trước. Và thêm một điều, từ giờ trở đi "Lời nhắn mở đầu phiên sau" phải yêu cầu đọc chính xác cả bài học này để claude không quên". From then on every next-session prompt requires reading this lesson and L-0024 exactly and in full (D-1342 C4).
 
+One occurrence in session 2026-10-18-2345 (../History/2026-10/2026-10-18-2345-the-pages-d1340-to-d1357-and-the-contract-of-task-066-on-main.md):
+- **2026-10-18 (D-1358).** After the app's auto mode classifier stopped the setup script and then a request to the decision agent, Claude ended a turn to ask the owner to choose how to go on, a question that DM A71 gives to the decision agent. The owner answered (:167): "hãy hỏi lại agent quyết định, prompt đã yêu cầu và bài học cũng đã ghi, hãy làm theo bài học". The request then went to the decision agent in neutral wording and was decided there (D-1358).
+
 ## Why it happens
 - Claude treats a step as mechanical (a display, a change of order, a turn end) and does not see it as a decision.
 - The request checklist of the decision agent's definition was not applied before sending.
