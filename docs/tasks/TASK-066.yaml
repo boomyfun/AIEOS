@@ -1,0 +1,555 @@
+# Task contract TASK-066, the store lookup of the Claude Code adapter's hook process (Master Plan revision 4, §4 M5;
+# concept line 945; specification 5 revision 4, section 11 point 7, bullets 3 to 6; specification 2 revision 7,
+# section 3).
+# Revision 1, drafted under decisions D-1360 (K2 first; C1 (a) to (e)), D-1361 (the scoping note approved) and D-1362
+# (round k2a's dispositions; D-1361 C1 amended by D-1362 C1), with round k2b's non-blocking points applied (D-1362
+# C7); brought for approval in its own request; whether it is
+# approved is recorded in the decision files, not in this file. Fields and value forms follow specification 2 §5.1
+# and the contracts of TASK-062 to TASK-065. Readings marked "(reading)" are the worker's, for the decision agent to
+# rule; values marked "(filled by script)" are written by script from the base just before commit C.
+# Task type: implementation. What it adds: the read-only judgement every hook call of the Claude Code adapter needs
+# before any concern, in two parts (D-1360 C1 (a); spec 5 :109-110):
+# - in the writer module (src/aieos_bootstrap/writer.py, changed): one new public function session_lease(root,
+#   session_id, now, timeout=5.0), the only part that opens the store, read-only, giving the store's answer for a
+#   session or for no session; and private helpers and private module-level constants that only session_lease uses
+#   (reading). No existing function, class or module-level assignment changes; no import is added; the module
+#   docstring gains lines (AC7);
+# - in a new hook-side module src/aieos_bootstrap/claude_code_store.py, judge(session_id, root, working_folder, now):
+#   the session id and root rules and the upward search for the store (bullet 4), calling only writer.store_path and
+#   writer.session_lease of the core; it never opens the store or the event log itself (the workflow's
+#   deterministic_rule refuses sqlite3 and open outside writer.py and the three writer test files,
+#   aieos-checks.yml:1449-1470, and strings naming the
+#   project-state directory in every src/ file but writer.py, docstrings included, aieos-checks.yml:1589-1591).
+# Both take the session id, the root, the working folder and the time now as arguments; where the hook entry takes
+# them from (environment variable names, the process's working folder, the process clock) is a later contract's
+# (reading). A now earlier than the real time would make an expired lease read as unexpired (the fail-open
+# direction), so that contract must take now from the process clock. Nothing calls either function yet but the
+# tests.
+# The three outcomes (spec 5 :109-112), judge's result "outcome":
+# - "enforce_nothing" (bullet 5): neither a session id nor a root, and no store found upward ("no_store_found"), or the
+#   store found holds no lease row at all, expired or not (session id absent; "no_lease_row");
+# - "refuse" (bullet 6, no record): every other case with no live tied lease, with one fixed reason;
+# - "tied" (bullet 3): the one unexpired lease the store holds for the session, in eventlog.LEASE_KEYS' form, and the
+#   root it was found at.
+# Read-only, and the lock (D-1361, D-1362 C1; DEF-0084 h4c Y2-8): session_lease connects with
+# sqlite3.connect(uri, uri=True, timeout=timeout, isolation_level=None), where uri is made by the private helper
+# _store_uri(path, sep, altsep) from the link check's verified left-hand string, os.path.realpath(store_path(root))
+# (absolute, so the store opened is the store checked; no lexical ".." collapse), with sep and altsep given by
+# session_lease as os.sep and os.altsep, by one rule (D-1362 C1): only sep and altsep become "/" (a "\" on POSIX is an
+# ordinary byte and is encoded as %5C); a "/" goes before a drive, an ASCII letter A-Z or a-z followed by ":" at the
+# start; every UTF-8 byte outside A-Z, a-z, 0-9, "-", ".", "_", "~", "/" and the drive's ":" becomes %XX (uppercase
+# hex), by a character loop or two-argument str.replace only (a one-argument .replace is refused,
+# aieos-checks.yml:1578-1581); the result is "file:" + "//" + that path + "?mode=ro". A path that starts with two
+# separators (a UNC path) is not encoded and is refused ("unreadable"; a limit). A path not encodable as UTF-8 (a
+# surrogate-escaped byte) is refused ("unreadable"; on a non-UTF-8 POSIX file-system encoding, a limit). No import is
+# added for this (tests/unit/test_writer.py:408-412
+# allows writer.py only datetime, hashlib, json, os, re, secrets, sqlite3 and aieos_bootstrap), and no PRAGMA is used.
+# It runs a deferred BEGIN; _check_schema and every query run inside that one transaction; it ends the transaction and
+# closes the connection in a finally block. SQLite's read-only mode then refuses any write and never creates the
+# file; no row is inserted, changed or removed, no table created, no expiry run (the launcher's, spec 5 :108), and the
+# store file and its folders are never created. Unlike held_lease (writer.py:465-473, through _transaction's BEGIN
+# IMMEDIATE, writer.py:256, a write lock), the lookup's deferred BEGIN takes only a shared lock, at its first read; a
+# writer's commit waits for it while it reads; a writer that holds, or waits at, an exclusive or pending lock longer
+# than the timeout, or a journal or WAL state a read-only connection cannot use, makes the lookup refuse
+# ("unreadable"). Cost stated: a hook call during a long commit is refused without a record. A hot rollback journal
+# left by a crash cannot be rolled back by a read-only connection; AC9's hot-journal test shows that the lookup then
+# refuses (D-1362 C6). Claude Code's own hook timeouts are unmeasured (C6).
+# The table form before and after K1 (D-1360 C1 (c)): specification 2 revision 7 §3 already lists four tables, reads
+# among them; the lookup checks the store with the existing _check_schema against the pre-K1 writer's TABLES (three
+# tables, writer.py:44-48, :241-248), so a store in specification 2's four-table form is refused ("tables") until K1;
+# when K1 adds reads, TABLES gains it, the lookup follows without a change of its own, and a store of the old form is
+# refused until K1's migration, as bullet 6 says (spec 5 :112). K1's contract changes the tests that pin three
+# tables. No hook is placed before the owner places it.
+# The store's presence and the link check (D-1362 C2, C3; DEF-0084 h4d Y2-4): session_lease first takes
+# os.lstat(store_path(root)): FileNotFoundError or NotADirectoryError gives "no_store"; any other OSError, or
+# ValueError, gives "unreadable"; an entry that is not a regular file ((st_mode & 0o170000) == 0o100000 is false: a
+# directory, a link, any other kind) gives "link". Then, just before the store is opened, the two folders between the
+# store and the root (the project-state directory and its local folder) and the file are checked together:
+# os.path.normcase of os.path.realpath(store_path(root)) must equal os.path.normcase of os.path.join(
+# os.path.realpath(root), the three names); else "link". normcase on both sides keeps case and separator
+# differences from giving a false refusal; short (8.3) names are resolved by realpath on both sides on Windows, and
+# where it does not resolve them the result is a false refusal (fail closed). Tests use stand-ins for os.lstat,
+# os.path.realpath and os.path.normcase (unittest.mock), since the workflow refuses creating links and folders in
+# tests (aieos-checks.yml:1455-1460, :1469); in tests/unit/test_writer.py they are patched on writer's os functions
+# for one call and pass every path other than the one under test to the real function (posixpath.realpath itself
+# calls os.lstat). Limits: real
+# links and junctions are never exercised in CI, which runs on Linux (aieos-checks.yml:84); a junction or link that
+# realpath does not resolve on the running Python leaves the path unchanged and is not seen; hard links and bind
+# mounts are not seen; the check and the open are two steps (a change between them is not seen).
+# Values (DEF-0084 h4d Y2-4; spec 5 :110): in judge, a session id or root is absent when it is None or the empty str;
+# any other str is present, whitespace-only included (reading; a whitespace root is not absolute and refuses: fail
+# closed); any other type is "argument". session_lease takes session_id None or a non-empty str only; the
+# empty-as-absent rule is judge's. A present root must be absolute (os.path.isabs); the working folder is used only
+# when the search is made (neither a session id nor a root), and must then be an absolute path of an existing folder
+# (os.path.isabs and os.path.isdir), else "argument" (reading; fail closed); so no result depends on the process's
+# current folder. The upward search starts at os.path.abspath(working_folder) and goes to
+# each parent in turn (os.path.dirname until it no longer changes: the drive or share root), taking
+# os.lstat(writer.store_path(folder)) in each: FileNotFoundError or NotADirectoryError passes the folder over (a
+# folder whose project-state directory has no store file); a regular file stops the search there; any other OSError,
+# ValueError, or an entry that is not a regular file (a dangling link among them) refuses ("search") (reading; fail
+# closed, under spec 5 :112's "every other case": spec 5 :111 names only a store not found).
+# DEF-0084 points taken: Y2-4 (values, links, where the search ends), Y2-8 (the lock), h4b Y2-6 in part (the
+# lookup's refusal of "not exactly one unexpired lease"), Y1-6 and Y5-8 (AC6's check of calls), and the base
+# commit's source (filled by script, D-198 C5).
+# Limits (carried at acceptance; D-1361 C5, the scoping note's §5 and §6 unchanged in meaning): C6 and P-LOC
+# unmeasured; no hook placed, no matcher, no setting, nothing measured (CC-3, the owner's, A51 item (4)); every limit
+# TASK-061 to TASK-065 carried; the lock, link and UNC limits above; a store found first inside an inner project is
+# judged alone, and a hook outside every project's folder tree is not judged (spec 5 :111); a store created, removed
+# or swapped between judge's search and session_lease's open is a race (refused if gone, judged if it appears). Stay
+# deferred in DEF-0084: the reads table's size (Y2-11, K1); the cost of fail closed when a lease expires during a run;
+# the hook input's own session_id; the token-less observe, reading and removing stored reads and finding a task's
+# leftover sessions (K1 and point 10's contract); the record's place among spec 1 §7's start steps (Y1-7); the lease
+# length (Y2-10); an unreadable contract (Y3-2, the write-set concern's contract); a global placement under a parent
+# folder (Y5-7, Y5-9: the upward search states its behaviour, the placement is the owner's); whether the core should
+# refuse a second grant to one session (h4b Y2-6; the lookup refuses "not exactly one unexpired lease"); the h4d
+# points Y1-1, Y1-3, Y2-6, Y4-6, Y5-7, and Y5-8 beyond AC6's check (that no hook program's function reaches the
+# core-only path is tested in K1's contract, which adds that path). DEF-0080, DEF-0081 and DEF-0082 stay deferred:
+# this task changes none of their modules, and none waits for the next change of writer.py; DEF-0076, DEF-0077,
+# DEF-0078 and DEF-0083 are not touched.
+# Risk: high (risk rules revision 6, §2 point 3: R3 matches every path under src/** and tests/**), computed over the
+# base by script before commit C. GOV-003: every path of the write-set is an evaluator path by the workflow's pinned
+# list, by script; change class critical_cr, as for TASK-060 to TASK-065, ruled at acceptance. Profile
+# (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture [deterministic_rule], functional
+# [integration_test], security [static_security_analysis] and architecture [ai_review (cross-model)], plus the
+# evidence_required of the applicable articles. Reviews: five way-2 reviews on Sonnet 5.5, a Claude model other than
+# the implementer's (Opus 5.5), never Fable (the owner's words of 2026-10-17); and the decision agent's own reviews:
+# INV-003's human_review, OPS-002's human_review and the cross-model half, each its own record (D-1148 Q2).
+# Records: in the readable form, as TASK-065's; per-entry coverage checked by script before the acceptance request
+# (L-0022), and the governor's evaluation over the records reported (D-1098). Two checks against the base run as
+# acceptance-time scripts over the task's commits, not as tests in tests/ (they would fail at the next legitimate
+# change of these files): AC6's unchanged definitions of writer.py and AC8's unchanged test functions.
+# Naming (D-544 Q3): every new test function names the AC ids it stands for as "TASK-066 ACn" in its own docstring.
+# Evaluation path (A61; as TASK-019 to TASK-065): commit C changes only docs/tasks/TASK-066.yaml and has one parent equal
+# to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-066" and no e-mail address in its message, go to
+# task/TASK-066 under their own decisions; main receives the task only at its acceptance.
+# Not applicable: OPS-001 (the task changes no ref); INV-005 to INV-008, INV-010 and INV-011; INV-009 (the task touches
+# no event log); GOV-001, GOV-004 to GOV-006 and SEC-003 (no path of the write-set meets them). INV-004 applies: the
+# writer stays the only module that opens the store, and the new function writes nothing.
+# Owner-kept acts: none. No hook placed, no matcher chosen, no Claude Code setting, nothing measured, nothing under
+# .github/ or .claude/, no push of its own; it weakens no evidence requirement; so its acceptance is one delegated
+# approval of the decision agent (Master Plan section 6).
+task: TASK-066
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add the Claude Code adapter's store lookup (concept line 945; specification 5 §11 point 7, bullets 3 to 6) in
+  standard-library Python 3: in src/aieos_bootstrap/writer.py one new read-only function session_lease(root,
+  session_id, now, timeout=5.0), which opens the store read-only and gives the store's answer for a session or for no
+  session; and a new module src/aieos_bootstrap/claude_code_store.py with judge(session_id, root, working_folder, now),
+  which applies the session id and root rules and the upward search for the store and returns enforce_nothing, refuse
+  or tied, calling only writer.store_path and writer.session_lease. With new test functions added to
+  tests/unit/test_writer.py, tests/integration/test_writer_files.py and tests/property/test_writer_properties.py (no
+  existing test function or class changed), and new test modules tests/unit/test_claude_code_store.py and
+  tests/property/test_claude_code_store_properties.py, each new test naming its AC ids in its own docstring.
+traces_to:
+  - docs/specs/spec-05-adapter-contract.md#11
+  - docs/specs/spec-05-adapter-contract.md#6
+  - docs/specs/spec-05-adapter-contract.md#8
+  - docs/specs/spec-02-aieos-file-format.md#3
+  - docs/specs/risk-rules-gov-aieos.md#2
+input_state:
+  # base_commit and the intent_versions values are filled by script from refs/heads/main just before commit C is made
+  # (D-198 C5).
+  base_commit: 66c212ec2a86ed207f27d17a43b83126b0e0079d
+  depends_on: [TASK-001, TASK-016, TASK-061, TASK-062]
+  intent_versions:
+    docs/specs/spec-05-adapter-contract.md: c2496023175dcc535974f04c9ec6778101da26fb90a35a5424fbc589c0303601
+    docs/specs/spec-02-aieos-file-format.md: 9442edbb9e6e70fcc7ef0b296815315d742c5c9c365e32813e83dbc3a982533b
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # Three paths are new; writer.py and the three writer test files are changed by additions only (AC6, AC8).
+  paths:
+    - src/aieos_bootstrap/writer.py
+    - src/aieos_bootstrap/claude_code_store.py
+    - tests/unit/test_writer.py
+    - tests/integration/test_writer_files.py
+    - tests/property/test_writer_properties.py
+    - tests/unit/test_claude_code_store.py
+    - tests/property/test_claude_code_store_properties.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.writer.store_path, aieos_bootstrap.writer.open_store, aieos_bootstrap.writer.start_session, aieos_bootstrap.writer.end_session, aieos_bootstrap.writer.grant_lease, aieos_bootstrap.writer.held_lease, aieos_bootstrap.writer.StoreResult, aieos_bootstrap.eventlog.LEASE_KEYS]
+  schemas: [spec-02 local store tables (section 3)]
+forbidden:
+  # As TASK-065's list: .github/**, .aieos/**, .claude/**, CLAUDE.md, AIEOS-concept.md, docs/**, bench/**,
+  # tests/conformance/**, .gitattributes, .gitignore, and every existing path of src/ and tests/ that is not in the
+  # write-set (the list is filled by script from the base's tree before commit C).
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - tests/conformance/fixtures/acc_01.py
+  - tests/conformance/fixtures/acc_02.py
+  - tests/conformance/fixtures/acc_03.py
+  - tests/conformance/fixtures/acc_04.py
+  - tests/conformance/fixtures/acc_05.py
+  - tests/conformance/fixtures/acc_06.py
+  - tests/conformance/fixtures/acc_07.py
+  - tests/conformance/fixtures/acc_08.py
+  - tests/conformance/fixtures/acc_09.py
+  - tests/conformance/fixtures/acc_10.py
+  - tests/conformance/fixtures/acc_11.py
+  - tests/conformance/fixtures/acc_12.py
+  - tests/conformance/fixtures/acc_13.py
+  - tests/conformance/fixtures/acc_14.py
+  - tests/conformance/fixtures/acc_15.py
+  - tests/conformance/fixtures/acc_16.py
+  - tests/conformance/fixtures/acc_17.py
+  - tests/conformance/fixtures/adv_01.py
+  - tests/conformance/fixtures/adv_03.py
+  - tests/conformance/fixtures_cb/adv_02.py
+  - tests/conformance/fixtures_rc/rc_01.py
+  - tests/conformance/fixtures_rc/rc_02.py
+  - tests/conformance/fixtures_rc/rc_03.py
+  - tests/conformance/fixtures_rc/rc_04.py
+  - tests/conformance/fixtures_rc/rc_05.py
+  - tests/conformance/fixtures_rc/rc_06.py
+  - tests/conformance/fixtures_rc/rc_07.py
+  - tests/conformance/fixtures_rc/rc_08.py
+  - tests/conformance/fixtures_rc/rc_09.py
+  - tests/conformance/fixtures_rc/rc_10.py
+  - tests/conformance/fixtures_rc/rc_11.py
+  - tests/conformance/fixtures_risk/risk_01.py
+  - tests/conformance/set.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      session_lease's arguments and result. It returns a writer.StoreResult: result "done" with reason "tied" (value
+      the lease in eventlog.LEASE_KEYS' form, as held_lease gives it) or reason "no_lease_row" (only when session_id is
+      None and the store holds no lease row; value None), so StoreResult's documented values ("done" or "refused",
+      writer.py:92-94) stay true; or result "refused" with exactly one finding and a reason from this fixed list:
+      "argument" (session_id neither None nor a non-empty str, or not encodable as UTF-8; now not a timezone-aware UTC
+      datetime in whole seconds; timeout not an int or float, or a bool, or not in 0 < timeout <= 60, a range test
+      that also refuses inf and NaN, so no math import is needed), "root" (the root not a non-empty str, not absolute,
+      or not an existing folder: _check_root raising included), "no_store", "link", "unreadable", "tables",
+      "lease_row_without_session", "no_lease_row", "session", "ended", "leases". No exception escapes: the argument
+      checks run inside a try whose any exception (a raising tzinfo among them) gives "argument", and the root check
+      inside one that gives "root"; everything after the "root" check (the presence step, the link check,
+      the URI, the connect and the reads) runs inside one try/except Exception; a failure inside the link-check step
+      gives "link", any other "unreadable"; _check_schema's ValueError gives "tables" in its own try. Every handler
+      returns a value (no pass or continue: bandit B110, B112); a failure while ending the transaction or closing the
+      connection also gives "unreadable" (the connection name is set to None before the try). A finding names the
+      exception's type, never its message.
+  - AC2: >-
+      session_lease's order and cases (spec 5 :110-112). In this order the first that applies gives the result:
+      "argument"; "root"; the presence step of the header ("no_store", "unreadable" or "link"); the link check
+      ("link"); a failure to make the URI (a UNC path), to open, or to read (a lock held past the timeout, a damaged
+      file) gives "unreadable"; tables other than TABLES or not exactly one store row (_check_schema) gives "tables".
+      Then, with session_id None: no lease row at all gives "done"/"no_lease_row", and any lease row, expired or not,
+      gives "lease_row_without_session". With session_id given: no lease row at all gives the refusal "no_lease_row";
+      no sessions row with that id gives "session"; a row whose ended_at IS NOT NULL (any non-NULL value, "" included)
+      gives "ended"; then the stored times of that session's lease rows only are parsed (a malformed one gives
+      "unreadable"), and not exactly one lease row of that session whose expires_at is after now (expires_at > now, the
+      same comparison as expire_leases, writer.py:457) gives "leases"; else "tied" with that lease. One unexpired and
+      one expired lease of the session give "tied". All reads, _check_schema included, run inside the one deferred
+      BEGIN.
+  - AC3: >-
+      Read-only and the lock. session_lease connects only as the header says (the URI from the private helper,
+      "?mode=ro", uri=True, the timeout passed, isolation_level None), runs a deferred BEGIN, and closes the connection
+      in a finally block on every path. Over every case of AC2 the store file's bytes, and the list of files under the
+      root's project-state directory (taken after any other test connection is closed), are the same before and after
+      the call; no store, folder or journal is left created. A root whose path holds a space, "#" and "%" (and, where
+      os.sep is "/", a "?": Windows file names cannot hold it, so that part is skipped there by unittest.skipIf) is
+      looked up correctly. _store_uri gives fixed expected strings on every platform, its sep and altsep given by the
+      test: a POSIX path (sep "/", altsep None), a Windows-form path (sep "\", altsep "/"), a "\" in a POSIX name (%5C), a
+      space, "#", "%", "?" and a non-ASCII name; and refuses a path starting with two separators. While another
+      connection holds a write transaction that has not reached its commit (BEGIN IMMEDIATE), the lookup still reads;
+      while another holds an exclusive lock (BEGIN EXCLUSIVE), the lookup with a short timeout (about 0.2 seconds) gives
+      "unreadable". With a hot rollback journal beside the store, the lookup gives "unreadable" (D-1362 C6; built as
+      AC9 R2 says).
+  - AC4: >-
+      judge's rules (spec 5 :110-111). judge(session_id, root, working_folder, now) returns a mapping with exactly
+      outcome, reason, findings, root and lease. In order: now not a timezone-aware UTC datetime in whole seconds, or a
+      session_id or root that is present but not a str (any type other than None and str: 0, False, [], b"", a number
+      among them), or a present root that is not absolute, gives "refuse", reason "argument"; a root without a session
+      id gives "refuse", "root_without_session"; a session id without a root gives "refuse", "session_without_root";
+      with both, the result is session_lease(root, session_id, now)'s, mapped as AC5 says, no upward search is made and
+      working_folder is not used. With neither: working_folder not a str that is absolute and names an existing folder
+      gives "refuse", "argument" (reading; fail closed); then the search of the header from working_folder; a search
+      refusal gives "refuse", "search" (reading; fail closed); no store found gives "enforce_nothing",
+      "no_store_found"; else session_lease(found, None, now) mapped as AC5 says. root is the root given (both present)
+      or the folder found, else None.
+  - AC5: >-
+      judge's mapping. session_lease's "done"/"tied" with a lease that is not None gives outcome "tied", reason "tied",
+      lease the value; "done"/"no_lease_row" gives "enforce_nothing", reason "no_lease_row", lease None, only when
+      judge's own session_id and root were both absent and the search was made; every "refused" gives "refuse" with
+      the same reason and findings, lease None; any other shape of answer ("done" with another reason, "tied" with no
+      lease, "no_lease_row" on the both-present path, a value that is not a StoreResult) gives "refuse", reason
+      "entry". So "enforce_nothing" arises only with both absent. judge calls only writer.store_path and
+      writer.session_lease of the core and nothing else that reads or writes the store or the event log; it never
+      opens a file. No exception escapes: any exception inside gives "refuse", reason "entry", the exception's type
+      name in findings. Equal arguments over an unchanged disk give equal results; judge keeps no state.
+  - AC6: >-
+      What the modules import and do (INV-001 to INV-004; D-1360 C1 (a)). claude_code_store.py imports exactly os and,
+      of aieos_bootstrap, writer; it calls no writer name other than store_path and session_lease (a check over its
+      AST); its regular-file test reads st_mode as the header says, with no stat import; it opens no file, starts no
+      process, reads no standard input or environment, prints nothing, calls no sys.exit, reads no clock, and makes no
+      network or model call; no exec, eval, compile, __import__ or importlib; no assert in src (bandit B101); no string,
+      docstrings included, naming the project-state directory. writer.py's change adds no import (its imports stay
+      within tests/unit/test_writer.py:410's set), adds only session_lease and the private helpers and private
+      module-level constants it alone uses (_store_uri's encoding by a character loop or two-argument str.replace
+      only), and reads no clock; every function, class and module-level assignment present at the base is unchanged (an
+      acceptance-time script by source segment over the task's commits). tests/unit/test_writer.py's R8 tests and
+      tests/unit/test_gitread.py's subprocess test pass unchanged. At the task's commits the CI steps report no
+      finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit.
+  - AC7: >-
+      What is stated. writer.py's module docstring gains lines naming session_lease and TASK-066, and its Limits gain
+      the read-only and lock text; session_lease's and claude_code_store's docstrings state: the three outcomes and
+      their sources (spec 5 :109-112); read-only and the lock, with the refusal cost, and the refusal on a hot journal
+      or a journal or WAL state a read-only connection cannot use; the URI rule, built from the checked realpath, and
+      the UNC and non-UTF-8 refusals;
+      the table form before and after K1, and that spec 2 revision 7 §3 already lists four tables; the presence step,
+      the link check and their limits (untested in CI on Linux; junctions and unresolved links; hard links and bind
+      mounts; check and use apart); the values rule, and that the empty-as-absent rule is judge's; the upward search,
+      where it ends, its refusal on an unexaminable entry as a fail-closed reading, the inner-store and
+      outside-the-tree limits, and the race between search and open; that the session id, root, working folder and
+      now are arguments, their source a later contract's, and that a now earlier than the real time is the fail-open
+      direction, so now must come from the process clock; and that no hook is placed
+      and nothing is measured (CC-3, the owner's; C6). No test asserts anything about a running Claude Code.
+  - AC8: >-
+      Its own tests and the added text (GOV-003; D-1361 C2). Every new test function names the AC ids it stands for as
+      "TASK-066 ACn" in its own docstring; no other task's AC is named in qualified form. In tests/unit/test_writer.py,
+      tests/integration/test_writer_files.py and tests/property/test_writer_properties.py every top-level and
+      class-level function and class present at the base is byte-identical after the change and none is removed, and
+      nothing else in them changes but added functions and classes and the imports they need (an acceptance-time
+      script by source segment over the AST, over the task's commits). Before each commit, the added text is scanned
+      with the workflow's SEC-001, SEC-002 and OPS-003 patterns, and each count is 0. Every test is buildable under
+      deterministic_rule (D-1362 C5): tests that make a real store (open_store, start_session, grant_lease, end_session
+      in a tempfile folder) or use sqlite3 or tempfile are only in the three writer test files, and no other test
+      module imports sqlite3 or tempfile; no test calls mkdir or makedirs, exec, compile, __import__ or importlib, or
+      open in a mode other than "rb" or "ab"; the two new test modules write no file, read sources only by pathlib's
+      read_bytes on paths relative to __file__, and use stand-ins for writer.session_lease and for the file checks:
+      claude_code_store's name os is replaced, for one call, by a stand-in namespace giving only the functions judge
+      uses (lstat, and path.abspath, isabs, isdir, dirname); in tests/unit/test_writer.py the presence-step and
+      link-check stand-ins patch writer's os functions for one call and pass every other path to the real function;
+      no test creates a link or a folder; no test value is a real path of this machine's user folders, a real session
+      id or a credential-shaped string other than made-up ones that the scans do not match, and no literal "/tmp" path
+      (bandit B108); paths are built from tempfile in the three writer test files and from absolute pieces derived from
+      os.sep in the two new modules.
+  - AC9: >-
+      Tests, each rule with at least one passing and one failing case: R1 AC1 and AC2 (each reason, in order, over
+      real stores in the writer test files: a missing and a non-folder root and a relative root, each with a session
+      id set, through session_lease and through judge; no store; a 0-byte store file ("tables") and a non-empty garbage
+      file of at least 100 bytes ("unreadable"), both built thus: open_store run with writer._SCHEMA patched to a
+      failing statement leaves the folders and an empty store file after its rollback, and the garbage is written to
+      it with open "ab" (if open_store leaves no file so, the raw evidence goes to the decision agent); a
+      malformed stored time on the session's own lease row; tables of another form and a fourth table; no lease row
+      with and without a session id; an expired and an unexpired lease row with no session id; no such session; an
+      ended session, built with two sessions (a lease granted to the second, the first ended); ended_at ""; zero, one
+      and two unexpired leases of the session; one unexpired and one expired; an expired lease at exactly now; each
+      bad argument kind, a raising tzinfo, a lone surrogate session id and each bad timeout; the tied case); R2 AC3
+      (bytes and files unchanged; the special-character root, made by tempfile's prefix and suffix; _store_uri's fixed
+      strings and the UNC refusal; the IMMEDIATE and
+      EXCLUSIVE locks; the hot journal, built in a writer test file thus: a second store made by open_store gives the
+      folders, since tests may not make folders; on a first store a write transaction is held open after it has
+      written pages, and that store's journal bytes, read with open "rb", are written with open "ab" to the journal
+      path beside the second store (or, if the copied journal is not hot, a journal whose header the test writes with
+      open "ab": SQLite's journal magic and a non-zero record count); the lookup on the second store gives
+      "unreadable"; if no journal can be produced, the raw evidence goes to the decision agent, and if the lookup does
+      not give "unreadable", that is a blocking finding for the decision agent, not a dropped test, D-1362 C6); R3, in
+      tests/unit/test_writer.py, the presence step and the link check through stand-ins for os.lstat,
+      os.path.realpath and os.path.normcase (each errno case, a directory, a link and another kind at the store path; a
+      store file, a local folder and a project-state folder each resolving elsewhere give "link"; case and separator
+      differences only, with ntpath.normcase standing in for os.path.normcase, do not; a realpath stand-in returning
+      the same expanded form on both sides for a short name does not; a raising realpath gives "link" and a raising
+      _store_uri "unreadable"); R4 AC4 and AC5 (each rule and mapping, with stand-ins: None, "", whitespace and each
+      non-str value; a bad now; relative paths; a working folder that is not an existing folder; a bad working folder
+      ignored when both are present; the upward search finding the nearest store, passing a folder without a store
+      file, ending at the root, refusing on another OSError, a ValueError and a non-regular entry, an inner store
+      judged alone; each odd answer shape of AC5 giving "entry"; exceptions giving "entry"); R5 AC6 by an in-suite check of the current text
+      (imports, absent names and calls) and the acceptance-time script for the base definitions; R6 AC7 by an in-suite
+      check of the docstring words, matched with whitespace collapsed (D-1286); R7 AC8 by the acceptance-time script
+      of the three writer test files; and property tests (standard library only, fixed seeds, at most 50 cases each):
+      over generated session ids, roots and stand-in answers judge's result has exactly the five keys, lease is None
+      unless the outcome is "tied", "enforce_nothing" occurs only when session id and root were both absent, and equal
+      inputs give equal results (tests/property/test_claude_code_store_properties.py); over generated real stores
+      session_lease never changes the store's bytes (tests/property/test_writer_properties.py). Broken copies of session_lease and judge, one per rule, are made and run in the
+      scratchpad, outside tests/, as for TASK-059 to TASK-065, and each fails at least one test. tests/run_tests.py,
+      unchanged, runs the tests.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC9]}
+  - {gate: G3, check: constitution, args: [AC6, AC7, AC8, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
