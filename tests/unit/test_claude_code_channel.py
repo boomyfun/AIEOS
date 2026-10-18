@@ -272,8 +272,9 @@ class Deliver(unittest.TestCase):
         the result."""
         marker = 'MARKER-TEXT-43'
         h = hook_result(rec=record(refers_to='x ' + marker), findings=[marker])
-        r, _ = deliver(hr=h, store=Store(append_state='weird'))
+        r, _ = deliver(hr=h, store=Store(append_state='weird', findings=('a made-up core finding',)))
         self.assertEqual((r['result'], r['reason']), ('refused', 'core'))
+        self.assertIn('a made-up core finding', ' '.join(r['findings']))
         self.assertNotIn(marker, repr(r))
 
     def test_hook_result_unchanged_and_no_text_copied(self):
@@ -298,7 +299,7 @@ class Statements(unittest.TestCase):
                       'write_set.paths', 'resume_check.py:290', 'writer.py:11', 'never changed',
                       'specification 5 section 8', "specification 5 section 6's table", 'neither refuses nor records',
                       'CC-3', 'No observed read-set record', 'claude_code.py:61-66, :169, :183-186',
-                      'can itself hold a secret', 'not pure', 'ties weakly', 'only "a refusal"', 'violation.py:36-38',
+                      'can itself hold a secret', 'not pure', 'ties weakly', 'only "a refusal"', 'violation.py:35-38', 'same blocking_kind and subject', 'is then not known',
                       'not redacted', 'claude_code.py:309', 'could drift apart', 'includes its "duplicate"'):
             self.assertIn(words, doc, words)
 

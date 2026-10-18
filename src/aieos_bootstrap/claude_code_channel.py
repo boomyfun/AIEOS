@@ -54,15 +54,17 @@ deliver (AC5, AC7):
   for the redacted record; no text of hook_result's findings or of the original refers_to is copied into the result.
 - The result "written" means adapter.violation gave "done", which includes its "duplicate" for a repeated event_id:
   nothing new is appended then. After an exception, the result's record is the redacted record when adapter.violation
-  was already called with it, and None otherwise.
+  was already called with it, and None otherwise; when adapter.violation itself raised, whether anything was written
+  is then not known.
 - The module writes only through adapter.violation, which writes through the core's writer (INV-004); append and
   release are passed on, so tests pass stand-ins. It opens no file itself, starts no process, reads no clock or
   environment and makes no network or model call; it is not pure, since adapter.violation writes.
 
 The ids (AC6): event_id and the record's record_id are the caller's, and only their form is checked. A repeated
 event_id gives adapter.violation's "duplicate": nothing is appended and it is no error. A repeated record_id of a kept
-blocking record makes a later evaluation of the task refuse (violation.py:36-38). record_id is form-checked only and is
-not redacted, so text in a forged record's record_id would reach the core; it is the caller's input, a stated limit.
+blocking record can make a later evaluation of the task refuse (violation.py:35-38), unless it repeats a kept blocking
+record's record_id with the same blocking_kind and subject. record_id is form-checked only and is not redacted, so text
+in a forged record's record_id would reach the core and deliver's result; it is the caller's input, a stated limit.
 How a hook process makes the
 ids is left to the task that starts the hook process; the candidates are named, not decided: the hook input's
 tool_use_id (entry does not read it today) and a counter per session (which needs state across hook processes).
