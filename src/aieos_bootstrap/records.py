@@ -46,6 +46,15 @@ Limits (TASK-001 AC7):
   outcome, gate, blocking_kind or dimension. A record of any other evidence_type that carries either key is out of
   form too. These findings all begin "6.2:audit_copy", and a record that carries neither key and neither name gets
   none of them. The values are the writer's statements and are not checked beyond their form.
+- The observed read-set record of specification 2 revision 6 (TASK-064 AC1): the record key read_paths (so check_record
+  no longer refuses it as an unknown key), and the form rules of a record whose evidence_type is observed_read_set:
+  fact_kind observation; source_class deterministic_tool_local; subject "TASK-" followed by digits; read_paths present,
+  a list of non-empty strings with no repeat by exact string equality (an empty list is of form); and none of session,
+  outcome, gate, blocking_kind, dimension, commit and intent_versions. A record of any other evidence_type, or with
+  none, that carries read_paths is out of form too. These findings all begin "6.2:read_set", and a record that carries
+  neither read_paths nor the name gets none of them. The paths are the writer's statements: no path form is checked
+  (specification 2 section 10 point 13), and how the recorder names the adapter and the session, in words, is not
+  checked (a limit).
 - record_id is checked as a non-empty string; whether it is unique across a log is not checked. evidence_type and
   dimension are open vocabularies, checked as non-empty strings only.
 - An ignored duplicate is reported as such whether or not the line it repeats has findings of its own.
@@ -78,12 +87,15 @@ BINDING_KINDS = frozenset({'contract', 'acceptance', 'change_request', 'baseline
 RECORD_REQUIRED = ('record_id', 'fact_kind', 'source_class', 'recorder', 'subject')
 RECORD_KEYS = frozenset(RECORD_REQUIRED + (
     'evidence_type', 'dimension', 'gate', 'outcome', 'blocking_kind', 'commit', 'intent_versions', 'approval_binding',
-    'decision_ref', 'models', 'basis', 'stands_for', 'refers_to', 'risk_class', 'evidence_profile'))
+    'decision_ref', 'models', 'basis', 'stands_for', 'refers_to', 'risk_class', 'evidence_profile', 'read_paths'))
 # The audit copies of specification 2 revision 4 (TASK-029 AC7).
 AUDIT_COPY_TYPES = ('risk_class', 'evidence_profile')
 AUDIT_COPY_SOURCES = frozenset({'deterministic_tool_local', 'deterministic_tool_external_ci'})
 AUDIT_COPY_FORBIDDEN = ('outcome', 'gate', 'blocking_kind', 'dimension')
 RISK_CLASSES = frozenset({'low', 'medium', 'high', 'critical'})
+# The observed read-set record of specification 2 revision 6 (TASK-064 AC1).
+READ_SET_TYPE = 'observed_read_set'
+READ_SET_FORBIDDEN = ('session', 'outcome', 'gate', 'blocking_kind', 'dimension', 'commit', 'intent_versions')
 ACCEPTANCE_DECISIONS = frozenset({'ACCEPT', 'NEEDS_REVIEW', 'INSUFFICIENT_EVIDENCE', 'NEEDS_REWORK', 'REJECT'})
 EXECUTION_DECISIONS = frozenset({
     'CONTINUE', 'CONTINUE_WITH', 'REPLAN', 'STOP: scope invalid', 'STOP: runtime insufficient', 'STOP: violation',
@@ -299,6 +311,7 @@ def check_record(record, extra_keys=frozenset(), where='record', section='6.2'):
         if key in record and not _is_str(record[key]):
             findings.append(Finding('6.2:' + key, '%s %r is not a non-empty string' % (where, key)))
     findings.extend(check_audit_copy(record, where))
+    findings.extend(check_read_set(record, where))
     return findings
 
 
@@ -341,6 +354,43 @@ def check_audit_copy(record, where='record'):
     for key in AUDIT_COPY_FORBIDDEN:
         if key in record:
             findings.append(Finding('6.2:audit_copy_forbidden', '%s is an audit copy that carries %r' % (where, key)))
+    return findings
+
+
+def _is_read_paths(value):
+    if not isinstance(value, list) or not all(_is_str(p) for p in value):
+        return False
+    return len(set(value)) == len(value)
+
+
+def check_read_set(record, where='record'):
+    """The observed read-set rules of specification 2 revision 6 (TASK-064 AC1), for one record (a dict). Every
+    finding's rule begins "6.2:read_set"; a record that carries neither read_paths nor the name gets none."""
+    findings = []
+    if record.get('evidence_type') != READ_SET_TYPE:
+        if 'read_paths' in record:
+            findings.append(Finding('6.2:read_set_key', '%s carries %r, but its evidence_type is not %r'
+                                    % (where, 'read_paths', READ_SET_TYPE)))
+        return findings
+    if record.get('fact_kind') != 'observation':
+        findings.append(Finding('6.2:read_set_fact_kind', '%s is an observed read-set record whose fact_kind is not '
+                                'observation' % where))
+    if record.get('source_class') != 'deterministic_tool_local':
+        findings.append(Finding('6.2:read_set_source_class', '%s is an observed read-set record whose source_class is '
+                                'not deterministic_tool_local' % where))
+    if not _matches(_TASK, record.get('subject')):
+        findings.append(Finding('6.2:read_set_subject', '%s is an observed read-set record whose subject is not '
+                                '"TASK-" followed by digits' % where))
+    if 'read_paths' not in record:
+        findings.append(Finding('6.2:read_set_key', '%s is an observed read-set record that lacks %r'
+                                % (where, 'read_paths')))
+    elif not _is_read_paths(record['read_paths']):
+        findings.append(Finding('6.2:read_set_value', '%s read_paths is not a list of distinct non-empty strings'
+                                % where))
+    for key in READ_SET_FORBIDDEN:
+        if key in record:
+            findings.append(Finding('6.2:read_set_forbidden', '%s is an observed read-set record that carries %r'
+                                    % (where, key)))
     return findings
 
 
