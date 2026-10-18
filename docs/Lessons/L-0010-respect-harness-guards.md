@@ -267,6 +267,9 @@ Occurrence in session 2026-10-18-2355 (../History/2026-10/2026-10-18-2355-the-pa
 Occurrence in session 2026-10-19-0115 (../History/2026-10/2026-10-19-0115-the-pages-d1367-to-d1377-the-k1-draft-reviewed-and-task-066.md):
 - **2026-10-19 (D-1383 (h), D-1384, D-1385).** A Bash call holding a bare ";" was refused before it ran (R4), the worker's error; it was not retried in any form; the guard then refused every Bash call (R6) until the line was listed by its own decision; an auto-mode notice on two decision-agent reports (both had only read) went to the decision agent, which kept the listing.
 
+Occurrence in session 2026-10-19-0247 (../History/2026-10/2026-10-19-0247-the-pages-d1378-to-d1390-and-the-contract-of-task-067-approved.md):
+- **2026-10-19 (D-1392, D-1394, D-1396, D-1398).** Five text slips beside tool calls (:397, :423, :649, :930, :1125), against the owner's "no text with an action"; the text-block guard refused one read (:427), which was sent again alone under its own decision; each slip was listed by its own decision, the last three before any refusal; Claude's reading: they came at step changes inside long runs of edits. A k1c reviewer's read-only Bash call was refused by a hook before it ran (D-1395).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
