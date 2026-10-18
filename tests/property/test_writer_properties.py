@@ -76,5 +76,42 @@ class Properties(unittest.TestCase):
             self.assertTrue(tokens, seed)
 
 
+class LookupProperties(unittest.TestCase):
+
+    def test_the_lookup_never_changes_the_store(self):
+        """TASK-066 AC9 (property) and TASK-066 AC3: over generated real stores (fixed seed, at most 50 cases: random
+        sessions, grants, ends and expiries), session_lease never changes the store's bytes or the files under the
+        project-state directory, and its result is always one of the documented shapes."""
+        rng = random.Random(66)
+        shapes = set()
+        for case in range(25):
+            with tempfile.TemporaryDirectory() as root:
+                writer.open_store(root)
+                sessions = ['s-%d' % i for i in range(1, rng.randint(1, 4) + 1)]
+                for sid in sessions:
+                    writer.start_session(root, sid, 'agent-1', T0)
+                for i in range(rng.randint(0, 4)):
+                    at = T0 + datetime.timedelta(minutes=rng.randint(0, 30))
+                    writer.grant_lease(root, rng.choice(TASKS), 'READY', 'agent-1', rng.choice(sessions), at,
+                                       at + datetime.timedelta(minutes=rng.randint(1, 60)))
+                if rng.random() < 0.3:
+                    writer.end_session(root, rng.choice(sessions), T0)
+                if rng.random() < 0.3:
+                    writer.expire_leases(root, T0 + datetime.timedelta(minutes=rng.randint(0, 90)))
+                path = writer.store_path(root)
+                for _ in range(2):
+                    files = sorted(os.listdir(os.path.dirname(path)))
+                    before = read(path)
+                    sid = rng.choice(sessions + [None, 's-9'])
+                    now = T0 + datetime.timedelta(minutes=rng.randint(0, 120))
+                    r = writer.session_lease(root, sid, now)
+                    shapes.add((r.result, r.reason))
+                    self.assertEqual((read(path), sorted(os.listdir(os.path.dirname(path)))), (before, files), case)
+                    self.assertIn(r.result, ('done', 'refused'))
+                    self.assertEqual(r.value is None, (r.result, r.reason) != ('done', 'tied'))
+        self.assertIn(('done', 'tied'), shapes)
+        self.assertTrue(any(s[0] == 'refused' for s in shapes))
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -23,6 +23,13 @@ Limits (AC10):
 - The caller runs the Resume Check before a grant and gives the task's state; the store projects no state from the log.
 - No caller in the core yet; ``.gitignore`` is not changed here (carried to the task that first creates a real
   project-state directory).
+- ``session_lease`` (task TASK-066) reads the store only, through SQLite's read-only mode and a deferred transaction:
+  it writes, creates and removes nothing, takes only a shared lock at its first read, and refuses ("unreadable") when
+  a writer holds an exclusive or pending lock longer than its timeout, or when a hot journal or a journal or WAL state
+  that a read-only connection cannot use is present; a hook call during a long commit is refused without a record.
+
+``session_lease`` (task TASK-066; specification 5 section 11 point 7, bullets 3 to 6) is the read-only lookup of the
+store for the Claude Code adapter's hook process: the store's answer for a session, or for no session.
 
 Readings of the specifications that the contract marks "(reading)" are noted where they are applied.
 """
@@ -479,3 +486,185 @@ def held_leases(root):
     if path is None:
         return []
     return _transaction(path, lambda con: [_lease(r) for r in con.execute(_LEASES)])
+
+
+# ---- the read-only lookup of the store (task TASK-066) ----
+
+# The bytes a file URI keeps as they are: RFC 3986's unreserved characters and "/" (the drive's ":" is kept apart).
+_URI_KEEP = frozenset(b'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~/')
+_DRIVE_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+# The kind bits of st_mode and the kind of a regular file, read without the stat module (no import is added).
+_KIND_BITS = 0o170000
+_REGULAR_FILE = 0o100000
+_LOOKUP_TIMEOUT_MAX = 60
+
+
+def _store_uri(path, sep, altsep):
+    """The read-only SQLite URI of the store at ``path`` (TASK-066; D-1362 C1). Only ``sep`` and ``altsep`` become "/"
+    (a "\\" where it is neither is an ordinary byte and is encoded as %5C); a "/" goes before a drive (an ASCII letter
+    and ":" at the start); every UTF-8 byte outside A-Z, a-z, 0-9, "-", ".", "_", "~", "/" and the drive's ":" becomes
+    %XX in uppercase hex; the result is "file:" + "//" + that path + "?mode=ro". A path that starts with two separators
+    (a UNC path) is refused, and so is a path not encodable as UTF-8 (a surrogate-escaped byte): both raise
+    ValueError."""
+    text = path
+    for s in (sep, altsep):
+        if s and s != '/':
+            text = text.replace(s, '/')
+    if text.startswith('//'):
+        raise ValueError('a path that starts with two separators (a UNC path) is not made into a URI')
+    drive = len(text) >= 2 and text[0] in _DRIVE_LETTERS and text[1] == ':'
+    if drive:
+        text = '/' + text
+    data = text.encode('utf-8')
+    out = []
+    for i, b in enumerate(data):
+        if b in _URI_KEEP or (drive and i == 2):
+            out.append(chr(b))
+        else:
+            out.append('%%%02X' % b)
+    return 'file:' + '//' + ''.join(out) + '?mode=ro'
+
+
+def _check_lookup(session_id, now, timeout):
+    """session_lease's arguments (AC1); raises on any that is out of form."""
+    if session_id is not None:
+        if not _is_str(session_id):
+            raise ValueError('session_id is neither None nor a non-empty string')
+        session_id.encode('utf-8')
+    _check_time(now, 'now')
+    if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not 0 < timeout <= _LOOKUP_TIMEOUT_MAX:
+        raise ValueError('timeout is not a number of seconds above 0 and at most 60')
+
+
+def _check_lookup_root(root):
+    """session_lease's root (AC1): a non-empty string, absolute, naming an existing folder; raises otherwise."""
+    _check_root(root)
+    if not os.path.isabs(root):
+        raise ValueError('the root is not an absolute path')
+
+
+def _named(reason, error):
+    """A refusal whose one finding names the exception's type, never its message (AC1)."""
+    return _refused(reason, '%s: %s' % (reason, type(error).__name__))
+
+
+def _store_answer(con, session_id, now):
+    """The store's answer inside the lookup's one deferred transaction (AC2)."""
+    try:
+        _check_schema(con)
+    except ValueError:
+        return _refused('tables', 'tables: the store does not hold exactly the writer\'s tables and one store row')
+    any_lease = con.execute('SELECT 1 FROM leases LIMIT 1').fetchone() is not None
+    if session_id is None:
+        if any_lease:
+            return _refused('lease_row_without_session', 'lease_row_without_session: the store holds a lease row')
+        return StoreResult('done', 'no_lease_row')
+    if not any_lease:
+        return _refused('no_lease_row', 'no_lease_row: the store holds no lease row')
+    row = con.execute('SELECT ended_at FROM sessions WHERE session_id = ?', (session_id,)).fetchone()
+    if row is None:
+        return _refused('session', 'session: no session with this id')
+    if row[0] is not None:
+        return _refused('ended', 'ended: the session is ended')
+    leases = [_lease(r) for r in con.execute(_LEASES_OF_SESSION, (session_id,))]
+    live = [x for x in leases if x['expires_at'] > now]
+    if len(live) != 1:
+        return _refused('leases', 'leases: not exactly one unexpired lease of the session (%d)' % len(live))
+    return StoreResult('done', 'tied', value=live[0])
+
+
+def _read_store(uri, timeout, session_id, now):
+    """Open the store read-only, run one deferred transaction, end it and close the connection on every path."""
+    con = None
+    try:
+        con = sqlite3.connect(uri, uri=True, timeout=timeout, isolation_level=None)
+        con.execute('BEGIN DEFERRED')
+        try:
+            answer = _store_answer(con, session_id, now)
+        finally:
+            con.execute('ROLLBACK')
+        return answer
+    finally:
+        if con is not None:
+            con.close()
+
+
+def session_lease(root, session_id, now, timeout=5.0):
+    """The store's answer for a session, or for no session, read only (task TASK-066; specification 5 section 11
+    point 7, bullets 3 to 6: the hook program reaches the store only through the writer module's functions, a
+    read-only lookup of the store among them).
+
+    Arguments: ``root``, the project root (a non-empty, absolute path of an existing folder); ``session_id``, None or a
+    non-empty str (the empty-as-absent rule is ``claude_code_store.judge``'s, not this function's); ``now``, a
+    timezone-aware datetime in UTC with whole seconds; ``timeout``, the seconds SQLite waits for a lock (above 0, at
+    most 60). The session id, the root and now are arguments: where the hook entry takes them from is a later
+    contract's. A now earlier than the real time would make an expired lease read as unexpired (the fail-open
+    direction), so that contract must take now from the process clock.
+
+    The result is a StoreResult: "done" with reason "tied" (value the one unexpired lease of the session, in
+    eventlog.LEASE_KEYS' form) or reason "no_lease_row" (only with no session id and no lease row at all; value None);
+    else "refused" with one finding and one of the reasons "argument", "root", "no_store", "link", "unreadable",
+    "tables", "lease_row_without_session", "no_lease_row", "session", "ended", "leases", in that order of checking.
+    These map to the hook's three outcomes (specification 5 section 11 point 7, bullets 3, 5 and 6): tied,
+    enforce nothing (no session id, no root, and no lease row at all) and refuse without a record. No exception
+    escapes; a finding names an exception's type, never its message. "Unexpired" is expires_at > now, the comparison of
+    expire_leases.
+
+    Read-only and the lock: the store is opened through SQLite's read-only mode (a file URI ending "?mode=ro") with the
+    given timeout and no implicit transaction; one deferred BEGIN holds every read, the table check included; the
+    transaction is ended and the connection closed on every path. So no row is inserted, changed or removed, no table
+    is created, no expiry is run (the launcher's), and the store file, its journal and its folders are never created.
+    The deferred BEGIN takes only a shared lock, at its first read, and a writer's commit waits for it while it reads.
+    A writer that holds, or waits at, an exclusive or pending lock longer than the timeout makes the lookup refuse
+    ("unreadable"): a hook call during a long commit is refused without a record. A hot rollback journal left by a
+    crash cannot be rolled back by a read-only connection, and a journal or WAL state a read-only connection cannot use
+    is refused too ("unreadable"). Claude Code's own hook timeouts are unmeasured (C6).
+
+    The URI is built by ``_store_uri`` from the link check's verified left-hand string, the realpath of the store path,
+    so the store opened is the store checked; a UNC path and a path not encodable as UTF-8 are refused ("unreadable").
+
+    The table form: the store is checked against TABLES, the writer's three tables, before K1 (the contract that adds
+    the reads table). Specification 2 revision 7 section 3 already lists four tables, reads among them; a store in that
+    four-table form is refused ("tables") until K1; when K1 adds reads, TABLES gains it, this lookup follows without a
+    change of its own, and a store of the old form is refused until K1's migration.
+
+    The presence step and the link check: os.lstat of the store path first; a missing entry (FileNotFoundError or
+    NotADirectoryError) gives "no_store", any other OSError or a ValueError "unreadable", an entry that is not a
+    regular file (a directory, a link, any other kind) "link". Just before the store is opened, os.path.normcase of
+    the realpath of the store path must equal os.path.normcase of the root's realpath joined with the project-state
+    directory, its local folder and the store's name; else "link". Limits: real links and junctions are never
+    exercised in CI, which runs on Linux; a junction or link that realpath does not resolve on the running Python is
+    not seen; short (8.3) names that realpath does not resolve give a false refusal (fail closed); hard links and bind
+    mounts are not seen; the check and the open are two steps, and a change between them is not seen.
+
+    No hook is placed, no matcher chosen, no setting changed and nothing measured here (CC-3, the owner's; C6).
+    """
+    try:
+        _check_lookup(session_id, now, timeout)
+    except Exception as e:
+        return _named('argument', e)
+    try:
+        _check_lookup_root(root)
+    except Exception as e:
+        return _named('root', e)
+    try:
+        path = store_path(root)
+        try:
+            kind = os.lstat(path).st_mode & _KIND_BITS
+        except (FileNotFoundError, NotADirectoryError):
+            return _refused('no_store', 'no_store: no store file under the root')
+        except (OSError, ValueError) as e:
+            return _named('unreadable', e)
+        if kind != _REGULAR_FILE:
+            return _refused('link', 'link: the store path is not a regular file')
+        try:
+            real = os.path.realpath(path)
+            same = os.path.normcase(real) == os.path.normcase(
+                os.path.join(os.path.realpath(root), STATE_DIR, LOCAL_DIR, STORE_NAME))
+        except Exception as e:
+            return _named('link', e)
+        if not same:
+            return _refused('link', 'link: the store or a folder above it resolves elsewhere')
+        return _read_store(_store_uri(real, os.sep, os.altsep), timeout, session_id, now)
+    except Exception as e:
+        return _named('unreadable', e)
