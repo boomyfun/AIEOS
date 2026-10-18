@@ -261,6 +261,9 @@ Occurrences in session 2026-10-17-0027 (../History/2026-10/2026-10-17-0027-the-c
 Occurrence in session 2026-10-18-2107 (../History/2026-10/2026-10-18-2107-the-pages-d1318-to-d1339-and-spec-5-revision-4-and-spec-2-revision-7-on-main.md):
 - **2026-10-18 (:367, D-1342).** The app's auto mode flagged a decision-agent handback (D-1341: list a slip in the file the guard reads, then rerun an approved step) as "[Auto-Mode Bypass]"; the flag blocked no action. Reading this lesson's last clause, Claude took the question to the owner, although DM A71 gives it to the decision agent. The decision agent ruled that the listing is the guard's own recovery route and not a way around it (D-1342). Separately, the guard refused ten Bash calls for unlisted text slips (R5); each was listed by its own decision and the refused call rerun once, unchanged.
 
+Occurrence in session 2026-10-18-2355 (../History/2026-10/2026-10-18-2355-the-pages-d1358-to-d1366-and-the-code-of-task-066-reviewed.md):
+- **2026-10-19 (D-1369, D-1370, D-1371, D-1374).** Two command forms refused by the guard before they ran, the worker's errors: a flag after Python's name read as its dash form, and a long Python run outside the 110-second form; each went to the decision agent, which allowed the guard's own form (the flag's effect moved into the file; the long run split into parts). Two text slips (:696, :1025) made the guard refuse the next Bash (R5); each was listed by its own decision. After the second refusal one more read-only Bash was made before the request and was refused too: a departure.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
