@@ -1,0 +1,443 @@
+# Task contract TASK-063, the Claude Code adapter's channel to the core, part CC-2 part 2 (Master Plan revision 4, §4
+# M5; specification 5 revision 3, sections 6 and 8 and section 11 points 5 and 7; specification 2 revision 6, section
+# 6.2; working records DEF-0079, DEF-0076 and DEF-0077).
+# Revision 0, drafted under decision D-1262 (outline (i) with M1 to M7); brought for approval in its own request;
+# whether it is approved is recorded in the decision files, not in this file. Fields and value forms follow
+# specification 2 §5.1 and the contract of TASK-062. Readings marked "(reading)" are the worker's, for the decision
+# agent's ruling; values marked "(filled by script)" are written by script from the base just before commit C.
+# Task type: implementation. What it adds: a new module src/aieos_bootstrap/claude_code_channel.py, called only by its
+# tests, with four functions: context_findings(context), the form of the per-session context a hook call needs (M1);
+# record_findings(record), whether a record has the exact form claude_code.judge gives a refusal (M4); redact(record),
+# the record with its refers_to redacted (M2, M3; DEF-0079); and deliver(context, hook_result, event_id, now,
+# append=None, release=None), which passes a refusal's redacted record to the core through adapter.violation (M5).
+# claude_code.py (TASK-061), claude_code_hook.py (TASK-062), adapter.py (TASK-051/052) and violation.py (TASK-052) are
+# not changed.
+# The interface (point 7), as this task states it:
+# - The context (M1): exactly root, task_id, session_id, fencing_token, write_set, allowlist and recorder. root is one
+#   root, for judging and for the core's writer (writer.py:11 puts the store under <root>/.aieos/local). The lease is
+#   tied by fencing_token, the token adapter.start's grant returns (adapter.py:8-11); the session is tied in words
+#   only, by a recorder that holds session_id verbatim, since specification 2 revision 6 keeps no session key on a
+#   record (section 6.2) and adapter.violation takes no session id (adapter.py:276).
+# - The write-set (M7; proposed): the caller takes it from the lease's task contract at the base,
+#   docs/tasks/<task>.yaml write_set.paths, the same key the Resume Check reads from the contract it is given
+#   (resume_check.py:290, :405); this module reads no file and only checks the form, as judge does.
+# - The ids (M6): event_id and record_id are the caller's; only their form is checked. A repeated event_id gives
+#   adapter.violation's "duplicate", which appends nothing and is no error (violation.py:20-21). How a hook process
+#   makes them is left to the task that starts the hook process; candidates named, not decided: the hook input's
+#   tool_use_id (not read today: entry reads only tool_name and tool_input, D-1236 Q2), or a counter per session (needs
+#   state across hook processes).
+# - Out of this task, stated as limits: how a hook process obtains the context and how it is started (tied to placing
+#   the hook, CC-3, the owner's act, A51 item (4), and to INV-004); the observed read-set record (it needs state across
+#   hook calls; specification 2 revision 6's form; a later task); the allowlist's content and source (point 6, policy
+#   at the base; DEF-0077's open names).
+# Redaction (DEF-0079; M2, M3):
+# - A record of evidence_type git_push_refused gets refers_to "a git push command; its text is not kept (D-1262 M2)",
+#   and one of shell_not_allowed "a shell command; its text is not kept (D-1262 M2)": no command text, no first word
+#   and no hash is kept (judge cut the text to 200 characters, claude_code.py:259, so a hash would be of the cut text,
+#   and a hash of a short text holding a short secret can be found by guessing; a first word can be an assignment).
+#   Keeping a first word or a hash is a later choice, not taken.
+# - A record of evidence_type write_outside_write_set keeps refers_to only when it has judge's root-relative form
+#   (claude_code.py:186): non-empty, no ":", no "\", no leading "/", and no empty, "." or ".." segment; otherwise
+#   refers_to becomes "a path outside the root; it is not kept (D-1262 M3)". The test fails closed. Limit, stated: a
+#   file or folder name under the root can itself hold a secret; segments are not hashed, since the path under the
+#   root is the evidence ADV-02 and the gates need.
+# - A departure from specification 5 §6's table, named: for the shell allowlist and git push rows (spec 5 :60-61),
+#   "the command" is recorded redacted, not as typed.
+# deliver (M5): entry's exit code and standard-error text are never changed (deliver changes nothing in hook_result,
+# and the caller keeps entry's exit code). Nothing is written for "allow", for "uncovered", or for a "refuse" without
+# a record; the last (entry's reasons argument, allowlist_form and record) is a caller's error, and is stated as a
+# limit against specification 5 §8's "every refusal ... is recorded". For a "refuse" with a record, the record must
+# pass record_findings and its subject and recorder must match the context (the task id; judge's prefix followed by
+# the context's recorder); then redact, then one call of adapter.violation(root, task_id, fencing_token, redacted
+# record, event_id, recorder, now, append, release). So the module writes, but only through adapter.violation, which
+# writes through the core's writer (INV-004); it is not called pure: it opens no file itself, starts no process, reads
+# no clock or environment and makes no network or model call. append and release default to adapter.violation's own
+# defaults; tests pass stand-ins and write no file.
+# Limits (carried at acceptance): specification 5 open points 4 (the observed read-set: no call here), 10 (an abnormal
+# session end), 12 (a bound on repeated STOP: violation); C6 and P-LOC unmeasured; every limit TASK-061 and TASK-062
+# carried; a hook that does not fire neither refuses nor records (spec 5 :80), so no record proves nothing (DEF-0076);
+# the session tie is in words only (the recorder), not checked by the core; a refusal that the hook process never
+# delivers (a crash, a timeout, a missing context) is lost, and the gates find the violation afterwards (spec 5 :80).
+# Deferred items: DEF-0079 closes only at this task's acceptance, if the redaction of AC3 and AC4 lands; DEF-0076 and DEF-0077
+# stay open, as inputs to CC-3 and to the allowlist contract.
+# Risk: high (risk rules revision 6, §2 point 3: R3 matches every path under src/** and tests/**), computed over the
+# base by script before commit C. GOV-003: every path of the write-set is an evaluator path by the workflow's pinned
+# list, by script; change class critical_cr, as for TASK-060 to TASK-062, ruled at acceptance. Profile
+# (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture [deterministic_rule], functional
+# [integration_test], security [static_security_analysis] and architecture [ai_review (cross-model)], plus the
+# evidence_required of the applicable articles. Reviews: five way-2 reviews on Sonnet 5.5, a Claude model other than
+# the implementer's (Opus 5.5), never Fable (the owner's words of 2026-10-17); and the decision agent's own reviews:
+# INV-003's human_review, OPS-002's human_review and the cross-model half, each its own record (D-1148 Q2).
+# Records: in the readable form, as TASK-062's; per-entry coverage checked by script before the acceptance request
+# (L-0022), and the governor's evaluation over the records reported (D-1098).
+# Naming (D-544 Q3): every test of the new test modules names the AC ids it stands for as "TASK-063 ACn" in its own
+# docstring.
+# Evaluation path (A61; as TASK-019 to TASK-062): commit C changes only docs/tasks/TASK-063.yaml and has one parent equal
+# to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-063" and no e-mail address in its message, go to
+# task/TASK-063 under their own decisions; main receives the task only at its acceptance.
+# Not applicable: OPS-001 (the task changes no ref); INV-005 to INV-008, INV-010 and INV-011; GOV-001, GOV-004 to GOV-006
+# and SEC-003 (no path of the write-set meets them). INV-004 applies: the module writes only through the core's writer.
+# Owner-kept acts: none. No hook placed, no matcher chosen, no Claude Code setting, nothing under .github/ or .claude/,
+# no push of its own; it weakens no evidence requirement; so its acceptance is one delegated approval of the decision
+# agent (Master Plan section 6).
+task: TASK-063
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add the Claude Code adapter's channel to the core (part CC-2 part 2) in standard-library Python 3. A new module
+  src/aieos_bootstrap/claude_code_channel.py gives context_findings(context), record_findings(record), redact(record)
+  and deliver(context, hook_result, event_id, now, append=None, release=None): deliver checks the context and entry's
+  result, and for a refusal with a record of judge's form, redacts its refers_to and passes it once to
+  adapter.violation with the context's root, task id, fencing token and recorder; it writes nothing else and changes
+  nothing in entry's result. With unit, integration and property tests in tests/unit/test_claude_code_channel.py,
+  tests/integration/test_claude_code_channel_flow.py and tests/property/test_claude_code_channel_properties.py, each
+  test naming its AC ids in its own docstring; the tests write no file.
+traces_to:
+  - docs/specs/spec-05-adapter-contract.md#6
+  - docs/specs/spec-05-adapter-contract.md#8
+  - docs/specs/spec-05-adapter-contract.md#11
+  - docs/specs/spec-02-aieos-file-format.md#6.2
+  - docs/specs/risk-rules-gov-aieos.md#2
+input_state:
+  # base_commit and the intent_versions values are filled by script from refs/heads/main just before commit C is made
+  # (D-198 C5).
+  base_commit: 158a839dc9f4f6b6f876f71aed447edebd223406
+  depends_on: [TASK-001, TASK-011, TASK-051, TASK-052, TASK-061, TASK-062]
+  intent_versions:
+    docs/specs/spec-05-adapter-contract.md: 6392a747dfab0f5b0c8f8103842bfeffdc5020e1828a4d5e97407ba5e07f1e94
+    docs/specs/spec-02-aieos-file-format.md: 690cb2ede30e34ab57abacba1a62284cac4b0225b7065678d6993d035edaf16c
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 05c53318cd756a3acfc13e5adaffbfaede8f05be3d00289e9fd45fef08c63c73
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # All four paths are new.
+  paths:
+    - src/aieos_bootstrap/claude_code_channel.py
+    - tests/unit/test_claude_code_channel.py
+    - tests/integration/test_claude_code_channel_flow.py
+    - tests/property/test_claude_code_channel_properties.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.claude_code.judge, aieos_bootstrap.claude_code.RECORDER, aieos_bootstrap.claude_code_hook.entry, aieos_bootstrap.claude_code_hook.RESULT_KEYS, aieos_bootstrap.claude_code_hook.allowlist_findings, aieos_bootstrap.adapter.violation, aieos_bootstrap.adapter.RESULT_KEYS]
+  schemas: [spec-02 records (6.2), spec-02 violation.detected (6.3)]
+forbidden:
+  # As TASK-062's list: .github/**, .aieos/**, .claude/**, CLAUDE.md, AIEOS-concept.md, docs/**, bench/**,
+  # tests/conformance/**, .gitattributes, .gitignore, and every existing path of src/ and tests/, claude_code.py,
+  # claude_code_hook.py, adapter.py, violation.py and writer.py among them (the list is filled by script from the
+  # base's tree before commit C).
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/conformance/fixtures/acc_01.py
+  - tests/conformance/fixtures/acc_02.py
+  - tests/conformance/fixtures/acc_03.py
+  - tests/conformance/fixtures/acc_04.py
+  - tests/conformance/fixtures/acc_05.py
+  - tests/conformance/fixtures/acc_06.py
+  - tests/conformance/fixtures/acc_07.py
+  - tests/conformance/fixtures/acc_08.py
+  - tests/conformance/fixtures/acc_09.py
+  - tests/conformance/fixtures/acc_10.py
+  - tests/conformance/fixtures/acc_11.py
+  - tests/conformance/fixtures/acc_12.py
+  - tests/conformance/fixtures/acc_13.py
+  - tests/conformance/fixtures/acc_14.py
+  - tests/conformance/fixtures/acc_15.py
+  - tests/conformance/fixtures/acc_16.py
+  - tests/conformance/fixtures/acc_17.py
+  - tests/conformance/fixtures/adv_01.py
+  - tests/conformance/fixtures/adv_03.py
+  - tests/conformance/fixtures_cb/adv_02.py
+  - tests/conformance/fixtures_rc/rc_01.py
+  - tests/conformance/fixtures_rc/rc_02.py
+  - tests/conformance/fixtures_rc/rc_03.py
+  - tests/conformance/fixtures_rc/rc_04.py
+  - tests/conformance/fixtures_rc/rc_05.py
+  - tests/conformance/fixtures_rc/rc_06.py
+  - tests/conformance/fixtures_rc/rc_07.py
+  - tests/conformance/fixtures_rc/rc_08.py
+  - tests/conformance/fixtures_rc/rc_09.py
+  - tests/conformance/fixtures_rc/rc_10.py
+  - tests/conformance/fixtures_rc/rc_11.py
+  - tests/conformance/fixtures_risk/risk_01.py
+  - tests/conformance/set.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The context (point 7; D-1262 M1). context_findings(context) gives a list of findings, empty only when context is a
+      mapping with exactly the keys root, task_id, session_id, fencing_token, write_set, allowlist and recorder, where:
+      root is an absolute Windows path as judge's AC1 requires; task_id is "TASK-" followed by digits; session_id is a
+      non-empty string with no whitespace; fencing_token is {epoch: a non-empty string, counter: an int at least 0} as
+      violation.argument_findings requires; write_set is a non-empty list of patterns as judge requires; allowlist is a
+      list for which claude_code_hook.allowlist_findings gives no finding; and recorder is a non-empty string that holds
+      session_id verbatim. A missing, extra or malformed key, or a context that is not a mapping, gives findings and
+      nothing is called. The module keeps no state.
+  - AC2: >-
+      The record's form (D-1262 M4). record_findings(record) gives a list of findings, empty only when record is a
+      mapping with exactly the keys judge's records have (record_id, fact_kind, source_class, outcome, blocking_kind,
+      recorder, subject, evidence_type, refers_to), with fact_kind "observation", source_class
+      "deterministic_tool_local", outcome "blocking", blocking_kind "violation", record_id, subject and refers_to
+      non-empty strings, recorder a string beginning with claude_code.RECORDER followed by ", for ", and evidence_type
+      one of write_outside_write_set, git_push_refused and shell_not_allowed. A record of any other form is never
+      passed to the core.
+  - AC3: >-
+      Shell redaction (DEF-0079; D-1262 M2). redact(record), for a record with no finding under AC2 and evidence_type
+      git_push_refused, gives a new mapping equal to record except refers_to "a git push command; its text is not kept
+      (D-1262 M2)"; for shell_not_allowed, refers_to "a shell command; its text is not kept (D-1262 M2)". refers_to is
+      exactly the fixed text; nothing derived from the original refers_to (no part of it and no hash of it) is kept. For a record with a finding under AC2, redact gives None. The
+      given record is never changed.
+  - AC4: >-
+      Path redaction (DEF-0079; D-1262 M3). For write_outside_write_set, refers_to is kept unchanged only when it is
+      non-empty, holds no ":" and no "\", does not begin with "/", and none of its "/"-separated segments is empty, "."
+      or ".."; otherwise refers_to becomes "a path outside the root; it is not kept (D-1262 M3)". Every other key is
+      kept. The docstring states the limit: a name under the root can itself hold a secret, and segments are not
+      hashed; and it states why the form test catches every outside path, citing claude_code.py:61-66, :169 and
+      :183-186: judge gives a path inside the root in the "/"-joined root-relative form with no drive, and a path
+      outside it as given, which is always absolute with a drive, since relative and driveless rooted paths are
+      "uncovered" there, so every outside path holds a ":".
+  - AC5: >-
+      deliver (point 7; D-1262 M5). deliver(context, hook_result, event_id, now, append=None, release=None) returns a
+      mapping with exactly result, reason, findings, record and core. In order, the first that applies gives the
+      result: context findings (AC1) give result "refused", reason "context"; hook_result not a mapping with exactly
+      claude_code_hook.RESULT_KEYS, a verdict outside claude_code.VERDICTS, an exit_code that is not 0 for "allow" and
+      2 otherwise, or a record that is not None for a verdict other than "refuse", gives "refused", reason
+      "hook_result";
+      event_id that is not a non-empty string with no whitespace gives "refused", reason "event_id"; verdict "allow"
+      gives result "nothing", reason "allow"; verdict "uncovered" gives "nothing", reason "uncovered"; verdict "refuse"
+      with record None gives "nothing", reason "no_record" (a caller's error, stated as a limit against specification 5
+      §8); a record with findings under AC2, or whose subject is not the context's task_id, or whose recorder is not
+      claude_code.RECORDER + ", for " + the context's recorder, gives "refused", reason "record". Otherwise the record is
+      redacted (AC3, AC4), and adapter.violation is called exactly once with the context's root, task_id and
+      fencing_token, the redacted record, event_id, the context's recorder, now, append and release; its result is
+      copied into core; result is "written" when adapter.violation's result is "done", else "refused" with reason
+      "core"; record is the redacted record passed, or None when nothing was passed. adapter.violation is called in no
+      other case. Any exception raised inside deliver gives "refused", reason "deliver", the exception's type in
+      findings; no exception escapes. hook_result is never changed. findings hold only deliver's own fixed words, an
+      exception's type, and adapter.violation's findings for the redacted record; no text of hook_result's findings or
+      of the original refers_to is copied into the result.
+  - AC6: >-
+      The ids (D-1262 M6). event_id and the record's record_id are the caller's; only their form is checked (AC2, AC5).
+      The docstring states that a repeated event_id gives adapter.violation's "duplicate" (nothing appended, no error),
+      and that how a hook process makes the ids is left to the task that starts it, with the candidates named (the hook
+      input's tool_use_id, not read by entry today; a counter per session, which needs state across processes).
+  - AC7: >-
+      What is stated (point 7; D-1262 M5, M7). The module's docstring states: the context's keys and where each comes
+      from (root and the store's root are one root, writer.py:11; the lease by fencing_token; the session in the
+      recorder's words only; the write-set from the lease's task contract at the base, write_set.paths, proposed, read
+      by the caller and not by the module); that entry's exit code and standard-error text are never changed and the
+      caller keeps them; that nothing is written for "allow", "uncovered" or a refusal without a record, the last being
+      a departure from specification 5 §8's "every refusal"; that the shell command text is recorded redacted, a
+      departure from specification 5 §6's table; that a hook that does not fire neither refuses nor records, and a
+      refusal never delivered is lost (unmeasured, C6); that how a hook process obtains the context and starts is out
+      of this task (CC-3, the owner's); that no observed read-set record is made; and the limits of the header. No test
+      asserts anything about a running Claude Code.
+  - AC8: >-
+      What it imports and does (INV-001 to INV-004). claude_code_channel.py imports only the Python 3 standard library
+      (re, if needed) and aieos_bootstrap's adapter, claude_code and claude_code_hook. It writes only through
+      adapter.violation; it opens no file, starts no process, reads no standard input, prints nothing, calls no
+      sys.exit, reads no clock or environment, and makes no network or model call; no exec, eval, compile, __import__ or
+      importlib; no assert in src (bandit B101); no string that names the project-state directory;
+      tests/unit/test_writer.py's R8 test and tests/unit/test_gitread.py's subprocess test pass unchanged. At the task's
+      commits the CI steps report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit.
+  - AC9: >-
+      Its own tests and the added text. Every test function of the three new test modules names the AC ids it stands for
+      as "TASK-063 ACn" in its own docstring; no other task's AC is named in qualified form. No existing test is changed
+      (GOV-003). Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns,
+      and each count is 0. The tests write and remove no file (append and release are stand-ins), and no test value is a
+      real path of this machine's user folders, a real command of this project's own hooks, a real session id or a
+      credential-shaped string other than made-up ones that the scans do not match.
+  - AC10: >-
+      Tests, each rule with at least one passing and one failing case: R1 AC1 (each key missing, extra, of a wrong type
+      or form, a recorder without the session id, a malformed allowlist, a context that is not a mapping); R2 AC2 (each
+      key missing or extra, each fixed value wrong, a recorder without judge's prefix, an unknown evidence_type); R3 AC3
+      (both evidence types, a command text holding a made-up credential-shaped word, the given record unchanged, None
+      for a malformed record); R4 AC4 (root-relative paths kept, and each of a drive letter, a backslash, a leading
+      slash, an empty, "." and ".." segment, and an empty text replaced); R5 AC5 (each step of the order, adapter.violation
+      called exactly once only for a well-formed matching refusal, with the exact arguments, by a stand-in; its "done"
+      and its refusals mapped; a fault injected into the stand-in giving "deliver"; hook_result unchanged; a hook_result whose findings and
+      record's refers_to hold a made-up marker text, with no marker text anywhere in deliver's result); R6 AC6 and AC7
+      by a script check of the docstring words; R7 AC8 by a script check of imports, absent names and calls; an
+      integration test from hook-input bytes through claude_code_hook.entry to deliver, for a write outside the
+      write-set, a git push, a command not allowed, an allowed call, an uncovered tool and a malformed allowlist, with
+      stand-ins for append and release; and a property test (standard library only, fixed seeds) that deliver is
+      deterministic over equal inputs, that adapter.violation is called at most once and only when entry's verdict is
+      "refuse" with a record, that no record passed keeps a character of a shell refusal's original refers_to beyond the
+      fixed text, and that hook_result is never changed. Broken copies of the module, one per rule, each fail at least
+      one test. tests/run_tests.py, unchanged, runs them.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC10]}
+  - {gate: G3, check: constitution, args: [AC6, AC7, AC8, AC9, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
