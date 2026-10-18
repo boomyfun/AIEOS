@@ -1,0 +1,423 @@
+# Task contract TASK-065, the read-path extraction of the Claude Code adapter (Master Plan revision 4, §4 M5; concept
+# line 945, "record the observed read-set"; specification 5 revision 3, section 6's table row "Observed read-set",
+# sections 7 and 11 point 8; specification 2 revision 6, section 6.2 :180-185 and section 10 point 13).
+# Revision 1, drafted under decisions D-1303 (candidate (5), C1 to C5) and D-1304 (readings r1 to r6 ruled; fixes F1 to
+# F5) and D-1306; brought for approval in its own request; whether it is approved is recorded in the decision files, not
+# in this file. Fields and value forms follow specification 2 §5.1 and the contracts of TASK-062 and TASK-064. Readings
+# marked "(reading)" are the worker's, ruled by decision D-1304; values marked "(filled by script)" are written by
+# script from the base just before commit C.
+# Task type: implementation. What it adds: a new module src/aieos_bootstrap/claude_code_reads.py, one pure function
+# called only by its tests, read_paths(stdin_bytes): from the bytes Claude Code would write to a PostToolUse hook's
+# standard input after a file-reading tool call to the list of paths that call read, as the list that
+# read_set_record.observe takes (TASK-064 AC5), or "uncovered" with a reason. It is the step between a hook's input and
+# the core side of TASK-064 (spec 5 :62, "after a file-reading tool call | the path read"). claude_code.py,
+# claude_code_hook.py, claude_code_channel.py, read_set_record.py, records.py and every other existing module are not
+# changed, so DEF-0080 and DEF-0081 stay deferred (D-1303 C3).
+# The input and its parse (D-1303 C1 (b)): the bytes are parsed as strictly as TASK-062's entry parses them
+# (claude_code_hook.py:136-152: bytes only, no byte-order mark, UTF-8 strict, one JSON value, no duplicate key, no
+# NaN or Infinity constant, a JSON object); the parse is restated in the new module, not imported from
+# claude_code_hook's private helpers (reading), and a test checks that both modules give "uncovered" for the same
+# malformed inputs. Of the hook input only tool_name and tool_input are read, as in TASK-062 (D-1236 Q2):
+# hook_event_name, session_id, cwd, transcript_path, tool_response and every other key are not read (reading: placed on
+# another hook event the function would give the same result; whether a read succeeded is not seen, below).
+# The tools covered, part of specification 5 §11 point 8 settled here (D-1303 C2):
+# - Read: covered. tool_input.file_path, a non-empty string, is the one path read; the result is [file_path]. The name
+#   is the model-side tool_use name seen in this project's transcripts (as TASK-061's names, claude_code.py:31-32);
+#   that a PostToolUse input carries tool_name "Read" and tool_input.file_path is cited from Claude Code's hooks
+#   documentation (https://code.claude.com/docs/en/hooks, summarised by a web-reading tool on 2026-10-18: a summary,
+#   not the page; read on 2026-10-18 in two parts (characters 0 to 200000 of the page)): the PostToolUse input
+#   "includes both `tool_input`, the arguments sent to the tool, and `tool_response`, the result it returned", with
+#   tool_name in its example; Read's tool_input fields file_path (an absolute path), offset and limit are given in the
+#   PreToolUse section, and file-tool paths in PostToolUse "arrive in the same format as for PreToolUse"; that Read's
+#   PostToolUse input holds file_path is so an inference from the documentation, not stated there for Read (a limit),
+#   and never measured (C6). The tool names are supported live only for Bash (claude_code.py:31-32), and in session
+#   1947b313 a hook with matcher "*" did not refuse Read calls it was written to refuse (D-1202, D-1203): whether a
+#   hook fires for Read is unknown, and the live evidence is negative.
+# - Uncovered, each with reason "tool" and listed as uncovered, never as an empty read: Grep and Glob (their input
+#   names a pattern and a folder, not the files read; Grep does read file contents, so its reads are real but not
+#   attributable from its input), Bash and PowerShell (reads by a shell command are not seen, spec 5 :73), every name
+#   beginning "mcp__", subagent tools (Task, Agent), NotebookEdit, MultiEdit, Write and Edit (an Edit reads the file it
+#   changes; not taken here, a limit), and every other name.
+# - A partial read (tool_input.offset or limit present) counts as a read of the whole path: the over-inclusive side,
+#   which is the fail-safe side for a read-set (D-1303 C2). A read that failed (the file missing, a refused read) is not
+#   seen: tool_response is not read, so the path is still returned (reading: over-inclusive again). The documentation
+#   (the same summary) says PostToolUse "Runs immediately after a tool completes successfully" and that failed calls go
+#   to a separate event, PostToolUseFailure, which this function is not meant for; placed there, it would return the
+#   path of a failed read (over-inclusive); unmeasured (C6).
+# - Left open of point 8: path semantics on Windows (case, separators, relative and absolute paths, drive letters,
+#   links and junctions, normalisation): the path stays the raw string of tool_input.file_path, not normalised,
+#   resolved, case-folded or checked against the root, the write-set or the disk, as TASK-064 records it (D-1281 C1;
+#   D-1303 C1 (c)); spec 2 §10 point 13 stays open. Named alternative, not chosen: claude_code.normalise_path(root,
+#   None, path), which would in effect settle point 13 and make a relative path uncovered.
+# What a result shows (stated in the docstring): a lower bound at best (spec 5 :73); the hook may not fire, may not
+# cover a tool, and cannot show its own completeness (A25); the record built from these paths is kept and not used
+# (spec 5 :72; spec 2 :184). Gathering the paths across hook calls, the hook process and its context, placing the hook
+# and choosing its matcher stay out (CC-3, the owner's under A51 item (4); spec 5 §11 points 7 and 10; DEF-0076).
+# Limits (carried at acceptance): C6 and P-LOC unmeasured; the PostToolUse input form cited, not measured, and Read's
+# file_path in it inferred from the documentation, not stated there for Read; the tool names supported live only for
+# Bash, and the live evidence about a hook on Read negative (D-1202, D-1203); every limit
+# TASK-061 to TASK-064 carried; reads by Grep, Glob, shell, PowerShell, MCP tools, subagents and Edit not seen; a failed
+# read not told from a successful one; DEF-0076, DEF-0077, DEF-0078, DEF-0080 and DEF-0081 stay open. Follow-up named,
+# not taken: the specification 3 alignment of its lines 24 and 29 (D-1281 C4; D-1303 C5).
+# Risk: high (risk rules revision 6, §2 point 3: R3 matches every path under src/** and tests/**), computed over the
+# base by script before commit C. GOV-003: every path of the write-set is an evaluator path by the workflow's pinned
+# list, by script; change class critical_cr, as for TASK-060 to TASK-064, ruled at acceptance. No existing module
+# imports the new one, so no other result changes. Profile (assurance-model.md §5, gov-AIEOS, high): functional
+# [unit_test], architecture [deterministic_rule], functional [integration_test], security [static_security_analysis]
+# and architecture [ai_review (cross-model)], plus the evidence_required of the applicable articles. Reviews: five way-2
+# reviews on Sonnet 5.5, a Claude model other than the implementer's (Opus 5.5), never Fable (the owner's words of
+# 2026-10-17); and the decision agent's own reviews: INV-003's human_review, OPS-002's human_review and the cross-model
+# half, each its own record (D-1148 Q2).
+# Records: in the readable form, as TASK-064's; per-entry coverage checked by script before the acceptance request
+# (L-0022), and the governor's evaluation over the records reported (D-1098).
+# Naming (D-544 Q3): every test of the new test modules names the AC ids it stands for as "TASK-065 ACn" in its own
+# docstring.
+# Evaluation path (A61; as TASK-019 to TASK-064): commit C changes only docs/tasks/TASK-065.yaml and has one parent equal
+# to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-065" and no e-mail address in its message, go to
+# task/TASK-065 under their own decisions; main receives the task only at its acceptance.
+# Not applicable: OPS-001 (the task changes no ref); INV-005 to INV-008, INV-010 and INV-011; GOV-001, GOV-004 to
+# GOV-006 and SEC-003 (no path of the write-set meets them). INV-004 applies, as for TASK-062: the module writes nothing.
+# Owner-kept acts: none. No hook placed, no matcher chosen, no Claude Code setting, nothing measured, nothing under
+# .github/ or .claude/, no push of its own; it weakens no evidence requirement; so its acceptance is one delegated
+# approval of the decision agent (Master Plan section 6).
+task: TASK-065
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add the Claude Code adapter's read-path extraction (concept line 945; specification 5 §6 and §11 point 8) in
+  standard-library Python 3. A new module src/aieos_bootstrap/claude_code_reads.py gives read_paths(stdin_bytes): it
+  parses the bytes Claude Code would write to a PostToolUse hook's standard input as strictly as TASK-062's entry does,
+  reads only tool_name and tool_input, and returns for tool_name "Read" the list [tool_input.file_path], the raw string,
+  and for every other tool or a malformed input "uncovered" with a reason. With unit, integration and property tests in
+  tests/unit/test_claude_code_reads.py, tests/integration/test_claude_code_reads_inputs.py and
+  tests/property/test_claude_code_reads_properties.py, each test naming its AC ids in its own docstring; the tests write
+  no file.
+traces_to:
+  - docs/specs/spec-05-adapter-contract.md#6
+  - docs/specs/spec-05-adapter-contract.md#7
+  - docs/specs/spec-05-adapter-contract.md#11
+  - docs/specs/spec-02-aieos-file-format.md#6.2
+  - docs/specs/spec-02-aieos-file-format.md#10
+  - docs/specs/risk-rules-gov-aieos.md#2
+input_state:
+  # base_commit and the intent_versions values are filled by script from refs/heads/main just before commit C is made
+  # (D-198 C5).
+  base_commit: 90d8c90cfbbff91bc0bac56faa1dd88685498bbb
+  depends_on: [TASK-001, TASK-061, TASK-062, TASK-064]
+  intent_versions:
+    docs/specs/spec-05-adapter-contract.md: 6392a747dfab0f5b0c8f8103842bfeffdc5020e1828a4d5e97407ba5e07f1e94
+    docs/specs/spec-02-aieos-file-format.md: 690cb2ede30e34ab57abacba1a62284cac4b0225b7065678d6993d035edaf16c
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 05c53318cd756a3acfc13e5adaffbfaede8f05be3d00289e9fd45fef08c63c73
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # All four paths are new.
+  paths:
+    - src/aieos_bootstrap/claude_code_reads.py
+    - tests/unit/test_claude_code_reads.py
+    - tests/integration/test_claude_code_reads_inputs.py
+    - tests/property/test_claude_code_reads_properties.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.claude_code_hook.entry, aieos_bootstrap.claude_code.READ_TOOLS, aieos_bootstrap.read_set_record.build, aieos_bootstrap.read_set_record.observe, aieos_bootstrap.records.check_record]
+  schemas: [Claude Code PostToolUse hook input (documentation, unmeasured), spec-02 records (6.2)]
+forbidden:
+  # As TASK-064's list: .github/**, .aieos/**, .claude/**, CLAUDE.md, AIEOS-concept.md, docs/**, bench/**,
+  # tests/conformance/**, .gitattributes, .gitignore, and every existing path of src/ and tests/ (none is in the
+  # write-set; the list is filled by script from the base's tree before commit C).
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/conformance/fixtures/acc_01.py
+  - tests/conformance/fixtures/acc_02.py
+  - tests/conformance/fixtures/acc_03.py
+  - tests/conformance/fixtures/acc_04.py
+  - tests/conformance/fixtures/acc_05.py
+  - tests/conformance/fixtures/acc_06.py
+  - tests/conformance/fixtures/acc_07.py
+  - tests/conformance/fixtures/acc_08.py
+  - tests/conformance/fixtures/acc_09.py
+  - tests/conformance/fixtures/acc_10.py
+  - tests/conformance/fixtures/acc_11.py
+  - tests/conformance/fixtures/acc_12.py
+  - tests/conformance/fixtures/acc_13.py
+  - tests/conformance/fixtures/acc_14.py
+  - tests/conformance/fixtures/acc_15.py
+  - tests/conformance/fixtures/acc_16.py
+  - tests/conformance/fixtures/acc_17.py
+  - tests/conformance/fixtures/adv_01.py
+  - tests/conformance/fixtures/adv_03.py
+  - tests/conformance/fixtures_cb/adv_02.py
+  - tests/conformance/fixtures_rc/rc_01.py
+  - tests/conformance/fixtures_rc/rc_02.py
+  - tests/conformance/fixtures_rc/rc_03.py
+  - tests/conformance/fixtures_rc/rc_04.py
+  - tests/conformance/fixtures_rc/rc_05.py
+  - tests/conformance/fixtures_rc/rc_06.py
+  - tests/conformance/fixtures_rc/rc_07.py
+  - tests/conformance/fixtures_rc/rc_08.py
+  - tests/conformance/fixtures_rc/rc_09.py
+  - tests/conformance/fixtures_rc/rc_10.py
+  - tests/conformance/fixtures_rc/rc_11.py
+  - tests/conformance/fixtures_risk/risk_01.py
+  - tests/conformance/set.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The parse. read_paths(stdin_bytes) returns a mapping with exactly result, reason, findings and read_paths. In
+      order, the first that applies gives the result: stdin_bytes not a bytes object gives "uncovered", reason
+      "argument"; a leading UTF-8 byte-order mark or bytes that are not strict UTF-8 give reason "input_bytes"; text
+      that is not one JSON value, or holds a duplicate key or a NaN or Infinity constant, or whose parse raises
+      RecursionError (deep nesting), as at claude_code_hook.py:149, gives "input_json"; a value
+      that is not a JSON object gives "input_shape"; tool_name not a string or tool_input not an object gives "input".
+      In each case read_paths is the empty list. For every input of these kinds, claude_code_hook.entry (with a
+      well-formed allowlist) also gives a non-allow verdict (a test over the same inputs).
+  - AC2: >-
+      The covered tool. For tool_name exactly "Read" (case-sensitive) with tool_input.file_path a non-empty string, the
+      result is "read", reason "read", findings empty, and read_paths the one-element list holding file_path's value
+      unchanged: not normalised, resolved, case-folded, stripped or checked against any root, write-set or the disk.
+      tool_input.offset and limit, of any value, do not change the result (a partial read counts as a read of the path,
+      the over-inclusive side). file_path missing, not a string or empty gives "uncovered", reason "input", with
+      read_paths empty.
+  - AC3: >-
+      The uncovered tools. Every other tool_name gives "uncovered", reason "tool", read_paths empty, and one finding of
+      fixed words naming the class: "a search tool whose reads are not attributable" for Grep and Glob, "a shell tool"
+      for Bash and PowerShell, "an MCP tool" for a name beginning "mcp__", "a subagent tool" for Task and Agent, and "a
+      tool not covered" for every other name (Write, Edit, MultiEdit and NotebookEdit among them). No text of the input
+      is copied into findings.
+  - AC4: >-
+      What is read and kept. Of the decoded object only tool_name and tool_input are read; hook_event_name,
+      session_id, cwd, transcript_path, tool_response and every other key change no result (tests vary each). The
+      given bytes are never changed (bytes are immutable; the test checks the value), and the function keeps no state:
+      equal inputs give equal results. No exception escapes: any exception inside gives "uncovered", reason "entry",
+      the exception's type name in findings, read_paths empty.
+  - AC5: >-
+      Fit with the core side. For a "read" result, read_set_record.build(task_id, session_id, result['read_paths'],
+      recorder) with well-formed other arguments gives a record that records.check_record finds no fault with, and
+      read_set_record.observe given that list with a stand-in append (in memory, as TASK-064's tests) calls append
+      once; the integration test joins several results' lists in call order and shows observe's record holds each
+      distinct path once in first-occurrence order. No file is written.
+  - AC6: >-
+      What is stated. The module's docstring states: the parse and its source (TASK-062's entry); the tools covered and
+      uncovered, with the reason for Grep and Glob; partial and failed reads (over-inclusive; tool_response not read);
+      the raw path and that spec 2 §10 point 13 stays open, naming claude_code.normalise_path as the alternative not
+      chosen; that the PostToolUse input form is cited from documentation and unmeasured (C6), and that Read's
+      file_path in that input is inferred from the documentation, not stated there for Read; that tool names are those
+      seen in this project's transcripts, supported live only for Bash, and that in session 1947b313 a hook with matcher
+      "*" did not refuse Read calls it was written to refuse (D-1202, D-1203), so whether a hook fires for Read is
+      unknown and the live evidence is negative; a lower bound at best (spec 5 :73), kept and not used (spec 5 :72);
+      and that gathering across hook calls, the hook process, placing the hook and its matcher stay out (CC-3, the
+      owner's; spec 5 §11 points 7 and 10). No test asserts anything about a running Claude Code.
+  - AC7: >-
+      What it imports and does (INV-001 to INV-004). claude_code_reads.py imports only the Python 3 standard library
+      (json) and nothing of aieos_bootstrap; it opens no file, starts no process, reads no standard input, prints nothing, calls no
+      sys.exit, reads no clock or environment, and makes no network or model call; no exec, eval, compile, __import__
+      or importlib; no assert in src (bandit B101); no string that names the project-state directory;
+      tests/unit/test_writer.py's R8 test and tests/unit/test_gitread.py's subprocess test pass unchanged. At the
+      task's commits the CI steps report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit.
+  - AC8: >-
+      Its own tests and the added text. Every test function of the three new test modules names the AC ids it stands
+      for as "TASK-065 ACn" in its own docstring; no other task's AC is named in qualified form. No existing test is
+      changed (GOV-003). Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003
+      patterns, and each count is 0. No test writes a file, creates or removes a folder, or imports a module the
+      workflow's deterministic_rule refuses outside the writer's tests (tempfile, shutil, os file calls; D-1291's
+      lesson); no test value is a real path of this machine's user folders, a real session id or a credential-shaped
+      string other than made-up ones that the scans do not match.
+  - AC9: >-
+      Tests, each rule with at least one passing and one failing case: R1 AC1 (each malformed kind, deep nesting
+      among them, and the same inputs through claude_code_hook.entry); R2 AC2 (Read with an absolute, a relative, a forward-slash, a mixed-case
+      and a non-ASCII path, each returned unchanged; with offset and limit; file_path missing, a number, empty); R3 AC3
+      (each named class and an unknown name; no input text in findings, by a made-up marker); R4 AC4 (each other key
+      varied; determinism; a fault injected through a dict subclass or a stand-in giving "entry"); R5 AC5 (build and
+      check_record clean; observe with a stand-in append called once; several results joined); R6 AC6 by a script check
+      of the docstring words, matched with whitespace collapsed (D-1286); R7 AC7 by a script check of imports, absent
+      names and calls; and a property test (standard library only, fixed seeds) that over generated hook inputs the
+      result has exactly the four keys, read_paths is empty unless the result is "read", a "read" result's list is
+      exactly [file_path], and equal inputs give equal results. Broken copies of claude_code_reads.py, one per rule,
+      each fail at least one test. tests/run_tests.py, unchanged, runs them.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC9]}
+  - {gate: G3, check: constitution, args: [AC6, AC7, AC8, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
