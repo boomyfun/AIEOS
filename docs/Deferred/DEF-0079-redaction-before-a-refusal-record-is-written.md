@@ -1,6 +1,6 @@
 # DEF-0079: redaction before a Claude Code adapter's refusal record is written
 
-- Status: open
+- Status: done
 - Opened: 2026-10-18 (session 89ad39be; decision D-1239 C4)
 - Deferred by: decision agent (A41), D-1219 (R2-2) in session dfcb097a; the item was found never opened in session 89ad39be (D-1239 M4, C4).
 - Decision group: A (an input to the contract that writes the records); B for any install or setting.
@@ -15,3 +15,4 @@
 
 ## Log
 - 2026-10-18: opened (session 89ad39be; D-1219 R2-2, D-1239 M4 and C4).
+- 2026-10-18: done (session dc541296; D-1277): TASK-063 (src/aieos_bootstrap/claude_code_channel.py) redacts a refusal record before it is passed to the core: by its AC3, a shell refusal's refers_to becomes a fixed text with no command text, first word or hash kept; by its AC4, a write refusal's path is kept only in judge's root-relative form, any other form replaced by a fixed text. Its stated limits (a name under the root can hold a secret; record_id is not redacted; a forged record's type is trusted) and the next text change are carried in DEF-0080.
