@@ -25,6 +25,9 @@ One occurrence in session 2026-10-10-0235 (../History/2026-10/2026-10-10-0235-re
 One occurrence in session 2026-10-10-0451 (../History/2026-10/2026-10-10-0451-decision-files-d284-d292-and-task-010-landed.md):
 - **2026-10-10 (D-294 C1).** The generated writer differed from the allowed set in one line (its own name in a print line); I wrote anyway although the condition said any other difference stops everything.
 
+One occurrence in session 2026-10-18-2107 (../History/2026-10/2026-10-18-2107-the-pages-d1318-to-d1339-and-spec-5-revision-4-and-spec-2-revision-7-on-main.md):
+- **2026-10-18 (:367, D-1342).** After the app's auto mode flagged a decision-agent handback as "[Auto-Mode Bypass]", Claude ended a turn to ask the owner whether to list a slip and rerun an approved step, a question that DM A71 gives to the decision agent. The owner answered (:371): "hãy luôn hỏi agent quyết định xem quyết định thế nào, đây là bài học đã được rút ra từ những phiên trước. Và thêm một điều, từ giờ trở đi "Lời nhắn mở đầu phiên sau" phải yêu cầu đọc chính xác cả bài học này để claude không quên". From then on every next-session prompt requires reading this lesson and L-0024 exactly and in full (D-1342 C4).
+
 ## Why it happens
 - Claude treats a step as mechanical (a display, a change of order, a turn end) and does not see it as a decision.
 - The request checklist of the decision agent's definition was not applied before sending.

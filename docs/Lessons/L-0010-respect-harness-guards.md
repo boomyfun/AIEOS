@@ -2,6 +2,8 @@
 
 Rule: When a classifier, a permission rule or an OS protection blocks an action, stop: do not retry it unchanged, reword it, split it or route it through another tool or agent, never change security settings yourself, and hand the action or the setting change to the owner.
 
+Note (2026-10-18, D-1342 C4 (c)): since DM A71 (the owner, 2026-10-18), guard refusals, safeguard stops and stops whose side is unclear go to the decision agent, and the owner is told afterwards; permission prompts and settings stay the owner's. The rule's last clause is read with this note.
+
 - Status: active
 - Category: governance
 - Binding: record only. Related: group B, item 2 of the decision agent's lists keeps security settings and Claude Code settings with the owner.
@@ -255,6 +257,9 @@ Occurrences in session 2026-10-16-2307 (../History/2026-10/2026-10-16-2307-the-c
 
 Occurrences in session 2026-10-17-0027 (../History/2026-10/2026-10-17-0027-the-classifier-stop-rule-recorded-and-task-056-reviewed.md):
 - **2026-10-17.** One command was refused by the guard before it ran (:283): it held Python's name followed by a dash, the worker's error, not a correct command refused; the program was written to a file and run. No classifier stop and no permission prompt in the session. The owner's rule of 2026-10-16 on classifier stops of a reply was written into the decision agent's definition (revision 11) and DM A70; decision-agent instances started in the same session kept revision 10, so every classifier stop stayed with the owner until the next session (D-1074).
+
+Occurrence in session 2026-10-18-2107 (../History/2026-10/2026-10-18-2107-the-pages-d1318-to-d1339-and-spec-5-revision-4-and-spec-2-revision-7-on-main.md):
+- **2026-10-18 (:367, D-1342).** The app's auto mode flagged a decision-agent handback (D-1341: list a slip in the file the guard reads, then rerun an approved step) as "[Auto-Mode Bypass]"; the flag blocked no action. Reading this lesson's last clause, Claude took the question to the owner, although DM A71 gives it to the decision agent. The decision agent ruled that the listing is the guard's own recovery route and not a way around it (D-1342). Separately, the guard refused ten Bash calls for unlisted text slips (R5); each was listed by its own decision and the refused call rerun once, unchanged.
 
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
