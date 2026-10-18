@@ -264,6 +264,9 @@ Occurrence in session 2026-10-18-2107 (../History/2026-10/2026-10-18-2107-the-pa
 Occurrence in session 2026-10-18-2355 (../History/2026-10/2026-10-18-2355-the-pages-d1358-to-d1366-and-the-code-of-task-066-reviewed.md):
 - **2026-10-19 (D-1369, D-1370, D-1371, D-1374).** Two command forms refused by the guard before they ran, the worker's errors: a flag after Python's name read as its dash form, and a long Python run outside the 110-second form; each went to the decision agent, which allowed the guard's own form (the flag's effect moved into the file; the long run split into parts). Two text slips (:696, :1025) made the guard refuse the next Bash (R5); each was listed by its own decision. After the second refusal one more read-only Bash was made before the request and was refused too: a departure.
 
+Occurrence in session 2026-10-19-0115 (../History/2026-10/2026-10-19-0115-the-pages-d1367-to-d1377-the-k1-draft-reviewed-and-task-066.md):
+- **2026-10-19 (D-1383 (h), D-1384, D-1385).** A Bash call holding a bare ";" was refused before it ran (R4), the worker's error; it was not retried in any form; the guard then refused every Bash call (R6) until the line was listed by its own decision; an auto-mode notice on two decision-agent reports (both had only read) went to the decision agent, which kept the listing.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
