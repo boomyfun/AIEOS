@@ -21,6 +21,9 @@ Occurrences in session 2026-10-15-0531 (../History/2026-10/2026-10-15-0531-the-a
 Occurrence in session 2026-10-18-1046 (../History/2026-10/2026-10-18-1046-dm-a71-written-and-the-channel-to-the-core-landed.md):
 - **2026-10-18 (D-1265, D-1266).** The worker proposed, and the decision agent approved, ending a turn only to tell the owner that TASK-063's contract was approved, before its code, reading the owner's item 5 alone and not with item 6 ("Việc đi tiếp, làm tiếp do agent quyết định; không dừng lại chờ tôi nhắn"). The owner, verbatim (:852): "tôi đã nói trong những phiên trước rằng để agent quyết định quyết định việc tiếp tục hay không. … đừng bao giờ quên điều này nữa." The decision agent revised its ruling (D-1266): the owner is told in the next turn-final reply, after the work has gone on.
 
+Occurrence in session 2026-10-18-1423 (../History/2026-10/2026-10-18-1423-the-pages-d1260-to-d1279-and-the-read-set-record-on-main.md):
+- **2026-10-18 (D-1280 part 1).** After sending the first decision request with the agent running in the background, the worker ended a turn with one owner-facing line saying only that it was waiting, against the owner's item 6 ("khi đang chờ"). Practice since: every decision-agent request runs in the foreground, so no turn ends while waiting.
+
 ## Why it happens
 "Tell me before" was read as "wait for my answer", and a condition written by the decision agent was followed without checking it against the owner's standing words.
 
