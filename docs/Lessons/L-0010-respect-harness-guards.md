@@ -282,6 +282,9 @@ Occurrence in session 2026-10-19-1146 (../History/2026-10/2026-10-19-1146-the-re
 Occurrence in session 2026-10-19-1411 (../History/2026-10/2026-10-19-1411-the-records-of-6260430e-pushed-the-pages-d1432-to-d1446-and-the-third-commit-of-task-067.md):
 - **2026-10-19 (D-1437, D-1438, D-1446).** A read-only listing that joined two steps with ";" (:539), the worker's error against owner item 1, was refused by the call-form guard before it ran (R4); listed by D-1437 and never rerun, the listing done by a one-purpose script instead; the app's notice "[Auto-Mode Bypass]" on that decision's report (an instance that only read) was brought before acting (D-1438). A text slip beside a tool call (:1191): the Bash in the same message, a scratch copy, ran; listed by D-1446 before any further Bash. A second text slip beside a Write (:1369) made the guard refuse the next Bash, a sha256sum (R5); listed by D-1449, the sha256sum not rerun. A third text slip beside an Edit (:1430) was listed by D-1451 before any further Bash.
 
+Occurrence in session 2026-10-19-1743 (../History/2026-10/2026-10-19-1743-the-pages-d1447-to-d1460-the-acceptance-and-the-landing-of-task-067.md):
+- **2026-10-19 (D-1453 to D-1457).** A text slip beside a read-only ls (:175) made the call-form guard refuse the next Bash (R5); listed by D-1453, the refused read done with the Read tool. Two command forms refused by the command guard before they ran, the worker's errors: a Python run without "timeout 110 " (:260, R3) and a "python -c" one-liner (:457, R2); each listed by its own decision and redone once in the guard's form. A second text slip beside a Write (:339) was listed by D-1455 before any further Bash. The app's notice "[Auto-Mode Bypass]" fell on D-1456's report, and two calls to the decision agent about it were stopped by the app's classifier (:490, :497; D-1457, L-0024).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
