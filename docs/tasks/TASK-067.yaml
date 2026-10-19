@@ -1,0 +1,700 @@
+# Task contract TASK-067, the reads table and the read-set accumulation of the Claude Code adapter's hook process
+# (Master Plan revision 4, §4 M5; concept line 945; specification 5 revision 4, section 7 and section 11 point 7,
+# bullets 3 and 6; specification 2 revision 7, section 3).
+# Revision 4, drafted under decisions D-1387 (K1 next), D-1388 (the scoping note approved, its rulings and C1 to C5),
+# D-1389 (round k1a's dispositions B1 to B7 and (e), and its C1 (i) to (iii)), D-1391 C2, D-1393 (round k1b's
+# dispositions K1 to K9 and (e), and its C1 (a) to (d)) and D-1395 (round k1c's dispositions M1 to M5 and (f), and its
+# C1 (a) to (g); D-1395 replaces D-1393 C1 (b)'s wording by AC5's error table); brought for approval in
+# its own request; whether it is approved is recorded in the decision files, not in this file. Fields and value forms
+# follow specification 2 §5.1 and the contracts of TASK-062 to TASK-066. Readings marked "(reading)" are the worker's,
+# for the decision agent to rule; values marked "(filled by script)" are written by script from the base just before
+# commit C.
+# Task type: implementation. What it adds, all in the writer module (src/aieos_bootstrap/writer.py, changed; INV-004:
+# the accumulation and its live-lease check open the store for writing, which only the writer may do; the workflow's
+# deterministic_rule refuses sqlite3 and open outside writer.py and the three writer test files,
+# aieos-checks.yml:1449-1470):
+# - the fourth table reads (session_id, task_id, seq, path) of specification 2 revision 7 §3 (:44): TABLES and _SCHEMA
+#   gain it, and _check_schema's refusal text names four tables;
+# - add_reads(root, session_id, paths, now, timeout=5.0): the read-set accumulation (spec 5 :74, :109): in one write
+#   transaction (BEGIN IMMEDIATE), refused unless the session holds a live lease, then each given path not yet stored
+#   for the session and the lease's task is added in the given order with the next seq; the only new function meant for
+#   a later hook-side caller (D-1388 C5);
+# - stored_reads(root, session_id, task_id, timeout=5.0): the stored paths of a session and task in seq order, read
+#   only, for the launcher's record before the release (spec 5 :108); core-only;
+# - remove_reads(root, session_id, task_id, timeout=5.0): removes them once the record is appended or found present
+#   (spec 2 :44); core-only; the caller (the launcher, specification 7) decides when; the function reads no event log;
+# - migrate_store(root, timeout=5.0): adds the reads table to a store in exactly the pre-TASK-067 form, in one write
+#   transaction, and changes nothing else; a store already in the four-table form is left unchanged; core-only;
+#   open_store keeps its meaning (create, or open unchanged) (D-1388 ruling).
+# Where the new code goes (D-1389 B3): every new definition (the four functions and every new private helper and
+# constant) is placed above the marker line "# ---- the read-only lookup of the store (task TASK-066) ----"
+# (writer.py:491), so that TASK-066's test_the_lookup_connects_read_only (tests/unit/test_writer.py:840-860), which
+# scans the text after that marker for INSERT, UPDATE, DELETE and PRAGMA and counts "finally:" as 2, passes unchanged.
+# The shared helpers (D-1389 B1, (e), B7), all new and private, all above the marker:
+# - the live-lease helper _live_lease (D-1388 C4): called inside the caller's transaction by both _store_answer's
+#   session branch and add_reads, each passing whether the store holds any lease row (_store_answer's existing query
+#   at writer.py:557; add_reads' own query of the same text), so the helper runs no second any-lease query (it runs
+#   the sessions and lease-rows queries itself); in this
+#   order: no lease row at all in the store gives the refusal "no_lease_row"; no sessions row
+#   with that id gives "session"; a row whose ended_at IS NOT NULL gives "ended"; then the stored times of that
+#   session's lease rows only are parsed (a malformed one raises ValueError, which each caller's own handler turns into
+#   "unreadable" with the exception's type name, so session_lease's finding stays "unreadable: ValueError"); not
+#   exactly one lease row of that session with expires_at > now gives "leases"; else the one live lease. This is
+#   TASK-066 AC2's order (TASK-066.yaml:405-410; writer.py:562-573); the refusal results and their finding strings are
+#   those _store_answer gives today, byte for byte; session_lease's session_id-None branch ("done"/"no_lease_row" and
+#   "lease_row_without_session") stays in _store_answer, outside the helper;
+# - the presence-and-link helper _store_present: for the four new functions only (session_lease and _read_store unchanged): the store
+#   path's os.lstat ("no_store" for FileNotFoundError or NotADirectoryError, "unreadable" for any other OSError or a
+#   ValueError, "link" for an entry that is not a regular file), then the realpath comparison of session_lease's link
+#   check ("link", a raising step included); returns the checked realpath; the same steps and reasons as session_lease;
+# - the write-transaction helper _write_store (_transaction unchanged; D-1393 K1, K2, C1 (a)): takes the checked
+#   realpath, the timeout, the work and check (True by default); builds the URI inside its guarded region (a ValueError
+#   of _store_uri, for a UNC path or a path not encodable as UTF-8, or a URI not ending in exactly "?mode=ro", gives
+#   "unreadable"); connects with the given timeout through the URI _store_uri gives for
+#   the checked realpath with its final "?mode=ro" turned into "?mode=rw" (reading, accepted by round k1b's R5: SQLite's
+#   rw mode opens an existing file only, so a store removed between the check and the open is never created; the URI
+#   is checked to end in exactly "?mode=ro" before only that suffix is changed; _store_uri percent-encodes any "?" in
+#   the path), uri=True, isolation_level None; runs BEGIN IMMEDIATE; when check is True runs _check_schema in its own
+#   try (a ValueError gives "tables"); runs the work. The ending: when the work returns a "done" StoreResult, COMMIT;
+#   when it returns a refused StoreResult, ROLLBACK and that refusal; when it returns anything else (None among it),
+#   ROLLBACK and "unreadable"; any exception raised inside the work (a
+#   TypeError from a malformed stored seq among them), a lock held past the timeout, a damaged file, any sqlite error
+#   and a failing COMMIT give "unreadable" after a ROLLBACK; ROLLBACK runs only while con.in_transaction is True; close
+#   runs in a finally (the connection name set to None before the try); a failing ROLLBACK or a failing close before a
+#   successful COMMIT gives "unreadable"; after a successful COMMIT a failing close does not change the result; no
+#   exception escapes from ROLLBACK, COMMIT or close; these failures are handled without a bare pass or continue in
+#   any handler (by a flag or a returned value; bandit B110, B112, aieos-checks.yml:1708-1710); the "unreadable"
+#   findings of this helper name the exception's type ("unreadable: <type name>");
+# - the read helper _read_reads for stored_reads: the URI of _store_uri for the checked realpath ("?mode=ro", built
+#   inside its guarded region as _write_store's), uri=True, the timeout, isolation_level None; BEGIN DEFERRED;
+#   _check_schema in its own try ("tables"); the reads; ROLLBACK only while con.in_transaction is True (so a failed
+#   BEGIN DEFERRED skips it, as _read_store's nested try does, writer.py:579-589) and close, in finally blocks, whose
+#   failure gives "unreadable"; writes and creates nothing.
+# - two new module-level constants: the CREATE TABLE reads statement, named, and also an item of _SCHEMA (so open_store
+#   and migrate_store run the same text); and the pre-task tables (TABLES without reads), for migrate_store.
+# The new code above the marker uses names defined below it (_store_uri, _KIND_BITS, _REGULAR_FILE,
+# _LOOKUP_TIMEOUT_MAX, _check_lookup_root, _check_lookup, _named); Python resolves them at call time; a later move of
+# those names must keep them defined in the module. The four private helper names above are fixed: K7's and M1's
+# stand-ins, AC8's scripts and the broken copies name them (D-1395 C1 (e)).
+# The finding rule, for all four new functions (D-1393 K3): a finding is fixed words and, where an exception is
+# named, its type, or the lease count of the "leases" finding (writer.py:572), never a message, a root, a path, a
+# session id or a task id.
+# The catch-all (D-1395 M1, C1 (b)): each of the four functions wraps everything after its "root" step in one
+# "except Exception" (as session_lease, writer.py:669-670); any exception given no named reason gives "unreadable"
+# with the finding "unreadable: <exception type name>". It handles only what happens outside _write_store's open
+# transaction, or a defect; it never takes the place of _write_store's own ROLLBACK and close. The live-lease
+# helper's ValueError (a malformed stored time), raised inside add_reads' work, reaches _write_store's handler, which
+# turns it into "unreadable: ValueError", as through session_lease.
+# The type rule (D-1393 K9): session_id, task_id and every path must be exactly of type str (type(x) is str); a str
+# subclass gives "argument" (session_id, task_id) or "path" (a path), although session_lease accepts a str-subclass
+# session id (its _is_str uses isinstance); paths must be exactly a list or a tuple.
+# No hook-side module changes; claude_code_store.py and TASK-066's check of its calls (store_path and session_lease
+# only, TASK-066.yaml:445-451) stay unchanged (D-1388 C5); nothing calls the new functions yet but the tests. A later
+# hook-side caller of add_reads needs that call check widened by its own contract; this task does not widen it.
+# The table form (spec 5 :112; D-1388 C2): from this task on, open_store creates the four-table form; every existing
+# writer function that opens the store raises on a three-table store, as it does today for any wrong table form
+# (_transaction's call of _check_schema at writer.py:265, whose ValueError is raised at :250; open_store's own check), session_lease refuses it "tables", and the four new
+# functions refuse it "tables" (migrate_store migrates it); until migrate_store has run. No store exists in this
+# repository (.aieos/ is absent at the base, by script) and no hook is placed, so nothing is refused in practice.
+# _tables (writer.py:240-245) compares table and column names only: a reads table without the UNIQUE constraints passes
+# the check (a stated limit); "each once" and the next seq are held by add_reads' own reads inside its transaction, and
+# the UNIQUE constraints are a second guard only; no AUTOINCREMENT and nothing else that adds a table to sqlite_master
+# (D-1388 C2).
+# The bound (DEF-0084 h4b Y2-11; D-1388 ruling): at most 10000 stored paths per session and task, and at most 4096
+# characters per path; a call that would exceed either bound is refused whole ("bound" or "path") and adds nothing;
+# cost stated: a long session's later reads are refused, so the record stays a lower bound (spec 5 :73). The bound is
+# per session and task: the table's total size stays unbounded across sessions and tasks (a stated limit).
+# seq (reading, accepted by round k1b's R5): the first stored path of a session and task has seq 0; specification 2
+# :44 says only "first-seen order". stored_reads orders by seq, then rowid.
+# The lease's task id (D-1393 K5): add_reads checks the live lease's task_id by isinstance(task_id, str) and
+# _TASK.fullmatch(task_id) (the form of _check_task, writer.py:140-142) before any insert; a lease row whose task_id
+# fails it (a BLOB or a number among them) gives "unreadable" with the finding "unreadable: the lease's task id is
+# not in the writer's form" (a malformed stored value, as a malformed stored time; session_lease does not check it).
+# now (as session_lease's docstring, writer.py:600-602): add_reads takes now as an argument; a now earlier than the real
+# time would make an expired lease read as live (the fail-open direction), so the later hook-side caller must take now
+# from the process clock; stated in add_reads' docstring.
+# DEF-0084 points taken, by its own wording (D-1388 C1): h4b Y2-11 "The local store's table reads ... has no bound on
+# its size" (the bound above); h4c "reading and removing a session's stored reads" (stored_reads and remove_reads); h4d
+# Y1-1's second part "who removes the stored reads after a lease holder's record" (remove_reads, called by the
+# launcher after the record is appended or found present); h4c Y2-8 "the write lock that the store lookup takes and its
+# refusal cost", for the write path (add_reads takes the write lock like the other writer functions; a call while
+# another writer holds it past the timeout is refused "unreadable"); h4d Y2-4 "whitespace-only values" for paths (a
+# stored path is a non-empty str of exactly type str, encodable as UTF-8, without NUL, within the length bound;
+# whitespace-only kept as given; the raw string, no normalisation, as TASK-064 and TASK-065 keep it); Y2-4's other parts
+# (a link or junction as the store file, where the upward search ends) and Y2-8 for the lookup were TASK-066's
+# (DEF-0084's log, 2026-10-18), and Y2-8 is taken here for the write path only. Stay deferred in
+# DEF-0084: the token-less observe and finding a task's leftover sessions (point 10's contract); h4d Y1-3 "whether the
+# core's append accepts a token-less record while an expired lease row of the task is still present", and h4d Y2-6
+# "the record's slot against specification 1 §7"; h4c Y1-7 the record's place among spec 1 §7's start steps; h4b Y2-6
+# whether the core should refuse a second grant to one session; h4c Y2-10 the lease length; h4c Y3-2 an unreadable
+# contract; h4d Y4-6 how the hook's violation path is fenced; h4c Y5-7 and Y5-9 a global placement; h4d Y5-8 beyond
+# this task (no core-only path of point 10 is added); the cost of fail closed when a lease expires during a run; the
+# hook input's own session_id; h4c Y1-4 "the separation of the hook's entry points from the core-only path and a test
+# of it" (this task marks stored_reads, remove_reads and migrate_store core-only and keeps TASK-066's call check, but
+# adds no hook entry point and no test of that separation); and h4d Y5-7's second half "D2-4, D2-5 and D3-2's "not a
+# holding" named in the text".
+# DEF-0085 (D-1388 ruling: it fires per module): this task changes writer.py, so its writer-side points are taken, by
+# their own wording (DEF-0085:11-16): "The WAL state ... no test builds a WAL-mode store, and whether a read-only open
+# of one reads it or creates its side files is untested" (AC7 (a)); "mutation M9 (the deferred BEGIN) is caught only by
+# a source-text check" (AC7 (b)); "AC9's short-name case of the link check is not exercised as written (the stand-in's
+# key is never looked up ...)" (AC7 (c)); "the presence and link stand-ins patch functions of the global os module for
+# one call" stays a limit only. Its claude_code_store points ("The lexical search (fail-open)", "claude_code_store's
+# docstring says any exception inside gives "entry"", "judge's check of now ... and the writer's ... differ", "_map
+# accepts "done"/"tied" with a lease on the search path", "mutation J9 is caught only by the unit module") and its
+# second trigger ("before any contract lets a hook call act on judge's "enforce_nothing"") stay open; this task lets no
+# hook call act on that result (no hook-side caller, and add_reads refuses without a live lease). At acceptance,
+# DEF-0085's log records which points closed and which stay open. DEF-0080, DEF-0081 and DEF-0082 stay deferred: this
+# task changes none of their modules. DEF-0076, DEF-0077, DEF-0078 and DEF-0083 are not touched.
+# Limits (carried at acceptance): C6 and P-LOC unmeasured; no hook placed, no matcher, no setting, nothing measured
+# (CC-3, the owner's, A51 item (4)); every limit TASK-061 to TASK-066 carried; the table-check and bound limits above;
+# the presence step, the link check and the open are separate steps, and a change between them is not seen (as
+# session_lease), for the write path too: a component replaced by a link between the check and the "?mode=rw" open
+# would let add_reads, remove_reads or migrate_store write into another existing store of the four-table form; the
+# existing writer functions make no link check at all (only session_lease and the four new functions do); a write
+# lock held past the timeout refuses a call without a record; stored_reads and remove_reads check no lease, so
+# remove_reads can remove the reads of a session whose lease is live (the launcher's order is specification 7's); a
+# store migrated while a hook process reads it is a race (the lookup refuses "tables" before and reads after); the
+# writer never makes a WAL-mode store, and the existing writer functions' behaviour on one is not tested;
+# session_lease's docstring stays byte-identical (D-1389 B4), so its sentences on "the writer's three tables, before
+# K1" and on a four-table store being refused (writer.py:626-629) are stale by design, for a later contract to correct;
+# a late add_reads between remove_reads and the lease's release is accepted (the lease is live) and stores reads that
+# no record uses and nothing removes (the launcher's order, spec 5 :108, narrows it); now is trusted from the caller,
+# and a datetime subclass passes _check_time; a COMMIT that fails, or a process that dies after it, may have applied
+# the change although "unreadable" is returned, and "each once" makes a retry of add_reads safe; stored_reads has no
+# row cap (a store written outside the writer can hold more than 10000 rows of a session and task).
+# Risk: high (risk rules revision 6, §2 point 3: R3 matches every path under src/** and tests/**), computed over the
+# base by script before commit C. GOV-003: every path of the write-set is an evaluator path by the workflow's pinned
+# list, by script; change class critical_cr, as for TASK-060 to TASK-066, ruled at acceptance. Profile
+# (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture [deterministic_rule], functional
+# [integration_test], security [static_security_analysis] and architecture [ai_review (cross-model)], plus the
+# evidence_required of the applicable articles. Reviews: five way-2 reviews on Sonnet 5.5, a Claude model other than
+# the implementer's (Opus 5.5), never Fable (the owner's words of 2026-10-17); and the decision agent's own reviews:
+# INV-003's human_review, OPS-002's human_review and the cross-model half, each its own record (D-1148 Q2).
+# Records: in the readable form, as TASK-066's; per-entry coverage checked by script before the acceptance request
+# (L-0022), and the governor's evaluation over the records reported (D-1098). AC8's checks against the base run as
+# acceptance-time scripts over the task's commits, not as tests in tests/.
+# Naming (D-544 Q3): every new test function names the AC ids it stands for as "TASK-067 ACn" in its own docstring.
+# Evaluation path (A61; as TASK-019 to TASK-066): commit C changes only docs/tasks/TASK-067.yaml and has one parent equal
+# to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-067" and no e-mail address in its message, go to
+# task/TASK-067 under their own decisions; main receives the task only at its acceptance.
+# Not applicable: OPS-001 (the task changes no ref); INV-005 to INV-008, INV-010 and INV-011; INV-009 (the task touches
+# no event log); GOV-001, GOV-004 to GOV-006 and SEC-003 (no path of the write-set meets them). INV-004 applies: the
+# writer stays the only module that opens the store.
+# Owner-kept acts: none. No hook placed, no matcher chosen, no Claude Code setting, nothing measured, nothing under
+# .github/ or .claude/, no push of its own; migrate_store is called only by the tests; it weakens no evidence
+# requirement (the changed tests are listed in AC8, each with the rule its check applies, and none is weakened); so its
+# acceptance is one delegated approval of the decision agent (Master Plan section 6).
+task: TASK-067
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add the reads table of specification 2 revision 7 §3 and the read-set accumulation of specification 5 §7 and §11
+  point 7 bullet 3 to src/aieos_bootstrap/writer.py in standard-library Python 3: TABLES and _SCHEMA gain the table
+  reads (session_id, task_id, seq, path); add_reads(root, session_id, paths, now, timeout=5.0) adds a session's read
+  paths under its one live lease, each once, in first-seen order, within a bound; stored_reads(root, session_id,
+  task_id, timeout=5.0) reads them read-only; remove_reads(root, session_id, task_id, timeout=5.0) removes them;
+  migrate_store(root, timeout=5.0) adds the table to a store of the earlier form. With new test functions in
+  tests/unit/test_writer.py, tests/integration/test_writer_files.py and tests/property/test_writer_properties.py, and
+  the three existing test functions AC8 names changed as it says, each new test naming its AC ids in its own docstring.
+traces_to:
+  - docs/specs/spec-05-adapter-contract.md#7
+  - docs/specs/spec-05-adapter-contract.md#11
+  - docs/specs/spec-02-aieos-file-format.md#3
+  - docs/specs/risk-rules-gov-aieos.md#2
+input_state:
+  # base_commit and the intent_versions values are filled by script from refs/heads/main just before commit C is made
+  # (D-198 C5).
+  base_commit: c1bc20303c5e46ee8503f78f8e04289230ffd1b8
+  depends_on: [TASK-001, TASK-016, TASK-064, TASK-066]
+  intent_versions:
+    docs/specs/spec-05-adapter-contract.md: c2496023175dcc535974f04c9ec6778101da26fb90a35a5424fbc589c0303601
+    docs/specs/spec-02-aieos-file-format.md: 9442edbb9e6e70fcc7ef0b296815315d742c5c9c365e32813e83dbc3a982533b
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # writer.py and the three writer test files are changed; no path is new.
+  paths:
+    - src/aieos_bootstrap/writer.py
+    - tests/unit/test_writer.py
+    - tests/integration/test_writer_files.py
+    - tests/property/test_writer_properties.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - docs/Deferred/DEF-0084-points-carried-from-the-hook-process-drafts.md
+    - docs/Deferred/DEF-0085-the-next-text-change-of-the-store-lookup.md
+    - src/aieos_bootstrap/**
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.writer.store_path, aieos_bootstrap.writer.open_store, aieos_bootstrap.writer.start_session, aieos_bootstrap.writer.end_session, aieos_bootstrap.writer.grant_lease, aieos_bootstrap.writer.release_lease, aieos_bootstrap.writer.session_lease, aieos_bootstrap.writer.StoreResult, aieos_bootstrap.eventlog.LEASE_KEYS]
+  schemas: [spec-02 local store tables (section 3)]
+forbidden:
+  # As TASK-066's list: .github/**, .aieos/**, .claude/**, CLAUDE.md, AIEOS-concept.md, docs/**, bench/**,
+  # tests/conformance/**, .gitattributes, .gitignore, and every existing path of src/ and tests/ that is not in the
+  # write-set (the list is filled by script from the base's tree before commit C).
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - tests/conformance/fixtures/acc_01.py
+  - tests/conformance/fixtures/acc_02.py
+  - tests/conformance/fixtures/acc_03.py
+  - tests/conformance/fixtures/acc_04.py
+  - tests/conformance/fixtures/acc_05.py
+  - tests/conformance/fixtures/acc_06.py
+  - tests/conformance/fixtures/acc_07.py
+  - tests/conformance/fixtures/acc_08.py
+  - tests/conformance/fixtures/acc_09.py
+  - tests/conformance/fixtures/acc_10.py
+  - tests/conformance/fixtures/acc_11.py
+  - tests/conformance/fixtures/acc_12.py
+  - tests/conformance/fixtures/acc_13.py
+  - tests/conformance/fixtures/acc_14.py
+  - tests/conformance/fixtures/acc_15.py
+  - tests/conformance/fixtures/acc_16.py
+  - tests/conformance/fixtures/acc_17.py
+  - tests/conformance/fixtures/adv_01.py
+  - tests/conformance/fixtures/adv_03.py
+  - tests/conformance/fixtures_cb/adv_02.py
+  - tests/conformance/fixtures_rc/rc_01.py
+  - tests/conformance/fixtures_rc/rc_02.py
+  - tests/conformance/fixtures_rc/rc_03.py
+  - tests/conformance/fixtures_rc/rc_04.py
+  - tests/conformance/fixtures_rc/rc_05.py
+  - tests/conformance/fixtures_rc/rc_06.py
+  - tests/conformance/fixtures_rc/rc_07.py
+  - tests/conformance/fixtures_rc/rc_08.py
+  - tests/conformance/fixtures_rc/rc_09.py
+  - tests/conformance/fixtures_rc/rc_10.py
+  - tests/conformance/fixtures_rc/rc_11.py
+  - tests/conformance/fixtures_risk/risk_01.py
+  - tests/conformance/set.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The table. TABLES gains 'reads': ('session_id', 'task_id', 'seq', 'path'); _SCHEMA gains one CREATE TABLE reads
+      (an ordinary rowid table, not WITHOUT ROWID) with session_id, task_id and path TEXT NOT NULL, seq INTEGER NOT
+      NULL, and UNIQUE (session_id, task_id, path) and UNIQUE (session_id,
+      task_id, seq), with no AUTOINCREMENT and nothing else that adds a table to sqlite_master; _check_schema's
+      refusal text names the four tables. open_store on a new root creates the four-table form; on an existing
+      four-table store it opens unchanged; on a three-table store it raises, by its existing check. Every existing
+      writer function that opens the store raises on a three-table store, as it does today for any wrong table form;
+      session_lease gives "tables"; add_reads, stored_reads and remove_reads give "tables". A reads table whose columns
+      match but whose constraints are missing passes _check_schema (a stated limit). On a store open_store makes, a
+      duplicate (session_id, task_id, path), a duplicate (session_id, task_id, seq) and a NULL in each of the four
+      columns, each inserted through a test connection, raise sqlite3.IntegrityError; sqlite_master holds exactly the
+      four tables and their automatic indexes, and no sqlite_sequence; _check_schema's message names reads.
+  - AC2: >-
+      add_reads(root, session_id, paths, now, timeout=5.0) returns a writer.StoreResult and lets no exception escape:
+      "done" with value the number of paths added (0 or more), or "refused" with exactly one finding and the reason of
+      the first step that applies, in this order: (1) "argument": session_id not exactly of type str (type(x) is not
+      str), empty, or not encodable as UTF-8; paths not exactly a list or a tuple (type(paths) not in (list, tuple));
+      now not a timezone-aware UTC datetime in whole seconds; timeout not an int or float, or a bool, or not in
+      0 < timeout <= 60 (session_lease's range rule, writer.py:535-536); these checks, in that order, and the snapshot
+      tuple(paths) run inside one try whose any exception (a raising tzinfo among them) gives "argument"; every later
+      step uses only the snapshot; (2) "bound": the snapshot holds more than 10000 paths (the early bound, after every
+      "argument" check and before any "path" check, so a huge list is refused before its items are read); (3) "path":
+      an item not exactly of type str, empty, holding NUL, longer than 4096 characters, or not encodable as UTF-8,
+      checked inside one try whose any exception gives "path"; a path error is reported before any store read;
+      (4) "root": the root not a non-empty str, not absolute, or not an existing folder (session_lease's root rule);
+      (5) the presence-and-link helper: "no_store", "unreadable" or "link"; (6) the write-transaction helper's open:
+      "unreadable" (a lock held past the timeout, a damaged file, any sqlite error); (7) "tables" (_check_schema, in
+      its own try); (8) the live-lease helper of AC4: "no_lease_row", "session", "ended", "unreadable" (a malformed
+      stored time of that session's lease rows), "leases"; then the lease's task_id checked against _TASK
+      ("unreadable", the header's finding); (9) "bound": a COUNT of the paths already stored for (session, the lease's
+      task) is read first, and a count above 10000 refuses "bound" before any path is read; then the stored count plus
+      the number of new ones would exceed 10000. Then the snapshot's paths are taken in order; a path already
+      stored for (session, task) or repeated earlier in the call is passed over; each new one is inserted with seq one
+      more than the largest seq stored for (session, task) (0 for the first; reading), computed by the function's own
+      read inside the transaction. All reads and inserts run inside the one BEGIN IMMEDIATE transaction, ended as the
+      header's write-transaction helper says. A refusal changes nothing (rolled back, or refused before the store is
+      opened). The task is the lease's task, never an argument. Findings follow the header's finding rule; any other
+      exception gives "unreadable" by the header's catch-all.
+  - AC3: >-
+      stored_reads(root, session_id, task_id, timeout=5.0) returns StoreResult "done" with value the list of stored
+      paths of (session, task) in the order of seq, then rowid (empty when none), or a refusal with one finding, in
+      this order: "argument" (session_id as AC2's; task_id not exactly of type str or not "TASK-" followed by digits,
+      the writer's _TASK form; timeout as AC2's; in one try), "root" (AC2's rule), "no_store", "unreadable" or "link" (the
+      presence-and-link helper), "unreadable" (open or read, a lock past the timeout included), "tables". It connects
+      only through the read helper of the header (the "?mode=ro" URI from the checked realpath, uri=True, the timeout,
+      isolation_level None, BEGIN DEFERRED, ROLLBACK and close in finally blocks), writes and creates nothing, and lets
+      no exception escape; a stored path that is not a str gives "unreadable" with the finding "unreadable: a stored
+      path is not text". remove_reads(root, session_id, task_id, timeout=5.0) removes every stored path of
+      (session, task) in one write transaction (the write-transaction helper) and returns "done" with the number
+      removed, or a refusal in the order "argument", "root", "no_store"/"unreadable"/"link", "unreadable", "tables";
+      it reads no event log, removes nothing else and lets no exception escape; its count is the DELETE's rowcount.
+      Neither checks a lease (the launcher calls them outside the runtime session, spec 5 :108): both work for a
+      session with no lease, an expired lease, an ended session and an unknown session id. Findings of both follow the
+      header's finding rule; any other exception gives "unreadable" by the header's catch-all.
+  - AC4: >-
+      The shared rule (D-1388 C4). The live-lease helper of the header is called inside the caller's transaction by
+      both _store_answer's session branch and add_reads, in the order no_lease_row, session, ended, the parse of that
+      session's lease times (a malformed one raises ValueError; each caller gives "unreadable"), leases, as TASK-066 AC2
+      states it. session_lease's results are unchanged: every result, reason and finding string it gives today is
+      byte-equal (for example "no_lease_row: the store holds no lease row", "session: no session with this id",
+      "unreadable: ValueError"), its session_id-None branch stays in _store_answer, and every TASK-066 test of
+      session_lease passes unchanged except the three AC8 names. An unknown session on a store with no lease row gives
+      "no_lease_row" through both session_lease and add_reads. A property test over generated store states (no lease
+      row; unknown, ended and started sessions; zero, one and two live leases of the session; expired leases) with
+      valid arguments only (paths that pass "path", under both bounds) shows that session_lease gives "tied" exactly
+      when add_reads accepts, and that on refusal both give the same reason; it compares the lease state only (the link
+      and table steps are the same steps in both, AC3 and AC5's tests cover them), and only over well-formed lease rows
+      (task ids in the _TASK form): a lease row whose task_id fails the form gives "unreadable" through add_reads and
+      may give "tied" through session_lease, which does not check it; that case is tested on its own (D-1393 K5,
+      C1 (c)).
+  - AC5: >-
+      migrate_store(root, timeout=5.0) returns StoreResult "done" with value "migrated" or "current", or a refusal with
+      one finding, in the order "argument" (timeout as AC2's), "root" (AC2's rule), "no_store"/"unreadable"/"link" (the
+      presence-and-link helper), "unreadable" (open, a lock past the timeout, any sqlite error), "tables"; it lets no
+      exception escape. It runs through _write_store with check=False (D-1393 K2), so its work, inside the one BEGIN
+      IMMEDIATE transaction, runs these points in order, with this table of outcomes (D-1395 C1 (a); it replaces
+      D-1393 C1 (b)'s wording, by D-1395): (P1) the probe, the unchanged _check_schema: passes: "current" (nothing
+      changed; committed with no change); ValueError: not a result, go to P2; sqlite3.Error: "unreadable";
+      (P2) _tables compared with the new private constant of the pre-task tables: differs: "tables"; equal: go to P3;
+      (P3) the named CREATE TABLE reads constant run: sqlite3.Error: "unreadable"; any other exception: "unreadable:
+      <type>" by the catch-all rule; done: go to P4; (P4) the unchanged _check_schema again (so the store-row rule is
+      checked once, by _check_schema itself): passes: "migrated" (committed); ValueError: "tables"; sqlite3.Error:
+      "unreadable". Every refusal is rolled back, so the store is unchanged. Any other form (a leftover reads table of
+      other columns, an extra table, a missing table) gives "tables" at P2; a pre-task form with not one store row gives
+      "tables" at P4. Nothing else changes: the other tables' rows and the
+      store row are equal by a dump before and after. It never creates a store ("no_store" when none; the "?mode=rw"
+      open). After "migrated", every writer function reads the store as a four-table store. Findings follow the
+      header's finding rule; any other exception gives "unreadable" by the header's catch-all.
+  - AC6: >-
+      What the module imports and does (INV-001 to INV-004). writer.py's change adds no import (its imports stay within
+      tests/unit/test_writer.py:410's set); every execute call in writer.py takes as its query a str constant (implicit
+      concatenation of constants included), a module-level name bound to a str constant, or a name bound by a for loop
+      over _SCHEMA, with ? parameters (an in-suite AST check over the whole module: no f-string, "%", "+", call,
+      subscript or other expression as the query); it reads no clock; writer.py stays the only module
+      that opens the store; claude_code_store.py is unchanged, and TASK-066's AST check of its calls passes unchanged.
+      At the task's commits the CI steps report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit.
+  - AC7: >-
+      DEF-0085's writer-side points. (a) WAL: a test in tests/integration/test_writer_files.py builds a store by
+      open_store, sets it to WAL mode on a test connection (PRAGMA journal_mode=WAL; the test may use sqlite3 there),
+      closes that connection, and takes the store's bytes and the list of files under the project-state directory; it
+      then calls session_lease and stored_reads and asserts, for each, that the result is either "refused" with reason
+      "unreadable" or the right answer (session_lease "tied" with the lease; stored_reads "done" with the stored list),
+      and that the store's bytes are unchanged. Whether a file appears beside the store (a -wal or -shm file a
+      read-only connection may create when the folder is writable) is recorded as an observation in the test's output,
+      not asserted; if one appears, or if the bytes change, the worker brings the raw result to the decision agent
+      before commit (D-1362 C6's form), and changes no text of session_lease for it. Limit stated: the disjunction
+      cannot fail for code that always refuses "unreadable"; it guards the bytes and the answer's form only.
+      (b) M9: a behavioural test records the statements each connection runs, by set_trace_callback on the real
+      connection (a stand-in for writer's sqlite3.connect for one call returns the real connection with the callback
+      set, since sqlite3.Connection's execute cannot be patched), and shows that session_lease and stored_reads run,
+      by each statement's leading keyword matched case-insensitively, only BEGIN DEFERRED, SELECT and ROLLBACK (so the
+      table check's SELECT over pragma_table_info is allowed), never BEGIN IMMEDIATE. (c) The short-name case: TASK-066's
+      test_case_and_separator_differences_are_not_links (class R13PresenceAndLink) looks up a root given in a short
+      form, keys its realpath stand-in on the paths that lookup really reaches (store_path of that root and that root),
+      counts the stand-in's hits, and asserts that each keyed path was looked up at least once and that the result is
+      not "link"; its assertions at tests/unit/test_writer.py:813-814 and :818 (the real lookup of the short-form root
+      giving 'tied') stay present and unchanged. R13's class-level helpers (with_realpath, lookup, with_lstat) stay
+      byte-identical: the strengthened test calls writer.session_lease with the short-form root itself and carries its
+      own counting stand-in.
+  - AC8: >-
+      Its own tests and the changed ones (GOV-003). Every new test function names the AC ids it stands for as
+      "TASK-067 ACn" in its own docstring; no other task's AC is named in qualified form in a new test. In the three
+      writer test files every top-level and class-level function and class present at the base is byte-identical
+      after the change and none is removed, and nothing else in them changes but added functions and classes and the
+      imports they need, except exactly these three functions: (1) tests/unit/test_writer.py
+      R11SessionLease.test_tables_of_another_form: a table named reads now exists, so the extra-table case uses another
+      name (a fifth table) and the drop removes that table; (2) tests/integration/test_writer_files.py
+      StoreLookupFiles.test_no_case_changes_the_store_or_its_folder: its CREATE TABLE reads (:144) creates another
+      name instead; (3) tests/unit/test_writer.py R13PresenceAndLink.test_case_and_separator_differences_are_not_links:
+      AC7 (c). The acceptance-time script by source segment over the AST lists every changed definition and refuses
+      any not on this list; for each listed function it compares the assertion calls (calls of self.assert* and of the
+      class's refused helper), as an ordered sequence of source segments, of the base and the head, and refuses unless
+      the base's sequence is present unchanged and in order at the head (the head may add assertions) except, for (3)
+      only, the one at tests/unit/test_writer.py:817 (assertNotEqual 'link'), which AC7 (c)'s assertions strengthen;
+      :813-814 and :818 must stay; for (1) and (2) it also checks that the base and head function sources are equal
+      after the token reads is replaced by the new table name (so their docstrings stay as they are; (1)'s "a fourth
+      table" is stale once reads exists, accepted and stated; (2)'s docstring names no fourth table and stays true);
+      for (2) it also checks that the final reasons set is
+      equal to the base's ({no_store, no_lease_row, lease_row_without_session, session, ended, leases, tied, tables}).
+      Each acceptance-time script of AC8 is also run once against a deliberately weakened copy (one assertion deleted
+      from a listed test; an unlisted base test edited; an existing writer definition edited) and must exit nonzero;
+      the raw outputs go to the decision agent (AC6's query rule is an in-suite check, exercised as AC9 R6 says). At
+      acceptance the whole tests/ suite passes at the head, and a grep of tests/** for "CREATE TABLE reads", "TABLES",
+      "_SCHEMA", "sqlite_master", "pragma_table_info" and "reads" lists no hit that the change breaks outside the three
+      named functions (raw output reported); a hit outside the write-set escalates (needs_out_of_scope_change). writer.py: every function, class
+      and module-level assignment present at the base is byte-identical except TABLES, _SCHEMA, _check_schema (its
+      message) and _store_answer (its session branch calls the AC4 helper), each change stated; session_lease is
+      byte-identical, its docstring included (so the words test_writer.py:875-881 pins stay); the module docstring
+      may change, keeping the four phrases test_writer.py:869-870 pins, and only to name the reads table in its store
+      list and add TASK-067's lines and limits; every added top-level definition is one of the four functions or
+      private (its name starts with "_"); an acceptance-time script lists every changed definition and refuses any
+      other. Before each commit the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns,
+      each count 0. Every test is buildable under deterministic_rule (as TASK-066 AC8: real stores, sqlite3 and
+      tempfile only in the three writer test files; no mkdir or makedirs, exec, compile, __import__ or importlib; open
+      only in "rb" or "ab"; no link or folder created; no real path of this machine's user folders, no real session id,
+      no credential-shaped string, no literal "/tmp").
+  - AC9: >-
+      Tests, each rule with at least one passing and one failing case, over real stores in the writer test files: R1
+      AC1 (the four-table form created; a three-table store, built by a test connection dropping reads, raising or
+      refused by each function as AC1 says; a reads table without the constraints passing; the IntegrityError cases,
+      the sqlite_master contents and _check_schema's message of AC1); R2 AC2 (each reason, in order, a case where two
+      apply showing the earlier wins: an argument and a path error, an early bound and a path error, a path error on a
+      store with no lease row; a raising tzinfo; a lone-surrogate session id and path; a str subclass as session id
+      ("argument") and as path ("path"); a list subclass as paths ("argument"); a non-list paths; an added path, a
+      repeated path in one call, a path stored before; the seq values read directly through a test connection (0, 1, 2
+      across calls, and after a gap made by a test connection the next seq is the largest plus one, not the count);
+      two tasks of one session kept apart (a lease released and another granted); the bound at exactly 10000 and one
+      over (early and stored); a 4096- and a 4097-character path; NUL and empty paths; a whitespace path kept; a held
+      write lock (another connection's BEGIN IMMEDIATE) with timeout about 0.2 giving "unreadable"; the timeout passed
+      to connect, by a connect stand-in recording its arguments; a garbage store ("unreadable") and a 0-byte store
+      ("tables"); a three-table store giving "tables"; a lease row whose task_id fails _TASK giving "unreadable" with the
+      header's finding; a malformed stored seq (a test connection) giving "unreadable"; a tuple of paths accepted; an
+      empty list giving "done" 0 with a live lease and refused without one; each bad timeout (a bool, 0, 61, inf, nan,
+      a str, None) and each bad now (naive, a fraction of a second, another offset, a date, a raising tzinfo) by name;
+      the mixed bound case (9999 stored, one new and one duplicate accepted; two new refused); a numeric-looking path
+      ("007", "1e3") read back unchanged as text; the store's rows unchanged after any refusal); R3 AC3 (stored_reads'
+      order, a seq tie on a reads table without the constraints ordered by rowid, empty, each refusal, bytes unchanged,
+      a stored path that is not a str giving "unreadable"; remove_reads' count, only that session and task removed, its
+      "argument", "root", garbage and 0-byte cases; stored_reads and remove_reads working for a session with no lease,
+      an expired lease, an ended session and an unknown session id (D-1395 M2); stored_reads' read helper failing at
+      ROLLBACK and at close (a connect stand-in), giving "unreadable", and a failed BEGIN DEFERRED skipping ROLLBACK; for each of the four functions the presence-step reasons "no_store",
+      "unreadable" (an lstat OSError and a ValueError) and "link" (a directory, a raising realpath, a realpath
+      elsewhere) by the stand-ins of TASK-066's R13PresenceAndLink form, in one parametrised test that also asserts
+      session_lease gives the same reason and finding over the same stand-ins); R4 AC4 (the helper's reasons in order
+      through both callers, an unknown session on a store with no lease row among them; the property test of agreement
+      over well-formed lease rows; the malformed-task_id case on its own; D-1395 M3: a test asserts session_lease's exact
+      finding tuple for each refusal reason with fixed text (no_lease_row, session, ended, leases with its count,
+      "unreadable: ValueError" for a malformed stored time, lease_row_without_session), the strings copied by hand from
+      the base text of writer.py:556-572 and never imported from the module); R5 AC5 (migrated, current, a leftover
+      reads table of other columns, an extra table, a missing table, two store rows, a pre-task form with a bad store
+      row (P3 runs, P4 refuses "tables", the store unchanged), no store; its "argument", "root", "link" and held-lock
+      "unreadable" cases; rows unchanged by a dump; after "migrated" each writer function reads the store as a
+      four-table store; D-1395 M5: every cell of AC5's table driven, the store unchanged after each refusal: the probe's
+      and the second check's ValueError and sqlite3.Error by a stand-in for writer._check_schema keyed on its call
+      count, and the CREATE's sqlite3.Error and another exception by a connect stand-in that returns a wrapper around
+      the real connection whose execute raises for the CREATE TABLE reads text (sqlite3.Connection.execute cannot be
+      patched; D-1395 C1 (c)); the write helper's ending (K1): a normal call of add_reads, remove_reads and migrate_store
+      each returns "done" with its change present; a refusal returned by the work leaves the store unchanged; a failing
+      close after a successful COMMIT (a connect stand-in) still returns "done"; a failing COMMIT (a stand-in) gives
+      "unreadable" with the store unchanged; a work result that is not a StoreResult (a stand-in work) gives
+      "unreadable" with the store unchanged; the "?mode=rw" reading (K7, D-1393 C1 (d)): a stand-in for _store_present
+      returns the root joined with a made-up file name (a missing file in an existing folder; no mkdir, makedirs,
+      remove or unlink), a connect recorder shows the open was reached with a URI ending "?mode=rw", and add_reads,
+      remove_reads and migrate_store give "unreadable" with no file created; the rw URI changes only the final suffix
+      (a root name holding "?mode=ro"); D-1395 M1, C1 (b): a stand-in for _store_present returns a UNC-form path, and
+      another returns a path not encodable as UTF-8 (a lone surrogate), for all four functions, so the tests run on
+      every OS and reach _store_uri (a recorder asserts it was reached), each giving "unreadable" with the finding
+      "unreadable: ValueError"; a stand-in for _store_uri returning a URI without the "?mode=ro" suffix gives
+      "unreadable" for the three write functions; for each of the four functions, a stand-in for one of the named
+      helpers (_store_present for each of the four; _write_store for add_reads, remove_reads and migrate_store;
+      _read_reads for stored_reads) raises an exception that no step names (RuntimeError), and the result is
+      "unreadable" with the finding "unreadable: RuntimeError", the store unchanged (D-1397 C1: the test that the
+      broken copy "the catch-all removed" must fail); real-root variants are optional and any skip states its reason; the
+      finding rule (K3): for every refusal reason of the four functions, with a made-up hostile session id, task id,
+      root and path, none of their text appears in the finding; R6 AC6 by an in-suite check of the current text
+      (imports, the AST query rule over the whole module, no clock), the query-rule checker being a function over
+      source text that is also run on a hostile sample (an f-string, "%", "+", a call and a subscript as the query) and
+      finds each, as test_the_check_finds_an_open_elsewhere (tests/unit/test_writer.py:414-420) does for opens;
+      R7 AC7 as stated; R8 AC8 by the acceptance-time scripts and their weakened-copy runs; and an in-suite case that
+      test_the_lookup_connects_read_only passes unchanged with the new definitions above the marker; property tests
+      (standard library only, fixed seeds, at most 50 cases each): over generated path lists add_reads stores each
+      distinct path once in first-seen order and stored_reads returns exactly that list, and the agreement of AC4.
+      Broken copies are made and run in the scratchpad, outside tests/, as for TASK-059 to TASK-066, and each fails at
+      least one test: the lease check skipped; the lease's task_id check skipped; the task taken from an argument; the
+      stored bound at >= 10000, at 9999 and at 10001; the early bound removed, and placed after the path check; the
+      path-length bound off by one; each path check removed in turn (NUL, empty, UTF-8, type(x) is str replaced by
+      isinstance); dedup across calls missing; dedup within one call missing; the bound checked after some inserts;
+      seq not from the largest stored seq; remove_reads without its task clause, and without its session clause;
+      remove_reads' count not from rowcount; stored_reads without its ORDER BY seq; migrate_store touching another
+      table's rows; migrate_store not giving "current" on a four-table store; migrate_store committing without the
+      second _check_schema; the helper's no_lease_row and session checks swapped; the presence-and-link helper skipped
+      in each of the four functions; the timeout not passed to connect; ROLLBACK after COMMIT; a refusal from the work
+      committed; an exception from close or ROLLBACK let escape; the write URI left at "?mode=ro", made "?mode=rwc",
+      and replaced by the plain path; stored_reads' BEGIN DEFERRED changed to BEGIN IMMEDIATE; UNIQUE on path removed;
+      UNIQUE on seq removed; a NOT NULL removed; a live-lease check added to stored_reads, and to remove_reads; a
+      finding text changed in _live_lease; AC5's two error kinds swapped, in the probe and after the CREATE; no
+      rollback on a "tables" exit of migrate_store; migrate_store run with check=True; stored_reads without its session
+      clause, and without its task clause; the catch-all removed from each of the four functions; a non-StoreResult
+      work result committed; and, for AC7, scratchpad copies of _read_store with BEGIN IMMEDIATE and with "?mode=rw" in
+      the lookup's URI, and of the link check without normcase or with a key the lookup never reaches, each run
+      against the AC7 tests. tests/run_tests.py, unchanged, runs the tests.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC7, AC9]}
+  - {gate: G3, check: constitution, args: [AC6, AC8, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
