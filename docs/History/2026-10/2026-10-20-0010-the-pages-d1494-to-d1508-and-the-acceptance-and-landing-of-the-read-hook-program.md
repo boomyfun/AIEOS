@@ -47,3 +47,12 @@
 
 - **A14:** step 9; M5 in progress. TASK-068 accepted and on main (dc4bf1e7). Next: M5's next step, the scoping of the next adapter contract (D-1518), and the pages D-1519 onward.
 - **Open:** DEF-0004, DEF-0005, DEF-0008, DEF-0011, DEF-0020, DEF-0024, DEF-0026 to DEF-0044, DEF-0046 to DEF-0052, DEF-0054 to DEF-0059, DEF-0061 to DEF-0063, DEF-0065, DEF-0067, DEF-0069, DEF-0071, DEF-0073, DEF-0076 to DEF-0078, DEF-0080 to DEF-0084, DEF-0087 to DEF-0090.
+
+## After the first records commit (21bc504b)
+
+- **A second text slip (:961)** beside the plan-list call, against owner item 6; the records commit was refused by the call-form guard (R5); listed by D-1521; the commit then ran once, unchanged. Two slips in one session, both short sentences written beside a call while the work went on; recorded here, no new lesson (the rule is owner item 6's, already in every start prompt).
+- **The records commit 21bc504b** (TASK-068's records, DEF-0089, DEF-0090, the four log lines, this History and the Progress entry) pushed under D-1522; CI on main success.
+- **M5's next step (D-1523):** H3, the core violation path tied by the live lease, chosen after H1 by D-1468's ranking. Its scoping note was accepted as H3's scope with one correction (D-1524): writer.py stays unchanged, since session_lease's tied value already carries the lease's task and fencing token; the write-set is adapter.py and its tests. The note and the correction are kept on decision page D-1524. Before any H3 contract text the next session reads in full eventlog.append and its fence check, violation.argument_findings and violation.record, and the violation.detected payload form (D-1524 C2).
+- **Decisions after the table above:** D-1519 to D-1524, decided by the decision agent (A41, A51; A71 for the listing of the slips; A41 for the push D-1522); their pages written at this step.
+- **Level marks:** estimates only: about 70% at D-1523, 78% at D-1524, 82% at the second records commit.
+- **Next:** H3's contract (after D-1524 C2's reads); the pages D-1525 onward.
