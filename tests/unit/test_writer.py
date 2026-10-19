@@ -925,8 +925,9 @@ class ReadsCase(Case):
         con = sqlite3.connect(writer.store_path(self.root), isolation_level=None)
         try:
             out = {}
-            for (name,) in con.execute("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"):
-                out[name] = con.execute('SELECT * FROM "%s" ORDER BY rowid' % name).fetchall()
+            for line in con.iterdump():
+                if line.startswith(('CREATE TABLE ', 'INSERT INTO ')):
+                    out.setdefault(line.split()[2].strip('"'), []).append(line)
             return out
         finally:
             con.close()
@@ -1147,9 +1148,13 @@ class R16AddReads(ReadsCase):
         """TASK-067 AC2, TASK-067 AC4 and TASK-067 AC9: a lease row whose task_id fails the writer's form (a number, a
         blob) gives "unreadable" with the fixed finding, while session_lease gives "tied"."""
         self.tied()
-        for value in ('7', "x'00'", "'task-1'"):
+        for value in (7, b'\x00', 'task-1'):
             with self.subTest(value=value):
-                self.sql('UPDATE leases SET task_id = %s' % value)
+                con = sqlite3.connect(writer.store_path(self.root), isolation_level=None)
+                try:
+                    con.execute('UPDATE leases SET task_id = ?', (value,))
+                finally:
+                    con.close()
                 r = self.add(['a'])
                 self.assertEqual((r.reason, r.findings),
                                  ('unreadable', ("unreadable: the lease's task id is not in the writer's form",)))
@@ -1433,7 +1438,7 @@ class R19MigrateAndTheWriteHelper(ReadsCase):
         r = writer.migrate_store(self.root)
         self.assertEqual((r.result, r.value), ('done', 'migrated'))
         after = self.dump()
-        self.assertEqual(after.pop('reads'), [])
+        self.assertEqual([x for x in after.pop('reads') if x.startswith('INSERT INTO ')], [])
         self.assertEqual(after, before)
         self.assertEqual(writer.held_lease(self.root, 'TASK-067')['task_id'], 'TASK-067')
         self.assertEqual(self.add(['a']).value, 1)
