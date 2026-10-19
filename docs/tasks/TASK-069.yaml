@@ -1,0 +1,629 @@
+# Task contract TASK-069, the core violation path tied by the live lease (Master Plan revision 4, §4 M5; concept line
+# 945, the hooks that enforce the write-set, the shell allowlist and the push block; specification 5 revision 4, section
+# 8 and section 11 point 7, bullets 3 to 6; specification 3 revision 4, section 8; specification 1 revision 2, section
+# 5.3; specification 2 revision 7, section 6.3).
+# Revision 3, a draft, drafted under decisions D-1523 (H3 chosen), D-1524 (the scoping note accepted with its
+# correction, C1 and C2), D-1528 (D-1524 C2's reads accepted; C2's list of what this draft states), D-1529
+# (revision 0's choices ruled; C1 the token removed from the result, header step (3b); C2 AC3's phrase, AC4's ended
+# session and AC5's eventlog import fixed), D-1532 (round t69a's dispositions) and D-1535 (round t69b's dispositions;
+# revision 3: the long lines rewrapped first, its parsed values unchanged, then t69b's points, each by its id
+# "t69b-Rn-k"); brought for
+# review and approval in its own requests; whether it is approved is recorded in the decision files, not in this file.
+# Fields and value forms follow specification 2 §5.1 and the contracts of TASK-062 to TASK-068. Readings marked
+# "(reading)" are the worker's, for the decision agent to rule; values marked "(filled by script)" are written by
+# script from the base just before commit C.
+# What was read for this draft (D-1524 C2; D-1528): specification 5 revision 4 sections 6 to 11; page D-1524 (the
+# scoping note and its correction); src/aieos_bootstrap/adapter.py in full; src/aieos_bootstrap/violation.py in full;
+# eventlog.append (:147-235) with _lease_findings (:125-144) and refusal_record (:117-122); writer.append_event
+# (:235-264); writer.session_lease's docstring and _store_answer (:961-1021); spec 1 :87 (§5.3) and spec 2 :205 (§6.3);
+# TASK-068.yaml in full; tests/integration/test_writer_files.py (:1-116, and its class list); tests/unit/test_adapter.py
+# :320-367 (R9Purity and R9OwnTests, revision 2).
+# Revision 2 (round t69a, reviews R1 to R5 on claude-sonnet-5-5; R3 "fail" on two blocking findings, the others
+# "pass"; D-1532): no new import in adapter.py, an inline _LEASE_KEYS with an equality test, and the new unit tests in
+# a new module tests/unit/test_adapter_session.py, so tests/unit/test_adapter.py stays unchanged and its R9Purity and
+# R9OwnTests pass (R3-B1, R3-B2; R4-2 moot); a fixed finding for a refused lookup with no finding (R1-1); a non-mapping
+# answer of adapter.violation (R1-2, R3-3); "entry: after the record" (R1-3, R2-5); the nested lists copied (R1-4); a
+# relative root (R1-5); the race wording (R2-1); the retry after a partial outcome stated (R2-2); "no_lease_row:"
+# after a done (R2-3); the filter on every path and the epoch-and-counter rule (R2-4, R3-5); one predicate (R3-4, and
+# D-1530's note); the second-fence copy described (R3-6); depends_on, interfaces and forbidden (R4-1, R4-3, R4-4);
+# spec 5 :109 cited (R5-1); the read-set record left for point 10 (R5-2); a "lease" refusal is no violation (R5-3);
+# h4c Y1-7's cost (R5-4); DEF-0088 point 2 (R5-5).
+# Task type: implementation. What it adds:
+# - in src/aieos_bootstrap/adapter.py, a fifth call, session_violation(root, session_id, observation, event_id,
+#   recorder, now, lookup=None, append=None, release=None): the violation path tied to a session by its session id and
+#   the one live lease the core's store holds for it (spec 5 :109); the hook side never holds the fencing token (it
+#   follows from spec 5 :109, the tie by the session id and the store's one lease, with :108 for what the launcher
+#   passes in the environment: the session id and the root, no token; R5-1), so the token is read core-side from that
+#   lease. lookup, append and release default, at call time, to writer.session_lease, writer.append_event and
+#   writer.release_lease_token (the module's existing stand-in form); and a private constant _LEASE_KEYS =
+#   frozenset({'task_id', 'fencing_token', 'expires_at'}), equal to eventlog.LEASE_KEYS by a test, so adapter.py's
+#   import set stays the base's (R3-B1);
+# - tests: a new module tests/unit/test_adapter_session.py (R3-B2: tests/unit/test_adapter.py is not changed, so its
+#   R9OwnTests, which scans test_adapter.py, test_replay.py and test_violation.py, :356, passes unchanged), a new module
+#   tests/property/test_adapter_properties.py, and one new class of end-to-end tests in
+#   tests/integration/test_writer_files.py (the only kind of place a real store may be built: the workflow's per-path
+#   allowance for sqlite3 and tempfile).
+# writer.py, violation.py and eventlog.py are unchanged (D-1524's correction: session_lease's tied value already
+# carries task_id and fencing_token, writer.py:316-320, :1008-1009). No hook-side module is changed, and nothing
+# hook-side calls the new function: its only callers are its tests; the caller is H2's PreToolUse program, a later
+# contract. The allowed pair (claude_code_channel.py, adapter.violation) of TASK-068's separation check stays
+# unchanged (D-1524 (h)); H2 replaces it.
+# The flow of session_violation, in this order, the first step that ends giving the result; the result is a mapping
+# with exactly adapter.RESULT_KEYS:
+# (1) the session-level arguments, all inside one try whose any exception gives "refused", reason "argument", findings
+#     ["argument: checking the arguments raised <type name>"]: root a non-empty str; session_id a non-empty str (so
+#     the lookup is always made with a session id); now a timezone-aware datetime in UTC with whole seconds
+#     (adapter._utc_whole); a failed check gives "refused", "argument", with a fixed finding naming the argument. The
+#     observation, event_id and recorder are checked in step (3), by violation.argument_findings.
+# (2) the lookup: lookup(root, session_id, now), reached at call time, with the lookup's own default timeout. Its
+#     answer is read through adapter._store_done: a "refused" with a str reason gives "refused", reason "lease",
+#     findings the writer's findings as a list of str (each "<writer reason>: ...", writer.py:961-963, :971, :975 and
+#     _live_lease's), or, when that list is empty, the fixed finding "lease: the lookup refused (<reason>)" (R1-1), so
+#     the writer's own reasons stay visible as findings[0]'s prefix: "argument", "root",
+#     "no_store", "link", "unreadable", "tables", "lease_row_without_session", "no_lease_row", "session", "ended",
+#     "leases" (writer.py:1010-1011). The writer's "argument" is thus told apart from steps (1) and (3)'s by the
+#     result's reason ("lease", not "argument"). "lease_row_without_session" and a "done" with reason "no_lease_row"
+#     cannot arise, since step (1) requires a session id (writer.py:973-976); either, if a stand-in gives it, ends as
+#     the next sentence says. A "done" goes on only with reason "tied" and a value that is a dict with exactly
+#     _LEASE_KEYS whose task_id is "TASK-" followed by digits and whose fencing_token has adapter._token_form;
+#     every other answer, and an exception raised by lookup, gives "refused", reason "lease", findings ["lease: the
+#     lookup gave no tied lease"] (an exception: ["lease: session_lease raised <type name>"]). expires_at is not
+#     checked here: the lookup's "unexpired" is expires_at > now, and the writer's fence checks it again (step 3).
+# (3) the record: adapter.violation(root, the lease's task_id, the lease's fencing_token, observation, event_id,
+#     recorder, now, append=append, release=release), the existing fourth call, unchanged: "argument" from
+#     violation.argument_findings (an observation whose subject is not the tied lease's task gives "argument:
+#     observation subject is not the task id", violation.py:127-128; nothing is appended and the lease is kept); "core"
+#     for every refusal of violation.record, the fence among them; "done" with decision 'STOP: violation' and released
+#     copied out.
+# (3b) the token removed (D-1529 C1): adapter.violation's result can carry a fencing token by two routes: on "done",
+#     released and core['released'] are the released lease in eventlog.LEASE_KEYS' form, its fencing_token included
+#     (violation.py:197; adapter.py:299; writer.py:483); and when the lease was granted again to another holder before
+#     the release, the release's "token" refusal finding names the held and the given epoch and counter
+#     (writer.py:476-478), which record keeps in core['findings'] after its note "release: nothing released (token)"
+#     (violation.py:198-199), so a live token of another holder would reach the caller. session_violation therefore
+#     returns a new mapping, never the one adapter.violation gave and never a mutated one, in which: released, when a
+#     dict, and core['released'], when a dict, are copies without the key fencing_token (task_id and expires_at kept);
+#     core is a copy of record's result, its appended, duplicate and findings lists copied too (R1-4); and in findings
+#     and in core['findings'] every str that starts with "the lease on " and contains " is held with epoch " (the
+#     writer's token-refusal form, writer.py:477), and every str that holds both "epoch" and "counter" (R2-4), is
+#     replaced by the fixed finding "release: the lease is held with another token (not shown)". The same filter runs
+#     on every result the function returns, step (2)'s copied lookup findings included (R3-5). adapter.violation's
+#     answer that is not a mapping with exactly RESULT_KEYS, or whose core is neither None nor a dict, or whose
+#     findings or core's appended, duplicate or findings is not a list, or whose released or core['released'] is
+#     neither a dict nor None (t69b-R1-4), gives "refused", reason "entry", findings
+#     ["entry: adapter.violation gave no result mapping"] (R1-2, R3-3). An exception raised in step (3b) gives
+#     "refused", reason "entry", findings ["entry: after the record: <type name>"] (R1-3, R2-5): the violation, the
+#     decision and the release may then be in the log and the store (a stated limit below). The result's fencing_token
+#     key is None (adapter.py:73-75). So no fencing token, the session's or another holder's, leaves the core-side
+#     function, and the hook side never holds one (spec 5 :109; D-1524 :30, :120). The fence's findings print no
+#     token (eventlog.py:125-144), so the filter leaves them as they are.
+# (4) no exception escapes session_violation: any exception outside steps (1) to (3b)'s own handling gives "refused",
+#     reason "entry", findings ["entry: <type name>"], never a message; this is the ending of an exception raised by a
+#     stand-in of adapter.violation itself (the real one catches its own, adapter.py:280-299), and violation.record may
+#     then already have appended and released (a stated limit; t69b-R1-3, t69b-R3-2).
+# The token predicate (R3-4; D-1530's note), used by AC4's walk and AC8's property: a result holds a token when, walked
+# recursively through its dicts, lists and tuples, it holds a dict with the keys epoch and counter, a str holding both
+# "epoch" and "counter", or a str holding the epoch value of the store (AC4) or of the generated tokens (AC8).
+# A "lease" refusal is not a section 8 violation (R5-3; spec 5 :82, :112): with no live tied lease there is no session
+# to stop, nothing is recorded and nothing is appended; H2 must not treat a "lease" result as a STOP.
+# One now serves both the lookup and the record (D-1528 C2): the lookup's "unexpired" is expires_at > now
+# (writer.py:1014-1015) and the fence's is expires_at > appended_at (eventlog.py:139-143), and record passes now as
+# appended_at to both appends (violation.py:180-185); so the two agree for one call.
+# The fencing (spec 5 :108-109; D-999 M2's rule kept): no token check of the new function's own; writer.append_event
+# gives eventlog.append the store's held lease on the task (writer.py:249), whose fence refuses unless the lease is on
+# the event's task, its token equals the event's and expires_at > appended_at (eventlog.py:125-144); a refusal
+# appends its own record.added (evidence_type refused_submission, eventlog.py:117-122; writer.py:256-263).
+# What it writes, only through violation.record: violation.detected, the decision STOP: violation, the release of the
+# lease by its token (spec 5 §8; spec 3 :106, :154). It never writes an observed read-set record, a reads row, a
+# session row or any other event (DEF-0084 h4d Y4-6); it never opens the store or the event log itself; it reads no
+# clock, no environment and no standard input (adapter.py's purity statement kept).
+# Stated outcomes and limits (D-1528 C2):
+# - the race between the lookup and the appends: the store (sqlite) and the event log (a file) are not one
+#   transaction; a lease removed between them (released, or expired and removed by the launcher's expiry) or granted
+#   again gives the writer's fence refusal (its refusal record stays in the log) and nothing further: "refused",
+#   "core", fail closed; a re-grant to another holder has a new counter, so the old token cannot append for it; a lease
+#   that only passes its expires_at during the call, its row still present, is judged live by the one now in the
+#   lookup and in both fence checks (R2-1; the fail-open window of an early now, below);
+# - the partial outcome: when violation.detected is appended and the decision append is then refused (for example, by
+#   the fence after the lease is lost between the two appends), the result is "refused", "core", with the violation's
+#   event_id in core's appended and decision None (violation.py:184-187; adapter.py:293-298); the log then holds a
+#   violation with no STOP: violation decision; the violation still makes every later evaluation of the task reject
+#   where the task is evaluable (TASK-053), and the lease, if still held, is released only by its expiry (the
+#   fallback, violation.py's limits) or by a retry; fail closed; a retry by the caller with the same event_id while the
+#   lease is still held completes it (violation.detected gives "duplicate", eventlog.py:180-182, then the decision is
+#   appended), while a different event_id would repeat the observation's record_id (the TASK-054 hazard), so H2 must
+#   reuse the event_id (R2-2; stated, not tested);
+# - an "entry: after the record" result: the violation, the decision and the release may already be in the log and
+#   the store although the result is "refused" (R1-3, R2-5); with the real adapter.violation, step (3b) does not
+#   raise on its results;
+# - a repeat after a "done" call: the lease is released, so the lookup refuses ("lease", findings[0] "no_lease_row:"
+#   when no other lease row exists, R2-3); the duplicate path of violation.record (D-1000 E1) is reached only while
+#   the same lease is still live (a release refused);
+# - the observed read-set record (R5-2; spec 5 :74, :119): the violation path releases the lease with no observed
+#   read-set record; the session's stored reads stay in the store, for specification 5 §11 point 10's record by the
+#   launcher or the next start of the task (H4); nothing here writes or removes them;
+# - the session tie rests on the session id the caller passes (for H2, the environment's, which an agent can set for a
+#   nested runtime; spec 5 :115, A25's limit for a determined agent);
+# - now is taken from the caller (a now earlier than real time would make an expired lease read as live, the
+#   fail-open direction; H2 must take the process clock rounded up, as TASK-068's main does);
+# - one refused command ends the session (spec 5 :80, cost stated) and there is no bound on repeated STOP: violation
+#   (spec 5 §11 point 12);
+# - C6 and P-LOC unmeasured; nothing placed, wired, set or measured; every limit TASK-051 to TASK-068 carried.
+# DEF-0084 taken: h4d Y4-6 ("how the hook's violation path is fenced, and that it never writes an observed read-set
+# record"). Stay deferred: the token-less observe and point 10's paths (H4); h4c Y1-7 (the lock a store lookup takes
+# and its refusal cost: the lookup here is read-only, writer.py:1017-1021, but its cost is reached: a lookup refused
+# "unreadable" during a long commit gives "lease", with no record and no STOP; accepted and stated here, Y1-7 open for
+# H2; R5-4); h4d Y1-3, Y2-6; h4b Y2-6; h4c Y2-10, Y3-2, Y5-7, Y5-9; h4d Y5-7. DEF-0088: not reached (no message is
+# shown); its point 2 (an AIEOS refusal names the corrected form) stays open for H2's messages, since the findings here
+# are fixed strings (R5-5). DEF-0080, DEF-0081, DEF-0082, DEF-0085, DEF-0087,
+# DEF-0089 and DEF-0090: not touched (no change to their modules). Their log lines are written at the records step.
+# Risk: high (risk rules revision 6, §2 point 3: R3 matches every path under src/** and tests/**), computed over the
+# base by script before commit C. GOV-003: every path of the write-set is an evaluator path by the workflow's pinned
+# list, by script; change class critical_cr, as for TASK-060 to TASK-068, ruled at acceptance. Profile
+# (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture [deterministic_rule], functional
+# [integration_test], security [static_security_analysis] and architecture [ai_review (cross-model)], plus the
+# evidence_required of the applicable articles. Reviews: five way-2 reviews on Sonnet 5.5, a Claude model other than
+# the implementer's (Opus 5.5), never Fable (the owner's words of 2026-10-17); and the decision agent's own reviews:
+# INV-003's human_review, OPS-002's human_review and the cross-model half, each its own record (D-1148 Q2).
+# Records: in the readable form, as TASK-068's; per-entry coverage checked by script before the acceptance request
+# (L-0022), and the governor's evaluation over the records reported (D-1098).
+# Naming (D-544 Q3): every new test function names the AC ids it stands for as "TASK-069 ACn" in its own docstring.
+# Evaluation path (A61; as TASK-019 to TASK-068): commit C changes only docs/tasks/TASK-069.yaml and has one parent
+# equal
+# to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-069" and no e-mail address in its message, go to
+# task/TASK-069 under their own decisions; main receives the task only at its acceptance.
+# Not applicable: OPS-001 (the task changes no ref); INV-005 to INV-008, INV-010 and INV-011; GOV-001, GOV-004 to
+# GOV-006 and SEC-003 (no path of the write-set meets them). INV-004 applies: the writer stays the only module that
+# opens the store and the event log. INV-009 applies (reading): the new call appends to the event log, through the
+# writer only, by violation.record.
+# Owner-kept acts: none. No hook placed, no matcher chosen, no Claude Code setting, nothing measured, nothing under
+# .github/ or .claude/, no push of its own; it weakens no evidence requirement; so its acceptance is one delegated
+# approval of the decision agent (Master Plan section 6).
+task: TASK-069
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add the core violation path tied by the live lease (specification 5 §8 and §11 point 7) in standard-library Python 3:
+  in src/aieos_bootstrap/adapter.py a fifth call, session_violation(root, session_id, observation, event_id, recorder,
+  now, lookup=None, append=None, release=None), which finds the session's one live lease through writer.session_lease,
+  takes that lease's task and fencing token core-side and passes them, with the observation, to the existing
+  adapter.violation, so that violation.record appends violation.detected and the decision STOP: violation under the
+  writer's fence and releases the lease; every outcome a mapping with exactly adapter.RESULT_KEYS, no exception
+  escaping and no fencing token in any result. With new modules tests/unit/test_adapter_session.py and
+  tests/property/test_adapter_properties.py and one new class in tests/integration/test_writer_files.py, each new test
+  naming its AC ids in its own docstring; tests/unit/test_adapter.py unchanged.
+traces_to:
+  - docs/specs/spec-05-adapter-contract.md#8
+  - docs/specs/spec-05-adapter-contract.md#11
+  - docs/specs/spec-01-state-and-event-model.md#5
+  - docs/specs/spec-02-aieos-file-format.md#6
+  - docs/specs/risk-rules-gov-aieos.md#2
+input_state:
+  # base_commit and the intent_versions values are filled by script from refs/heads/main just before commit C is made
+  # (D-198 C5).
+  base_commit: 8ac22b0c78e73ffcc941b3b8456c170f2911a174
+  depends_on: [TASK-001, TASK-016, TASK-051, TASK-052, TASK-066, TASK-067, TASK-068]
+  intent_versions:
+    docs/specs/spec-05-adapter-contract.md: c2496023175dcc535974f04c9ec6778101da26fb90a35a5424fbc589c0303601
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 9442edbb9e6e70fcc7ef0b296815315d742c5c9c365e32813e83dbc3a982533b
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # Two paths are new (test_adapter_session.py, test_adapter_properties.py); adapter.py and test_writer_files.py are
+  # changed (additions, and the module docstring of adapter.py, as AC6 and AC7 say). tests/unit/test_adapter.py is not
+  # in the write-set (R3-B2).
+  paths:
+    - src/aieos_bootstrap/adapter.py
+    - tests/unit/test_adapter_session.py
+    - tests/property/test_adapter_properties.py
+    - tests/integration/test_writer_files.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - docs/Deferred/DEF-0084-points-carried-from-the-hook-process-drafts.md
+    - docs/Deferred/DEF-0088-the-claude-apps-own-checks-and-aieoss-flow-after-a-refusal.md
+    - src/aieos_bootstrap/**
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.adapter.violation, aieos_bootstrap.adapter.RESULT_KEYS, aieos_bootstrap.violation.record,
+    aieos_bootstrap.violation.argument_findings, aieos_bootstrap.violation.decision_ids,
+    aieos_bootstrap.writer.session_lease, aieos_bootstrap.writer.append_event,
+    aieos_bootstrap.writer.release_lease_token, aieos_bootstrap.writer.StoreResult, aieos_bootstrap.writer.open_store,
+    aieos_bootstrap.writer.start_session, aieos_bootstrap.writer.grant_lease, aieos_bootstrap.writer.held_leases,
+    aieos_bootstrap.writer.held_lease, aieos_bootstrap.writer.end_session, aieos_bootstrap.writer.log_path,
+    aieos_bootstrap.eventlog.LEASE_KEYS, aieos_bootstrap.records.check_log]
+  schemas: [spec-01 violation.detected (section 5.3), spec-02 event payloads (section 6.3), spec-02 local store tables
+    (section 3)]
+forbidden:
+  # As TASK-068's list: .github/**, .aieos/**, .claude/**, CLAUDE.md, AIEOS-concept.md, docs/**, bench/**,
+  # tests/conformance/**, .gitattributes, .gitignore, and every existing path of src/ and tests/ that is not in the
+  # write-set, src/aieos_bootstrap/writer.py, violation.py, eventlog.py and every hook-side module among them (the list
+  # is filled by script from the base's tree before commit C).
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/writer.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/eventlog.py
+  - tests/unit/test_adapter.py
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/verification_records.py
+  - tests/conformance/fixtures/acc_01.py
+  - tests/conformance/fixtures/acc_02.py
+  - tests/conformance/fixtures/acc_03.py
+  - tests/conformance/fixtures/acc_04.py
+  - tests/conformance/fixtures/acc_05.py
+  - tests/conformance/fixtures/acc_06.py
+  - tests/conformance/fixtures/acc_07.py
+  - tests/conformance/fixtures/acc_08.py
+  - tests/conformance/fixtures/acc_09.py
+  - tests/conformance/fixtures/acc_10.py
+  - tests/conformance/fixtures/acc_11.py
+  - tests/conformance/fixtures/acc_12.py
+  - tests/conformance/fixtures/acc_13.py
+  - tests/conformance/fixtures/acc_14.py
+  - tests/conformance/fixtures/acc_15.py
+  - tests/conformance/fixtures/acc_16.py
+  - tests/conformance/fixtures/acc_17.py
+  - tests/conformance/fixtures/adv_01.py
+  - tests/conformance/fixtures/adv_03.py
+  - tests/conformance/fixtures_cb/adv_02.py
+  - tests/conformance/fixtures_rc/rc_01.py
+  - tests/conformance/fixtures_rc/rc_02.py
+  - tests/conformance/fixtures_rc/rc_03.py
+  - tests/conformance/fixtures_rc/rc_04.py
+  - tests/conformance/fixtures_rc/rc_05.py
+  - tests/conformance/fixtures_rc/rc_06.py
+  - tests/conformance/fixtures_rc/rc_07.py
+  - tests/conformance/fixtures_rc/rc_08.py
+  - tests/conformance/fixtures_rc/rc_09.py
+  - tests/conformance/fixtures_rc/rc_10.py
+  - tests/conformance/fixtures_rc/rc_11.py
+  - tests/conformance/fixtures_risk/risk_01.py
+  - tests/conformance/set.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      session_violation's arguments and result. It returns a mapping with exactly adapter.RESULT_KEYS; result is "done"
+      or "refused"; findings is a list of str; fencing_token is None in every result, and no fencing token appears
+      anywhere in the result by the header's token predicate (header step (3b)). Step (1) of the header refuses,
+      reason "argument", with a fixed finding naming the argument: root not a non-empty str (None, "", bytes);
+      session_id not a non-empty str (None, "", an int); now not a timezone-aware datetime in UTC with whole seconds
+      (naive, a fraction of a second, another offset, a date, a str); an argument whose own methods raise gives
+      "argument: checking the arguments raised <type name>". No later step's function is called after a step-(1)
+      refusal (recording stand-ins). No exception escapes: any exception outside steps (1) to (3b)'s own handling gives
+      "refused", "entry", findings ["entry: <type name>"]; an exception in step (3b) gives ["entry: after the record:
+      <type name>"], shown by a stand-in of adapter.violation whose answer is a dict subclass whose keys, items,
+      values, __iter__, __getitem__, get and copy all raise, so that any way of copying it meets the exception (R1-3,
+      R2-5, R3-3; t69b-R1-2, t69b-R3-1); a stand-in of adapter.violation that raises gives ["entry: <type name>"],
+      not the "after the record" form (t69b-R1-3, t69b-R3-2); a stand-in answer that is not a mapping with exactly
+      RESULT_KEYS, whose core is neither None nor a dict, whose findings or core's appended, duplicate or findings is
+      not a list, or whose released or core['released'] is neither a dict nor None gives ["entry: adapter.violation
+      gave no result mapping"] (R1-2; t69b-R1-4). Equal arguments over an unchanged store and log give equal results;
+      nothing is
+      kept between calls.
+  - AC2: >-
+      The lookup, step (2). lookup is called once, with exactly (root, session_id, now), reached at call time (a
+      test's stand-in is the one called), and by default writer.session_lease. Each writer reason of a "refused" answer
+      ("argument", "root", "no_store", "link", "unreadable", "tables", "lease_row_without_session", "no_lease_row",
+      "session", "ended", "leases") gives "refused", reason "lease", findings the writer's findings as a list, with
+      findings[0] starting "<writer reason>:", and adapter.violation is not called; a "refused" with a str reason and
+      no str finding gives ["lease: the lookup refused (<reason>)"] (R1-1); through the real writer.session_lease, a
+      relative root gives "lease" with findings[0] starting "root:", never "argument" (R1-5); the real lookup refuses
+      it at its root check, after only an os.path.isdir check of the given path (writer.py:154-159, :954-958) and
+      before the store is looked up or any file is opened or written, so this call is allowed in the unit module
+      (t69b-R3-4). A "done" with reason
+      "no_lease_row", a "done" with reason "tied" whose value is None, not a dict, a dict missing or adding a key of
+      _LEASE_KEYS, a task_id not "TASK-" followed by digits, or a fencing_token without _token_form's shape; a
+      "refused" with a non-str reason; a non-StoreResult answer; and an exception raised by lookup: each gives
+      "refused", "lease", findings exactly the header's fixed finding, and adapter.violation is not called. A test
+      asserts that no text of the stand-in's answer (beyond the writer's own findings on "refused") appears in a
+      finding, and that a stand-in's refused findings holding a token (both "epoch" and "counter") come out replaced by
+      the fixed finding (R3-5). A test asserts _LEASE_KEYS == eventlog.LEASE_KEYS.
+  - AC3: >-
+      The record, step (3). On a tied lease, adapter.violation is called once with exactly (root, the lease's task_id,
+      the lease's fencing_token, observation, event_id, recorder, now) and append and release passed through (a
+      recording stand-in of adapter.violation, patched on the module at call time, shows the call); its result is
+      returned unchanged but for the token's removal of header step (3b) (a test compares it with the stand-in's
+      return value: equal but for released's and core['released']'s fencing_token key and the replaced token-refusal
+      findings; the stand-in's own mapping, its core and the nested lists appended, duplicate and findings are not
+      mutated and are not the same objects as the result's (R1-4); a stand-in result whose released and
+      core['released'] carry a token, and whose findings and core['findings'] carry a token-refusal finding and a
+      finding holding both "epoch" and "counter", shows each removal). Through the real
+      adapter.violation with stand-ins for append and release: an observation whose subject is not the lease's task
+      gives "refused", "argument", nothing appended, release not called; record's "fence" on the first append gives
+      "refused", "core", decision None, appended []; the partial outcome (the first append "appended", the second
+      refused by the fence) gives "refused", "core", decision None, the violation's event_id in core's appended; a
+      "done" gives decision 'STOP: violation' and released copied out.
+  - AC4: >-
+      End to end over a real store and event log, in a new class of tests/integration/test_writer_files.py: a store
+      made by writer.open_store in a tempfile folder, a session started and a lease granted to it on a task; a valid
+      violation.detected observation (one observation record, outcome blocking, blocking_kind violation, subject the
+      task, source_class deterministic_tool_local) and a fixed now inside the lease. Cases: the tied call gives "done",
+      decision 'STOP: violation'; the log, checked by records.check_log with no finding, ends with violation.detected
+      and decision.execution (STOP: violation, refers_to the violation's event_id), both carrying the lease's task and
+      token; writer.held_leases is empty; the same call again gives "refused", "lease", findings[0] starting
+      "no_lease_row:" (the lease is released and no other lease row exists; R2-3), and the log is unchanged; a now at or
+      after the lease's expires_at gives "refused", "lease", with findings[0] starting
+      "leases:" (no unexpired lease), and the log unchanged; an ended session: a session s-2 is started and then ended
+      by writer.end_session while the tied session s-1 still holds its lease (so the store holds a lease row), and the
+      call with s-2's id gives "lease", findings[0] starting "ended:"; an unknown session id (with s-1's lease row
+      present) gives "lease", "session:"; an observation for another
+      task gives "refused", "argument", the log unchanged and the lease kept; the race: a lookup stand-in that returns
+      a lease read before the lease was released and granted again to a second session (a new counter) gives
+      "refused", "core", with core's reason "fence", one record.added (evidence_type refused_submission) appended, no
+      violation.detected, and the second lease kept; the partial outcome: an append stand-in that forwards to
+      writer.append_event and, after the first append, releases the lease by its token, gives "refused", "core",
+      decision None, the log holding violation.detected and the fence's record.added and no decision.execution; the
+      release-"token" race (D-1529 C1): a release stand-in that first releases the lease by its token and grants the
+      task again to a second session (a new counter), then forwards to writer.release_lease_token, gives "done",
+      decision 'STOP: violation', released None, the second lease kept, and the fixed finding "release: the lease is
+      held with another token (not shown)" in core's findings. In the done case and in this race case the header's
+      token predicate, with the store's epoch value, finds no token in the result (R3-4). After each case the store's
+      leases and
+      the log's event types are as expected. The project-state files are only the
+      store and the log.
+  - AC5: >-
+      What the module imports and does (INV-001 to INV-004, INV-009). adapter.py's import set is the base's, unchanged:
+      datetime, re, and of aieos_bootstrap execution, gitread, submit, violation and writer (R3-B1; D-1532); the key
+      set is the private constant _LEASE_KEYS, equal to eventlog.LEASE_KEYS by AC2's test; tests/unit/test_adapter.py's
+      R9Purity (:320-345) and R9OwnTests (:348-367) pass unchanged: the new code uses none of the attribute names
+      R9Purity refuses (now, utcnow, today, time, environ, getenv, system, popen, open) and none of its refused names
+      (open, exec, eval, compile, __import__), and the docstring keeps its six pinned phrases and never holds "called
+      only by this function"; the new function calls of writer only session_lease by default
+      (as lookup) and passes append and release through; it opens no file, starts no process, reads no clock, no
+      environment and no standard input, makes no network or model call, names no string with the project-state
+      directory, and uses no exec, eval, compile, __import__, importlib or assert (a check over its AST). TASK-068's
+      separation check (tests/unit/test_claude_code_read_hook.py) passes unchanged, and no hook-side module names
+      session_violation (a test over the six hook-side modules' text). At the task's commits the CI steps report no
+      finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit.
+  - AC6: >-
+      What is stated. adapter.py's module docstring adds a paragraph for the fifth call: the tie by the session id and
+      the one live lease (spec 5 :109, with :108 for the environment), the token read core-side and never returned
+      (the two routes of header step (3b), their removal and the epoch-and-counter rule), the flow (1) to (4), that a
+      "lease" refusal is no section 8 violation and no STOP (R5-3), the "entry: after the record" outcome (R1-3), the
+      retry with the same event_id after a partial outcome (R2-2), the observed read-set record left for point 10
+      (R5-2), the
+      lookup's reasons kept as findings[0]'s prefix under reason "lease", that "lease_row_without_session" and a
+      "no_lease_row" done cannot arise with a session id required, one now for the lookup and the record, the
+      observation's subject required to be the tied lease's task, the race and the partial outcome as stated limits,
+      the repeat after "done", the session tie and now as the caller's (the fail-open direction of an early now), what
+      it never writes, and that nothing hook-side calls it yet (H2's). The existing paragraphs are unchanged. No
+      docstring or other string constant of adapter.py contains the project-state directory's name (the workflow's
+      INV-004 rule).
+  - AC7: >-
+      Its own tests and the changed ones (GOV-003). Every new test function names the AC ids it stands for as
+      "TASK-069 ACn" in its own docstring; no other task's AC is named in qualified form in a new test. In adapter.py
+      every function, class and module-level assignment present at the base is byte-identical, and only the module
+      docstring (AC6) and new definitions are added, with no import line added or changed; tests/unit/test_adapter.py
+      is not changed at all (R3-B2); in tests/integration/test_writer_files.py every top-level and class-level function
+      and class present at the base is
+      byte-identical and none is removed, and nothing else changes but added functions, classes and module-level
+      assignments of new names, and the imports they need. An acceptance-time script by source segment (as TASK-068
+      AC8's) lists every changed definition and refuses any not allowed here. Before each commit the added text is
+      scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns, each count 0. Every test is buildable under
+      deterministic_rule: real stores, sqlite3 and tempfile only in tests/integration/test_writer_files.py; the unit and
+      property modules use stand-ins only (but for AC2's one call of the real writer.session_lease with a relative
+      root, t69b-R3-4), write no file and read sources only by pathlib's read_bytes on paths relative to __file__;
+      tests/integration/test_ac_tests_tree.py and every other existing test pass unchanged, and the new test names
+      leave its ambiguous-key count (EXPECTED_AMBIGUOUS) unchanged, shown by the suite run before the task's commit
+      (t69b-R3-3); no real path of this machine's user folders, no real session id, no credential-shaped
+      string, no literal "/tmp".
+  - AC8: >-
+      Tests, each rule with at least one passing and one failing case: R1 AC1; R2 AC2 (each writer reason, each shape
+      ending, the exception); R3 AC3; R4 AC4 as stated; R5 AC5 by the in-suite AST and text checks; R6 AC6 by an
+      in-suite check of the docstring words, matched with whitespace collapsed (D-1286); R7 AC7 by the acceptance-time
+      script and one run of it against a deliberately weakened copy (one more definition allowed than listed); and
+      property tests (standard library only, fixed seeds, at most 50 cases each): over generated lookup answers and
+      arguments (stand-ins for lookup and adapter.violation, the latter's results generated with tokens in released,
+      core['released'] and token-refusal findings; the generator puts epoch values only in released,
+      core['released'] and the two filtered finding forms, each generated epoch at least 16 characters long, distinct
+      from the others and not a substring of any fixed finding text; t69b-R1-1), the result has exactly RESULT_KEYS,
+      fencing_token is always None,
+      no fencing token appears anywhere in the result (the header's token predicate, with the generated epochs; R3-4),
+      adapter.violation is called only after a tied lease of the checked shape and then with that lease's
+      task and token, and equal inputs give equal results. Broken copies are made and run in the scratchpad, outside
+      tests/, as for TASK-059 to TASK-068, and each fails at least one test: released returned with its fencing_token;
+      core['released'] returned with its fencing_token; the token-refusal finding kept in core['findings']; the
+      stand-in's result mutated in place instead of copied; the nested lists shared instead of copied; the
+      epoch-and-counter rule removed; the filter not run on the lookup's findings; the empty-findings fallback removed;
+      the "after the record" finding given as plain "entry: <type name>"; a non-mapping answer of adapter.violation
+      passed through; the lookup made without the session id
+      (None passed); a session_id of "" accepted; a naive now accepted; the token returned in the result; the task
+      taken from the observation's subject instead of the lease; the lease's shape check removed; a "done" with
+      "no_lease_row" accepted as tied; the writer's findings dropped on "refused"; the writer's reason used as the
+      result's reason; adapter.violation called after a refused lookup; a second now (a fresh one) passed to the record;
+      an exception let escape; a check of its own of the token against the lease (a second fence: it compares the
+      tied lease's token with a fresh writer.held_lease of the task and refuses when they are equal, inverted; R3-6),
+      which the "done" cases catch; the new function opening the log itself; adapter.py importing eventlog (R9Purity
+      catches it); a pinned docstring phrase removed (one per word check);
+      and a hook-side module calling session_violation. The copy-making script refuses any copy whose edit text is not
+      found exactly once. tests/run_tests.py, unchanged, runs the tests.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC8]}
+  - {gate: G3, check: constitution, args: [AC5, AC6, AC7, INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003,
+    SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
