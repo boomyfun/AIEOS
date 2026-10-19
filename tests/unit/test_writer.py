@@ -620,9 +620,9 @@ class R11SessionLease(Case):
         self.store()
         self.session()
         self.grant()
-        self.sql('CREATE TABLE reads (task_id TEXT)')
+        self.sql('CREATE TABLE extra (task_id TEXT)')
         self.refused(self.lookup(), 'tables')
-        self.sql('DROP TABLE reads', "INSERT INTO store (epoch, counter) VALUES ('x', 0)")
+        self.sql('DROP TABLE extra', "INSERT INTO store (epoch, counter) VALUES ('x', 0)")
         self.refused(self.lookup(), 'tables')
         self.sql("DELETE FROM store WHERE epoch = 'x'")
         self.assertEqual(self.lookup().reason, 'tied')
@@ -812,9 +812,24 @@ class R13PresenceAndLink(Case):
             with self.subTest(other=other):
                 r = self.with_realpath({self.root: other}, normcase=ntpath.normcase)
                 self.assertEqual((r.reason, r.value), ('tied', self.lease))
+        from unittest import mock
         short = os.path.join(self.root, '.')
-        r = self.with_realpath({short: rroot})
+        keyed = {writer.store_path(short): os.path.join(rroot, '.aieos', 'local', 'state.sqlite'), short: rroot}
+        hits = dict.fromkeys(keyed, 0)
+        real = writer.os.path.realpath
+
+        def counting(p, *a, **k):
+            if p in keyed:
+                hits[p] += 1
+                return keyed[p]
+            return real(p, *a, **k)
+        with mock.patch.object(writer.os.path, 'realpath', counting):
+            r = writer.session_lease(short, 's-1', T0)
+        for p in keyed:
+            with self.subTest(keyed=p):
+                self.assertGreaterEqual(hits[p], 1)
         self.assertNotEqual(r.reason, 'link')
+        self.assertEqual((r.reason, r.value), ('tied', self.lease))
         self.assertEqual(writer.session_lease(short, 's-1', T0).reason, 'tied')
 
     def test_a_raising_check_or_uri(self):
@@ -881,6 +896,835 @@ class R14WhatTheWriterSays(unittest.TestCase):
                       'fail-open direction', 'process clock', 'No hook is placed', 'nothing measured', 'CC-3', 'C6'):
             with self.subTest(words=words):
                 self.assertIn(words, doc)
+
+
+# ---- task TASK-067: the reads table and the read-set accumulation ----
+
+class ReadsCase(Case):
+    """A store with session s-1 and one live lease of it on TASK-067, and helpers over a test connection."""
+
+    def tied(self, task='TASK-067', until=None):
+        self.store()
+        self.session()
+        return self.grant(task=task, until=until).value
+
+    def sql(self, *statements):
+        con = sqlite3.connect(writer.store_path(self.root), isolation_level=None)
+        try:
+            out = None
+            for s in statements:
+                out = con.execute(s).fetchall()
+            return out
+        finally:
+            con.close()
+
+    def rows(self):
+        return self.sql('SELECT session_id, task_id, seq, path FROM reads ORDER BY rowid')
+
+    def dump(self):
+        con = sqlite3.connect(writer.store_path(self.root), isolation_level=None)
+        try:
+            out = {}
+            for (name,) in con.execute("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"):
+                out[name] = con.execute('SELECT * FROM "%s" ORDER BY rowid' % name).fetchall()
+            return out
+        finally:
+            con.close()
+
+    def refused(self, r, reason):
+        self.assertEqual((r.result, r.reason, r.value, len(r.findings)), ('refused', reason, None, 1), r)
+        self.assertTrue(r.findings[0].startswith(reason + ': '), r.findings)
+
+    def add(self, paths, sid='s-1', now=T0, timeout=5.0, root=None):
+        return writer.add_reads(self.root if root is None else root, sid, paths, now, timeout)
+
+
+class R15ReadsTable(ReadsCase):
+    """TASK-067's rule R1: the four-table form and its constraints."""
+
+    def test_the_four_table_form_is_created(self):
+        """TASK-067 AC1 and TASK-067 AC9: open_store creates the four tables, sqlite_master holds exactly them and their
+        automatic indexes and no sqlite_sequence, and reads is an ordinary rowid table."""
+        self.store()
+        names = self.sql("SELECT type, name FROM sqlite_master ORDER BY name")
+        tables = sorted(n for t, n in names if t == 'table')
+        self.assertEqual(tables, ['leases', 'reads', 'sessions', 'store'])
+        self.assertEqual(sorted(t for t, n in names), ['index'] * (len(names) - 4) + ['table'] * 4)
+        self.assertTrue(all(n.startswith('sqlite_autoindex_') for t, n in names if t == 'index'))
+        self.assertNotIn('sqlite_sequence', [n for _, n in names])
+        self.assertEqual(writer.TABLES['reads'], ('session_id', 'task_id', 'seq', 'path'))
+        self.sql("INSERT INTO reads (session_id, task_id, seq, path) VALUES ('s', 'TASK-1', 0, 'a')")
+        self.assertEqual(self.sql('SELECT rowid FROM reads'), [(1,)])
+        self.assertEqual(writer.open_store(self.root, 'epoch-1')['epoch'], 'epoch-1')
+
+    def test_the_constraints_hold(self):
+        """TASK-067 AC1 and TASK-067 AC9: a duplicate (session, task, path), a duplicate (session, task, seq) and a
+        NULL in each column raise sqlite3.IntegrityError through a test connection."""
+        self.store()
+        self.sql("INSERT INTO reads (session_id, task_id, seq, path) VALUES ('s', 'TASK-1', 0, 'a')")
+        bad = ["INSERT INTO reads (session_id, task_id, seq, path) VALUES ('s', 'TASK-1', 1, 'a')",
+               "INSERT INTO reads (session_id, task_id, seq, path) VALUES ('s', 'TASK-1', 0, 'b')",
+               "INSERT INTO reads (session_id, task_id, seq, path) VALUES (NULL, 'TASK-1', 2, 'c')",
+               "INSERT INTO reads (session_id, task_id, seq, path) VALUES ('s', NULL, 3, 'd')",
+               "INSERT INTO reads (session_id, task_id, seq, path) VALUES ('s', 'TASK-1', NULL, 'e')",
+               "INSERT INTO reads (session_id, task_id, seq, path) VALUES ('s', 'TASK-1', 4, NULL)"]
+        for s in bad:
+            with self.subTest(s=s):
+                with self.assertRaises(sqlite3.IntegrityError):
+                    self.sql(s)
+
+    def test_a_three_table_store_is_refused(self):
+        """TASK-067 AC1 and TASK-067 AC9: on a store whose reads table a test connection dropped, open_store and every
+        existing writer function raise, session_lease gives "tables", and add_reads, stored_reads and remove_reads
+        give "tables"; _check_schema's message names reads."""
+        self.tied()
+        self.sql('DROP TABLE reads')
+        with self.assertRaises(ValueError) as cm:
+            writer.open_store(self.root)
+        self.assertIn('reads', str(cm.exception))
+        for call in (lambda: writer.start_session(self.root, 's-2', 'agent-2', T0),
+                     lambda: writer.end_session(self.root, 's-1', T0),
+                     lambda: writer.grant_lease(self.root, 'TASK-002', 'READY', 'agent-1', 's-1', T0, T0 + H1),
+                     lambda: writer.release_lease(self.root, 'TASK-067'), lambda: writer.expire_leases(self.root, T0),
+                     lambda: writer.held_lease(self.root, 'TASK-067'), lambda: writer.held_leases(self.root)):
+            with self.subTest(call=call):
+                with self.assertRaises(ValueError):
+                    call()
+        self.refused(writer.session_lease(self.root, 's-1', T0), 'tables')
+        self.refused(self.add(['a']), 'tables')
+        self.refused(writer.stored_reads(self.root, 's-1', 'TASK-067'), 'tables')
+        self.refused(writer.remove_reads(self.root, 's-1', 'TASK-067'), 'tables')
+
+    def test_a_reads_table_without_the_constraints_passes_the_check(self):
+        """TASK-067 AC1 and TASK-067 AC9: a reads table whose columns match but whose constraints are missing passes
+        _check_schema (a stated limit)."""
+        self.tied()
+        self.sql('DROP TABLE reads', 'CREATE TABLE reads (session_id, task_id, seq, path)')
+        self.assertEqual(self.add(['a']).value, 1)
+
+
+class R16AddReads(ReadsCase):
+    """TASK-067's rule R2: add_reads' arguments, order, bounds, seq and cases over real stores."""
+
+    def test_paths_are_added_once_in_first_seen_order(self):
+        """TASK-067 AC2 and TASK-067 AC9: an added path, a path repeated in one call and a path stored before are
+        each kept once; the seq values read through a test connection are 0, 1, 2 across calls; a tuple is accepted;
+        numeric-looking and whitespace paths come back unchanged as text."""
+        self.tied()
+        self.assertEqual(self.add(['a', 'b', 'a']).value, 2)
+        self.assertEqual(self.add(('b', '007', '1e3', ' ')).value, 3)
+        self.assertEqual(self.rows(), [('s-1', 'TASK-067', 0, 'a'), ('s-1', 'TASK-067', 1, 'b'), ('s-1', 'TASK-067', 2, '007'),
+                                       ('s-1', 'TASK-067', 3, '1e3'), ('s-1', 'TASK-067', 4, ' ')])
+        self.assertEqual(writer.stored_reads(self.root, 's-1', 'TASK-067').value, ['a', 'b', '007', '1e3', ' '])
+
+    def test_the_next_seq_is_the_largest_plus_one(self):
+        """TASK-067 AC2 and TASK-067 AC9: after a gap made by a test connection, the next seq is the largest stored
+        plus one, not the count."""
+        self.tied()
+        self.add(['a', 'b', 'c'])
+        self.sql("DELETE FROM reads WHERE path = 'b'")
+        self.add(['d'])
+        self.assertEqual([r[2:] for r in self.rows()], [(0, 'a'), (2, 'c'), (3, 'd')])
+
+    def test_two_tasks_of_one_session_are_kept_apart(self):
+        """TASK-067 AC2 and TASK-067 AC9: the task is the lease's; a lease released and another granted keeps the
+        reads of each task apart."""
+        self.tied()
+        self.add(['a'])
+        writer.release_lease(self.root, 'TASK-067')
+        self.grant(task='TASK-068')
+        self.add(['a', 'b'])
+        self.assertEqual(writer.stored_reads(self.root, 's-1', 'TASK-067').value, ['a'])
+        self.assertEqual(writer.stored_reads(self.root, 's-1', 'TASK-068').value, ['a', 'b'])
+
+    def test_an_empty_list(self):
+        """TASK-067 AC2 and TASK-067 AC9: an empty list gives "done" 0 with a live lease and is refused without one."""
+        self.store()
+        self.session()
+        self.refused(self.add([]), 'no_lease_row')
+        self.grant(task='TASK-067')
+        self.assertEqual((self.add([]).result, self.add([]).value), ('done', 0))
+
+    def test_each_bad_argument(self):
+        """TASK-067 AC2 and TASK-067 AC9: each bad session id, paths, now and timeout gives "argument", before the root
+        (a missing one); a str subclass session id and a list subclass are refused; a raising tzinfo too."""
+
+        class S(str):
+            pass
+
+        class L(list):
+            pass
+
+        class Raising(datetime.tzinfo):
+            def utcoffset(self, dt):
+                raise RuntimeError('made-up')
+        missing = os.path.join(self.root, 'absent')
+        cases = [dict(sid=''), dict(sid=None), dict(sid=7), dict(sid=S('s-1')), dict(sid='s-\ud800'),
+                 dict(paths='a'), dict(paths=None), dict(paths=L(['a'])), dict(paths={'a'}),
+                 dict(now=T0.replace(tzinfo=None)), dict(now=T0.replace(microsecond=1)),
+                 dict(now=T0.astimezone(datetime.timezone(H1))), dict(now=T0.date()),
+                 dict(now=T0.replace(tzinfo=Raising())), dict(timeout=True), dict(timeout=0), dict(timeout=61),
+                 dict(timeout=float('inf')), dict(timeout=float('nan')), dict(timeout='5'), dict(timeout=None)]
+        for kw in cases:
+            paths = kw.pop('paths', ['a'])
+            with self.subTest(kw=kw, paths=paths):
+                self.refused(self.add(paths, root=missing, **kw), 'argument')
+        self.refused(self.add(['a'], root=missing), 'root')
+
+    def test_each_bad_path(self):
+        """TASK-067 AC2 and TASK-067 AC9: a path not exactly a str (a str subclass among them), empty, holding NUL,
+        longer than 4096 characters or holding a lone surrogate gives "path", before any store read; 4096 passes."""
+
+        class S(str):
+            pass
+        self.tied()
+        for bad in (S('a'), 7, None, '', 'a\x00b', 'x' * 4097, 'a\ud800'):
+            with self.subTest(bad=bad):
+                self.refused(self.add(['ok', bad]), 'path')
+        self.assertEqual(self.rows(), [])
+        self.assertEqual(self.add(['x' * 4096]).value, 1)
+
+    def test_the_earlier_reason_wins(self):
+        """TASK-067 AC2 and TASK-067 AC9: an argument and a path error give "argument"; an early bound and a path error
+        "bound"; a path error on a store with no lease row "path"; a bad path on a missing root "path"."""
+        self.store()
+        self.refused(self.add(['']), 'path')
+        self.refused(self.add([''], timeout=0), 'argument')
+        self.refused(self.add(['a'] * 10000 + ['']), 'bound')
+        self.refused(self.add([''], root=os.path.join(self.root, 'absent')), 'path')
+
+    def test_the_bounds(self):
+        """TASK-067 AC2 and TASK-067 AC9: 10000 paths in one call pass and 10001 are refused early; with 9999 stored
+        one new and one duplicate pass and two new are refused; with exactly 10000 stored a duplicate and an empty list
+        pass with 0 and a new path is refused; nothing changes on a refusal."""
+        self.tied()
+        self.refused(self.add(['p%d' % i for i in range(10001)]), 'bound')
+        self.assertEqual(self.rows(), [])
+        self.assertEqual(self.add(['p%d' % i for i in range(10000)]).value, 10000)
+        self.assertEqual(writer.remove_reads(self.root, 's-1', 'TASK-067').value, 10000)
+        self.assertEqual(self.add(['p%d' % i for i in range(9999)]).value, 9999)
+        before = self.dump()
+        self.refused(self.add(['n1', 'n2']), 'bound')
+        self.assertEqual(self.dump(), before)
+        self.assertEqual(self.add(['n1', 'p0']).value, 1)
+        self.assertEqual(self.add(['n1', 'p0']).value, 0)
+        self.assertEqual(self.add([]).value, 0)
+        self.refused(self.add(['n2']), 'bound')
+
+    def test_a_stored_count_above_the_bound(self):
+        """TASK-067 AC2 and TASK-067 AC9: more than 10000 stored rows (written by a test connection) refuse "bound"
+        before any path is read."""
+        self.tied()
+        con = sqlite3.connect(writer.store_path(self.root), isolation_level=None)
+        try:
+            con.executemany('INSERT INTO reads (session_id, task_id, seq, path) VALUES (?, ?, ?, ?)',
+                            [('s-1', 'TASK-067', i, 'p%d' % i) for i in range(10001)])
+        finally:
+            con.close()
+        self.refused(self.add(['p0']), 'bound')
+
+    def test_the_live_lease_reasons(self):
+        """TASK-067 AC2 and TASK-067 AC9: no lease row, no such session, an ended session, zero and two live leases,
+        and a malformed stored time give the helper's reasons; nothing is stored."""
+        self.store()
+        self.session()
+        self.refused(self.add(['a']), 'no_lease_row')
+        self.session('s-2', 'agent-2')
+        self.grant(task='TASK-002', holder='agent-2', sid='s-2')
+        self.refused(self.add(['a'], sid='s-9'), 'session')
+        self.refused(self.add(['a']), 'leases')
+        self.grant(task='TASK-003', until=T0 + datetime.timedelta(minutes=5))
+        self.grant(task='TASK-004')
+        self.refused(self.add(['a']), 'leases')
+        self.assertEqual(self.add(['a'], now=T0 + datetime.timedelta(minutes=5)).value, 1)
+        writer.end_session(self.root, 's-2', T0)
+        self.refused(self.add(['a'], sid='s-2'), 'ended')
+        self.sql("UPDATE leases SET expires_at = 'soon' WHERE task_id = 'TASK-004'")
+        r = self.add(['b'])
+        self.assertEqual((r.reason, r.findings), ('unreadable', ('unreadable: ValueError',)))
+
+    def test_a_lease_whose_task_id_is_out_of_form(self):
+        """TASK-067 AC2, TASK-067 AC4 and TASK-067 AC9: a lease row whose task_id fails the writer's form (a number, a
+        blob) gives "unreadable" with the fixed finding, while session_lease gives "tied"."""
+        self.tied()
+        for value in ('7', "x'00'", "'task-1'"):
+            with self.subTest(value=value):
+                self.sql('UPDATE leases SET task_id = %s' % value)
+                r = self.add(['a'])
+                self.assertEqual((r.reason, r.findings),
+                                 ('unreadable', ("unreadable: the lease's task id is not in the writer's form",)))
+                self.assertEqual(writer.session_lease(self.root, 's-1', T0).reason, 'tied')
+        self.assertEqual(self.rows(), [])
+
+    def test_a_malformed_stored_seq(self):
+        """TASK-067 AC2 and TASK-067 AC9: a stored seq that is not a number (a test connection, on a table without the
+        constraints) gives "unreadable" and stores nothing."""
+        self.tied()
+        self.sql('DROP TABLE reads', 'CREATE TABLE reads (session_id, task_id, seq, path)',
+                 "INSERT INTO reads VALUES ('s-1', 'TASK-067', 'x', 'a')")
+        r = self.add(['b'])
+        self.assertEqual((r.reason, r.findings), ('unreadable', ('unreadable: TypeError',)))
+        self.assertEqual(len(self.rows()), 1)
+
+    def test_a_held_write_lock_and_the_timeout(self):
+        """TASK-067 AC2 and TASK-067 AC9: while another connection holds BEGIN IMMEDIATE, add_reads with a timeout of
+        about 0.2 gives "unreadable"; the timeout is passed to connect (a recording stand-in)."""
+        from unittest import mock
+        self.tied()
+        con = sqlite3.connect(writer.store_path(self.root), isolation_level=None)
+        try:
+            con.execute('BEGIN IMMEDIATE')
+            self.refused(self.add(['a'], timeout=0.2), 'unreadable')
+        finally:
+            con.close()
+        seen = []
+        real = sqlite3.connect
+
+        def recording(*a, **k):
+            seen.append(k.get('timeout'))
+            return real(*a, **k)
+        with mock.patch.object(writer.sqlite3, 'connect', recording):
+            self.assertEqual(self.add(['a'], timeout=7).value, 1)
+        self.assertEqual(seen, [7])
+
+    def test_a_garbage_and_a_zero_byte_store(self):
+        """TASK-067 AC2 and TASK-067 AC9: a 0-byte store file gives "tables" and a garbage file "unreadable", for
+        add_reads, stored_reads and remove_reads."""
+        from unittest import mock
+        with mock.patch.object(writer, '_SCHEMA', ('CREATE TABLE broken (',)):
+            with self.assertRaises(sqlite3.Error):
+                writer.open_store(self.root, 'epoch-1')
+        calls = (lambda: self.add(['a']), lambda: writer.stored_reads(self.root, 's-1', 'TASK-067'),
+                 lambda: writer.remove_reads(self.root, 's-1', 'TASK-067'))
+        for call in calls:
+            self.refused(call(), 'tables')
+        with open(writer.store_path(self.root), 'ab') as f:
+            f.write(b'made-up bytes, not a store. ' * 5)
+        for call in calls:
+            self.refused(call(), 'unreadable')
+
+
+class R17StoredAndRemoved(ReadsCase):
+    """TASK-067's rule R3: stored_reads and remove_reads, and the presence step of the four functions."""
+
+    def test_order_count_and_scope(self):
+        """TASK-067 AC3 and TASK-067 AC9: stored_reads gives the paths in seq order (empty when none) and changes no
+        byte; remove_reads removes only that session's and task's rows and gives the DELETE's count."""
+        self.tied()
+        self.add(['b', 'a'])
+        self.sql("INSERT INTO reads VALUES ('s-2', 'TASK-067', 0, 'x')", "INSERT INTO reads VALUES ('s-1', 'TASK-1', 0, 'y')")
+        before = read(writer.store_path(self.root))
+        self.assertEqual(writer.stored_reads(self.root, 's-1', 'TASK-067').value, ['b', 'a'])
+        self.assertEqual(writer.stored_reads(self.root, 's-9', 'TASK-067').value, [])
+        self.assertEqual(read(writer.store_path(self.root)), before)
+        r = writer.remove_reads(self.root, 's-1', 'TASK-067')
+        self.assertEqual((r.result, r.value), ('done', 2))
+        self.assertEqual(sorted(x[:2] for x in self.rows()), [('s-1', 'TASK-1'), ('s-2', 'TASK-067')])
+        self.assertEqual(writer.remove_reads(self.root, 's-1', 'TASK-067').value, 0)
+
+    def test_a_seq_tie_is_ordered_by_rowid(self):
+        """TASK-067 AC3 and TASK-067 AC9: on a reads table without the constraints, two rows with one seq come back in
+        rowid order."""
+        self.tied()
+        self.sql('DROP TABLE reads', 'CREATE TABLE reads (session_id, task_id, seq, path)',
+                 "INSERT INTO reads VALUES ('s-1', 'TASK-067', 1, 'b')", "INSERT INTO reads VALUES ('s-1', 'TASK-067', 1, 'a')",
+                 "INSERT INTO reads VALUES ('s-1', 'TASK-067', 0, 'c')")
+        self.assertEqual(writer.stored_reads(self.root, 's-1', 'TASK-067').value, ['c', 'b', 'a'])
+
+    def test_a_stored_path_that_is_not_text(self):
+        """TASK-067 AC3 and TASK-067 AC9: a stored path that is not a str gives "unreadable" with the fixed finding."""
+        self.tied()
+        self.sql('DROP TABLE reads', 'CREATE TABLE reads (session_id, task_id, seq, path)',
+                 "INSERT INTO reads VALUES ('s-1', 'TASK-067', 0, 7)")
+        r = writer.stored_reads(self.root, 's-1', 'TASK-067')
+        self.assertEqual((r.reason, r.findings), ('unreadable', ('unreadable: a stored path is not text',)))
+
+    def test_no_lease_is_checked(self):
+        """TASK-067 AC3 and TASK-067 AC9 (D-1395 M2): both work for a session with no lease, an expired lease, an ended
+        session and an unknown session id."""
+        self.tied(until=T0 + datetime.timedelta(minutes=5))
+        self.add(['a'])
+        self.sql("INSERT INTO reads VALUES ('s-9', 'TASK-067', 0, 'z')")
+        writer.expire_leases(self.root, T0 + H1)
+        self.assertEqual(writer.stored_reads(self.root, 's-1', 'TASK-067').value, ['a'])
+        writer.end_session(self.root, 's-1', T0 + H1)
+        self.assertEqual(writer.stored_reads(self.root, 's-1', 'TASK-067').value, ['a'])
+        self.assertEqual(writer.stored_reads(self.root, 's-9', 'TASK-067').value, ['z'])
+        self.assertEqual(writer.remove_reads(self.root, 's-1', 'TASK-067').value, 1)
+        self.assertEqual(writer.remove_reads(self.root, 's-9', 'TASK-067').value, 1)
+
+    def test_each_bad_argument_and_root(self):
+        """TASK-067 AC3 and TASK-067 AC9: bad session ids, task ids and timeouts give "argument", a bad root "root"."""
+
+        class S(str):
+            pass
+        self.tied()
+        missing = os.path.join(self.root, 'absent')
+        for fn in (writer.stored_reads, writer.remove_reads):
+            for sid, task, timeout in (('', 'TASK-067', 5), (S('s-1'), 'TASK-067', 5), ('s-1', 'task-1', 5), ('s-1', S('TASK-067'), 5),
+                                       ('s-1', None, 5), ('s-1', 'TASK-067', 0), ('s-1', 'TASK-067', True)):
+                with self.subTest(fn=fn, sid=sid, task=task, timeout=timeout):
+                    self.refused(fn(missing, sid, task, timeout), 'argument')
+            for bad in (missing, 'relative', '', None, writer.store_path(self.root)):
+                with self.subTest(fn=fn, bad=bad):
+                    self.refused(fn(bad, 's-1', 'TASK-067'), 'root')
+
+    def test_the_read_helper_fails_closed(self):
+        """TASK-067 AC3 and TASK-067 AC9: stored_reads gives "unreadable" when ROLLBACK or close fails (a connect
+        stand-in), and a failed BEGIN DEFERRED skips ROLLBACK; the timeout is passed to connect (a recording
+        stand-in)."""
+        from unittest import mock
+        self.tied()
+        real = sqlite3.connect
+
+        class Wrap:
+            def __init__(self, con, fail):
+                self.con, self.fail, self.ran = con, fail, []
+
+            @property
+            def in_transaction(self):
+                return self.con.in_transaction
+
+            def execute(self, s, *a):
+                self.ran.append(s)
+                if s == self.fail:
+                    raise sqlite3.OperationalError('made-up')
+                return self.con.execute(s, *a)
+
+            def close(self):
+                self.con.close()
+                if self.fail == 'close':
+                    raise sqlite3.OperationalError('made-up')
+        for fail in ('ROLLBACK', 'close', 'BEGIN DEFERRED'):
+            made = []
+
+            def connect(*a, **k):
+                made.append(Wrap(real(*a, **k), fail))
+                return made[-1]
+            with self.subTest(fail=fail):
+                with mock.patch.object(writer.sqlite3, 'connect', connect):
+                    r = writer.stored_reads(self.root, 's-1', 'TASK-067')
+                self.assertEqual((r.result, r.reason), ('refused', 'unreadable'))
+                if fail == 'BEGIN DEFERRED':
+                    self.assertNotIn('ROLLBACK', made[0].ran)
+        seen = []
+
+        def recording(*a, **k):
+            seen.append(k.get('timeout'))
+            return real(*a, **k)
+        with mock.patch.object(writer.sqlite3, 'connect', recording):
+            self.assertEqual(writer.stored_reads(self.root, 's-1', 'TASK-067', timeout=7).result, 'done')
+        self.assertEqual(seen, [7])
+
+    def test_the_presence_step_of_the_four_functions(self):
+        """TASK-067 AC3 and TASK-067 AC9: through the stand-ins of R13's form, each of the four functions gives
+        "no_store", "unreadable" (an lstat OSError, a ValueError) and "link" (a directory, a raising realpath, a
+        realpath elsewhere), each with the same reason and finding as session_lease."""
+        import types
+        from unittest import mock
+        self.tied()
+        path = writer.store_path(self.root)
+        rroot = os.path.realpath(self.root)
+        calls = {'add_reads': lambda: self.add(['a']), 'stored_reads': lambda: writer.stored_reads(self.root, 's-1', 'TASK-067'),
+                 'remove_reads': lambda: writer.remove_reads(self.root, 's-1', 'TASK-067'),
+                 'migrate_store': lambda: writer.migrate_store(self.root),
+                 'session_lease': lambda: writer.session_lease(self.root, 's-1', T0)}
+        lstat, realpath = writer.os.lstat, writer.os.path.realpath
+
+        def with_lstat(effect):
+            def fake(p, *a, **k):
+                if p == path:
+                    if isinstance(effect, BaseException):
+                        raise effect
+                    return types.SimpleNamespace(st_mode=effect)
+                return lstat(p, *a, **k)
+            return mock.patch.object(writer.os, 'lstat', fake)
+
+        def with_realpath(effect):
+            def fake(p, *a, **k):
+                if p == path:
+                    if isinstance(effect, BaseException):
+                        raise effect
+                    return effect
+                return realpath(p, *a, **k)
+            return mock.patch.object(writer.os.path, 'realpath', fake)
+        stands = [(with_lstat(FileNotFoundError('x')), 'no_store'), (with_lstat(PermissionError('x')), 'unreadable'),
+                  (with_lstat(ValueError('x')), 'unreadable'), (with_lstat(0o040755), 'link'),
+                  (with_realpath(RuntimeError('x')), 'link'),
+                  (with_realpath(os.path.join(rroot, '.aieos', 'local', 'other.sqlite')), 'link')]
+        for patcher, reason in stands:
+            got = {}
+            for name, call in calls.items():
+                with patcher:
+                    got[name] = call()
+            with self.subTest(reason=reason):
+                for name, r in got.items():
+                    self.assertEqual((name, r.result, r.reason, r.findings),
+                                     (name, 'refused', reason, got['session_lease'].findings))
+
+
+class R18TheSharedRule(ReadsCase):
+    """TASK-067's rule R4: the live-lease helper through both callers, and session_lease's exact findings."""
+
+    def test_session_lease_findings_are_unchanged(self):
+        """TASK-067 AC4 and TASK-067 AC9 (D-1395 M3): session_lease's exact finding for each refusal reason with fixed
+        text, the strings copied by hand from the base text of writer.py, never imported."""
+        self.store()
+        self.session()
+        self.assertEqual(writer.session_lease(self.root, 's-1', T0).findings,
+                         ('no_lease_row: the store holds no lease row',))
+        self.session('s-2', 'agent-2')
+        self.grant(task='TASK-002', holder='agent-2', sid='s-2')
+        self.assertEqual(writer.session_lease(self.root, None, T0).findings,
+                         ('lease_row_without_session: the store holds a lease row',))
+        self.assertEqual(writer.session_lease(self.root, 's-9', T0).findings, ('session: no session with this id',))
+        self.assertEqual(writer.session_lease(self.root, 's-1', T0).findings,
+                         ('leases: not exactly one unexpired lease of the session (0)',))
+        writer.end_session(self.root, 's-1', T0)
+        self.assertEqual(writer.session_lease(self.root, 's-1', T0).findings, ('ended: the session is ended',))
+        self.sql("UPDATE leases SET expires_at = 'soon'")
+        self.assertEqual(writer.session_lease(self.root, 's-2', T0).findings, ('unreadable: ValueError',))
+
+    def test_both_callers_agree(self):
+        """TASK-067 AC4 and TASK-067 AC9: over the helper's cases, in order, session_lease and add_reads give the same
+        reason and finding, an unknown session on a store with no lease row among them; "tied" exactly when add_reads
+        accepts."""
+        self.store()
+        self.session()
+        self.session('s-2', 'agent-2')
+
+        def both(sid, now=T0):
+            a = writer.session_lease(self.root, sid, now)
+            b = self.add(['p'], sid=sid, now=now)
+            return a, b
+        a, b = both('s-9')
+        self.assertEqual((a.reason, a.findings), (b.reason, b.findings))
+        self.assertEqual(a.reason, 'no_lease_row')
+        self.grant(task='TASK-002', holder='agent-2', sid='s-2', until=T0 + datetime.timedelta(minutes=5))
+        for sid, now in (('s-9', T0), ('s-1', T0), ('s-2', T0 + datetime.timedelta(minutes=5))):
+            a, b = both(sid, now)
+            with self.subTest(sid=sid, now=now):
+                self.assertEqual((a.reason, a.findings), (b.reason, b.findings))
+        a, b = both('s-2')
+        self.assertEqual((a.reason, b.result), ('tied', 'done'))
+        self.grant(task='TASK-003')
+        writer.end_session(self.root, 's-2', T0)
+        a, b = both('s-2')
+        self.assertEqual((a.reason, a.findings), (b.reason, b.findings))
+        self.assertEqual(a.reason, 'ended')
+
+
+class R19MigrateAndTheWriteHelper(ReadsCase):
+    """TASK-067's rule R5: migrate_store's table of outcomes, the write helper's ending, the "?mode=rw" reading and
+    the catch-all."""
+
+    def three_tables(self, rows=1):
+        self.tied()
+        self.sql('DROP TABLE reads')
+        if rows != 1:
+            self.sql("INSERT INTO store (epoch, counter) VALUES ('x', 0)")
+
+    def test_migrated_and_current(self):
+        """TASK-067 AC5 and TASK-067 AC9: a three-table store is "migrated", the other rows unchanged by a dump, and
+        then every writer function reads it as a four-table store; a four-table store is "current", bytes unchanged."""
+        self.three_tables()
+        self.add(['ignored'])
+        before = self.dump()
+        r = writer.migrate_store(self.root)
+        self.assertEqual((r.result, r.value), ('done', 'migrated'))
+        after = self.dump()
+        self.assertEqual(after.pop('reads'), [])
+        self.assertEqual(after, before)
+        self.assertEqual(writer.held_lease(self.root, 'TASK-067')['task_id'], 'TASK-067')
+        self.assertEqual(self.add(['a']).value, 1)
+        self.assertEqual(writer.session_lease(self.root, 's-1', T0).reason, 'tied')
+        data = read(writer.store_path(self.root))
+        self.assertEqual(writer.migrate_store(self.root).value, 'current')
+        self.assertEqual(read(writer.store_path(self.root)), data)
+
+    def test_other_forms_give_tables(self):
+        """TASK-067 AC5 and TASK-067 AC9: a leftover reads table of other columns, an extra table, a missing table and
+        two store rows give "tables", the store unchanged; a pre-task form with two store rows runs the CREATE and is
+        refused at the second check, rolled back."""
+        for setup in (lambda: self.sql('DROP TABLE reads', 'CREATE TABLE reads (x)'),
+                      lambda: self.sql('CREATE TABLE extra (x)'), lambda: self.sql('DROP TABLE reads', 'DROP TABLE sessions'),
+                      lambda: self.sql("INSERT INTO store (epoch, counter) VALUES ('x', 0)"),
+                      lambda: self.sql('DROP TABLE reads', "INSERT INTO store (epoch, counter) VALUES ('x', 0)")):
+            with self.subTest(setup=setup):
+                self.tearDown()
+                self.setUp()
+                self.tied()
+                setup()
+                before = self.dump()
+                self.refused(writer.migrate_store(self.root), 'tables')
+                self.assertEqual(self.dump(), before)
+
+    def test_arguments_root_store_link_and_lock(self):
+        """TASK-067 AC5 and TASK-067 AC9: its "argument", "root", "no_store" (nothing created), "link" and held-lock
+        "unreadable" cases."""
+        import types
+        from unittest import mock
+        for bad in (0, 61, True, 'x', None):
+            self.refused(writer.migrate_store(self.root, bad), 'argument')
+        self.refused(writer.migrate_store(os.path.join(self.root, 'absent')), 'root')
+        self.refused(writer.migrate_store(self.root), 'no_store')
+        self.assertEqual(files_under(self.root), [])
+        self.three_tables()
+        with mock.patch.object(writer.os, 'lstat', lambda p, *a, **k: types.SimpleNamespace(st_mode=0o040755)):
+            self.refused(writer.migrate_store(self.root), 'link')
+        con = sqlite3.connect(writer.store_path(self.root), isolation_level=None)
+        try:
+            con.execute('BEGIN IMMEDIATE')
+            self.refused(writer.migrate_store(self.root, 0.2), 'unreadable')
+        finally:
+            con.close()
+        self.assertNotIn('reads', self.dump())
+
+    def test_every_cell_of_the_table(self):
+        """TASK-067 AC5 and TASK-067 AC9 (D-1395 M5): the probe's and the second check's ValueError and sqlite3.Error
+        by a stand-in for _check_schema keyed on its call count, and the CREATE's sqlite3.Error and another exception
+        by a connect stand-in whose execute raises for the CREATE TABLE reads text; the store unchanged after each
+        refusal."""
+        from unittest import mock
+        real_check, real_connect = writer._check_schema, sqlite3.connect
+
+        def keyed(effects):
+            calls = []
+
+            def check(con):
+                calls.append(1)
+                e = effects.get(len(calls))
+                if e is not None:
+                    raise e
+                return real_check(con)
+            return check
+        cells = [({1: sqlite3.OperationalError('x')}, 'unreadable'), ({2: ValueError('x')}, 'tables'),
+                 ({2: sqlite3.OperationalError('x')}, 'unreadable')]
+        for effects, reason in cells:
+            with self.subTest(effects=effects):
+                self.tearDown()
+                self.setUp()
+                self.three_tables()
+                before = self.dump()
+                with mock.patch.object(writer, '_check_schema', keyed(effects)):
+                    self.refused(writer.migrate_store(self.root), reason)
+                self.assertEqual(self.dump(), before)
+
+        class Wrap:
+            def __init__(self, con, error):
+                self.con, self.error = con, error
+
+            @property
+            def in_transaction(self):
+                return self.con.in_transaction
+
+            def execute(self, s, *a):
+                if s.startswith('CREATE TABLE reads'):
+                    raise self.error
+                return self.con.execute(s, *a)
+
+            def close(self):
+                self.con.close()
+        for error, finding in ((sqlite3.OperationalError('x'), 'unreadable: OperationalError'),
+                               (RuntimeError('x'), 'unreadable: RuntimeError')):
+            with self.subTest(error=error):
+                self.tearDown()
+                self.setUp()
+                self.three_tables()
+                before = self.dump()
+                with mock.patch.object(writer.sqlite3, 'connect', lambda *a, **k: Wrap(real_connect(*a, **k), error)):
+                    r = writer.migrate_store(self.root)
+                self.assertEqual((r.reason, r.findings), ('unreadable', (finding,)))
+                self.assertEqual(self.dump(), before)
+
+    def test_the_write_helpers_ending(self):
+        """TASK-067 AC9 (D-1393 K1): normal calls return "done" with their change; a refusal from the work leaves the
+        store unchanged; a failing close after a successful COMMIT still gives "done"; a failing COMMIT and a work
+        result that is not a StoreResult give "unreadable" with the store unchanged; a failing ROLLBACK after a refusal
+        from the work gives "unreadable" from the write helper itself, no exception escaping it."""
+        from unittest import mock
+        self.tied()
+        self.assertEqual(self.add(['a']).value, 1)
+        self.assertEqual(writer.remove_reads(self.root, 's-1', 'TASK-067').value, 1)
+        real = sqlite3.connect
+
+        class Wrap:
+            def __init__(self, con, fail):
+                self.con, self.fail = con, fail
+
+            @property
+            def in_transaction(self):
+                return self.con.in_transaction
+
+            def execute(self, s, *a):
+                if s == self.fail:
+                    raise sqlite3.OperationalError('made-up')
+                return self.con.execute(s, *a)
+
+            def close(self):
+                self.con.close()
+                if self.fail == 'close':
+                    raise sqlite3.OperationalError('made-up')
+        with mock.patch.object(writer.sqlite3, 'connect', lambda *a, **k: Wrap(real(*a, **k), 'close')):
+            self.assertEqual(self.add(['b']).value, 1)
+        self.assertEqual(writer.stored_reads(self.root, 's-1', 'TASK-067').value, ['b'])
+        before = self.dump()
+        with mock.patch.object(writer.sqlite3, 'connect', lambda *a, **k: Wrap(real(*a, **k), 'COMMIT')):
+            self.refused(self.add(['c']), 'unreadable')
+        self.assertEqual(self.dump(), before)
+        self.refused(self.add(['c'], sid='s-9'), 'session')
+        self.assertEqual(self.dump(), before)
+        real_store = writer._store_present(self.root)[1]
+        r = writer._write_store(real_store, 5.0, lambda con: (con.execute(
+            "INSERT INTO reads VALUES ('s-1', 'TASK-067', 9, 'z')"), None)[1])
+        self.assertEqual(r.reason, 'unreadable')
+        self.assertEqual(self.dump(), before)
+        with mock.patch.object(writer.sqlite3, 'connect', lambda *a, **k: Wrap(real(*a, **k), 'ROLLBACK')):
+            r = writer._write_store(real_store, 5.0, lambda con: writer._refused('session', 'session: made-up'))
+        self.assertEqual((r.result, r.reason, r.findings), ('refused', 'unreadable', ('unreadable: OperationalError',)))
+        self.assertEqual(self.dump(), before)
+
+    def test_the_rw_open_never_creates_a_store(self):
+        """TASK-067 AC9 (D-1393 K7, C1 (d)): a stand-in for _store_present returns a missing file in an existing folder;
+        a connect recorder shows the open was reached with a URI ending "?mode=rw"; the three write functions give
+        "unreadable" and no file is created; the suffix change touches only the final suffix."""
+        from unittest import mock
+        self.tied()
+        missing = os.path.join(self.root, 'made-up.sqlite')
+        before = files_under(self.root)
+        seen = []
+        real = sqlite3.connect
+
+        def recording(target, *a, **k):
+            seen.append(target)
+            return real(target, *a, **k)
+        calls = (lambda: self.add(['a']), lambda: writer.remove_reads(self.root, 's-1', 'TASK-067'),
+                 lambda: writer.migrate_store(self.root))
+        for call in calls:
+            with mock.patch.object(writer, '_store_present', lambda root: (None, missing)), \
+                    mock.patch.object(writer.sqlite3, 'connect', recording):
+                self.refused(call(), 'unreadable')
+        self.assertEqual(len(seen), 3)
+        self.assertTrue(all(u.endswith('made-up.sqlite?mode=rw') for u in seen), seen)
+        self.assertEqual(files_under(self.root), before)
+        seen.clear()
+        odd = os.path.join(self.root, 'a?mode=ro')
+        with mock.patch.object(writer, '_store_present', lambda root: (None, odd)), \
+                mock.patch.object(writer.sqlite3, 'connect', recording):
+            self.add(['a'])
+        self.assertTrue(seen[0].endswith('a%3Fmode%3Dro?mode=rw'), seen)
+
+    def test_the_catch_all(self):
+        """TASK-067 AC9 (D-1395 M1, C1 (b); D-1397 C1): a UNC-form path and a path not encodable as UTF-8 from a
+        _store_present stand-in reach _store_uri (a recorder) and give, for all four functions, "unreadable:
+        ValueError" (the UNC path) and "unreadable: UnicodeEncodeError" (the path not encodable as UTF-8; a subclass
+        of ValueError; D-1421 E1); a URI without the "?mode=ro" suffix gives "unreadable" for the three write functions; a stand-in
+        for a named helper raising RuntimeError gives "unreadable: RuntimeError", the store unchanged."""
+        from unittest import mock
+        self.tied()
+        before = self.dump()
+        calls = {'add_reads': lambda: self.add(['a']), 'stored_reads': lambda: writer.stored_reads(self.root, 's-1', 'TASK-067'),
+                 'remove_reads': lambda: writer.remove_reads(self.root, 's-1', 'TASK-067'),
+                 'migrate_store': lambda: writer.migrate_store(self.root)}
+        real_uri = writer._store_uri
+        # The surrogate case raises UnicodeEncodeError, a subclass of ValueError, inside _store_uri; the finding names
+        # the exception's own type, under the contract's type rule (D-1421 E1; AC9's text says "unreadable: ValueError").
+        self.assertTrue(issubclass(UnicodeEncodeError, ValueError))
+        for odd, kind in (('//server/share/state.sqlite', 'ValueError'),
+                          (os.path.join(self.root, 'x\udcff'), 'UnicodeEncodeError')):
+            for name, call in calls.items():
+                reached = []
+
+                def uri(*a):
+                    reached.append(a)
+                    return real_uri(*a)
+                with self.subTest(odd=odd, name=name):
+                    with mock.patch.object(writer, '_store_present', lambda root: (None, odd)), \
+                            mock.patch.object(writer, '_store_uri', uri):
+                        r = call()
+                    self.assertEqual((r.reason, r.findings), ('unreadable', ('unreadable: ' + kind,)))
+                    self.assertEqual(len(reached), 1)
+        for name in ('add_reads', 'remove_reads', 'migrate_store'):
+            with self.subTest(name=name):
+                with mock.patch.object(writer, '_store_uri', lambda *a: 'file:///x'):
+                    self.refused(calls[name](), 'unreadable')
+
+        def boom(*a, **k):
+            raise RuntimeError('made-up')
+        helpers = {'add_reads': ('_store_present', '_write_store'), 'remove_reads': ('_store_present', '_write_store'),
+                   'migrate_store': ('_store_present', '_write_store'), 'stored_reads': ('_store_present', '_read_reads')}
+        for name, names in helpers.items():
+            for helper in names:
+                with self.subTest(name=name, helper=helper):
+                    with mock.patch.object(writer, helper, boom):
+                        r = calls[name]()
+                    self.assertEqual((r.reason, r.findings), ('unreadable', ('unreadable: RuntimeError',)))
+                    self.assertEqual(self.dump(), before)
+
+    def test_no_finding_holds_the_callers_text(self):
+        """TASK-067 AC9 (D-1393 K3): for every refusal reason of the four functions, with a made-up hostile session
+        id, task id, root and path, none of their text appears in the finding."""
+        from unittest import mock
+        hostile = 'zz-HOSTILE-zz'
+        root = os.path.join(self.root, hostile)
+        self.store()
+        self.session(hostile)
+        out = [self.add(['a'], sid=hostile), self.add([hostile + '\x00']), self.add(['a'], sid=hostile, root=root),
+               writer.stored_reads(root, hostile, 'TASK-1'), writer.remove_reads(root, hostile, 'TASK-1'),
+               writer.stored_reads(self.root, hostile, hostile), writer.migrate_store(root),
+               self.add(['a'] * 10001, sid=hostile)]
+        with mock.patch.object(writer, '_store_present', lambda r: (None, '//' + hostile)):
+            out += [self.add(['a'], sid=hostile), writer.stored_reads(self.root, hostile, 'TASK-1')]
+        for r in out:
+            with self.subTest(r=r):
+                self.assertEqual(r.result, 'refused')
+                self.assertNotIn(hostile, ' '.join(r.findings))
+
+
+class R20TheQueries(unittest.TestCase):
+    """TASK-067's rule R6: every execute call of writer.py takes a constant query."""
+
+    @staticmethod
+    def bad_queries(source):
+        """The line numbers of execute calls whose query is not a str constant (implicit concatenation included), a
+        module-level name bound to a str constant, or a name bound by a for loop over _SCHEMA."""
+        tree = ast.parse(source)
+        consts = {t.id for n in tree.body if isinstance(n, ast.Assign) and isinstance(n.value, ast.Constant)
+                  and isinstance(n.value.value, str) for t in n.targets if isinstance(t, ast.Name)}
+        loops = {n.target.id for n in ast.walk(tree) if isinstance(n, ast.For) and isinstance(n.target, ast.Name)
+                 and isinstance(n.iter, ast.Name) and n.iter.id == '_SCHEMA'}
+        bad = []
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr in ('execute', 'executemany'):
+                q = n.args[0] if n.args else None
+                ok = (isinstance(q, ast.Constant) and isinstance(q.value, str)) or (
+                    isinstance(q, ast.Name) and (q.id in consts or q.id in loops))
+                if not ok:
+                    bad.append(n.lineno)
+        return bad
+
+    def test_every_query_is_a_constant(self):
+        """TASK-067 AC6 and TASK-067 AC9: no execute call of writer.py builds its query; the check finds each of an
+        f-string, "%", "+", a call and a subscript in a hostile sample."""
+        self.assertEqual(self.bad_queries(read(os.path.join(SRC, 'writer.py')).decode('utf-8')), [])
+        sample = ("Q = 'SELECT 1'\nN = 1\ncon.execute(Q)\ncon.execute('SELECT ' 'x')\ncon.execute(f'SELECT {x}')\n"
+                  "con.execute('SELECT %s' % x)\ncon.execute('SELECT ' + x)\ncon.execute(q())\ncon.execute(A[0])\n"
+                  "con.execute(N)\n")
+        self.assertEqual(self.bad_queries(sample), [5, 6, 7, 8, 9, 10])
+
+    def test_the_lookup_test_still_passes_with_the_new_code_above_the_marker(self):
+        """TASK-067 AC9: every new definition stands above the marker of TASK-066's lookup, whose text keeps no
+        INSERT, UPDATE, DELETE or PRAGMA and two "finally:"."""
+        text = read(os.path.join(SRC, 'writer.py')).decode('utf-8')
+        head, part = text.split('# ---- the read-only lookup of the store (task TASK-066) ----', 1)
+        for name in ('def add_reads(', 'def stored_reads(', 'def remove_reads(', 'def migrate_store(',
+                     'def _live_lease(', 'def _store_present(', 'def _write_store(', 'def _read_reads('):
+            with self.subTest(name=name):
+                self.assertIn(name, head)
+                self.assertNotIn(name, part)
+        for word in ('INSERT', 'UPDATE', 'DELETE', 'PRAGMA'):
+            self.assertNotIn(word, part)
+        self.assertEqual(part.count('finally:'), 2)
 
 
 if __name__ == '__main__':

@@ -141,7 +141,7 @@ class StoreLookupFiles(unittest.TestCase):
                         self.assertEqual(snapshot(root), before, (sid, now, r))
             con = sqlite3.connect(writer.store_path(root), isolation_level=None)
             try:
-                con.execute('CREATE TABLE reads (task_id TEXT)')
+                con.execute('CREATE TABLE extra (task_id TEXT)')
             finally:
                 con.close()
             before = snapshot(root)
@@ -239,6 +239,68 @@ class StoreLookupFiles(unittest.TestCase):
                 self.assertEqual((out['outcome'], out['reason']), ('refuse', 'lease_row_without_session'))
                 out = claude_code_store.judge('s-1', outer, inner, T0)
                 self.assertEqual((out['outcome'], out['lease'], out['root']), ('tied', lease, outer))
+
+
+class ReadsFiles(unittest.TestCase):
+    """TASK-067's rule R7 on real files: DEF-0085's writer-side points (AC7 (a) and (b))."""
+
+    def test_a_wal_mode_store(self):
+        """TASK-067 AC7 and TASK-067 AC9: a store set to WAL mode by a test connection; session_lease and stored_reads
+        each give "unreadable" or the right answer, and the store's bytes are unchanged; whether a file appears beside
+        the store is printed as an observation, not asserted (a limit: the disjunction cannot fail for code that always
+        refuses)."""
+        import sqlite3
+        with tempfile.TemporaryDirectory() as root:
+            lease = tied_store(root)
+            writer.add_reads(root, 's-1', ['a', 'b'], T0)
+            con = sqlite3.connect(writer.store_path(root), isolation_level=None)
+            try:
+                self.assertEqual(con.execute('PRAGMA journal_mode=WAL').fetchone()[0], 'wal')
+            finally:
+                con.close()
+            data, files = snapshot(root)
+            r = writer.session_lease(root, 's-1', T0)
+            self.assertIn((r.result, r.reason, r.value), (('refused', 'unreadable', None), ('done', 'tied', lease)))
+            s = writer.stored_reads(root, 's-1', 'TASK-001')
+            self.assertIn((s.result, s.reason, s.value), (('refused', 'unreadable', None), ('done', None, ['a', 'b'])))
+            after = snapshot(root)
+            self.assertEqual(after[0], data)
+            print('\nTASK-067 AC7 (a) observation: lookup %s, stored_reads %s, files before %s, after %s'
+                  % (r.reason, s.result, files, after[1]))
+
+    def test_the_read_paths_run_only_deferred_reads(self):
+        """TASK-067 AC7 and TASK-067 AC9: by set_trace_callback on the real connection (a stand-in for writer's
+        sqlite3.connect for one call), session_lease and stored_reads run only BEGIN DEFERRED, SELECT and ROLLBACK, by
+        each statement's leading keyword, case-insensitively; never BEGIN IMMEDIATE; the trace's own comment lines are
+        allowed only in the form "-- PRAGMA table_info=" (D-1421 E2)."""
+        import sqlite3
+        from unittest import mock
+        real = sqlite3.connect
+        with tempfile.TemporaryDirectory() as root:
+            tied_store(root)
+            writer.add_reads(root, 's-1', ['a'], T0)
+            for call in (lambda: writer.session_lease(root, 's-1', T0),
+                         lambda: writer.stored_reads(root, 's-1', 'TASK-001')):
+                ran = []
+
+                def traced(*a, **k):
+                    con = real(*a, **k)
+                    con.set_trace_callback(ran.append)
+                    return con
+                with mock.patch.object(writer.sqlite3, 'connect', traced):
+                    self.assertEqual(call().result, 'done')
+                # SQLite's trace also reports "-- PRAGMA table_info=..." comment lines for the table-valued function
+                # pragma_table_info that the table check's SELECT reads; exactly that form is allowed, and any other
+                # line starting "--" fails (D-1421 E2).
+                notes = [s for s in ran if s.lstrip().startswith('--')]
+                words = [' '.join(s.split()[:2]).upper() if s.split()[0].upper() == 'BEGIN' else s.split()[0].upper()
+                         for s in ran if not s.lstrip().startswith('--')]
+                with self.subTest(call=call):
+                    for s in notes:
+                        self.assertTrue(s.lstrip().startswith('-- PRAGMA table_info='), s)
+                    self.assertTrue(words)
+                    self.assertLessEqual(set(words), {'BEGIN DEFERRED', 'SELECT', 'ROLLBACK'}, ran)
+                    self.assertEqual(words[0], 'BEGIN DEFERRED')
 
 
 if __name__ == '__main__':

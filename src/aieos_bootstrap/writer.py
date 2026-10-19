@@ -8,8 +8,8 @@ the caller gives, it touches exactly two files (AC1):
   as TASK-015 left it) decide the one line to append, appends exactly that line, flushes and syncs it, and reads the
   file back (AC2); a fence refusal is recorded as its own ``record.added`` event (AC3); ``read_log`` returns the
   log's bytes, or empty bytes when it is absent, and creates nothing (TASK-026);
-- ``<root>/.aieos/local/state.sqlite``, the local store of the fence's epoch and counter, the leases and the sessions
-  (AC4 to AC7), with SQLite's own rollback journal ``state.sqlite-journal`` beside it, which SQLite creates and removes
+- ``<root>/.aieos/local/state.sqlite``, the local store of the fence's epoch and counter, the leases, the sessions
+  (AC4 to AC7) and, from task TASK-067, the reads kept for a session's observed read-set record, with SQLite's own rollback journal ``state.sqlite-journal`` beside it, which SQLite creates and removes
   during a transaction (the default rollback journal mode; no WAL); ``release_lease_token`` releases a lease only for
   its own fencing token (TASK-028).
 
@@ -30,6 +30,31 @@ Limits (AC10):
 
 ``session_lease`` (task TASK-066; specification 5 section 11 point 7, bullets 3 to 6) is the read-only lookup of the
 store for the Claude Code adapter's hook process: the store's answer for a session, or for no session.
+
+Task TASK-067 (specification 2 revision 7 section 3; specification 5 sections 7 and 11 point 7) adds the fourth table
+reads (session_id, task_id, seq, path) and four functions: ``add_reads``, the read-set accumulation under the session's
+one live lease (the only one meant for a later hook-side caller); ``stored_reads`` and ``remove_reads``, core-only, for
+the launcher's record and its clean-up; ``migrate_store``, core-only, which adds the table to a store of the earlier
+form. From this task on ``open_store`` creates the four-table form, and every existing function refuses or raises on a
+three-table store until ``migrate_store`` has run (no store exists in this repository and no hook is placed).
+Limits of task TASK-067:
+- The table check compares table and column names only: a reads table without its UNIQUE constraints passes it; "each
+  once" and the next seq are held by add_reads' own reads inside its transaction.
+- At most 10000 stored paths per session and task and 4096 characters per path; a call that would exceed either is
+  refused whole, so a long session's later reads are refused and the record stays a lower bound; the table's total size
+  stays unbounded across sessions and tasks; stored_reads has no row cap.
+- The presence step, the link check and the open are separate steps for the write path too: a component replaced by a
+  link between the check and the "?mode=rw" open would let a write reach another existing store of the four-table
+  form; the existing writer functions make no link check at all.
+- stored_reads and remove_reads check no lease; a late add_reads between remove_reads and the lease's release is
+  accepted and stores reads that no record uses and nothing removes; a store migrated while a hook process reads it is
+  a race; the writer never makes a WAL-mode store, and the existing functions' behaviour on one is not tested; now is
+  trusted from the caller.
+- A read-only open of a store in WAL mode, which the writer never makes, may create its -shm and -wal files beside it
+  when the folder is writable and leave them there; in AC7 (a)'s test the store's own bytes were unchanged (D-1421).
+- For a store path not encodable as UTF-8, _store_uri raises UnicodeEncodeError (a subclass of ValueError), and the
+  finding names that type, "unreadable: UnicodeEncodeError", under the contract's type rule (D-1421 E1).
+- session_lease's docstring is kept byte-identical, so its sentences on the three tables before K1 are stale by design.
 
 Readings of the specifications that the contract marks "(reading)" are noted where they are applied.
 """
@@ -52,7 +77,14 @@ TABLES = {
     'store': ('epoch', 'counter'),
     'leases': ('task_id', 'holder', 'session_id', 'fencing_epoch', 'fencing_counter', 'granted_at', 'expires_at'),
     'sessions': ('session_id', 'holder', 'started_at', 'ended_at'),
+    'reads': ('session_id', 'task_id', 'seq', 'path'),
 }
+# The tables of the store before task TASK-067 (TABLES without reads), which migrate_store migrates from.
+_PRE_READS_TABLES = {name: columns for name, columns in TABLES.items() if name != 'reads'}
+# Task TASK-067: the reads table of specification 2 revision 7 section 3, an ordinary rowid table; the UNIQUE
+# constraints are a second guard to add_reads' own reads (the table check compares names only).
+_CREATE_READS = ('CREATE TABLE reads (session_id TEXT NOT NULL, task_id TEXT NOT NULL, seq INTEGER NOT NULL, '
+                 'path TEXT NOT NULL, UNIQUE (session_id, task_id, path), UNIQUE (session_id, task_id, seq))')
 _SCHEMA = (
     'CREATE TABLE store (epoch TEXT NOT NULL, counter INTEGER NOT NULL)',
     'CREATE TABLE leases (task_id TEXT PRIMARY KEY, holder TEXT NOT NULL, session_id TEXT NOT NULL, '
@@ -60,6 +92,7 @@ _SCHEMA = (
     'expires_at TEXT NOT NULL)',
     'CREATE TABLE sessions (session_id TEXT PRIMARY KEY, holder TEXT NOT NULL, started_at TEXT NOT NULL, '
     'ended_at TEXT)',
+    _CREATE_READS,
 )
 # Every query is a constant text with ? parameters; no query is built from values.
 _LEASES = 'SELECT task_id, fencing_epoch, fencing_counter, expires_at FROM leases ORDER BY fencing_counter'
@@ -247,8 +280,8 @@ def _tables(con):
 
 def _check_schema(con):
     if _tables(con) != TABLES:
-        raise ValueError('the store does not hold exactly the tables store, leases and sessions of specification 2 '
-                         'section 3')
+        raise ValueError('the store does not hold exactly the tables store, leases, sessions and reads of '
+                         'specification 2 section 3')
     rows = con.execute('SELECT epoch, counter FROM store').fetchall()
     if len(rows) != 1 or not _is_str(rows[0][0]) or not (isinstance(rows[0][1], int) and rows[0][1] >= 0):
         raise ValueError('the store does not hold exactly one row with an epoch and a counter of 0 or more')
@@ -488,6 +521,388 @@ def held_leases(root):
     return _transaction(path, lambda con: [_lease(r) for r in con.execute(_LEASES)])
 
 
+# ---- the reads table and the read-set accumulation (task TASK-067) ----
+#
+# Everything of task TASK-067 stands above the marker of task TASK-066's lookup, so that the text below that marker
+# keeps no INSERT, UPDATE, DELETE or PRAGMA. It uses names defined below the marker (_store_uri, _KIND_BITS,
+# _REGULAR_FILE, _LOOKUP_TIMEOUT_MAX, _check_lookup_root, _named), which Python resolves at call time.
+
+_READS_MAX = 10000
+_READ_PATH_MAX = 4096
+_RO_SUFFIX = '?mode=ro'
+_RW_SUFFIX = '?mode=rw'
+_READS_COUNT = 'SELECT COUNT(*) FROM reads WHERE session_id = ? AND task_id = ?'
+_READS_PATHS = 'SELECT path FROM reads WHERE session_id = ? AND task_id = ?'
+_READS_TOP = 'SELECT MAX(seq) FROM reads WHERE session_id = ? AND task_id = ?'
+_READS_INSERT = 'INSERT INTO reads (session_id, task_id, seq, path) VALUES (?, ?, ?, ?)'
+_READS_IN_ORDER = 'SELECT path FROM reads WHERE session_id = ? AND task_id = ? ORDER BY seq, rowid'
+_READS_REMOVE = 'DELETE FROM reads WHERE session_id = ? AND task_id = ?'
+_TABLES_FINDING = 'tables: the store does not hold exactly the writer\'s tables and one store row'
+
+
+def _live_lease(con, session_id, now, any_lease):
+    """The live lease of a session, inside the caller's transaction (TASK-067 AC4; TASK-066 AC2's order): no lease
+    row at all in the store ("no_lease_row"), no such session ("session"), an ended session ("ended"), then the stored
+    times of that session's lease rows only are parsed (a malformed one raises ValueError, which each caller turns into
+    "unreadable"), and not exactly one of them with expires_at > now ("leases"). ``any_lease`` is the caller's own
+    answer to whether the store holds any lease row, so no second such query is run here. Returns a refused
+    StoreResult, or StoreResult("done", "tied", value=the lease in eventlog.LEASE_KEYS' form)."""
+    if not any_lease:
+        return _refused('no_lease_row', 'no_lease_row: the store holds no lease row')
+    row = con.execute('SELECT ended_at FROM sessions WHERE session_id = ?', (session_id,)).fetchone()
+    if row is None:
+        return _refused('session', 'session: no session with this id')
+    if row[0] is not None:
+        return _refused('ended', 'ended: the session is ended')
+    leases = [_lease(r) for r in con.execute(_LEASES_OF_SESSION, (session_id,))]
+    live = [x for x in leases if x['expires_at'] > now]
+    if len(live) != 1:
+        return _refused('leases', 'leases: not exactly one unexpired lease of the session (%d)' % len(live))
+    return StoreResult('done', 'tied', value=live[0])
+
+
+def _store_present(root):
+    """The presence step and the link check of session_lease, for the four functions of task TASK-067 (session_lease
+    keeps its own): os.lstat of the store path ("no_store" for a missing entry, "unreadable" for another OSError or a
+    ValueError, "link" for an entry that is not a regular file), then the realpath comparison ("link", a raising step
+    included). Returns (a refused StoreResult, None), or (None, the checked realpath of the store)."""
+    path = store_path(root)
+    try:
+        kind = os.lstat(path).st_mode & _KIND_BITS
+    except (FileNotFoundError, NotADirectoryError):
+        return _refused('no_store', 'no_store: no store file under the root'), None
+    except (OSError, ValueError) as e:
+        return _named('unreadable', e), None
+    if kind != _REGULAR_FILE:
+        return _refused('link', 'link: the store path is not a regular file'), None
+    try:
+        real = os.path.realpath(path)
+        same = os.path.normcase(real) == os.path.normcase(
+            os.path.join(os.path.realpath(root), STATE_DIR, LOCAL_DIR, STORE_NAME))
+    except Exception as e:
+        return _named('link', e), None
+    if not same:
+        return _refused('link', 'link: the store or a folder above it resolves elsewhere'), None
+    return None, real
+
+
+def _write_steps(con, work, check):
+    """Inside _write_store's open transaction: the table check when ``check`` is True, then the work. A result that is
+    not a "done" or a "refused" StoreResult is "unreadable"."""
+    if check:
+        try:
+            _check_schema(con)
+        except ValueError:
+            return _refused('tables', _TABLES_FINDING)
+    out = work(con)
+    if isinstance(out, StoreResult) and out.result in ('done', 'refused'):
+        return out
+    return _refused('unreadable', 'unreadable: the work gave no store result')
+
+
+def _write_store(real, timeout, work, check=True):
+    """One write transaction on the existing store at the checked realpath ``real`` (task TASK-067; _transaction is
+    unchanged). The URI is _store_uri's, checked to end in exactly "?mode=ro" before only that suffix becomes
+    "?mode=rw" (SQLite's rw mode opens an existing file only, so a store removed after the check is never created);
+    the connection takes the given timeout and no implicit transaction; BEGIN IMMEDIATE; the table check when ``check``
+    is True ("tables"); the work. A "done" result is committed; a refused result is rolled back and returned; any other
+    result, any exception (inside the work too), a lock held past the timeout, a damaged file, any sqlite error and a
+    failing COMMIT give "unreadable: <exception type name>" after a rollback. ROLLBACK runs only while a transaction is
+    open; a failing ROLLBACK, or a failing close before a successful COMMIT, gives "unreadable"; after a successful
+    COMMIT a failing close changes nothing. No exception escapes."""
+    con = None
+    committed = False
+    result = None
+    try:
+        try:
+            uri = _store_uri(real, os.sep, os.altsep)
+            if not uri.endswith(_RO_SUFFIX):
+                raise ValueError('the store URI does not end in the read-only mode')
+            con = sqlite3.connect(uri[:-len(_RO_SUFFIX)] + _RW_SUFFIX, uri=True, timeout=timeout,
+                                  isolation_level=None)
+            con.execute('BEGIN IMMEDIATE')
+            result = _write_steps(con, work, check)
+            if result.result == 'done':
+                con.execute('COMMIT')
+                committed = True
+        except Exception as e:
+            result = _named('unreadable', e)
+        finally:
+            if con is not None and not committed:
+                try:
+                    if con.in_transaction:
+                        con.execute('ROLLBACK')
+                except Exception as e:
+                    result = _named('unreadable', e)
+    finally:
+        if con is not None:
+            try:
+                con.close()
+            except Exception as e:
+                if not committed:
+                    result = _named('unreadable', e)
+    return result
+
+
+def _reads_answer(con, session_id, task_id):
+    """Inside _read_reads' deferred transaction: the table check, then the stored paths in seq order."""
+    try:
+        _check_schema(con)
+    except ValueError:
+        return _refused('tables', _TABLES_FINDING)
+    paths = [row[0] for row in con.execute(_READS_IN_ORDER, (session_id, task_id))]
+    if any(type(p) is not str for p in paths):
+        return _refused('unreadable', 'unreadable: a stored path is not text')
+    return StoreResult('done', value=paths)
+
+
+def _read_reads(real, timeout, session_id, task_id):
+    """stored_reads' read: _store_uri's "?mode=ro" URI for the checked realpath, the timeout, no implicit transaction,
+    BEGIN DEFERRED, the reads, then ROLLBACK (only while a transaction is open, so a failed BEGIN skips it) and close in
+    finally blocks, whose failure gives "unreadable". It writes and creates nothing."""
+    con = None
+    result = None
+    try:
+        try:
+            con = sqlite3.connect(_store_uri(real, os.sep, os.altsep), uri=True, timeout=timeout,
+                                  isolation_level=None)
+            con.execute('BEGIN DEFERRED')
+            result = _reads_answer(con, session_id, task_id)
+        except Exception as e:
+            result = _named('unreadable', e)
+        finally:
+            if con is not None:
+                try:
+                    if con.in_transaction:
+                        con.execute('ROLLBACK')
+                except Exception as e:
+                    result = _named('unreadable', e)
+    finally:
+        if con is not None:
+            try:
+                con.close()
+            except Exception as e:
+                result = _named('unreadable', e)
+    return result
+
+
+def _check_reads_session(session_id):
+    if type(session_id) is not str or not session_id:
+        raise ValueError('session_id is not a non-empty str')
+    session_id.encode('utf-8')
+
+
+def _check_reads_timeout(timeout):
+    if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not 0 < timeout <= _LOOKUP_TIMEOUT_MAX:
+        raise ValueError('timeout is not a number of seconds above 0 and at most 60')
+
+
+def _check_read_path(path):
+    if type(path) is not str or not path or '\x00' in path or len(path) > _READ_PATH_MAX:
+        raise ValueError('a path is not a non-empty str of at most 4096 characters without NUL')
+    path.encode('utf-8')
+
+
+def _add_work(con, session_id, items, now):
+    """add_reads' work inside its one BEGIN IMMEDIATE transaction (AC2 steps 8 and 9, then the inserts)."""
+    any_lease = con.execute('SELECT 1 FROM leases LIMIT 1').fetchone() is not None
+    live = _live_lease(con, session_id, now, any_lease)
+    if live.result != 'done':
+        return live
+    task_id = live.value['task_id']
+    if not (isinstance(task_id, str) and _TASK.fullmatch(task_id)):
+        return _refused('unreadable', 'unreadable: the lease\'s task id is not in the writer\'s form')
+    count = con.execute(_READS_COUNT, (session_id, task_id)).fetchone()[0]
+    if count > _READS_MAX:
+        return _refused('bound', 'bound: more than 10000 paths are stored for the session and its task')
+    stored = {row[0] for row in con.execute(_READS_PATHS, (session_id, task_id))}
+    new = []
+    for p in items:
+        if p not in stored:
+            stored.add(p)
+            new.append(p)
+    if count + len(new) > _READS_MAX:
+        return _refused('bound', 'bound: the stored and the new paths would exceed 10000')
+    top = con.execute(_READS_TOP, (session_id, task_id)).fetchone()[0]
+    seq = 0 if top is None else top + 1
+    for p in new:
+        con.execute(_READS_INSERT, (session_id, task_id, seq, p))
+        seq += 1
+    return StoreResult('done', value=len(new))
+
+
+def add_reads(root, session_id, paths, now, timeout=5.0):
+    """Add the paths a hook call passed for a session to the reads table, under the session's one live lease (task
+    TASK-067; specification 5 sections 7 and 11 point 7, bullet 3; specification 2 revision 7 section 3): in one
+    BEGIN IMMEDIATE transaction, refused unless the session holds a live lease (a check of the store's lease, not of a
+    token the caller carries), then each given path not yet stored for the session and the lease's task is added in the
+    given order with the next seq (one more than the largest stored, 0 for the first). The task is the lease's task,
+    never an argument. The only function of task TASK-067 meant for a later hook-side caller; nothing calls it yet but
+    the tests, and claude_code_store's check of its calls is not widened here.
+
+    Arguments: ``root``, the project root (non-empty, absolute, an existing folder); ``session_id``, a non-empty str of
+    exactly type str; ``paths``, exactly a list or a tuple of paths, each a non-empty str of exactly type str, encodable
+    as UTF-8, without NUL, of at most 4096 characters, kept as given (whitespace-only included; no normalisation);
+    ``now``, a timezone-aware datetime in UTC with whole seconds; ``timeout``, above 0 and at most 60. Now is trusted
+    from the caller: a now earlier than the real time would make an expired lease read as live (the fail-open
+    direction), so the later hook-side caller must take now from the process clock.
+
+    The result is a StoreResult: "done" with value the number of paths added (0 or more), or "refused" with one finding
+    and the reason of the first step that applies: "argument", "bound" (more than 10000 paths in the call), "path",
+    "root", "no_store", "unreadable" or "link" (the presence step and the link check), "unreadable" (the open, a lock
+    held past the timeout, a damaged file, any sqlite error), "tables", the live-lease reasons "no_lease_row",
+    "session", "ended", "unreadable" (a malformed stored time of the session's lease rows), "leases", then
+    "unreadable" for a lease whose task id is not in the writer's form, then "bound" (more than 10000 stored for the
+    session and its task, or the stored and the new together would exceed 10000). A refusal changes nothing. A finding
+    is fixed words and, where an exception is named, its type, or the lease count; never a message, a root, a path, a
+    session id or a task id. No exception escapes: any other exception gives "unreadable: <type name>". A COMMIT that
+    fails, or a process that dies after it, may have applied the change although "unreadable" is returned; "each
+    once" makes a retry safe."""
+    try:
+        _check_reads_session(session_id)
+        if type(paths) not in (list, tuple):
+            raise ValueError('paths is not a list or a tuple')
+        _check_time(now, 'now')
+        _check_reads_timeout(timeout)
+        items = tuple(paths)
+    except Exception as e:
+        return _named('argument', e)
+    if len(items) > _READS_MAX:
+        return _refused('bound', 'bound: more than 10000 paths in one call')
+    try:
+        for p in items:
+            _check_read_path(p)
+    except Exception as e:
+        return _named('path', e)
+    try:
+        _check_lookup_root(root)
+    except Exception as e:
+        return _named('root', e)
+    try:
+        refusal, real = _store_present(root)
+        if refusal is not None:
+            return refusal
+        return _write_store(real, timeout, lambda con: _add_work(con, session_id, items, now))
+    except Exception as e:
+        return _named('unreadable', e)
+
+
+def _check_reads_task(task_id):
+    if type(task_id) is not str or not _TASK.fullmatch(task_id):
+        raise ValueError('task_id is not TASK- followed by digits')
+
+
+def stored_reads(root, session_id, task_id, timeout=5.0):
+    """The stored paths of a session and a task, in the order of seq, then rowid (task TASK-067), read only, for the
+    launcher's observed read-set record before the release (specification 5 section 11 point 7, bullet 2). Core-only.
+    It checks no lease, so it works for a session with no lease, an expired lease, an ended or an unknown session.
+
+    The result is a StoreResult: "done" with value the list of paths (empty when none), or "refused" with one finding,
+    in the order "argument" (session_id as add_reads'; task_id exactly a str in the writer's form; timeout), "root",
+    "no_store", "unreadable" or "link", "unreadable" (the open or a read, a lock past the timeout included), "tables";
+    a stored path that is not text gives "unreadable". It connects through SQLite's read-only mode, runs one BEGIN
+    DEFERRED, and ends the transaction and closes the connection on every path; it writes and creates nothing. It has
+    no row cap: a store written outside the writer can hold more than 10000 rows of a session and task. No exception
+    escapes."""
+    try:
+        _check_reads_session(session_id)
+        _check_reads_task(task_id)
+        _check_reads_timeout(timeout)
+    except Exception as e:
+        return _named('argument', e)
+    try:
+        _check_lookup_root(root)
+    except Exception as e:
+        return _named('root', e)
+    try:
+        refusal, real = _store_present(root)
+        if refusal is not None:
+            return refusal
+        return _read_reads(real, timeout, session_id, task_id)
+    except Exception as e:
+        return _named('unreadable', e)
+
+
+def remove_reads(root, session_id, task_id, timeout=5.0):
+    """Remove every stored path of a session and a task in one write transaction (task TASK-067; specification 2
+    revision 7 section 3: the reads are removed once the session's observed read-set record is appended or found
+    present). Core-only; the caller (the launcher, specification 7) decides when; it reads no event log and checks no
+    lease, so it can remove the reads of a session whose lease is live.
+
+    The result is a StoreResult: "done" with value the number removed (the DELETE's row count), or "refused" with one
+    finding, in the order "argument", "root", "no_store", "unreadable" or "link", "unreadable", "tables". It removes
+    nothing else. No exception escapes."""
+    try:
+        _check_reads_session(session_id)
+        _check_reads_task(task_id)
+        _check_reads_timeout(timeout)
+    except Exception as e:
+        return _named('argument', e)
+    try:
+        _check_lookup_root(root)
+    except Exception as e:
+        return _named('root', e)
+
+    def work(con):
+        return StoreResult('done', value=con.execute(_READS_REMOVE, (session_id, task_id)).rowcount)
+    try:
+        refusal, real = _store_present(root)
+        if refusal is not None:
+            return refusal
+        return _write_store(real, timeout, work)
+    except Exception as e:
+        return _named('unreadable', e)
+
+
+def _migrate_work(con):
+    """migrate_store's work inside its one BEGIN IMMEDIATE transaction (AC5's table): P1 the unchanged table check
+    ("current" when it passes); P2 the tables compared with the pre-task form ("tables" when they differ); P3 the
+    CREATE TABLE reads; P4 the unchanged table check again ("migrated", or "tables" when it raises ValueError). An
+    sqlite3.Error at P1, P3 or P4 reaches _write_store's handler ("unreadable"), and every refusal is rolled back."""
+    try:
+        _check_schema(con)
+        current = True
+    except ValueError:
+        current = False
+    if current:
+        return StoreResult('done', value='current')
+    if _tables(con) != _PRE_READS_TABLES:
+        return _refused('tables', _TABLES_FINDING)
+    con.execute(_CREATE_READS)
+    try:
+        _check_schema(con)
+    except ValueError:
+        return _refused('tables', _TABLES_FINDING)
+    return StoreResult('done', value='migrated')
+
+
+def migrate_store(root, timeout=5.0):
+    """Add the reads table to a store in exactly the form before task TASK-067, in one write transaction, changing
+    nothing else; a store already in the four-table form is left unchanged (task TASK-067; specification 5 section 11
+    point 7, bullet 6: a store of the old form is refused until its migration). Core-only; nothing calls it yet but
+    the tests. open_store keeps its meaning (create, or open unchanged).
+
+    The result is a StoreResult: "done" with value "migrated" or "current", or "refused" with one finding, in the
+    order "argument" (timeout), "root", "no_store", "unreadable" or "link", "unreadable" (the open, a lock past the
+    timeout, any sqlite error), "tables" (another form, or a pre-task form whose store row is not exactly one). It
+    never creates a store. No exception escapes."""
+    try:
+        _check_reads_timeout(timeout)
+    except Exception as e:
+        return _named('argument', e)
+    try:
+        _check_lookup_root(root)
+    except Exception as e:
+        return _named('root', e)
+    try:
+        refusal, real = _store_present(root)
+        if refusal is not None:
+            return refusal
+        return _write_store(real, timeout, _migrate_work, check=False)
+    except Exception as e:
+        return _named('unreadable', e)
+
+
 # ---- the read-only lookup of the store (task TASK-066) ----
 
 # The bytes a file URI keeps as they are: RFC 3986's unreserved characters and "/" (the drive's ":" is kept apart).
@@ -559,18 +974,7 @@ def _store_answer(con, session_id, now):
         if any_lease:
             return _refused('lease_row_without_session', 'lease_row_without_session: the store holds a lease row')
         return StoreResult('done', 'no_lease_row')
-    if not any_lease:
-        return _refused('no_lease_row', 'no_lease_row: the store holds no lease row')
-    row = con.execute('SELECT ended_at FROM sessions WHERE session_id = ?', (session_id,)).fetchone()
-    if row is None:
-        return _refused('session', 'session: no session with this id')
-    if row[0] is not None:
-        return _refused('ended', 'ended: the session is ended')
-    leases = [_lease(r) for r in con.execute(_LEASES_OF_SESSION, (session_id,))]
-    live = [x for x in leases if x['expires_at'] > now]
-    if len(live) != 1:
-        return _refused('leases', 'leases: not exactly one unexpired lease of the session (%d)' % len(live))
-    return StoreResult('done', 'tied', value=live[0])
+    return _live_lease(con, session_id, now, any_lease)
 
 
 def _read_store(uri, timeout, session_id, now):
