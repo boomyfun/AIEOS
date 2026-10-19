@@ -20,3 +20,4 @@ TASK-066's code was reviewed with these points carried, each non-blocking:
 
 ## Log
 - 2026-10-19: opened (session fb812044; D-1376).
+- 2026-10-19: TASK-067 took its writer-side points (the WAL state, mutation M9, AC9's short-name case) by AC7 (a) to (c), accepted under D-1458; its claude_code_store points and its second trigger stay open (session dc5d0da2).
