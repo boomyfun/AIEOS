@@ -25,7 +25,10 @@ each parent in turn, until the parent no longer changes (the drive or share root
 (a folder whose project-state directory has no store file); a regular file, read from st_mode's kind bits with no stat
 import, stops the search there; any other OSError, a ValueError or an entry that is not a regular file (a dangling
 link among them) refuses ("search"; a fail-closed reading of bullet 6's "every other case", since bullet 5 names only a
-store not found). The store found is then looked up with no session id. Limits: a store found first inside an inner
+store not found). The store found is then looked up with no session id. The search climbs the lexical parents of
+os.path.abspath of the working folder, with no link resolved: a working folder reached through a link from outside a
+project's tree finds no store there and gives "enforce_nothing" (fail-open for that case; task TASK-068 states it and
+leaves the search unchanged). Limits: a store found first inside an inner
 project is judged alone, even while an outer store holds a lease row; a hook call outside every project's folder tree
 is not judged; a store created, removed or swapped between this search and the lookup's open is a race (refused if
 gone, judged if it appears).
@@ -38,11 +41,18 @@ section 3 already lists four tables) and its presence step and link check, with 
 junctions and unresolved links; hard links and bind mounts; check and use apart), are stated in that function's own
 docstring.
 
-The mapping of the lookup's answer: "done" with reason "tied" and a lease gives "tied"; "done" with reason
+The mapping of the lookup's answer: "done" with reason "tied" and a lease gives "tied" only when the lookup was made
+with a session id; on the search path, where no session id is given, it gives "refuse" with reason "entry" (task
+TASK-068; the real lookup gives "tied" only with a session id, so this guard changes no real result); "done" with reason
 "no_lease_row" gives "enforce_nothing" only on the search path; every "refused" gives "refuse" with the same reason
-and findings; any other shape of answer gives "refuse" with reason "entry". No exception escapes: any exception inside
-gives "refuse", reason "entry", the exception's type name in findings. Equal arguments over an unchanged disk give
-equal results; nothing is kept between calls.
+and findings; any other shape of answer gives "refuse" with reason "entry". No exception escapes: an exception while
+now is checked gives "refuse", reason "argument", with the finding "argument: now (<type name>)"; any other exception
+inside gives "refuse", reason "entry", the exception's type name in findings. Equal arguments over an unchanged disk
+give equal results; nothing is kept between calls.
+
+Now is checked here by its type's MRO (a class named datetime in module datetime), with no import of datetime, while
+the writer checks it with isinstance; the two checks of now differ and both fail closed (each refuses what it does not
+accept, and the writer checks again).
 
 The session id, the root, the working folder and now are arguments: where the hook entry takes them from is a later
 contract's. A now earlier than the real time would make an expired lease read as unexpired (the fail-open direction),
@@ -111,6 +121,8 @@ def _map(answer, searched, root):
     """The lookup's answer as judge's result (AC5)."""
     if not isinstance(answer, writer.StoreResult):
         return _refuse('entry', 'entry: the lookup gave no store result', root)
+    if answer.result == 'done' and answer.reason == 'tied' and searched:
+        return _refuse('entry', 'entry: the lookup gave "tied" without a session id', root)
     if answer.result == 'done' and answer.reason == 'tied' and answer.value is not None:
         return _result('tied', 'tied', [], root, answer.value)
     if answer.result == 'done' and answer.reason == 'no_lease_row' and searched:

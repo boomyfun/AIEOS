@@ -303,5 +303,152 @@ class ReadsFiles(unittest.TestCase):
                     self.assertEqual(words[0], 'BEGIN DEFERRED')
 
 
+def read_input(path, tool='Read'):
+    """The bytes of a PostToolUse input for a tool call, with a made-up path (json escapes a NUL)."""
+    import json
+    return json.dumps({'session_id': 'made-up-input-session', 'cwd': 'made-up-input-cwd', 'tool_name': tool,
+                       'tool_input': {'file_path': path}}).encode('utf-8')
+
+
+def dump(root):
+    """The store's tables, reads included, as SQL text (None when there is no store file)."""
+    import sqlite3
+    path = writer.store_path(root)
+    if not os.path.isfile(path):
+        return None
+    con = sqlite3.connect(path)
+    try:
+        return list(con.iterdump())
+    finally:
+        con.close()
+
+
+class ReadHookFiles(unittest.TestCase):
+    """TASK-068's rule R4 on real files: run end to end over real stores."""
+
+    def hook(self, root, data, env, folder=None, now=T0):
+        from aieos_bootstrap import claude_code_read_hook as hook
+        names = {}
+        if env[0] is not None:
+            names[hook.SESSION_VAR] = env[0]
+        if env[1] is not None:
+            names[hook.ROOT_VAR] = env[1]
+        return hook.run(data, names, folder, now)
+
+    def assert_refused(self, out, reason):
+        self.assertEqual((out['outcome'], out['reason']), ('skip', 'refuse'))
+        self.assertTrue(out['findings'][0].startswith(reason + ':'), out)
+
+    def test_a_read_is_recorded_once(self):
+        """TASK-068 AC4 and TASK-068 AC9: a Read input under a live tied lease gives "recorded" and stored_reads
+        shows the path; the same call again gives "recorded" and the path is stored once."""
+        with tempfile.TemporaryDirectory() as root:
+            tied_store(root)
+            for _ in range(2):
+                out = self.hook(root, read_input('made-up/a.txt'), ('s-1', root))
+                self.assertEqual(out, {'exit_code': 0, 'outcome': 'recorded', 'reason': None, 'findings': []})
+                self.assertEqual(writer.stored_reads(root, 's-1', 'TASK-001').value, ['made-up/a.txt'])
+
+    def test_nothing_is_stored_without_a_live_tie(self):
+        """TASK-068 AC4 and TASK-068 AC9: an expired lease, an ended session, an unknown session id, a session id
+        without a root, a root without a session id, a root whose store holds no lease row, a root with no store, two
+        unexpired leases of the session and a store of the three-table form each give "skip", "refuse" with judge's
+        own reason, and the store's tables are unchanged."""
+        import sqlite3
+
+        def other_lease(root):
+            tied_store(root)
+            writer.start_session(root, 's-2', 'agent-2', T0)
+            writer.grant_lease(root, 'TASK-002', 'READY', 'agent-2', 's-2', T0, T0 + datetime.timedelta(hours=1))
+
+        def ended(root):
+            other_lease(root)
+            writer.end_session(root, 's-1', T0)
+
+        def two_leases(root):
+            tied_store(root)
+            writer.grant_lease(root, 'TASK-002', 'READY', 'agent-1', 's-1', T0, T0 + datetime.timedelta(hours=1))
+
+        def three_tables(root):
+            tied_store(root)
+            con = sqlite3.connect(writer.store_path(root), isolation_level=None)
+            try:
+                con.execute('DROP TABLE reads')
+            finally:
+                con.close()
+        cases = [('leases', tied_store, ('s-1', 'R'), T0 + datetime.timedelta(hours=2)),
+                 ('ended', ended, ('s-1', 'R'), T0),
+                 ('session', other_lease, ('s-9', 'R'), T0),
+                 ('session_without_root', tied_store, ('s-1', None), T0),
+                 ('root_without_session', tied_store, (None, 'R'), T0),
+                 ('no_lease_row', lambda r: writer.open_store(r, 'epoch-1'), ('s-1', 'R'), T0),
+                 ('no_store', lambda r: None, ('s-1', 'R'), T0),
+                 ('leases', two_leases, ('s-1', 'R'), T0),
+                 ('tables', three_tables, ('s-1', 'R'), T0)]
+        for reason, setup, env, now in cases:
+            with self.subTest(reason=reason, setup=setup):
+                with tempfile.TemporaryDirectory() as root:
+                    setup(root)
+                    before = dump(root)
+                    out = self.hook(root, read_input('made-up/a.txt'), tuple(root if v == 'R' else v for v in env),
+                                    now=now)
+                    self.assert_refused(out, reason)
+                    self.assertEqual(dump(root), before)
+
+    def test_neither_name_set(self):
+        """TASK-068 AC4 and TASK-068 AC9: with neither name set and the working folder the store's root, a store with
+        no lease row gives "skip", "enforce_nothing", and one with a lease row "skip", "refuse"; nothing is stored."""
+        with tempfile.TemporaryDirectory() as root:
+            writer.open_store(root, 'epoch-1')
+            before = dump(root)
+            out = self.hook(root, read_input('made-up/a.txt'), (None, None), folder=root)
+            self.assertEqual((out['outcome'], out['reason'], out['findings']), ('skip', 'enforce_nothing', []))
+            self.assertEqual(dump(root), before)
+        with tempfile.TemporaryDirectory() as root:
+            tied_store(root)
+            before = dump(root)
+            out = self.hook(root, read_input('made-up/a.txt'), (None, None), folder=root)
+            self.assert_refused(out, 'lease_row_without_session')
+            self.assertEqual(dump(root), before)
+
+    def test_uncovered_and_refused_paths(self):
+        """TASK-068 AC4 and TASK-068 AC9: an input for Grep gives "skip", "uncovered"; a file_path holding NUL and one
+        of 4097 characters give "lost", reason "path"; nothing is stored."""
+        with tempfile.TemporaryDirectory() as root:
+            tied_store(root)
+            before = dump(root)
+            out = self.hook(root, read_input('made-up/a.txt', tool='Grep'), ('s-1', root))
+            self.assertEqual((out['outcome'], out['reason'], out['findings']), ('skip', 'uncovered', []))
+            for path in ('made-up\x00a', 'x' * 4097):
+                with self.subTest(path=len(path)):
+                    out = self.hook(root, read_input(path), ('s-1', root))
+                    self.assertEqual((out['outcome'], out['reason']), ('lost', 'path'))
+                    self.assertTrue(out['findings'][0].startswith('path:'))
+            self.assertEqual(dump(root), before)
+
+    def test_a_held_write_lock_loses_the_read(self):
+        """TASK-068 AC4 and TASK-068 AC9: while another connection holds BEGIN IMMEDIATE, judge's read-only lookup
+        still reads, and add_reads, reached through a stand-in of writer.add_reads that forwards with a timeout of 0.2
+        seconds, gives "lost", reason "unreadable"; after the holder's ROLLBACK the store's tables are unchanged."""
+        import sqlite3
+        from unittest import mock
+        real = writer.add_reads
+        with tempfile.TemporaryDirectory() as root:
+            tied_store(root)
+            before = dump(root)
+            con = sqlite3.connect(writer.store_path(root), isolation_level=None)
+            try:
+                con.execute('BEGIN IMMEDIATE')
+                con.execute('UPDATE store SET counter = counter')
+                with mock.patch.object(writer, 'add_reads', lambda r, s, p, n: real(r, s, p, n, timeout=0.2)):
+                    out = self.hook(root, read_input('made-up/a.txt'), ('s-1', root))
+                con.execute('ROLLBACK')
+            finally:
+                con.close()
+            self.assertEqual((out['outcome'], out['reason']), ('lost', 'unreadable'))
+            self.assertTrue(out['findings'][0].startswith('unreadable:'))
+            self.assertEqual(dump(root), before)
+
+
 if __name__ == '__main__':
     unittest.main()
