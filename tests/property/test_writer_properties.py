@@ -113,5 +113,57 @@ class LookupProperties(unittest.TestCase):
         self.assertTrue(any(s[0] == 'refused' for s in shapes))
 
 
+class ReadsProperties(unittest.TestCase):
+    """TASK-067's property tests (standard library only, fixed seeds, at most 50 cases each)."""
+
+    def test_each_distinct_path_once_in_first_seen_order(self):
+        """TASK-067 AC2, TASK-067 AC3 and TASK-067 AC9 (property): over generated path lists in several calls,
+        add_reads stores each distinct path once in first-seen order and stored_reads returns exactly that list."""
+        rng = random.Random(67)
+        alphabet = ['a', 'b', 'c', 'd', ' ', '007', 'x/y', 'é']
+        for case in range(30):
+            with tempfile.TemporaryDirectory() as root:
+                writer.open_store(root)
+                writer.start_session(root, 's-1', 'agent-1', T0)
+                writer.grant_lease(root, 'TASK-067', 'READY', 'agent-1', 's-1', T0, T0 + datetime.timedelta(hours=1))
+                want = []
+                for _ in range(rng.randint(1, 4)):
+                    paths = [rng.choice(alphabet) + rng.choice(['', '1', '2']) for _ in range(rng.randint(0, 8))]
+                    r = writer.add_reads(root, 's-1', paths if rng.random() < 0.5 else tuple(paths), T0)
+                    new = [p for p in dict.fromkeys(paths) if p not in want]
+                    self.assertEqual((r.result, r.value), ('done', len(new)), case)
+                    want.extend(new)
+                self.assertEqual(writer.stored_reads(root, 's-1', 'TASK-067').value, want, case)
+
+    def test_the_lookup_and_the_accumulation_agree(self):
+        """TASK-067 AC4 and TASK-067 AC9 (property): over generated store states (no lease row; unknown, ended and
+        started sessions; zero, one and two live leases of the session; expired leases), with valid arguments only and
+        well-formed lease rows, session_lease gives "tied" exactly when add_reads accepts, and on refusal both give the
+        same reason."""
+        rng = random.Random(1067)
+        seen = set()
+        for case in range(40):
+            with tempfile.TemporaryDirectory() as root:
+                writer.open_store(root)
+                sessions = ['s-%d' % i for i in range(1, rng.randint(1, 3) + 1)]
+                for sid in sessions:
+                    writer.start_session(root, sid, 'agent-1', T0)
+                for i in range(rng.randint(0, 4)):
+                    writer.grant_lease(root, rng.choice(TASKS), 'READY', 'agent-1', rng.choice(sessions), T0,
+                                       T0 + datetime.timedelta(minutes=rng.randint(1, 60)))
+                if rng.random() < 0.3:
+                    writer.end_session(root, rng.choice(sessions), T0)
+                sid = rng.choice(sessions + ['s-9'])
+                now = T0 + datetime.timedelta(minutes=rng.randint(0, 70))
+                a = writer.session_lease(root, sid, now)
+                b = writer.add_reads(root, sid, ['p'], now)
+                seen.add(a.reason)
+                self.assertEqual(a.reason == 'tied', b.result == 'done', (case, a, b))
+                if a.reason != 'tied':
+                    self.assertEqual((a.reason, a.findings), (b.reason, b.findings), case)
+        self.assertIn('tied', seen)
+        self.assertTrue(seen - {'tied'})
+
+
 if __name__ == '__main__':
     unittest.main()
