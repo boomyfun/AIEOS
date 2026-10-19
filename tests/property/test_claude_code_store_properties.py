@@ -79,5 +79,56 @@ class Properties(unittest.TestCase):
             self.assertEqual(first, second)
 
 
+PRESENT_SIDS = ('s-1', 'made-up-session-9', ' ')
+PRESENT_ROOTS = (PROJ, SUB)
+
+
+def judge_present(rng, answer, both):
+    """One case on the both-present path when both is true (a present session id and a present absolute root), else
+    a case of the search path, with the given answer."""
+    if both:
+        sid, root, wf = rng.choice(PRESENT_SIDS), rng.choice(PRESENT_ROOTS), rng.choice(VALUES)
+    else:
+        sid, root, wf = rng.choice((None, '')), rng.choice((None, '')), rng.choice((PROJ, SUB))
+    osns = types.SimpleNamespace(lstat=lambda p: types.SimpleNamespace(st_mode=0o100644), path=types.SimpleNamespace(
+        abspath=os.path.abspath, isabs=os.path.isabs, isdir=lambda p: p in {PROJ, SUB}, dirname=os.path.dirname))
+    with mock.patch.object(claude_code_store, 'os', osns), \
+            mock.patch.object(writer, 'session_lease', lambda r, s, n, *a: answer):
+        out = claude_code_store.judge(sid, root, wf, T0)
+    return sid, root, out
+
+
+class GuardProperties(unittest.TestCase):
+
+    def test_no_lease_row_with_both_present_refuses(self):
+        """TASK-068 AC7 and TASK-068 AC9 (property): with "done"/"no_lease_row", in at least half the cases on the
+        both-present path, "enforce_nothing" occurs only when both values are absent, and the both-present cases give
+        "refuse", reason "entry"."""
+        rng = random.Random(681)
+        present = 0
+        for i in range(CASES):
+            sid, root, out = judge_present(rng, writer.StoreResult('done', 'no_lease_row'), i % 2 == 0)
+            if out['outcome'] == 'enforce_nothing':
+                self.assertTrue(absent(sid) and absent(root), (sid, root))
+            if not absent(sid) and not absent(root):
+                present += 1
+                self.assertEqual((out['outcome'], out['reason']), ('refuse', 'entry'))
+        self.assertGreaterEqual(present, CASES // 2)
+
+    def test_tied_is_given_with_both_present(self):
+        """TASK-068 AC8 and TASK-068 AC9 (property): with "done"/"tied" and a lease, the both-present cases give "tied"
+        with the lease, and the search-path cases give "refuse", reason "entry" (so "tied" is not left to chance)."""
+        rng = random.Random(682)
+        tied = 0
+        for i in range(CASES):
+            sid, root, out = judge_present(rng, writer.StoreResult('done', 'tied', value=LEASE), i % 2 == 0)
+            if not absent(sid) and not absent(root):
+                tied += 1
+                self.assertEqual((out['outcome'], out['lease']), ('tied', LEASE))
+            else:
+                self.assertEqual((out['outcome'], out['reason'], out['lease']), ('refuse', 'entry', None))
+        self.assertGreaterEqual(tied, CASES // 2)
+
+
 if __name__ == '__main__':
     unittest.main()

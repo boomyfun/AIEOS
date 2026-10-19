@@ -177,8 +177,8 @@ class R4UpwardSearch(unittest.TestCase):
         """TASK-066 AC4: NotADirectoryError passes the folder over like FileNotFoundError."""
         osns = fake_os(stores=[writer.store_path(PROJ)], dirs=[SUB],
                        errors={writer.store_path(INNER): NotADirectoryError('x')})
-        out, calls = run(None, None, SUB, osns=osns)
-        self.assertEqual((out['outcome'], calls), ('tied', [(PROJ, None, T0)]))
+        out, calls = run(None, None, SUB, osns=osns, answer=writer.StoreResult('done', 'no_lease_row'))
+        self.assertEqual((out['outcome'], calls), ('enforce_nothing', [(PROJ, None, T0)]))
 
     def test_an_entry_that_cannot_be_examined_refuses(self):
         """TASK-066 AC4: another OSError, a ValueError, or an entry that is not a regular file (a directory, a link, a
@@ -312,6 +312,28 @@ class R6WhatIsStated(unittest.TestCase):
                       'nothing is measured', 'CC-3', 'C6'):
             with self.subTest(words=words):
                 self.assertIn(words, doc)
+
+
+class R7TheGuard(unittest.TestCase):
+    """TASK-068's rule R7 on claude_code_store (DEF-0085's points, AC7 (c))."""
+
+    def test_tied_on_the_search_path_refuses(self):
+        """TASK-068 AC7 and TASK-068 AC9: a "done"/"tied" answer with a lease gives "tied" only when the lookup was
+        made with a session id; on the search path it gives "refuse", reason "entry", root the store found, lease
+        None; the lookup is still made once, with no session id."""
+        osns = fake_os(stores=[writer.store_path(PROJ)], dirs=[SUB])
+        out, calls = run(None, None, SUB, osns=osns)
+        self.assertEqual((out['outcome'], out['reason'], out['root'], out['lease'], calls),
+                         ('refuse', 'entry', PROJ, None, [(PROJ, None, T0)]))
+        self.assertEqual(len(out['findings']), 1)
+        self.assertTrue(out['findings'][0].startswith('entry:'))
+        out, calls = run('s-1', PROJ, None)
+        self.assertEqual((out['outcome'], out['lease'], calls), ('tied', LEASE, [(PROJ, 's-1', T0)]))
+
+    def test_the_no_lease_row_line_is_kept(self):
+        """TASK-068 AC7 and TASK-068 AC9: the line of _map that J9 changes stays byte-identical, once."""
+        text = SOURCE.read_bytes().decode('utf-8')
+        self.assertEqual(text.count("answer.reason == 'no_lease_row' and searched:"), 1)
 
 
 if __name__ == '__main__':
