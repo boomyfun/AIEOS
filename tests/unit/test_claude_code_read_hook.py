@@ -509,6 +509,15 @@ class R5WhatTheModulesDo(unittest.TestCase):
             with self.subTest(name=name, text=text):
                 self.assertTrue(separation_findings(name, text))
 
+    def test_the_pair_is_exact_apart_from_the_import_rule(self):
+        """TASK-068 AC5 and TASK-068 AC9: the allowed pair is exact apart from the import rule: adapter.violation under
+        another hook-side name gives the attribute finding itself, not only the import finding; under the channel's
+        name, with the channel's own imports, it gives none."""
+        text = 'from aieos_bootstrap import claude_code\nfrom aieos_bootstrap import adapter\nadapter.violation()\n'
+        self.assertIn('adapter.violation', separation_findings('claude_code_hook.py', text))
+        channel = 'from aieos_bootstrap import adapter, claude_code, claude_code_hook\nadapter.violation()\n'
+        self.assertEqual(separation_findings('claude_code_channel.py', channel), [])
+
 
 class R6WhatIsStated(unittest.TestCase):
 
