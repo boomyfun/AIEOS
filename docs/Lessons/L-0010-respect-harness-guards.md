@@ -270,6 +270,12 @@ Occurrence in session 2026-10-19-0115 (../History/2026-10/2026-10-19-0115-the-pa
 Occurrence in session 2026-10-19-0247 (../History/2026-10/2026-10-19-0247-the-pages-d1378-to-d1390-and-the-contract-of-task-067-approved.md):
 - **2026-10-19 (D-1392, D-1394, D-1396, D-1398).** Five text slips beside tool calls (:397, :423, :649, :930, :1125), against the owner's "no text with an action"; the text-block guard refused one read (:427), which was sent again alone under its own decision; each slip was listed by its own decision, the last three before any refusal; Claude's reading: they came at step changes inside long runs of edits. A k1c reviewer's read-only Bash call was refused by a hook before it ran (D-1395).
 
+Occurrence in session 2026-10-19-1001 (../History/2026-10/2026-10-19-1001-a-stop-after-guard-refusals-and-the-owners-question-on-the-listing-route.md):
+- **2026-10-19 (D-1400 to D-1402).** A two-step display joined by ";" was refused before it ran (R4), the worker's error, and dropped; the guard then refused the next Bash (R6) because the refused line stayed in the transcript; the decision agent's listing was flagged by the app's notice "[Auto-Mode Bypass]" and the next request was stopped by the classifier; the decision agent stopped the session and asked the owner whether agents may keep writing the listing; the owner answered "có" in the next session (D-1404).
+
+Occurrence in session 2026-10-19-1042 (../History/2026-10/2026-10-19-1042-the-owners-answer-the-pages-d1391-to-d1403-and-the-contract-of-task-067-on-main.md):
+- **2026-10-19 (D-1404, D-1406, D-1407).** A Python run with a dash after Python's name and no timeout was refused before it ran (R2, R3), the worker's error, and rewritten in the guard's own form without bringing it first, a departure; a text slip beside a call (:439) made the guard refuse the next Bash (R5), and the worker's request wrongly stated that no such text was written; listed by its own decision; an app notice on the decision agent's report (an instance that only read) was brought before acting. A second text slip beside a Write (:944) made the guard refuse a sha256sum (R5); listed by D-1411, the sha256sum ran once, unchanged. A third text slip beside an Edit (:1153) made the guard refuse two Bash calls (R5); listed by D-1414, each ran once, unchanged. A fourth text slip beside an Edit (:1236) made the guard refuse a sha256sum (R5); listed by D-1415, and the session then stopped (D-1415).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
