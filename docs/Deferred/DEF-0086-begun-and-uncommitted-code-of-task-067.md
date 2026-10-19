@@ -1,6 +1,6 @@
 # DEF-0086: TASK-067's code, begun and not committed
 
-- Status: open
+- Status: done
 - Opened: 2026-10-19 (session 799f77cb; decision D-1410 C3)
 - Deferred by: decision agent (A41, A51), D-1410 C3: the code stops at a clean point before the session's end.
 - Decision group: A (the code of an approved contract, TASK-067 on main at 60345ce1).
@@ -17,3 +17,4 @@
 
 ## Log
 - 2026-10-19: opened (session 799f77cb; D-1410).
+- 2026-10-19: done (session 6260430e). D-1421 ruled its three points: the WAL side files kept as an observation, with a limit sentence in writer.py's module docstring; erratum E1 (the finding "unreadable: UnicodeEncodeError" for a path not encodable as UTF-8); erratum E2 (the trace's "-- PRAGMA table_info=" lines). Its remaining work was finished: the AC8 scripts and their weakened copies, the sixty broken copies, the whole suite under the CI's steps, task/TASK-067 at c9cf31c7 (D-1424, D-1428), and round t67a's five way-2 reviews t67a-R1 to R5 (D-1431). TASK-067 is not yet accepted.
