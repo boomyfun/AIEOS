@@ -1,0 +1,660 @@
+# Task contract TASK-068, the read hook program of the Claude Code adapter (Master Plan revision 4, §4 M5; concept line
+# 945, "record the observed read-set"; specification 5 revision 4, section 7 and section 11 point 7, bullets 2 to 6;
+# specification 2 revision 7, section 3).
+# Revision 3, a draft, drafted under decisions D-1468 (H1 chosen), D-1469 (the scoping note approved, its five
+# rulings and C1 to C6), D-1472 (the rulings on revision 0's readings, and its C1), D-1473 (round t68a), D-1474 (round
+# t68a's dispositions) and D-1484 (round t68b's dispositions); brought for
+# review and approval in its own requests; whether it is approved is recorded in the decision files, not in this file. Fields and value forms follow specification 2 §5.1 and the contracts of
+# TASK-062 to TASK-067. Readings marked "(reading)" are the worker's, for the decision agent to rule; values marked
+# "(filled by script)" are written by script from the base just before commit C.
+# What was read for this draft (D-1469 C2): specification 5 revision 4 in full; specification 2 revision 7 §3 and §6.2;
+# TASK-066.yaml and TASK-067.yaml in full; src/aieos_bootstrap/claude_code_store.py in full; read_set_record.py in
+# full; writer.add_reads and writer.session_lease (docstrings and bodies' heads); adapter.violation's signature
+# (adapter.py:276-279); the module docstrings of claude_code.py, claude_code_hook.py, claude_code_channel.py and
+# claude_code_reads.py, and claude_code_reads.py's RESULT_KEYS and result forms (:57, :65, :69, :119);
+# tests/unit/test_claude_code_store.py (:1-319), tests/property/test_claude_code_store_properties.py (:1-84) and
+# tests/integration/test_writer_files.py (:1-308), in full (revision 1, D-1472 C1 (a)); TASK-066's broken-copy list
+# entry J9 in session fb812044's archive (t066/brk66.py:58) and review 66a-R3's finding on it; the workflow's
+# deterministic_rule step (aieos-checks.yml:1417-1626).
+# Revision 1 (D-1472): the three test modules read in full; AC7 (d) names J9's exact change; AC8 names the existing
+# functions the task changes; step (4)'s read_paths result named by its own RESULT_KEYS.
+# Revision 2 (round t68a, reviews R1 and R2 on claude-sonnet-5-5, both "fail" on one shared blocking finding): step
+# (1) wrapped, its now test named (R1-1, R2-1); judge's and the writer's answers checked by shape before use, findings
+# always a list of str (R1-2, R2-2); main passes os.environ unread (R1-3); the session id is the environment's, add_reads
+# reached as writer.add_reads (R1-4); the silent-loss limit widened (R1-5); AC5's check an allow-list with aliases
+# resolved (R1-6, R2-6); J9 a scratch copy only (R1-7); no ".aieos" in the new docstrings (R1-8, R2-7); more AC4 cases
+# (R1-9, R2-5); DEF dispositions completed (R1-10); the clock in two helpers (R2-3); test-data requirements (R2-4); J9's
+# test stronger (R2-8); the mapping sentence of claude_code_store's docstring (R2-9); AC8 (2) expected, with a forcing
+# property function (R2-11); added module-level constants allowed in tests (R2-12); more broken copies (R2-13).
+# Revision 3 (round t68b, reviews R1 and R2 on claude-sonnet-5-5, both "pass", no blocking finding; D-1484): the clock
+# window stated as a limit (t68b R1-1); an AST check of the new module's os and sys uses (t68b R1-2); the silent-loss
+# limit widened to every "skip" but "enforce_nothing" (t68b R1-3); "tied" needs judge's reason "tied" and a dict lease
+# (t68b R1-4); AC4's set-ups and judge's own reasons (t68b R1-5, R2-1); sub-reasons as findings[0]'s prefix (t68b R2-2);
+# the "entry" endings' findings fixed (t68b R2-3); environ.get raising (t68b R1-6); J9's line kept byte-identical (t68b
+# R1-7); DEF accounts (t68b R1-8); four limits of spec 5 :111 (t68b R1-9); seed 66 kept if it still passes (t68b R2-4);
+# AC7 (e) in the module docstring (t68b R2-5); the pinned phrases listed (t68b R2-6); dotted chains and any other use of
+# a writer or adapter name refused (t68b R2-7); the tests/ grep before commit C (t68b R2-10); test-building points (t68b
+# R2-9); more broken copies (t68b R2-12).
+# Task type: implementation. What it adds:
+# - a new hook-side module src/aieos_bootstrap/claude_code_read_hook.py, for a PostToolUse hook on the file-reading
+#   tool, with the constants SESSION_VAR = "AIEOS_SESSION_ID" and ROOT_VAR = "AIEOS_ROOT" (D-1469 ruling 4; names only:
+#   nothing is placed or set) and two functions:
+#   - run(stdin_bytes, environ, working_folder, now): the judgement of one hook call, every outside value an argument;
+#     it returns a mapping with exactly exit_code, outcome, reason and findings; it writes only through
+#     writer.add_reads;
+#   - main(): the glue that reads standard input once (sys.stdin.buffer.read()), takes os.environ (passed to run
+#     unread: run is the only reader of the two names), the process's own working folder (os.getcwd()) and the clock,
+#     calls run, and returns its exit_code; and the line
+#     `if __name__ == '__main__': sys.exit(main())`;
+# - in src/aieos_bootstrap/claude_code_store.py, DEF-0085's claude_code_store points (D-1469 ruling 3), as AC7 says;
+# - tests: two new test modules for the new module, additions to the two claude_code_store test modules, and one new
+#   class of end-to-end tests in tests/integration/test_writer_files.py (the only kind of place a real store may be
+#   built: the workflow's per-path allowance for sqlite3 and tempfile, aieos-checks.yml:1462-1470).
+# Nothing in the repository wires the program into Claude Code: no settings file, no matcher, no hook entry, nothing
+# under .claude/ (D-1469; CC-3, the owner's, A51 item (4)); how the owner would run it is placement, described only in
+# the module docstring. writer.py is unchanged.
+# The flow of run (D-1469 note §3), in this order, the first step that ends giving the result; every result has
+# exit_code 0 (D-1469 ruling 1):
+# (1) the arguments, all inside one try whose any exception (a raising tzinfo among them) gives outcome "skip", reason
+#     "argument", findings ["argument: <type name>"]: stdin_bytes of exactly type bytes; environ an instance of
+#     collections.abc.Mapping (only .get of the two names is used); working_folder a str or None; now passing the
+#     test isinstance(now, datetime.datetime) and now.tzinfo is not None and now.utcoffset() == timedelta(0) and
+#     now.microsecond == 0 (the form of the writer's _check_time and of read_set_record's _utc_whole; reading); a
+#     failed check gives "skip", "argument", with a fixed finding naming the argument;
+# (2) session_id = environ.get(SESSION_VAR) and root = environ.get(ROOT_VAR), passed unchanged (an absent name is None,
+#     an empty value "", both passed as they are); no other name is read; the empty-or-absent rule is judge's (TASK-066
+#     AC4; spec 5 :110); an exception raised by environ.get for either name gives step (6)'s "skip", "entry" (t68b R1-6);
+# (3) claude_code_store.judge(session_id, root, working_folder, now), its answer checked in this order: not a dict whose
+#     keys are exactly judge's KEYS, or its findings not a list of str, gives "skip", reason "entry"; outcome
+#     "enforce_nothing" gives "skip", reason "enforce_nothing", findings []; outcome "refuse" with a str reason gives
+#     "skip", reason "refuse", findings judge's own findings (judge's fixed sentences, never input text, TASK-066 AC1
+#     and AC5) copied as a new list; outcome "tied" with judge's reason "tied", a dict lease, and session_id and judge's
+#     root both non-empty str goes on (t68b R1-4); every other answer gives "skip", reason "entry". Every "entry" ending
+#     of this step gives findings ["entry: judge"] (t68b R2-3). The session id used later is step (2)'s environment value, never
+#     anything taken from judge's lease;
+# (4) claude_code_reads.read_paths(stdin_bytes), its answer checked: not a dict whose keys are exactly read_paths'
+#     RESULT_KEYS (claude_code_reads.py:57) gives "skip", "entry"; result "uncovered" gives "skip", reason "uncovered",
+#     findings [] (read_paths' finding may name the tool, so it is not copied); result "read" with a non-empty list of
+#     str under read_paths goes on; every other answer gives "skip", "entry", findings ["entry: read_paths"] (t68b R2-3);
+# (5) writer.add_reads(judge's root, session_id, the paths, now), reached as an attribute of the writer module at call
+#     time (so a test's stand-in for writer.add_reads is the one called): a writer.StoreResult "done" gives outcome
+#     "recorded", reason None, findings [] (the count added is not kept; the caller needs none); a StoreResult
+#     "refused" with a str reason gives outcome "lost", reason the writer's reason, findings the writer's findings
+#     converted to a list (fixed words: TASK-067's finding rule), each checked to be a str, else "lost", "entry";
+#     anything else gives "lost", reason "entry"; each "entry" ending of this step gives findings ["entry: add_reads"]
+#     (t68b R2-3); no input text ever appears in findings;
+# (6) no exception escapes run: an exception after step (1) gives "lost", reason "entry" when step (5) was reached,
+#     else "skip", reason "entry"; findings ["entry: <type name>"], never a message.
+# run reads no key of the hook input itself: the input's bytes go only to claude_code_reads.read_paths, which reads
+# only tool_name and tool_input (D-1469 C1; DEF-0084 h4b Y5-6: the input's session_id, cwd and transcript_path are
+# never read; this program writes no record, so no recorder words exist here; the record is the launcher's, spec 5
+# :108, specification 7).
+# main (D-1469 C1): reads standard input once, then takes os.environ (unread), then os.getcwd() (an OSError gives
+# working_folder None, which judge refuses on the search path and which is unused when both names are set), then the
+# clock through two private helpers (R2-3): _raw_clock() returns datetime.datetime.now(datetime.timezone.utc) and is
+# the one a test replaces; _whole_second_now() calls _raw_clock() and rounds its value up to the next whole second
+# when its microsecond is not 0 (D-1469 ruling 5; the rounding is the fail-closed direction: rounding never makes
+# a lease that has expired at the clock's reading read as live); the same now goes to judge and add_reads through run.
+# A limit in the fail-open direction (t68b R1-1; D-1484 C2): now is fixed before judge's lookup and before add_reads'
+# lock waits (up to about 5 seconds each), so a lease that expires during the call, up to about 10 seconds, may still
+# be judged live, and a read may then be stored for it. The clock is not read again before add_reads: add_reads takes
+# now as an argument and checks the lease after its own BEGIN IMMEDIATE wait, so about 5 seconds would remain anyway,
+# and D-1469 ruling 5's "the same now" is kept.
+# An error while reading standard input, the environment or the clock gives exit code 0, no output and nothing
+# written; no exception escapes main (it returns 0 on any exception); main prints nothing and writes nothing to
+# standard output or standard error.
+# Outcomes and messages (D-1469 ruling 1): every outcome gives exit code 0 and no text; a PostToolUse
+# hook runs after the read, so a refusal would block nothing; the program never asks for an approval and never shows
+# a stop. A stated limit (R1-5): a read is lost silently, and nothing records the loss, on a "lost" outcome (a lock
+# held past add_reads' 5.0-second default timeout, the bound, a path refused, a damaged store, an exception) and on
+# every "skip" other than "enforce_nothing" ("argument", "refuse", "uncovered", "entry") while the session holds a
+# lease (t68b R1-3; for example a Read input read_paths cannot parse, which gives "uncovered", or judge's lookup refusing
+# "unreadable" during a long commit, spec 5 :112, writer.py:1022-1025); the read-set stays a lower bound and an
+# estimate (spec 5 :72-73; spec 2 :184). One hook call may wait up to about 10 seconds (judge's lookup timeout, then
+# add_reads'), beside Claude Code's own hook timeout, unmeasured (C6). A new deferred point, for specification 2's next
+# revision: a count of reads lost while a session holds a lease (every "lost" and every "skip" but "enforce_nothing";
+# t68b R1-3; written at the records step, not in this task's write-set; D-1469 C1).
+# The check of calls (D-1469 ruling 2; DEF-0084 h4c Y1-4 and h4d Y5-8 as far as this task reaches): AC5.
+# The behaviour a hook-side caller of add_reads meets (DEF-0087's trigger, "before a contract lets a hook-side caller
+# use add_reads"; D-1469 C1), stated in the new module's docstring: with exactly 10000 stored, a duplicate or an empty
+# call returns "done" 0 (DA-1); a "?mode=rw" open may roll back a hot journal and so change the store's bytes (t67a-R2);
+# a failed COMMIT may have applied the change ("each once" makes a later call safe). DEF-0087's other points stay open
+# (writer.py is unchanged); its log line is written at the records step.
+# DEF-0085 (its second trigger fires: run acts on judge's "enforce_nothing" by storing nothing; DEF-0085 :19) taken by
+# AC7: the lexical search stated; the "argument: now (<type>)" finding stated; _map's guard; the J9 property case; the
+# two now checks stated; and the mapping sentence of its docstring, after the guard (R2-9). Left: the global-os
+# stand-ins (a limit only). Its writer-side points (the WAL state, mutation M9, AC9's short-name case) were taken by
+# TASK-067 (DEF-0085's log, 2026-10-19). Its log line is written at the records step.
+# DEF-0084 taken: h4c Y1-4 as far as this task reaches, h4d Y5-8 in its current extent (AC5), h4b Y5-6 (above);
+# already taken by earlier tasks and not reopened: h4b Y2-11 (the bound, TASK-067; t68b R1-8), h4d Y1-1's second part
+# (remove_reads, TASK-067), Y2-4, Y2-8, Y1-6 (TASK-066 and TASK-067). Stay deferred: the token-less observe and finding a task's leftover sessions (point 10's
+# contract); h4d Y1-3, Y2-6; h4c Y1-7; h4b Y2-6; h4c Y2-10; h4c Y3-2; h4d Y4-6; h4c Y5-7, Y5-9; the cost of fail closed
+# when a lease expires during a run; h4d Y5-7 in full (D2-4, D2-5 and D3-2's "not a holding" named in the text). DEF-0080, DEF-0081 and DEF-0082 stay deferred: this task changes none of their modules.
+# DEF-0083 and DEF-0076 to DEF-0078 are not touched. DEF-0088: point 2 not reached: no message is shown; silence chosen by
+# D-1469 ruling 1 (t68b R1-8); points 1 and 3 not reached; its log line is written at the records step.
+# Limits (carried at acceptance): C6 and P-LOC unmeasured; no hook placed, no matcher, no setting, nothing measured
+# (CC-3, the owner's, A51 item (4)); every limit TASK-061 to TASK-067 carried; whether a PostToolUse hook inherits the
+# runtime's environment, in subagents and across a resume or a compaction, and the folder it runs in (spec 5 :115);
+# in the desktop app's sessions the tie is covered by no measurement (spec 5 :53), so with neither name set a hook
+# inside a project whose store holds a lease row stores nothing; reads through Grep, Glob, a shell or an MCP tool are
+# not seen (claude_code_reads); the silent loss above; the machine's clock is trusted; the clock window above (now
+# fixed before the lookups; a lease may expire during the call, t68b R1-1); spec 5 :111's limits (t68b R1-9): a hook
+# call outside every project's folder tree is not judged, an inner project's store judges alone, a removed or emptied
+# store turns the hook off when no session id is set, and a run outside the launcher while no task is leased is not
+# judged; standard input is read whole
+# (no size bound of its own); no test starts a process, so `python -m` and the __main__ line are not run by the suite
+# (main is called with stand-ins); a hook killed by Claude Code's own timeout (unmeasured) stores nothing.
+# Risk: high (risk rules revision 6, §2 point 3: R3 matches every path under src/** and tests/**), computed over the
+# base by script before commit C. GOV-003: every path of the write-set is an evaluator path by the workflow's pinned
+# list, by script; change class critical_cr, as for TASK-060 to TASK-067, ruled at acceptance. Profile
+# (assurance-model.md §5, gov-AIEOS, high): functional [unit_test], architecture [deterministic_rule], functional
+# [integration_test], security [static_security_analysis] and architecture [ai_review (cross-model)], plus the
+# evidence_required of the applicable articles. Reviews: five way-2 reviews on Sonnet 5.5, a Claude model other than
+# the implementer's (Opus 5.5), never Fable (the owner's words of 2026-10-17); and the decision agent's own reviews:
+# INV-003's human_review, OPS-002's human_review and the cross-model half, each its own record (D-1148 Q2).
+# Records: in the readable form, as TASK-067's; per-entry coverage checked by script before the acceptance request
+# (L-0022), and the governor's evaluation over the records reported (D-1098).
+# Naming (D-544 Q3): every new test function names the AC ids it stands for as "TASK-068 ACn" in its own docstring.
+# Evaluation path (A61; as TASK-019 to TASK-067): commit C changes only docs/tasks/TASK-068.yaml and has one parent equal
+# to base_commit; the task's commits, each carrying "AIEOS-Task: TASK-068" and no e-mail address in its message, go to
+# task/TASK-068 under their own decisions; main receives the task only at its acceptance.
+# Not applicable: OPS-001 (the task changes no ref); INV-005 to INV-008, INV-010 and INV-011; INV-009 (the task touches
+# no event log); GOV-001, GOV-004 to GOV-006 and SEC-003 (no path of the write-set meets them). INV-004 applies: the
+# writer stays the only module that opens the store; the new module reaches it only through writer.add_reads.
+# Owner-kept acts: none. No hook placed, no matcher chosen, no Claude Code setting, nothing measured, nothing under
+# .github/ or .claude/, no push of its own; it weakens no evidence requirement; so its acceptance is one delegated
+# approval of the decision agent (Master Plan section 6).
+task: TASK-068
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add the Claude Code adapter's read hook program (specification 5 §7 and §11 point 7) in standard-library Python 3: a
+  new module src/aieos_bootstrap/claude_code_read_hook.py with the constants SESSION_VAR and ROOT_VAR, run(stdin_bytes,
+  environ, working_folder, now), which judges one PostToolUse hook call through claude_code_store.judge,
+  claude_code_reads.read_paths and writer.add_reads and always gives exit code 0, and main(), which takes standard
+  input, the two environment names, the process's working folder and the clock rounded up to a whole second; and
+  DEF-0085's text and test points in src/aieos_bootstrap/claude_code_store.py. With new test modules
+  tests/unit/test_claude_code_read_hook.py and tests/property/test_claude_code_read_hook_properties.py, new test
+  functions in tests/unit/test_claude_code_store.py and tests/property/test_claude_code_store_properties.py, and one
+  new class in tests/integration/test_writer_files.py, each new test naming its AC ids in its own docstring.
+traces_to:
+  - docs/specs/spec-05-adapter-contract.md#7
+  - docs/specs/spec-05-adapter-contract.md#11
+  - docs/specs/spec-02-aieos-file-format.md#3
+  - docs/specs/risk-rules-gov-aieos.md#2
+input_state:
+  # base_commit and the intent_versions values are filled by script from refs/heads/main just before commit C is made
+  # (D-198 C5).
+  base_commit: 8aa51f4bfa7d1385d79a2ad2d80ab77e456d6a2c
+  depends_on: [TASK-001, TASK-016, TASK-065, TASK-066, TASK-067]
+  intent_versions:
+    docs/specs/spec-05-adapter-contract.md: c2496023175dcc535974f04c9ec6778101da26fb90a35a5424fbc589c0303601
+    docs/specs/spec-02-aieos-file-format.md: 9442edbb9e6e70fcc7ef0b296815315d742c5c9c365e32813e83dbc3a982533b
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  # Three paths are new; claude_code_store.py, its two test modules and test_writer_files.py are changed (additions,
+  # and the changes AC7 and AC8 list).
+  paths:
+    - src/aieos_bootstrap/claude_code_read_hook.py
+    - src/aieos_bootstrap/claude_code_store.py
+    - tests/unit/test_claude_code_read_hook.py
+    - tests/property/test_claude_code_read_hook_properties.py
+    - tests/unit/test_claude_code_store.py
+    - tests/property/test_claude_code_store_properties.py
+    - tests/integration/test_writer_files.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - docs/Deferred/DEF-0084-points-carried-from-the-hook-process-drafts.md
+    - docs/Deferred/DEF-0085-the-next-text-change-of-the-store-lookup.md
+    - docs/Deferred/DEF-0087-the-findings-and-limits-carried-from-the-reads-table.md
+    - docs/Deferred/DEF-0088-the-claude-apps-own-checks-and-aieoss-flow-after-a-refusal.md
+    - src/aieos_bootstrap/**
+    - tests/unit/**
+    - tests/integration/**
+    - tests/property/**
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.claude_code_store.judge, aieos_bootstrap.claude_code_reads.read_paths, aieos_bootstrap.writer.add_reads, aieos_bootstrap.writer.stored_reads, aieos_bootstrap.writer.store_path, aieos_bootstrap.writer.session_lease, aieos_bootstrap.writer.open_store, aieos_bootstrap.writer.start_session, aieos_bootstrap.writer.grant_lease, aieos_bootstrap.writer.StoreResult]
+  schemas: [spec-02 local store tables (section 3)]
+forbidden:
+  # As TASK-067's list: .github/**, .aieos/**, .claude/**, CLAUDE.md, AIEOS-concept.md, docs/**, bench/**,
+  # tests/conformance/**, .gitattributes, .gitignore, and every existing path of src/ and tests/ that is not in the
+  # write-set, src/aieos_bootstrap/writer.py among them (the list is filled by script from the base's tree before
+  # commit C).
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/conformance/fixtures/acc_01.py
+  - tests/conformance/fixtures/acc_02.py
+  - tests/conformance/fixtures/acc_03.py
+  - tests/conformance/fixtures/acc_04.py
+  - tests/conformance/fixtures/acc_05.py
+  - tests/conformance/fixtures/acc_06.py
+  - tests/conformance/fixtures/acc_07.py
+  - tests/conformance/fixtures/acc_08.py
+  - tests/conformance/fixtures/acc_09.py
+  - tests/conformance/fixtures/acc_10.py
+  - tests/conformance/fixtures/acc_11.py
+  - tests/conformance/fixtures/acc_12.py
+  - tests/conformance/fixtures/acc_13.py
+  - tests/conformance/fixtures/acc_14.py
+  - tests/conformance/fixtures/acc_15.py
+  - tests/conformance/fixtures/acc_16.py
+  - tests/conformance/fixtures/acc_17.py
+  - tests/conformance/fixtures/adv_01.py
+  - tests/conformance/fixtures/adv_03.py
+  - tests/conformance/fixtures_cb/adv_02.py
+  - tests/conformance/fixtures_rc/rc_01.py
+  - tests/conformance/fixtures_rc/rc_02.py
+  - tests/conformance/fixtures_rc/rc_03.py
+  - tests/conformance/fixtures_rc/rc_04.py
+  - tests/conformance/fixtures_rc/rc_05.py
+  - tests/conformance/fixtures_rc/rc_06.py
+  - tests/conformance/fixtures_rc/rc_07.py
+  - tests/conformance/fixtures_rc/rc_08.py
+  - tests/conformance/fixtures_rc/rc_09.py
+  - tests/conformance/fixtures_rc/rc_10.py
+  - tests/conformance/fixtures_rc/rc_11.py
+  - tests/conformance/fixtures_risk/risk_01.py
+  - tests/conformance/set.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      run's arguments and result. run(stdin_bytes, environ, working_folder, now) returns a mapping with exactly the
+      keys exit_code, outcome, reason and findings; exit_code is always 0; outcome is one of "skip", "recorded" and
+      "lost"; findings is a list of str. Step (1) of the header refuses, outcome "skip", reason "argument": stdin_bytes
+      not of exactly type bytes (a bytearray, a memoryview, a str, None); environ not a collections.abc.Mapping (a list
+      of pairs, None); working_folder neither a str nor None; now not a timezone-aware datetime in UTC with whole
+      seconds (naive, a fraction of a second, another offset, a date, a time, a str); a raising tzinfo gives "skip",
+      "argument", findings ["argument: <type name>"], by step (1)'s own try. No exception escapes run: any exception
+      after step (1) gives the header's step (6) result, findings holding only the exception's type name. Equal
+      arguments over an unchanged store give equal results; nothing is kept between calls.
+  - AC2: >-
+      run's flow, in the header's order (1) to (6); the first step that ends gives the result, and no later step's
+      function is called (shown by recording stand-ins). Only environ.get(SESSION_VAR) and environ.get(ROOT_VAR) are
+      called on environ: a recording Mapping whose __getitem__, __iter__, __len__ and __contains__ raise, and whose get
+      raises for any other name. judge is called with exactly (session_id, root, working_folder, now) as taken, "" and
+      None passed unchanged; read_paths with exactly stdin_bytes; add_reads with exactly (judge's root, session_id, the
+      list read_paths gave, now). Test data (R2-4): the stdin bytes carry session_id and cwd keys whose values differ
+      from the environment's session id and from working_folder; judge's stand-in returns a root that differs from the
+      environment's ROOT_VAR value; so a copy that reads either is caught. Each mapping of the header is shown, in its
+      order: judge's answer not a dict, missing a key, with an extra key, or with findings not a list of str ("entry");
+      "enforce_nothing"; "refuse" with a str reason (judge's findings copied) and with a non-str reason ("entry");
+      "tied" with a non-str or empty session id or root, with a reason other than "tied", or with a lease that is not a
+      dict ("entry"; t68b R1-4); read_paths' answer of another shape ("entry"),
+      "uncovered" (findings []), "read" with an empty list or a non-str item ("entry"); add_reads' "done"
+      ("recorded"), "refused" with each reason of TASK-067 AC2 passed through ("lost", the writer's reason, its findings
+      tuple given as a list), "refused" with a non-str finding ("entry"), and a non-StoreResult ("lost", "entry"); an
+      exception raised by each stand-in, before and at step (5), and by environ.get for each of the two names ("skip",
+      "entry"; t68b R1-6). Each "entry" ending of steps (3), (4) and (5) gives exactly the header's fixed findings
+      (["entry: judge"], ["entry: read_paths"], ["entry: add_reads"]), and a test asserts that no text of the input,
+      the environment or a stand-in's answer appears in any finding (t68b R2-3). Judge's and the writer's own reason
+      on "refuse" and "lost" is asserted as findings[0] starting with "<reason>:" (t68b R2-2; their findings take that
+      form, claude_code_store.py:136-138, writer.py:551-560).
+  - AC3: >-
+      main. main() reads sys.stdin.buffer.read() once, passes os.environ to run unread (run's two .get calls are its
+      only reads), takes os.getcwd() once and the clock once, calls run once with them, and returns run's exit_code; it
+      prints nothing (standard output and standard error unchanged, by stand-ins for sys.stdout and sys.stderr).
+      os.getcwd() raising OSError gives working_folder None. The clock (R2-3): _raw_clock() returns
+      datetime.datetime.now(datetime.timezone.utc); _whole_second_now() calls _raw_clock() and rounds up to the next
+      whole second when the microsecond is not 0, keeping it when it is 0; tests replace _raw_clock only (12:00:00.000000
+      gives 12:00:00; 12:00:00.000001 and 12:00:00.999999 give 12:00:01; 23:59:59.5 gives the next day's 00:00:00), and a
+      source check shows that _raw_clock calls datetime.datetime.now with datetime.timezone.utc. An exception while reading standard input, the environment, the working folder or the
+      clock, or raised by run, gives the return value 0 and nothing written; no exception escapes main. The line
+      `if __name__ == '__main__': sys.exit(main())` is present (a source check); no test runs it as a process.
+  - AC4: >-
+      End to end over real stores, in a new class of tests/integration/test_writer_files.py (the only place a real
+      store may be built): a store made by writer.open_store in a tempfile folder, a session started and a lease
+      granted to it; run called with the bytes of a PostToolUse input for the Read tool (tool_name "Read",
+      tool_input.file_path a made-up path), an environ mapping holding SESSION_VAR and ROOT_VAR, and a fixed now:
+      "recorded", and writer.stored_reads shows the path; the same call again: "recorded", the path stored once; an
+      expired lease: "skip", reason "refuse", nothing stored; an ended session: "skip", "refuse"; a store with no lease
+      row and neither name set, the working folder the store's root: "skip", "enforce_nothing"; a store with a lease
+      row and neither name set: "skip", "refuse"; an input for Grep: "skip", "uncovered", nothing stored; with one or
+      both names set (R1-9): a session id and no root ("refuse", session_without_root), a root but no session id ("refuse",
+      root_without_session), an unknown session id ("refuse", session), a root whose store holds no lease row
+      ("refuse", no_lease_row, never "enforce_nothing"), a root with no store ("refuse", no_store), two unexpired leases
+      of the session ("refuse", leases), a store of the three-table form made by a test connection dropping reads
+      ("refuse", tables); a Read input whose file_path holds NUL (as the JSON escape) and one of 4097 characters
+      ("lost", reason "path"); a held write lock (another connection's BEGIN IMMEDIATE, which leaves judge's read-only
+      lookup unblocked, as TASK-066's test_the_locks shows) with add_reads reached through a stand-in of
+      writer.add_reads that forwards with a timeout of about 0.2 seconds: "lost", reason "unreadable", nothing stored.
+      The file_path values are plain made-up strings. After each case, the store's tables, reads included, are as
+      expected (a dump). Set-ups (t68b R1-5, R2-1): for the ended session and the unknown session id, a second session
+      holds a lease in the same store (else judge answers no_lease_row first, writer.py:972-977); the two unexpired
+      leases come from a second grant to the session on a different task (leases.task_id is the key); the root with no
+      store is an existing folder (a missing one gives "root"); the held-lock case's dump is taken after the holder's
+      ROLLBACK. Each "refuse" case asserts judge's own reason as findings[0]'s prefix (AC2), so no case passes for
+      another reason.
+  - AC5: >-
+      What the modules import and do (INV-001 to INV-004; D-1469 ruling 2). claude_code_read_hook.py imports exactly
+      collections.abc, datetime, os, sys and, of aieos_bootstrap, claude_code_reads, claude_code_store and writer; it
+      calls of writer only add_reads, of claude_code_store only judge, of claude_code_reads only read_paths (a check
+      over its AST); it opens no file, starts no process, makes no network or model call, names no string with the
+      project-state directory, and uses no exec, eval, compile, __import__, importlib or assert. Its os and sys uses
+      (t68b R1-2), by the same AST check: of os only the attributes getcwd and environ, of sys only stdin and exit; the
+      name environ (as os.environ) only as the argument of main's call of run; no getenv, putenv or argv anywhere, and
+      no ".environ.get". The separation (DEF-0084
+      h4c Y1-4; h4d Y5-8 in its current extent; R1-6, R2-6): an in-suite check, a function (path, text) -> findings,
+      run over the hook-side modules claude_code.py, claude_code_hook.py, claude_code_channel.py, claude_code_reads.py,
+      claude_code_store.py and claude_code_read_hook.py. It resolves every local name bound to the writer or the
+      adapter module (import aieos_bootstrap.writer, from aieos_bootstrap import writer, either with "as"); refuses
+      any star import, any from-import of a name out of aieos_bootstrap.writer or aieos_bootstrap.adapter, and any
+      import of aieos_bootstrap.read_set_record; refuses any aieos_bootstrap module import not in the module's own list
+      (the base's imports of each existing module, and the new module's three); and refuses any attribute of a writer
+      or adapter name that is not in an allow-list: writer's store_path, session_lease and StoreResult for
+      claude_code_store.py, writer's add_reads and StoreResult for claude_code_read_hook.py, none for the others; and
+      adapter's violation for claude_code_channel.py only, the one pair (claude_code_channel.py, adapter.violation)
+      named in the test as that exact pair, allowed until H2 or H3 rule its place. Any other reference fails, so a
+      later writer function (read_log, log_path or one not yet written) is refused by default. It also refuses any use
+      of a writer or adapter name other than as the object of an attribute (getattr(writer, ...), w = writer, a call
+      argument), and any dotted chain aieos_bootstrap.<module>.<attr> through a bound aieos_bootstrap name (plain
+      "import aieos_bootstrap.writer", or "import aieos_bootstrap as ab" with ab.writer.x) (t68b R2-7). The check passes on
+      the six files and is run on hostile samples, each found: a text naming writer.remove_reads under the file name
+      claude_code_channel.py; one naming adapter.violation under another hook-side name; an alias "import
+      aieos_bootstrap.writer as w" with w.append_event; a star import; an import of read_set_record; a dotted chain
+      aieos_bootstrap.writer.remove_reads; and getattr(writer, 'remove_reads') (t68b R2-7). read_set_record.observe is stated, in the new module's docstring, as a core-side
+      function. TASK-066's AST check of claude_code_store.py's calls (store_path and session_lease only) passes
+      unchanged. At the task's commits the CI steps report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002
+      and bandit.
+  - AC6: >-
+      What is stated. claude_code_read_hook.py's module docstring states: the PostToolUse use and that nothing wires it
+      into Claude Code (placement and the matcher are the owner's, CC-3, A51 item (4); C6 unmeasured); the flow and its
+      order; the two names and that the empty-or-absent rule is judge's; the working folder as the process's own,
+      never the input's cwd; that no key of the hook input is read but through read_paths, and that this program writes
+      no record; the clock rounded up and why (the fail-closed direction), and the clock window as a limit in the
+      fail-open direction (now fixed before the lookups; a lease may expire during the call; t68b R1-1); exit code 0 and
+      silence on every outcome, and why (D-1469 ruling 1); the silent loss as a stated limit; the behaviour a hook-side caller of add_reads meets
+      (DEF-0087: "done" 0 at the bound for a duplicate or an empty call, the hot-journal rollback of a "?mode=rw" open,
+      a COMMIT that fails yet may have applied); read_set_record.observe as core-side; and every limit of the header.
+      No docstring or other string constant of claude_code_read_hook.py or claude_code_store.py contains the
+      project-state directory's name (the workflow's INV-004 rule, aieos-checks.yml:1589-1591; they say
+      "project-state directory"), shown by the in-suite check (R1-8, R2-7). No test asserts anything about a running
+      Claude Code.
+  - AC7: >-
+      DEF-0085's claude_code_store points. (a) The lexical search: judge's module docstring states that the upward
+      search climbs lexical parents of os.path.abspath of the working folder, so a working folder reached through a
+      link from outside a project's tree finds no store and gives "enforce_nothing" (fail-open for that case; the
+      search itself unchanged). (b) The docstring's "any exception inside gives "entry"" is corrected to name the
+      "argument: now (<type>)" finding of a raising now check. (c) _map's guard: "done" with reason "tied" gives
+      "tied" only when the lookup was made with a session id (not on the search path); on the search path it gives
+      "refuse", reason "entry", with a test through a stand-in of writer.session_lease; the module docstring's sentence
+      on the mapping says so; the guard is a separate condition placed before the existing ones, and the line
+      "answer.reason == 'no_lease_row' and searched:" stays byte-identical (t68b R1-7). (d) TASK-066's broken copy J9 (a scratch copy outside the repository only; _map keeps
+      "and searched" in the task's code; R1-7), "no_lease_row on any path" (session fb812044's t066/brk66.py:58), replaces in _map the text
+      "answer.reason == 'no_lease_row' and searched:" by "answer.reason == 'no_lease_row':", so a "no_lease_row"
+      answer on the both-present path gives "enforce_nothing"; review 66a-R3 found it caught only by the unit module,
+      because the property generator reaches the both-present path with a "no_lease_row" answer only by chance. A new
+      property test function in tests/property/test_claude_code_store_properties.py generates, in at least half of its
+      cases, a present session id (a non-empty str), a present absolute root and the answer "done"/"no_lease_row",
+      and asserts that "enforce_nothing" occurs only when both values are absent and that those cases give "refuse",
+      reason "entry" (R2-8); J9's copy, applied to the module after AC7 (c)'s change, fails it; the copy-making
+      script refuses unless the replaced text occurs exactly once. (e) judge's
+      check of now (a class named datetime in the type's MRO) and the writer's (isinstance) are stated in the module
+      docstring (the place of (a), (b) and (c)'s sentence; t68b R2-5) as different and both fail closed; no code change. Every other result of judge is unchanged.
+  - AC8: >-
+      Its own tests and the changed ones (GOV-003). Every new test function names the AC ids it stands for as
+      "TASK-068 ACn" in its own docstring; no other task's AC is named in qualified form in a new test. In
+      tests/unit/test_claude_code_store.py, tests/property/test_claude_code_store_properties.py and
+      tests/integration/test_writer_files.py every top-level and class-level function and class present at the base is
+      byte-identical after the change and none is removed, and nothing else in them changes but added functions,
+      classes and module-level assignments of new names, and the imports they need (R2-12), except exactly these: (1) tests/unit/test_claude_code_store.py
+      R4UpwardSearch.test_a_folder_whose_state_folder_is_a_file_is_passed_over, which asserts "tied" on the search
+      path with a stand-in "tied" answer (:180-181), a case AC7 (c)'s guard turns into "refuse"/"entry": its stand-in
+      answer becomes writer.StoreResult('done', 'no_lease_row') and its expected outcome "enforce_nothing", with the
+      same lookup call [(PROJ, None, T0)], so its purpose (the folder passed over and the outer store looked up) is
+      kept; (2) tests/property/test_claude_code_store_properties.py Properties.test_the_shape_and_the_enforce_nothing_rule,
+      expected to need a change (R2-11: under AC7 (c)'s guard a "tied" case needs the both-present path, under 1% of
+      its cases, so seed 66 very likely no longer gives all three outcomes): a recorded scratchpad run against the
+      guarded code decides it (t68b R2-4): if seed 66 still gives all three outcomes the function stays byte-identical;
+      else only its seed changes, its assertions unchanged, the new seed being the first integer from 67 upward for
+      which the recorded run gives all three outcomes; the run's output (each seed tried and its three counts) goes to
+      the decision agent before commit C;
+      and, so that "tied" is not left to chance, a new property function forces the both-present path with a "tied"
+      answer in at least half its cases and asserts "tied" with the lease there. No existing function pins the docstring words AC7 (a), (b) or (e)
+      change: R6WhatIsStated.test_the_docstring_states_the_rules_and_limits (:300-314) pins phrases that these changes
+      keep (they add sentences and correct the one sentence on exceptions, which no test pins), so it passes unchanged.
+      The acceptance-time script by source segment (as TASK-067 AC8's) lists every changed definition and refuses any
+      not on this list; for (1) it compares the assertion calls of base and head and refuses unless only the expected
+      tuple of :181 and the stand-in answer differ; for (2) it accepts the function unchanged or with only the seed's
+      constant changed, and refuses any other difference (t68b R2-4). Before commit C, a grep of the whole tests/ tree
+      for other callers of judge that expect "tied" on the search path, its unedited output to the decision agent
+      (t68b R2-10). claude_code_store.py: every function, class and module-level assignment present at
+      the base is byte-identical except _map (AC7 (c)) and the module and judge docstrings (AC7 (a), (b), (c)'s mapping
+      sentence, (e)); an
+      acceptance-time script lists every changed definition and refuses any other. Before each commit the added text
+      is scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns, each count 0. Every test is buildable under
+      deterministic_rule: real stores, sqlite3 and tempfile only in tests/integration/test_writer_files.py; the two new
+      test modules use stand-ins only (for judge, read_paths, add_reads, sys.stdin, sys.stdout, sys.stderr, os.getcwd
+      and the clock helper), write no file and read sources only by pathlib's read_bytes on paths relative to
+      __file__; no mkdir or makedirs, exec, compile, __import__ or importlib; open only in "rb" or "ab"; no link or
+      folder created; no real path of this machine's user folders, no real session id, no credential-shaped string, no
+      literal "/tmp".
+  - AC9: >-
+      Tests, each rule with at least one passing and one failing case: R1 AC1 (each bad argument kind by name; the
+      result's keys; exit code 0 in every case; equal results for equal arguments); R2 AC2 (every step's ending and the
+      calls not made after it; the exact arguments passed; each mapping); R3 AC3 (main's order of reads, the getcwd
+      OSError, the clock's rounding cases, every exception kind giving 0, nothing printed, the __main__ line); R4 AC4 as
+      stated; R5 AC5 by the in-suite AST checks and their hostile samples; R6 AC6 by an in-suite check of the docstring
+      words, matched with whitespace collapsed (D-1286); R7 AC7 (a), (b), (e) by docstring word checks and (c), (d) as
+      stated. The pinned phrases (t68b R2-6), each a required substring after collapsing whitespace: in
+      claude_code_read_hook.py's module docstring "PostToolUse", "nothing wires this program into Claude Code",
+      "AIEOS_SESSION_ID", "AIEOS_ROOT", "the empty-or-absent rule is judge's", "the process's own working folder",
+      "no key of the hook input is read but through read_paths", "writes no record", "rounded up to the next whole
+      second", "now is fixed before the lookups", "exit code 0", "prints nothing", "a read may be lost silently",
+      "0 at the bound", "hot journal", "a failed COMMIT may have applied", "read_set_record.observe is core-side", "outside
+      every project's folder tree is not judged", "an inner project's store judges alone", "a removed or emptied
+      store", "outside the launcher" and "project-state directory"; in claude_code_store.py's module docstring "lexical
+      parents" (AC7 (a)), "argument: now (" (AC7 (b)), "only when the lookup was made with a session id" (AC7 (c)) and
+      "the two checks of now differ and both fail closed" (AC7 (e)). R8 AC8 by the acceptance-time scripts and one run
+      of each against a deliberately weakened copy: the by-segment script with one more definition allowed than listed;
+      the AC8 (1) check accepting any changed assertion; and the AC8 (2) check accepting a changed assertion (t68b
+      R2-12); and
+      property tests (standard library only, fixed seeds, at most 50 cases each): over generated judge, read_paths and
+      add_reads answers (stand-ins) and generated environ mappings, the result has exactly its four keys, exit_code is
+      always 0, add_reads is called only after "tied" and a covered read, and equal inputs give equal results. Broken
+      copies are made and run in the scratchpad, outside tests/, as for TASK-059 to TASK-067, and each fails at least
+      one test: run with the steps reordered (read_paths before judge; add_reads before read_paths); a non-zero exit
+      code on "lost"; "tied" accepted without a session id; the input's session_id or cwd read; another environment
+      name read; the root taken from the environment instead of judge's result; the clock truncated instead of rounded
+      up; the clock rounded up when the microsecond is 0; main printing a line; an exception let escape run, and main;
+      the AST check without the allowed pair's exactness (any adapter.violation allowed); the check exempting the whole
+      channel file; the check without alias resolution; _map's guard removed; and, for AC7 (d), J9 itself run against
+      the property module; and (R2-13): a bytearray accepted for stdin_bytes; a naive, and a fractional, now accepted;
+      a non-Mapping environ accepted; a non-str working_folder accepted; step (2) turning "" into None; the new module
+      importing a fifth module, calling writer.stored_reads, and calling open; the __main__ line removed; a pinned
+      docstring phrase removed (one per word check); add_reads given a now other than judge's; judge's findings not
+      copied on "refuse"; and the writer's findings left as a tuple; and (t68b R1-2, R1-4, R2-7, R2-12): run reading
+      a third environment name through os.environ or os.getenv; "tied" accepted with a reason other than "tied" or a
+      lease None; read_paths' finding copied on "uncovered"; main reading a name of os.environ itself; state kept
+      between calls (a module-level cache); the new module using exec, eval or assert, or a string naming the
+      project-state directory; and the separation check without its dotted-chain or getattr refusal. The copy-making
+      script refuses any copy whose edit text is not found exactly once. Each broken copy is run with the tests copied
+      beside the source, since the tests read sources relative to __file__; the integration class's stand-in for
+      writer.add_reads keeps the real function before the patch and forwards to it with timeout=0.2 (t68b R2-9).
+      tests/run_tests.py, unchanged, runs the tests.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC7, AC9]}
+  - {gate: G3, check: constitution, args: [AC5, AC6, AC8, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
