@@ -12,3 +12,4 @@
 - With the next contract of the Claude Code adapter (M5) that handles refusals or messages to the user, or the owner's word.
 ## Log
 - 2026-10-19: opened (session dc5d0da2; D-1457).
+- 2026-10-19: the app's notice fell again on a decision-agent report (D-1470) and the app stopped the call that brought it to the decision agent (session bc3137c8, :500); not resent; the owner answered "đồng ý" (:523) (D-1472).

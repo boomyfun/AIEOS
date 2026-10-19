@@ -19,3 +19,4 @@
 - 2026-10-18: opened (session 1c0ea663; D-1335 C7, D-1338).
 - 2026-10-18: the deferred points of rounds h4c and h4d added (session 9a7be298; D-1346, D-1348 C3); specification 5 revision 4 and specification 2 revision 7 landed on main (F55, F56); still open for the contracts.
 - 2026-10-18: TASK-066's contract takes Y2-4, Y2-8, h4b Y2-6 in part, Y1-6 and Y5-8 (its check of calls) and the base commit's source; the other points stay open (session 747e2eff; D-1364).
+- 2026-10-19: TASK-067, accepted under D-1458, took h4b Y2-11 (the bound), h4c's "reading and removing a session's stored reads", h4d Y1-1's second part (remove_reads), h4c Y2-8 for the write path and h4d Y2-4's whitespace-only values for paths (TASK-067.yaml:116-125); the other points stay open; written late, in session bc3137c8 (D-1474 C4).
