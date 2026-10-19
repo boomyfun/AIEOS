@@ -1732,5 +1732,220 @@ class R20TheQueries(unittest.TestCase):
         self.assertEqual(part.count('finally:'), 2)
 
 
+class R21TheReviewPoints(ReadsCase):
+    """TASK-067's review points of round t67a that touch the contract's own words (D-1431 C1, D-1436): every refusal
+    reason against the finding rule, release_lease_token on a three-table store, the rows after each refusal, every
+    writer function after "migrated", and the order of the stored-count check."""
+
+    HOSTILE = 'zz-HOSTILE-zz'
+
+    def stored_rows(self, root, sid, task, n):
+        con = sqlite3.connect(writer.store_path(root), isolation_level=None)
+        try:
+            con.execute('DELETE FROM reads WHERE session_id = ? AND task_id = ?', (sid, task))
+            con.executemany('INSERT INTO reads (session_id, task_id, seq, path) VALUES (?, ?, ?, ?)',
+                            [(sid, task, i, self.HOSTILE + '-p%d' % i) for i in range(n)])
+        finally:
+            con.close()
+
+    def sql_at(self, root, statement, args=()):
+        con = sqlite3.connect(writer.store_path(root), isolation_level=None)
+        try:
+            return con.execute(statement, args).fetchall()
+        finally:
+            con.close()
+
+    def test_every_refusal_reason_keeps_the_callers_text_out(self):
+        """TASK-067 AC2, TASK-067 AC3, TASK-067 AC5 and TASK-067 AC9 (D-1393 K3; D-1436 C4): each refusal reason of the
+        four functions is reached, as asserted case by case, with a made-up hostile text in the root (a folder made by
+        tempfile with the text as its prefix), in the session id, in the task id or in a path, as each case's table
+        row says; none of that text appears in any finding."""
+        import types
+        from unittest import mock
+        h = self.HOSTILE
+        hp = [h + '-a', h + '-b']
+        got = []
+
+        def case(label, carries, reason, call):
+            got.append((label, carries, reason, call()))
+        with tempfile.TemporaryDirectory(prefix=h) as root:
+            absent = os.path.join(root, h + '-absent')
+            four = {'add_reads': lambda **k: writer.add_reads(k.get('root', root), k.get('sid', h), k.get('paths', hp),
+                                                              k.get('now', T0), k.get('timeout', 5.0)),
+                    'stored_reads': lambda **k: writer.stored_reads(k.get('root', root), k.get('sid', h),
+                                                                    k.get('task', 'TASK-067'), k.get('timeout', 5.0)),
+                    'remove_reads': lambda **k: writer.remove_reads(k.get('root', root), k.get('sid', h),
+                                                                    k.get('task', 'TASK-067'), k.get('timeout', 5.0)),
+                    'migrate_store': lambda **k: writer.migrate_store(k.get('root', root), k.get('timeout', 5.0))}
+            for name, fn in four.items():
+                case(name, 'root, session id, path', 'no_store', fn)
+                case(name, 'root, session id', 'argument', lambda fn=fn: fn(timeout=0))
+                case(name, 'root (an absent folder under it), session id', 'root', lambda fn=fn: fn(root=absent))
+            case('add_reads', 'session id, path', 'argument', lambda: four['add_reads'](paths=h))
+            case('stored_reads', 'session id, task id', 'argument', lambda: four['stored_reads'](task=h))
+            case('remove_reads', 'session id, task id', 'argument', lambda: four['remove_reads'](task=h))
+            case('add_reads', 'root, session id, path', 'bound', lambda: four['add_reads'](paths=[h] * 10001))
+            case('add_reads', 'root, session id, path', 'path', lambda: four['add_reads'](paths=[h + '\x00']))
+            writer.open_store(root, 'epoch-1')
+            self.assertEqual(writer.start_session(root, h, 'agent-1', T0).result, 'done')
+            case('add_reads', 'root, session id, path', 'no_lease_row', four['add_reads'])
+            self.assertEqual(writer.start_session(root, 's-other', 'agent-2', T0).result, 'done')
+            self.assertEqual(writer.grant_lease(root, 'TASK-002', 'READY', 'agent-2', 's-other', T0, T0 + H1).result, 'done')
+            case('add_reads', 'root, session id, path', 'leases', four['add_reads'])
+            case('add_reads', 'root, session id (unknown), path', 'session', lambda: four['add_reads'](sid=h + '-unknown'))
+            self.assertEqual(writer.start_session(root, h + '-ended', 'agent-3', T0).result, 'done')
+            self.assertEqual(writer.end_session(root, h + '-ended', T0).result, 'done')
+            case('add_reads', 'root, session id (ended), path', 'ended', lambda: four['add_reads'](sid=h + '-ended'))
+            self.assertEqual(writer.grant_lease(root, 'TASK-067', 'READY', 'agent-1', h, T0, T0 + H1).result, 'done')
+            (until,), = self.sql_at(root, 'SELECT expires_at FROM leases WHERE session_id = ?', (h,))
+            self.sql_at(root, 'UPDATE leases SET expires_at = ? WHERE session_id = ?', (h, h))
+            case('add_reads', 'root, session id, path, a stored time', 'unreadable', four['add_reads'])
+            self.sql_at(root, 'UPDATE leases SET expires_at = ? WHERE session_id = ?', (until, h))
+            self.sql_at(root, 'UPDATE leases SET task_id = ? WHERE session_id = ?', (h, h))
+            case('add_reads', 'root, session id, path, a stored task id', 'unreadable', four['add_reads'])
+            self.sql_at(root, 'UPDATE leases SET task_id = ? WHERE session_id = ?', ('TASK-067', h))
+            self.stored_rows(root, h, 'TASK-067', 10001)
+            case('add_reads', 'root, session id, path, stored paths', 'bound', four['add_reads'])
+            self.stored_rows(root, h, 'TASK-067', 9999)
+            case('add_reads', 'root, session id, path, stored paths', 'bound', four['add_reads'])
+            path = writer.store_path(root)
+            lstat = writer.os.lstat
+
+            def with_lstat(effect):
+                def fake(p, *a, **k):
+                    if p == path:
+                        if isinstance(effect, BaseException):
+                            raise effect
+                        return types.SimpleNamespace(st_mode=effect)
+                    return lstat(p, *a, **k)
+                return mock.patch.object(writer.os, 'lstat', fake)
+            for name, fn in four.items():
+                with with_lstat(PermissionError(h)):
+                    case(name, 'root, session id, path, the error message', 'unreadable', fn)
+                with with_lstat(0o040755):
+                    case(name, 'root, session id, path', 'link', fn)
+            self.sql_at(root, 'DROP TABLE reads')
+            self.sql_at(root, 'CREATE TABLE reads (x)')
+            for name, fn in four.items():
+                case(name, 'root, session id, path', 'tables', fn)
+        self.assertEqual(len(got), 37)
+        for label, carries, reason, r in got:
+            with self.subTest(label=label, carries=carries, reason=reason):
+                self.assertEqual((r.result, r.reason, len(r.findings)), ('refused', reason, 1), r)
+                self.assertNotIn(h, r.findings[0])
+        reached = {(label, reason) for label, _, reason, _ in got}
+        for name in ('add_reads', 'stored_reads', 'remove_reads', 'migrate_store'):
+            for reason in ('argument', 'root', 'no_store', 'unreadable', 'link', 'tables'):
+                self.assertIn((name, reason), reached)
+        for reason in ('bound', 'path', 'no_lease_row', 'session', 'ended', 'leases'):
+            self.assertIn(('add_reads', reason), reached)
+
+    def test_release_lease_token_raises_on_a_three_table_store(self):
+        """TASK-067 AC1 and TASK-067 AC9 (D-1436 C6): release_lease_token, an existing writer function that opens the
+        store, raises on a store whose reads table a test connection dropped, and removes nothing."""
+        token = self.tied()['fencing_token']
+        self.sql('DROP TABLE reads')
+        with self.assertRaises(ValueError) as cm:
+            writer.release_lease_token(self.root, 'TASK-067', token)
+        self.assertIn('reads', str(cm.exception))
+        self.assertEqual(len(self.sql('SELECT task_id FROM leases')), 1)
+
+    def test_no_refusal_changes_the_rows(self):
+        """TASK-067 AC2 and TASK-067 AC9: the store's rows, by a dump, are the same before and after each refusal of
+        add_reads: argument, the early bound, path, no_lease_row, session, ended, leases, a malformed stored time, a
+        lease task id out of form, the stored bound and the bound of the stored and the new paths."""
+        self.store()
+        self.session()
+        before = self.dump()
+        self.refused(self.add(['a'], timeout=0), 'argument')
+        self.refused(self.add(['a'] * 10001), 'bound')
+        self.refused(self.add(['a', '']), 'path')
+        self.refused(self.add(['a']), 'no_lease_row')
+        self.assertEqual(self.dump(), before)
+        self.session('s-2', 'agent-2')
+        self.grant(task='TASK-002', holder='agent-2', sid='s-2')
+        self.session('s-3', 'agent-3')
+        writer.end_session(self.root, 's-3', T0)
+        before = self.dump()
+        self.refused(self.add(['a'], sid='s-9'), 'session')
+        self.refused(self.add(['a'], sid='s-3'), 'ended')
+        self.refused(self.add(['a']), 'leases')
+        self.assertEqual(self.dump(), before)
+        self.grant(task='TASK-067')
+        self.sql("UPDATE leases SET expires_at = 'soon' WHERE task_id = 'TASK-067'")
+        before = self.dump()
+        self.refused(self.add(['a']), 'unreadable')
+        self.assertEqual(self.dump(), before)
+        self.sql("UPDATE leases SET expires_at = (SELECT expires_at FROM leases WHERE task_id = 'TASK-002') "
+                 "WHERE task_id = 'TASK-067'", "UPDATE leases SET task_id = 'task-1' WHERE task_id = 'TASK-067'")
+        before = self.dump()
+        self.refused(self.add(['a']), 'unreadable')
+        self.assertEqual(self.dump(), before)
+        self.sql("UPDATE leases SET task_id = 'TASK-067' WHERE task_id = 'task-1'")
+        self.assertEqual(self.add(['a']).value, 1)
+        con = sqlite3.connect(writer.store_path(self.root), isolation_level=None)
+        try:
+            con.executemany('INSERT INTO reads (session_id, task_id, seq, path) VALUES (?, ?, ?, ?)',
+                            [('s-1', 'TASK-067', i, 'p%d' % i) for i in range(1, 10001)])
+        finally:
+            con.close()
+        before = self.dump()
+        self.refused(self.add(['new']), 'bound')
+        self.assertEqual(self.dump(), before)
+        self.sql("DELETE FROM reads WHERE seq >= 9999")
+        before = self.dump()
+        self.refused(self.add(['n1', 'n2']), 'bound')
+        self.assertEqual(self.dump(), before)
+
+    def test_every_writer_function_reads_a_migrated_store(self):
+        """TASK-067 AC5 and TASK-067 AC9: after "migrated", every writer function that opens the store reads it as a
+        four-table store: session_lease, add_reads, stored_reads, remove_reads, held_lease, held_leases, start_session,
+        grant_lease, release_lease_token, release_lease, expire_leases, end_session, open_store and migrate_store
+        ("current")."""
+        self.tied()
+        self.sql('DROP TABLE reads')
+        self.assertEqual(writer.migrate_store(self.root).value, 'migrated')
+        self.assertEqual(writer.session_lease(self.root, 's-1', T0).reason, 'tied')
+        self.assertEqual(self.add(['a']).value, 1)
+        self.assertEqual(writer.stored_reads(self.root, 's-1', 'TASK-067').value, ['a'])
+        self.assertEqual(writer.remove_reads(self.root, 's-1', 'TASK-067').value, 1)
+        self.assertEqual(writer.held_lease(self.root, 'TASK-067')['task_id'], 'TASK-067')
+        self.assertEqual([x['task_id'] for x in writer.held_leases(self.root)], ['TASK-067'])
+        self.session('s-2', 'agent-2')
+        token = self.grant(task='TASK-002', holder='agent-2', sid='s-2').value['fencing_token']
+        self.assertEqual(writer.release_lease_token(self.root, 'TASK-002', token).result, 'done')
+        self.assertEqual(writer.release_lease(self.root, 'TASK-067')['task_id'], 'TASK-067')
+        self.assertEqual(writer.expire_leases(self.root, T0 + 2 * H1), [])
+        self.assertEqual(writer.end_session(self.root, 's-2', T0).result, 'done')
+        self.assertEqual(writer.open_store(self.root)['epoch'], 'epoch-1')
+        self.assertEqual(writer.migrate_store(self.root).value, 'current')
+
+    def test_the_stored_count_is_checked_before_the_paths_are_read(self):
+        """TASK-067 AC2 and TASK-067 AC9 (D-1436 C5): with more than 10000 stored rows, add_reads gives the stored
+        bound's own finding, and the statements its connection runs (recorded by set_trace_callback on the real
+        connection, the form of AC7 (b)) hold the count but no "SELECT path FROM reads" before the refusal."""
+        from unittest import mock
+        self.tied()
+        con = sqlite3.connect(writer.store_path(self.root), isolation_level=None)
+        try:
+            con.executemany('INSERT INTO reads (session_id, task_id, seq, path) VALUES (?, ?, ?, ?)',
+                            [('s-1', 'TASK-067', i, 'p%d' % i) for i in range(10001)])
+        finally:
+            con.close()
+        seen = []
+        real = sqlite3.connect
+
+        def traced(*a, **k):
+            c = real(*a, **k)
+            c.set_trace_callback(seen.append)
+            return c
+        with mock.patch.object(writer.sqlite3, 'connect', traced):
+            r = self.add(['p0'])
+        self.assertEqual((r.result, r.reason, r.findings),
+                         ('refused', 'bound', ('bound: more than 10000 paths are stored for the session and its task',)))
+        self.assertTrue(any(s.startswith('SELECT COUNT(*) FROM reads') for s in seen), seen)
+        self.assertFalse(any(s.lstrip().startswith('SELECT path FROM reads') for s in seen), seen)
+
+
 if __name__ == '__main__':
     unittest.main()
