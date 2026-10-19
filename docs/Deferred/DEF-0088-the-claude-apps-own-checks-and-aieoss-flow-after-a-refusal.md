@@ -13,3 +13,4 @@
 ## Log
 - 2026-10-19: opened (session dc5d0da2; D-1457).
 - 2026-10-19: the app's notice fell again on a decision-agent report (D-1470) and the app stopped the call that brought it to the decision agent (session bc3137c8, :500); not resent; the owner answered "đồng ý" (:523) (D-1472).
+- 2026-10-19: the app's notice fell on a decision-agent report again (D-1481's, which let work go on after a refusal by the project's call-form guard); no call about it was sent to the decision agent; the owner was asked and answered "có" (session b886c732, :332) (D-1482).

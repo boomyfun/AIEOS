@@ -20,6 +20,9 @@ One, in session 2026-10-19-1743 (../History/2026-10/2026-10-19-1743-the-pages-d1
 One, in session 2026-10-19-1848 (../History/2026-10/2026-10-19-1848-the-pages-d1461-to-d1476-and-the-draft-of-task-068.md):
 - **2026-10-19 (D-1472).** Not a model safeguard but the app's auto-mode classifier ("[Auto-Mode Bypass]"): after the app's notice fell on D-1470's report, the call that brought the notice to the decision agent was stopped before it ran (:500). It was not resent in other words; the decision agent being unreachable, the owner was asked and answered "đồng ý" (:523). The cause is a guess: the report let work go on after a refusal by the project's own guard.
 
+One, in session 2026-10-19-2004 (../History/2026-10/2026-10-19-2004-the-pages-d1477-to-d1488-and-the-contract-and-code-of-task-068.md):
+- **2026-10-19 (D-1482).** Not a model safeguard but the app's auto-mode notice ("[Auto-Mode Bypass]") on D-1481's report, which let work go on after a refusal by the project's own call-form guard; no action was stopped. No call about it was sent to the decision agent, since such calls were stopped in the two earlier sessions; the owner was asked and answered "có" (:332). The cause is a guess.
+
 ## Why it happens
 The official refusal documentation says that Opus 5.5 and Sonnet 5.5 carry safety classifiers that can stop a reply, with categories such as "cyber", where benign security work can also trigger a stop, and "reasoning_extraction"; the reason is not shown in the app's notice. The work's text was about blocking hooks, bypass hunts and push blocking, so a "cyber" stop is the likely cause, which stays a guess.
 
