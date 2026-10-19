@@ -23,6 +23,10 @@ One, in session 2026-10-19-1848 (../History/2026-10/2026-10-19-1848-the-pages-d1
 One, in session 2026-10-19-2004 (../History/2026-10/2026-10-19-2004-the-pages-d1477-to-d1488-and-the-contract-and-code-of-task-068.md):
 - **2026-10-19 (D-1482).** Not a model safeguard but the app's auto-mode notice ("[Auto-Mode Bypass]") on D-1481's report, which let work go on after a refusal by the project's own call-form guard; no action was stopped. No call about it was sent to the decision agent, since such calls were stopped in the two earlier sessions; the owner was asked and answered "có" (:332). The cause is a guess.
 
+Two, in session 2026-10-19-2233 (../History/2026-10/2026-10-19-2233-the-pages-d1489-to-d1493-the-broken-copies-and-reviews-of-task-068-and-the-refusal-investigation.md):
+- **2026-10-19 (D-1497).** A reasoning_extraction refusal of a reply during a Write, after a guard refusal (:452); not redone; brought to the decision agent.
+- **2026-10-19 (D-1503, D-1504).** A reasoning_extraction refusal of the request after the Write of review entries (:926); not redone; the owner asked for the true cause; an investigation by metadata only (see L-0025).
+
 ## Why it happens
 The official refusal documentation says that Opus 5.5 and Sonnet 5.5 carry safety classifiers that can stop a reply, with categories such as "cyber", where benign security work can also trigger a stop, and "reasoning_extraction"; the reason is not shown in the app's notice. The work's text was about blocking hooks, bypass hunts and push blocking, so a "cyber" stop is the likely cause, which stays a guess.
 
