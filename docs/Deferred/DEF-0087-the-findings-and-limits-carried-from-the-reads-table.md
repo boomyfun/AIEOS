@@ -18,3 +18,4 @@ TASK-067 (the reads table and the read-set accumulation: writer.add_reads, store
 
 ## Log
 - 2026-10-19: opened (session dc5d0da2; D-1458).
+- 2026-10-20: its second trigger fired: TASK-068, accepted under D-1515, lets a hook-side caller use add_reads, and states in its module docstring the behaviour such a caller meets (DA-1: "done" 0 at the bound for a duplicate or an empty call; the hot-journal rollback of a "?mode=rw" open; a COMMIT that fails yet may have applied); writer.py is unchanged, so the other points stay open (session b62e2485).

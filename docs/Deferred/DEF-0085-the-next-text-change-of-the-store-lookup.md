@@ -1,6 +1,6 @@
 # DEF-0085: the next text change of the store lookup (writer.session_lease and claude_code_store)
 
-- Status: open
+- Status: done
 - Opened: 2026-10-19 (session fb812044; decision D-1376 C2)
 - Deferred by: decision agent (A41, A51), D-1376, after the five way-2 reviews of TASK-066 at its head 3998a378 (all pass).
 - Decision group: A (a text and test change of src/aieos_bootstrap/writer.py's lookup and src/aieos_bootstrap/claude_code_store.py, and their tests, in a task of its own).
@@ -21,3 +21,4 @@ TASK-066's code was reviewed with these points carried, each non-blocking:
 ## Log
 - 2026-10-19: opened (session fb812044; D-1376).
 - 2026-10-19: TASK-067 took its writer-side points (the WAL state, mutation M9, AC9's short-name case) by AC7 (a) to (c), accepted under D-1458; its claude_code_store points and its second trigger stay open (session dc5d0da2).
+- 2026-10-20: TASK-068, accepted under D-1515, took its claude_code_store points by AC7: the lexical search stated, the "argument: now (<type>)" finding stated, _map's guard, the J9 property case, the two now checks stated, and the mapping sentence; its second trigger fired (the read hook acts on "enforce_nothing" by storing nothing); left: the global-os stand-ins (a limit only); closed, every point taken or a limit (session b62e2485).
