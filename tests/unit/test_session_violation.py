@@ -90,8 +90,7 @@ def core_done(released=None, findings=()):
 
 
 def answer(core=None, released=None, findings=(), result='done', reason=None, decision=violations.DECISION):
-    return {'result': result, 'reason': reason, 'findings': list(findings), 'core': core, 'decision': decision,
-            'fencing_token': None, 'released': released}
+    return adapter._result(result, reason, findings, core, decision, released=released)
 
 
 def run(c, lookup_answer=tied(), violation_answer=None, patch=True, **over):
