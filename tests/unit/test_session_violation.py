@@ -242,7 +242,8 @@ class R2Lookup(unittest.TestCase):
         a non-StoreResult answer and an exception of lookup each give "lease" with the fixed finding, and
         adapter.violation is not called; no text of the answer reaches a finding."""
         mark = 'TEXT-OF-THE-ANSWER-QQ'
-        shapes = [writer.StoreResult('done', 'no_lease_row'), tied(None), tied([mark]), tied(dict(LEASE, more=mark)),
+        shapes = [writer.StoreResult('done', 'no_lease_row'), writer.StoreResult('done', 'no_lease_row', value=LEASE),
+                  tied(None), tied([mark]), tied(dict(LEASE, more=mark)),
                   tied({k: LEASE[k] for k in ('task_id', 'fencing_token')}), tied(dict(LEASE, task_id=mark)),
                   tied(dict(LEASE, fencing_token={'epoch': mark})), tied(dict(LEASE, fencing_token=mark)),
                   writer.StoreResult('refused', 7, [mark]), writer.StoreResult('done', mark, value=LEASE),
