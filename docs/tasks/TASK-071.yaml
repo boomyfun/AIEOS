@@ -1,0 +1,776 @@
+# Task contract TASK-071, H2a: the task contract reader at a given commit, and the hardening carried from TASK-070
+# (Master Plan revision 4, §4 M5; concept line 945; specification 5 revision 4, section 8 and section 11 point 7,
+# bullets 3 and 7 (:109, :113); specification 3 revision 5, :19 and :177 for "the base", cited, not chosen here).
+# Revision 0, a draft, drafted under decision D-1583: H2 (decision D-1468 :19, the PreToolUse program) is split into
+# H2a, this contract, and H2b, the program, a later contract. H2a builds the core-side, fail-closed reader of a lease
+# task's contract at an explicit commit (spec 5 :109: "the write-set is the task contract's write_set.paths at the
+# base"; :113: a contract not readable at the base, with a live tied lease, is a refusal on the write-set concern), and
+# carries out the points DEF-0084's log carries to H2 that change TASK-070's module and tests.
+# Revision 0a (D-1584 C1, F1 to F4). Revision 1 (round t71a, reviews R1 and R2 on claude-sonnet-5-5, both "changes
+# needed"; dispositions of D-1587): the strict layout pass and the stricter refusals (t71a-R1-1, R1-2, R1-3, R2-1,
+# R2-2); run's result, the tree text and the reason table (R1-4, R1-5, R2-9, D-1587 C3); the check order and types
+# (R1-7); the caps (R1-8); AC8's lists (R1-9, R2-3, R2-4); the hardening's wording (R1-10, R2-5 to R2-8); the pins
+# (R1-11); placement and citations (R1-12, R2-10 to R2-13); R1-6 stated as a limit (D-1587 C5). Revision 2 (round
+# t71b, reviews R1 and R2 on claude-sonnet-5-5, both "changes needed"; D-1590): every t71b finding applied.
+# Revision 3 (round t71c, the same; D-1593): every t71c finding applied. Revision 4 (round t71d, R1 "changes needed",
+# R2 "pass"; D-1595): every t71d finding applied, R2-1 as an exact-str check of event_id, R1-5 as a stated limit.
+# Revision 5 (round t71e, both "changes needed"; D-1603, D-1604): t71e's findings applied, but for the three gaps
+# D-1606 found (R1-7 not applied; R2-8 and R2-10 not carried into AC7). Revision 6 (D-1606 C3): those three closed, R1-7
+# as a stated limit, R2-8 and R2-10 as AC7 docstring phrases. Revision 7 (round t71f, both "changes needed"; D-1613):
+# every t71f finding applied, R1-1 with D-1613's precisions. Revision 7a (D-1615 C2, D-1616 C2): step (3)'s set
+# written with escape text, four long lines wrapped. Revision 8 (round t71g, both "pass"; D-1619): t71g's text
+# fixes, R2-7 not applied (TASK-070's R6Stated precedent).
+# Brought for review and approval in its own requests; whether it is approved is recorded in the decision files.
+# Fields and value forms follow specification 2 §5.1 and the contracts of TASK-062 to TASK-070. Values marked "(filled
+# by script)" are written by script from the base just before commit C.
+# The pins (L-0026), found by a read-only scan of every test and the workflow for the changed paths, each to pass
+# unchanged unless named here:
+# - tests/unit/test_session_violation.py R5WhatItDoes (:367-391): session_violation.py imports exactly
+#   aieos_bootstrap.adapter and aieos_bootstrap.writer, uses of writer only session_lease and StoreResult, no refused
+#   name or attribute, no assert, no string constant "valid", "accepted" or "approved", no ".aieos" anywhere in the
+#   file (:390) and no "eventlog" in its code after the docstring (:391); kept: the core key set is a private constant
+#   _CORE_KEYS, a frozenset written out, equal to frozenset(violation.RESULT_KEYS) by a new test, not an import of
+#   violation;
+# - the same module's R6Stated (:403-423): every pinned docstring phrase kept, no ".aieos" and no "called only by this
+#   function" in the docstring (:422-423); R7OwnTests (:428-436): every test function of that module names "TASK-070
+#   ACn" and no other task's AC, so TASK-071's new tests go in new modules or as added definitions elsewhere, and the
+#   one rename below keeps its docstring byte-identical;
+# - tests/unit/test_gitread.py (:370-380): no module but gitread.py imports subprocess; the new module reaches git only
+#   through gitread.run with its pinned cat-file form (no gitread change);
+# - TASK-068's separation check (tests/unit/test_claude_code_read_hook.py :35-43, :485-488): no hook-side module is
+#   changed, the new module is not hook-side, the allowed pair is unchanged (H2b replaces it);
+# - tests/unit/test_writer.py's R8SingleWriter (:396-406); tests/integration/test_ac_tests_tree.py (EXPECTED_AMBIGUOUS =
+#   2): the new test names leave its count unchanged, shown by the suite run before the task's commit;
+# - the workflow's per-path rules (the INV-004 string rule, the purity and module allowances, OPS-003, SEC-001, SEC-002,
+#   the evaluator list's src/aieos_bootstrap/**); the new module needs no allowance (it imports re and gitread only).
+# Task type: implementation. What it adds:
+# - a new module src/aieos_bootstrap/task_contract.py with one public call, read_contract(root, commit, task_id,
+#   run=None), and one pure function parse_contract(text, task_id), both called only by their tests (H2b is the
+#   caller). The flow, in this order, the first step that ends giving the result:
+#   (1) the arguments, by exact types (type(x) is str): root a str for which gitread.form_error(root, ["cat-file",
+#       "-p", "0" * 40], 10) gives None (gitread's public check: an absolute path of an existing folder; the module
+#       imports no os, t71b-R1-1); commit fullmatching gitread.OBJECT_ID (40 or 64 lowercase hexadecimal characters,
+#       while base_commit in a contract must be 40, a stated difference); task_id fullmatching "TASK-[0-9]+" with
+#       ASCII digits only (as adapter.py :67, :88); checked in the order root, commit, task_id, the first failure
+#       giving the one finding; else "unreadable", reason "argument", findings exactly ["argument: root"],
+#       ["argument: commit"] or ["argument: task_id"] (a missing folder gives "argument: root"). run is a test seam:
+#       a production caller passes none (t71c-R2-10);
+#   (2) the file at the commit, through run (default, at call time, gitread.run), each call run(root, ["cat-file",
+#       "-p", <id>], 10), each id checked to fullmatch gitread.OBJECT_ID before it is passed: the commit object, parsed
+#       by gitread.parse_commit, gives the tree id; the tree "docs", then "tasks", then the blob "<task_id>.yaml" are
+#       found by a pure parser of the tree text; at most five calls, in the order commit, root tree, docs, tasks, blob.
+#       A try around each run call and the checks of its result (its type, keys, error, exit and out) gives "git";
+#       the decoding, the caps, parse_commit and the tree parser run outside those tries, so an exception there gives
+#       step (6)'s "entry" (t71c-R1-2, R2-3). The order is per call: the commit's cap, decode and parse_commit finish
+#       before the root tree's call, and so on (t71e-R1-3). An id from parse_commit or a tree line that does not
+#       fullmatch gitread.OBJECT_ID gives "git: commit out of form" or "tree: line out of form" (t71e-R2-5). The result must be of type dict (not a subclass) with exactly the
+#       keys exit, out, err and error, error None, type(exit) is int and exit == 0, and type(out) is bytes (not a
+#       subclass). The commit's original bytes go to parse_commit (which takes bytes); the module's own strict UTF-8
+#       decode and 1 MiB cap of the commit text and of each tree text are checks only; the caps are checked after run
+#       has returned the whole output (gitread caps nothing), the cap before the decode; exactly 1 MiB passes, 1 MiB +
+#       1 byte refuses. A tree text is split on "\n" only (never splitlines); every tree line ends with "\n" and
+#       fullmatches "<mode> <type> <id>\t<name>" with mode [0-7]{6}, type blob, tree or commit, id fullmatching
+#       gitread.OBJECT_ID, and name non-empty with no "/"; a name quoted by git or raw (core.quotePath is the
+#       repository's) is kept verbatim and never matches a sought name; a repeated name in one tree refuses; the sought
+#       entries must be "040000 tree" (docs, tasks) and "100644 blob" (the contract); other entries are only
+#       form-checked. The order, the first failure giving the one finding: a raise, the result's shape, error, exit,
+#       out; then for each text the cap, the decode; for a tree, the form of every line, then a repeated name, then a
+#       sought entry missing, then its mode and type (t71d-R1-2). A repository whose core.quotePath leaves a raw name
+#       that is not UTF-8 in any of the three trees makes the whole read "tree: tree text not UTF-8", and any line out of
+#       form in an unrelated entry refuses too: an availability limit, fail closed (t71d-R2-4). The reasons and
+#       findings, by table:
+#       - "git": ["git: run raised <type name>"] (an exception in the call or the checks of its result);
+#         ["git: result shape"] (not an exact dict with the four keys); ["git: error"] (error not None, its text never
+#         copied); ["git: exit <n>"] when type(exit) is int and exit != 0, else ["git: exit not an int"]; ["git: out
+#         not bytes"]; ["git: commit text over the cap"]; ["git: commit text not UTF-8"]; ["git: commit out of form"]
+#         (a parse_commit error, its text never copied);
+#       - "tree": ["tree: tree text over the cap"]; ["tree: tree text not UTF-8"]; ["tree: line out of form"]; ["tree:
+#         repeated name"]; ["tree: docs missing"], ["tree: tasks missing"], ["tree: contract missing"]; ["tree: docs
+#         not a tree"], ["tree: tasks not a tree"], ["tree: contract not a 100644 blob"].
+#       No finding holds any part of out, err, error or a name from the tree;
+#   (3) the contract's bytes, checked in this order, the first failure giving the one finding: at most 1 MiB
+#       (exactly 1 MiB passes, one byte more refuses), strict UTF-8, no U+FEFF anywhere in the decoded text (a leading
+#       byte-order mark and one in the middle, a comment line included, both refuse; t71f-R1-2), and, over the code
+#       points after the decode (never the raw bytes), none of the control set
+#       [\x00-\x09\x0b-\x1f\x7f-\x9f\u2028\u2029]
+#       (so a carriage return, NUL, tab, form feed, vertical tab, DEL, the C1 controls U+0080 to U+009F, NEL included,
+#       and the line and paragraph separators U+2028 and U+2029 refuse; "\n" passes; t71c-R1-1, R2-4, t71f-R1-3);
+#       else "unreadable", reason "bytes", findings ["bytes: over the cap"], ["bytes: not UTF-8"], ["bytes: byte-order
+#       mark"] (any U+FEFF) or ["bytes: control character"];
+#   (4) parse_contract(text, task_id): the fields G0 reads (the workflow's parse_contract,
+#       .github/workflows/aieos-checks.yml :162-191, read, not changed), returning instead of exiting: task,
+#       base_commit, write_set (write_set.paths' items) and forbidden (forbidden's items), by G0's layout, with these
+#       refusals stricter than G0's (fail-closed additions of this contract, not G0's rules). The text is split on
+#       "\n" only; a blank line and a comment line are skipped at every indent by G0's own two tests (raw.strip() empty,
+#       raw.lstrip() starting with "#"), so a line holding only Unicode whitespace (a non-breaking space, U+3000) is
+#       blank and skipped, as G0 skips it (t71c-R1-5, R2-8); every other line is recognised by an exact match of its
+#       raw prefix (its indent counted in spaces only, then "- " or the key), never after a strip, so a line such as
+#       four spaces, a non-breaking space and "- x" is no item and refuses. A top-level line's value is the text after
+#       the first ": ", taken unstripped (stricter than G0, which strips; t71d-R1-1, R2-3). The checks run in this
+#       order, the first failure giving the one finding (one finding per result; t71e-R1-1, R2-6):
+#       (i) the lines, in file order; for each line, the first of these rules it breaks gives its finding:
+#         - "parse: top-level line out of form": a line at indent 0 that is not "<key>:" or "<key>: <value>" with key
+#           [a-z_]+ and <value> possibly empty ("task:TASK-071" among them; "task: " fits the form; t71g-R1-3), or a
+#           "write_set" or "forbidden" line other than exactly "write_set:" or "forbidden:";
+#         - "parse: base_commit line out of form": an input_state line whose raw text is exactly two spaces and then
+#           "base_commit:" followed by anything, and that is not exactly "  base_commit:" or "  base_commit: <value>"
+#           ("  base_commit:x" among them; a second such line too, since this rule comes before "repeated key");
+#         - "parse: write_set line out of form": inside write_set, any line other than exactly "  paths:" (no value)
+#           and "    - <item>" after it with <item> non-empty (a bare "-", "-x", "    - " with an empty item, a
+#           "  paths:" line with a value, the first or a second, a wrong indent, an item before paths, another key, all
+#           among them);
+#         - "parse: forbidden line out of form": inside forbidden, any line other than "  - <item>" with <item>
+#           non-empty (so "  - " with an empty item is this finding, not the item rule's);
+#         - "parse: repeated key": a line of an allowed form whose key was seen before: a top-level key (a second task,
+#           write_set or forbidden among them), a second "  base_commit:" or "  base_commit: <value>" line in
+#           input_state, or a second exact "  paths:" in write_set (t71f-R1-1: the "line out of form" rules come first,
+#           so "repeated" applies only to an exactly allowed second line);
+#         - "parse: item out of form": an item, taken unstripped, that does not fullmatch [A-Za-z0-9_./*-]+, starts
+#           with "/" or "./", ends with "/", or has an empty, "." or ".." segment (so trailing whitespace, " #", quotes,
+#           braces and brackets are refused);
+#       (ii) then the fields, in this order: "parse: task missing" (no task line, or "task:" or "task: " with no value,
+#         as G0 treats an empty value as missing; t71f-R1-1, t71g-R1-3); "parse: base_commit missing" (none at indent 2 in
+#         input_state, or "  base_commit:" or "  base_commit: " with an empty value); "parse: base_commit out of form"
+#         (not 40 lowercase hexadecimal characters, unstripped, so a trailing space or a whitespace-only value is this
+#         finding); "parse: write_set empty"; "parse: forbidden empty"; "parse: task value out
+#         of form" (the task value, unstripped, does not fullmatch "TASK-[0-9]+" with ASCII digits, so "task:
+#         TASK-071" with two spaces, a trailing space, a non-breaking space, "TASK-071 # c" or a whitespace-only value
+#         such as "task:  " are this finding; t71e-R2-1, R1-5, t71f-R1-1);
+#       (iii) last, a task other than task_id gives reason "task", ["task: another task"].
+#       The finding words are constants of the module (no line's text is ever copied). Of these, G0 has only task or
+#       base_commit missing, base_commit's form and the empty lists; every other refusal is stricter than G0. The item
+#       charset was chosen by a scratchpad scan of TASK-061 to TASK-070, which all read (D-1587 C4).
+#       parse_contract returns the same seven-key mapping as read_contract; a text or task_id not of type str gives
+#       "argument" (["argument: text"] or ["argument: task_id"], text checked first); task_id's form is checked only
+#       by read_contract's step (1), so a direct call with a malformed task_id ends in "task: another task"
+#       (t71g-R1-4);
+#   (5) "read", reason None, findings [], with task, base_commit, write_set and forbidden (fresh lists of str); no other
+#       key or default;
+#   (6) no exception escapes: one outside step (2)'s try gives "unreadable", reason "entry", findings ["entry: <type
+#       name>"] (its test seam: a patched gitread.parse_commit that raises).
+#   The result is a mapping with exactly result, reason, findings, task, base_commit, write_set and forbidden; on
+#   "unreadable" the last four are None, never a partial or default write-set (D-1583 C1). The commit is the caller's:
+#   this contract fixes no choice of base (D-1583 C2); H2b proposes it, by analogy to spec 5 :34 (a capability
+#   declaration is read at the base, "never from the change it judges") and under spec 3 :177; spec 3 :19 reads the
+#   contract "at HEAD", a difference H2b resolves (t71f-R2-8; carried to H2b below). capabilities.shell.allow is
+#   not read: the
+#   allowlist's source is H2b's proposal (D-1583 C3), and nothing here chooses one.
+# - the hardening of src/aieos_bootstrap/session_violation.py carried from TASK-070 (DEF-0084's log of 2026-10-22, two
+#   lines), each point mapped:
+#   (0) session_violation also requires event_id to be of type str (type(x) is str), refusing "argument" before
+#       anything is written, so a str-subclass event_id never reaches the log only to end in a refusal after the
+#       record (t71d-R2-1). The check is in _session_violation, after _session_findings and inside the same try, made
+#       only when _session_findings gives no finding; its finding is exactly ["argument: event_id is not a string"];
+#       the lookup is not called (t71e-R1-2, R2-2, R2-3). _session_findings is unchanged; AC8 lists both it (as
+#       unchanged) and _session_violation (as changed);
+#   This hardening's sources (t71e-R2-11): (a) to (e), DA-1 (i), DA-3 (i) and DA-3 (ii) are DEF-0084's two
+#       2026-10-22 lines; (0) is t71d-R2-1; the property case of step 1 is D-1569's records; the rest are review
+#       findings named where they apply;
+#   (a) every item of the result's findings and of core['findings'] must be of type str (type(x) is str), else
+#       "refused", reason "entry", findings ["entry: adapter.violation gave no result mapping"] (fail closed); with
+#       R2-6 of t71a, the answer's reason and core's reason must be of type str or None, the answer's result and
+#       core's result exactly "done" or "refused", the answer's decision None or exactly "STOP: violation" (private
+#       constants of the module, never imported from violation; t71f-R2-1), and every item of core's appended and
+#       duplicate of type str (exact types throughout, t71b-R2-10), else the same ending; this ending comes after
+#       adapter.violation has returned, so it can follow a record already written; the containers keep isinstance
+#       (the answer, core, the lists and released: a dict or list
+#       subclass whose reads raise is caught as "entry: after the record: <type name>"), while items and scalars are
+#       exact types (t71c-R2-14);
+#   (b) core, when not None, must be a dict whose key set is exactly the private constant _CORE_KEYS (a frozenset,
+#       equal to frozenset(violation.RESULT_KEYS) by a new test), else the same "entry" ending; core None passes as
+#       today. This is stricter than DEF-0084's wording "only the RESULT_KEYS-shaped keys of core are copied": a core
+#       with another key set is refused rather than cut down, a deliberate fail-closed departure;
+#   (c) the whole reading of the lookup answer, _tied's reading and the copying and filtering of a refused answer's
+#       findings included, runs inside one try: an exception there (a StoreResult subclass whose attributes raise,
+#       refused findings that are not iterable, a str subclass whose methods raise) gives "refused", reason "lease",
+#       findings ["lease: the lookup gave no tied lease"], not "entry"; a refused answer whose findings are not exactly
+#       a list or a tuple (a plain str among them, which would iterate per character) gives that same collapse
+#       (t71d-R2-2); the call of adapter.violation itself stays outside this try (t71g-R2-3). The refused findings:
+#       session_violation.py :131
+#       today keeps items by isinstance(f, str), so a str subclass passes; it is changed to type(f) is str, so every
+#       item that is not exactly a str (a str subclass, raising or not, or any other object) is dropped, and when
+#       nothing is left the fixed "lease: the lookup refused (<reason>)" is given, as today for (1, None) (the pinned
+#       test at test_session_violation.py :226-231); a mixed list keeps its exact str items only; the collapse to
+#       "lease: the lookup gave no tied lease" is for exceptions and for findings that are not exactly a list or a
+#       tuple; dropped items never collapse (t71c-R2-1, R2-2, t71f-R2-3). The refused answer's reason must be exactly a
+#       str (type(x) is str), whatever the findings are (this test replaces the isinstance test at :130), else the
+#       same collapse (t71f-R2-10, t71g-R2-1).
+#       _hides_token keeps
+#       isinstance; that is safe because every item is exact-type checked before _filtered sees it, and that order is
+#       required for the answer's findings too. An exception from the lookup call itself keeps its exact finding
+#       "lease: session_lease raised <type name>". A real StoreResult always holds a tuple (writer.py :141), so the
+#       list-or-tuple check never refuses a real answer (t71e-R1-4). After (a), the answer's reason and decision and
+#       core's reason are type-checked but not passed through the token filter, and the lease's task_id
+#       (adapter._task), the token's epoch (adapter._text), and recorder, root and session_id stay isinstance-checked,
+#       recorder being written into the log: a stated limit (t71e-R2-10, t71f-R2-5);
+#   (d) the module docstring states, besides every phrase R6Stated pins: that an exception raised by adapter.violation
+#       itself ends as the plain "entry: <type name>" (the real one catches its own); that a "done" may carry released
+#       None (a release refused for "token"); the token filter's breadth (any str holding both "epoch" and "counter",
+#       so an unrelated finding of that shape is hidden too); and the lookup's lock cost (the point DEF-0084's log
+#       line of 2026-10-22 labels h4c Y1-7; TASK-066.yaml :101 uses that label for another point; t71f-R2-9: a lookup
+#       refused "unreadable" during a long commit gives "lease", no record, no STOP); and the test
+#       test_the_docstring_states_the_fifth_call is renamed test_the_docstring_states_the_tied_call, its docstring and
+#       body byte-identical;
+#   (e) AC8's acceptance-time script flags, in every added test function, every other task's AC id by the pattern
+#       "TASK-(?!071 )[0-9]+ AC[0-9]+" over the docstring with every run of whitespace collapsed to one space, not
+#       only TASK-0xx, and requires at least one "TASK-071 AC[0-9]+" in each (t71c-R2-12); the two changed
+#       definitions that keep "TASK-070 ACn" in
+#       their docstrings (the renamed test and test_the_partial_outcome) are named as expected; the in-suite check of
+#       the same rule for the new modules lives in each new test module's own R7-style test;
+#   DA-1 (i) (the contract said the lookup answer is read through adapter._store_done; the module reads it directly
+#       after an isinstance test): out of scope as a code change, because both fail closed and _store_done's use would
+#       add no check; the docstring states the direct reading;
+#   DA-3 (i) (lookup, append and release can be injected): out of scope here, because it binds the caller: H2b's
+#       contract must pass none of them; the docstring states that a production caller passes none;
+#   DA-3 (ii): test_the_partial_outcome in tests/integration/test_writer_files.py asserts the store's leases after the
+#       case (writer.held_leases empty: the stand-in released the lease), as TASK-070 AC4 says; its docstring unchanged;
+#   the records' "no property-level case of step 1" (D-1569): a property test over generated step-(1) arguments, added
+#       to tests/property/test_session_violation_properties.py as new definitions only;
+#   D-1569 C1's other points are (a) to (e) above.
+# adapter.py, writer.py, violation.py, eventlog.py, gitread.py and every hook-side module are unchanged.
+# Stated outcomes and limits:
+# - the reader reads the committed object store only, never the working tree; a commit that does not exist, a shallow
+#   or partial clone without the objects, or a repository of another hash form gives "unreadable";
+# - the commit argument is not proven to be a commit object (t71a-R1-6): only "cat-file -p" is used, and any object
+#   whose text parse_commit accepts is followed; the trees and the blob reached are form-checked; no sixth call;
+# - parse_contract is stricter than G0 in the refusals of step (4) (the top-level form, repeated keys, every
+#   unrecognised line inside write_set and forbidden, a bare "-", the item charset, a leading "/" or a ".." segment,
+#   a task other than task_id) and step (3) (a U+FEFF anywhere, a carriage return, NUL, tab and the other C0
+#   controls, DEL, the C1 controls, U+2028 and U+2029; so a committed CRLF contract that G0 accepts is refused;
+#   t71e-R2-8, t71f-R1-2, R1-3): a
+#   contract G0 accepts can be "unreadable" here, which fails closed; G0 itself drops such lines silently (t71a-R1-1,
+#   R2-2), which H2a does not change;
+# - a base commit with an "encoding" header and a non-UTF-8 message is "git: commit text not UTF-8" although its tree
+#   is fine: an availability limit H2b must expect (t71e-R1-6);
+# - contracts before TASK-061 were not scanned (D-1587 C4 scanned TASK-061 to TASK-070 only): an older contract may be
+#   "unreadable" under the strict rules, and for H2b that is an expected STOP, not a bug (t71d-R1-5);
+# - the workflow holds two copies of G0's parse_contract (:162-191 and :583-612); a test asserts both are equal and
+#   hold the rule lines, comparing dedented text, never line numbers; a workflow change to parse_contract (the
+#   owner's, A66/A67) needs a paired change of that test (t71d-R1-3, R2-6);
+# - G0's layout rules are copied, not shared: the workflow's parse_contract and parse_contract here could drift apart;
+#   a test reads the workflow text and checks that its rule lines are present, but does not run them;
+# - the commit and tree texts and the contract are capped at 1 MiB only after run has returned the whole output
+#   (gitread caps nothing);
+# - the 1 MiB cap on each tree text bounds a tree at roughly 15,000 entries (about 70 bytes per entry line): a root
+#   tree or docs/tasks folder larger than that makes every read "tree: tree text over the cap", an availability limit,
+#   fail closed (t71e-R1-7);
+# - up to five git processes of up to 10 seconds each per call: H2b's hook calls may wait up to about 50 seconds
+#   (beside Claude Code's hook timeout, unmeasured);
+# - git is trusted as gitread trusts it (TASK-024's limits); among them, git's cat-file honours replace refs
+#   (refs/replace), grafts and alternates (gitread sets no GIT_NO_REPLACE_OBJECTS): one who can write the repository's
+#   refs or object store can change what the given commit reads as, and so the write-set (t71b-R1-6, R2-11); H2b or a
+#   later gitread revision may add --no-replace-objects; no hash check is made here; H2b must take this as a named
+#   point (its contract states how the replace route is closed or limited; t71c-R1-6);
+# - gitread runs git with -C root, and git finds a repository upward: an existing folder that is not a repository
+#   but lies inside another one is read as that outer repository (t71c-R1-7); H2b's caller passes the repository's
+#   top level;
+# - the reader checks no contract signature or approval: a contract committed at the given commit is read as written;
+# - C6 and P-LOC unmeasured; nothing placed, wired, set or measured; every limit TASK-051 to TASK-070 carried.
+# Carried to H2b (t71f-R2-8): spec 3 :19 reads a task's contract "at HEAD", spec 5 :109 and :113 "at the base"; H2b's
+# contract resolves which commit its caller passes.
+# DEF-0084 taken: the log points of 2026-10-22 as mapped above; the lookup's lock cost (labelled h4c Y1-7 in DEF-0084's
+# log line of 2026-10-22) stated (not solved); h4c Y3-2's reading side
+# (an unreadable contract fails closed) as far as the reader goes, its STOP is H2b's. Stay deferred: h4c Y2-10, Y5-7,
+# Y5-9; h4d Y1-3, Y2-6, Y5-7; h4b Y2-6; the token-less observe and point 10's paths (H4). (h4c Y1-6 was taken by
+# TASK-066, DEF-0084 :21.) DEF-0077, DEF-0088: not reached (H2b's). DEF-0080 to DEF-0083, DEF-0085, DEF-0087, DEF-0089,
+# DEF-0090: not touched.
+# Risk: high (risk rules revision 6, §2 point 3: R3 matches every path under src/** and tests/**), computed over the
+# base by script before commit C. GOV-003: every path of the write-set is an evaluator path, by script; change class
+# critical_cr, ruled at acceptance. Profile (gov-AIEOS, high): functional [unit_test], architecture
+# [deterministic_rule], functional [integration_test], security [static_security_analysis] and architecture
+# [ai_review (cross-model)], plus the evidence_required of the applicable articles. Reviews: five way-2 reviews on
+# Sonnet 5.5 (never Fable, the owner's words of 2026-10-17); the decision agent's own reviews: INV-003's human_review,
+# OPS-002's human_review and the cross-model half, each its own record (D-1148 Q2). Records in the readable form, as
+# TASK-070's; per-entry coverage checked by script (L-0022); the governor's evaluation reported (D-1098).
+# Naming (D-544 Q3): every new test function names "TASK-071 ACn" in its own docstring.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-071.yaml and has one parent equal to base_commit; the
+# task's commits carry "AIEOS-Task: TASK-071" and go to task/TASK-071 under their own decisions; main receives the task
+# only at its acceptance.
+# Not applicable: OPS-001; INV-005 to INV-008, INV-010, INV-011; GOV-001, GOV-004 to GOV-006, SEC-003. INV-004
+# applies: the writer stays the only module that opens the store and the event log. INV-009 applies (reading) through
+# session_violation, unchanged in what it appends.
+# Owner-kept acts: none. No hook placed, no matcher, no Claude Code setting, nothing under .github/ or .claude/, nothing
+# measured, no push of its own; it weakens no evidence requirement; acceptance is one delegated approval.
+task: TASK-071
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add, in standard-library Python 3, a new module src/aieos_bootstrap/task_contract.py with read_contract(root, commit,
+  task_id, run=None), which reads a task's contract at an explicit commit from the repository's object store through
+  gitread.run only and gives its task, base_commit, write_set and forbidden by G0's layout, with refusals stricter
+  than G0's that are labelled as this contract's, or "unreadable" on any form it does not recognise, never a partial
+  or default write-set; and harden src/aieos_bootstrap/session_violation.py and its tests by the points DEF-0084
+  carries from TASK-070 (a) to (e) and DA-3 (ii), with new test modules tests/unit/test_task_contract.py,
+  tests/integration/test_task_contract_repo.py, tests/property/test_task_contract_properties.py and
+  tests/unit/test_session_violation_hardening.py, and added definitions in
+  tests/property/test_session_violation_properties.py.
+traces_to:
+  - docs/specs/spec-05-adapter-contract.md#11
+  - docs/specs/spec-05-adapter-contract.md#8
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#1
+  - docs/specs/risk-rules-gov-aieos.md#2
+input_state:
+  base_commit: 6302d99ff780969e0053bc8ac73fa427a1dddb6b
+  depends_on: [TASK-001, TASK-016, TASK-024, TASK-051, TASK-053, TASK-070]
+  intent_versions:
+    docs/specs/spec-05-adapter-contract.md: c2496023175dcc535974f04c9ec6778101da26fb90a35a5424fbc589c0303601
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/task_contract.py
+    - src/aieos_bootstrap/session_violation.py
+    - tests/unit/test_task_contract.py
+    - tests/unit/test_session_violation_hardening.py
+    - tests/unit/test_session_violation.py
+    - tests/integration/test_task_contract_repo.py
+    - tests/integration/test_writer_files.py
+    - tests/property/test_task_contract_properties.py
+    - tests/property/test_session_violation_properties.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - docs/Deferred/DEF-0084-points-carried-from-the-hook-process-drafts.md
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.gitread.run, aieos_bootstrap.gitread.parse_commit, aieos_bootstrap.gitread.OBJECT_ID,
+    aieos_bootstrap.gitread.form_error, aieos_bootstrap.writer.StoreResult,
+    aieos_bootstrap.session_violation.session_violation, aieos_bootstrap.violation.RESULT_KEYS,
+    aieos_bootstrap.adapter.RESULT_KEYS, aieos_bootstrap.writer.session_lease, aieos_bootstrap.writer.held_leases,
+    aieos_bootstrap.adapter.violation, aieos_bootstrap.adapter._result, aieos_bootstrap.adapter._text,
+    aieos_bootstrap.adapter._utc_whole, aieos_bootstrap.adapter._task, aieos_bootstrap.adapter._token_form]
+  # The adapter names are read, not changed (t71f-R2-7).
+forbidden:
+  # As TASK-070's list (filled by script from the base's tree before commit C): .github/**, .aieos/**, .claude/**,
+  # CLAUDE.md, AIEOS-concept.md, docs/**, bench/**, tests/conformance/**, .gitattributes, .gitignore, and every existing
+  # path of src/ and tests/ not in the write-set, gitread.py, adapter.py, writer.py, violation.py, eventlog.py and every
+  # hook-side module among them.
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/writer.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/verification_records.py
+  - tests/conformance/fixtures/acc_01.py
+  - tests/conformance/fixtures/acc_02.py
+  - tests/conformance/fixtures/acc_03.py
+  - tests/conformance/fixtures/acc_04.py
+  - tests/conformance/fixtures/acc_05.py
+  - tests/conformance/fixtures/acc_06.py
+  - tests/conformance/fixtures/acc_07.py
+  - tests/conformance/fixtures/acc_08.py
+  - tests/conformance/fixtures/acc_09.py
+  - tests/conformance/fixtures/acc_10.py
+  - tests/conformance/fixtures/acc_11.py
+  - tests/conformance/fixtures/acc_12.py
+  - tests/conformance/fixtures/acc_13.py
+  - tests/conformance/fixtures/acc_14.py
+  - tests/conformance/fixtures/acc_15.py
+  - tests/conformance/fixtures/acc_16.py
+  - tests/conformance/fixtures/acc_17.py
+  - tests/conformance/fixtures/adv_01.py
+  - tests/conformance/fixtures/adv_03.py
+  - tests/conformance/fixtures_cb/adv_02.py
+  - tests/conformance/fixtures_rc/rc_01.py
+  - tests/conformance/fixtures_rc/rc_02.py
+  - tests/conformance/fixtures_rc/rc_03.py
+  - tests/conformance/fixtures_rc/rc_04.py
+  - tests/conformance/fixtures_rc/rc_05.py
+  - tests/conformance/fixtures_rc/rc_06.py
+  - tests/conformance/fixtures_rc/rc_07.py
+  - tests/conformance/fixtures_rc/rc_08.py
+  - tests/conformance/fixtures_rc/rc_09.py
+  - tests/conformance/fixtures_rc/rc_10.py
+  - tests/conformance/fixtures_rc/rc_11.py
+  - tests/conformance/fixtures_risk/risk_01.py
+  - tests/conformance/set.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      read_contract's arguments and result: a mapping with exactly result, reason, findings, task, base_commit,
+      write_set and forbidden; result "read" or "unreadable"; findings a list of str, [] on "read"; on "unreadable"
+      task, base_commit, write_set and forbidden are None. Step (1) refuses, reason "argument", with step (1)'s exact
+      findings, a root that is not of type str, relative, or not an existing folder (through gitread.form_error), a
+      commit not of type str or not fullmatching gitread.OBJECT_ID, a task_id not of type str or not "TASK-" and ASCII
+      digits (a str subclass and an Arabic-Indic digit among the cases, and "TASK-071\n", a 40-hex commit with a
+      final "\n", a 41-hex and a 63-hex commit, and a root that is an absolute path to an existing file; t71f-R1-5),
+      before run is called (a recording stand-in);
+      with two bad arguments, the first in the order root, commit, task_id is the one finding. No exception escapes:
+      a patched gitread.parse_commit that raises gives reason "entry", ["entry: <type name>"]. Equal arguments over an unchanged
+      repository give equal results.
+  - AC2: >-
+      The git reads, step (2): run is called at call time (a stand-in is the one called; by default gitread.run), only
+      as run(root, ["cat-file", "-p", <id>], 10), each id fullmatching gitread.OBJECT_ID, at most five times, in the
+      order commit, root tree, docs, tasks, blob. Each case a stand-in, asserting step (2)'s exact finding: reason
+      "git" for run raising; a result that is not a dict, a dict subclass, or a dict with other keys; an error not
+      None; an exit of 1, of True, of None, of "MARKER"; an out of type str, bytearray or a bytes subclass; a commit
+      text of 1 MiB + 1 byte (1 MiB exactly passes) or not UTF-8; a commit out of form (a parse_commit error, and a
+      patched gitread.parse_commit returning a tree id not in OBJECT_ID form; t71f-R1-4); reason
+      "tree" for a tree text of 1 MiB + 1 byte (1 MiB exactly passes) or not UTF-8; a tree line without its final
+      "\n", out of form, with a mode not [0-7]{6}, a type other than blob, tree or commit, an id not in OBJECT_ID
+      form, an empty name or a "/" in it; a C-quoted name and a raw non-ASCII name, neither matching a sought name; a
+      tree name holding U+2028 or U+0085, which does not split its line; a repeated name; docs or
+      tasks missing or not "040000 tree"; the contract missing or "100755 blob" or "120000 blob". With "MARKER" put in
+      exit, out, err, error and a tree name, "MARKER" is absent from the repr of every result. The cases are single
+      faults, plus one ordering case per sequence of step (2)'s order (exit 1 with an out of type str gives "git: exit
+      1"; a tree with a bad line and no docs entry gives "tree: line out of form"). A stand-in records that
+      parse_commit is given the commit's original bytes. The result-check faults (a raise, the result's shape,
+      error, exit, out not bytes) are tested at every one of the five call positions; the commit's cap, decode and
+      form faults at the first; each tree-class fault at each of the three trees; and the blob's cap and decode at
+      the fifth (as "bytes"), as parametrised cases (t71e-R2-4, t71g-R1-2).
+  - AC3: >-
+      The bytes and the parse, steps (3) to (5): 1 MiB + 1 byte (1 MiB exactly passes), invalid UTF-8, a leading
+      byte-order mark, a U+FEFF inside a comment line, a carriage return, a NUL, a tab, a form feed, a vertical tab,
+      DEL, a C1 control (U+0085 among them), or a U+2028 or U+2029 inside a comment line (t71f-R1-2, R1-3) gives
+      "bytes", in step (3)'s order when several fail; a non-ASCII text without controls is not refused by step
+      (3); read_contract(root, <HEAD id>, task_id), the real five-call walk, and parse_contract on the same blob
+      bytes, give "read" for each of docs/tasks/TASK-061.yaml to TASK-070.yaml as committed at HEAD (t71d-R1-6), read
+      through gitread.run (HEAD's id by rev-parse --verify --end-of-options HEAD, then cat-file, so a working tree's
+      line endings play no part; t71b-R1-11), in tests/integration/test_task_contract_repo.py, with write_set and
+      forbidden equal to
+      the lists G0's own rules take from the same bytes (the test's copy of G0's loop, the oracle only for these
+      well-formed files); and "parse", each with a fixed test text and the exact finding of step (4)'s table (one
+      case per rule of the table at least; a text with two faults gives the first by step (4)'s order: two line
+      faults give the earlier line's, a line fault and a field fault give the line fault's; t71e-R1-1, R2-6), for: a
+      task line "task:  TASK-071", one with a trailing space and "task: TASK-071 # c" ("parse: task value out of
+      form"; t71e-R2-1, R1-5); a missing task or
+      base_commit; a short or upper-case base_commit; an empty write_set or forbidden; a repeated top-level key (a
+      second write_set or forbidden), a repeated task, base_commit or paths; a top-level line of another form; a value
+      on the write_set, forbidden or paths line; a bare "-" line; an item at indent 4 before paths, at indent 3 or 6 in
+      write_set, or at indent 4 in forbidden; another key under write_set; a key line in forbidden; an item line "- "
+      with an empty item; "-x"; a second "paths:" with a value ("parse: write_set line out of form"), a second exact
+      "  paths:" ("parse: repeated key"), a second "  base_commit:x" ("parse: base_commit line out of form"), an
+      empty item "  - " in forbidden ("parse: forbidden line out of form"), "task:" with no value ("parse: task
+      missing"), "task: " with an empty value (the same; t71g-R1-3, R2-6), "task:  " with a whitespace-only value
+      ("parse: task value out of form"), "  base_commit:" and
+      "  base_commit: " with no value ("parse: base_commit missing"), and "  base_commit:   " with a whitespace-only
+      value ("parse: base_commit out of form") (t71f-R1-1); a top-level key with an upper-case letter or a digit;
+      a base_commit at indent 4 or outside input_state (so missing); a task line with a trailing space and one with no
+      space after the colon; a base_commit line with a trailing space (t71d-R1-1, R1-7); an item with
+      trailing whitespace or a non-breaking space, a space and "#", a quote, a brace, a bracket, a leading "/" or "./",
+      a trailing "/", an empty, "." or ".." segment, or a character outside the set; a line of four spaces, a
+      non-breaking space and "- x" (no item); after all of these pass, a task other than task_id gives "task", and a
+      text with both a short base_commit and another task gives "parse"; a text or task_id not of type str gives
+      "argument". Skipped, not refused: an indent-0 comment line, and a line inside write_set holding only a
+      non-breaking space (G0's blank test), each with a test. A test reads the workflow text and asserts that the
+      layout rule lines of both its copies of parse_contract (:162-191 and :583-612; in the first copy the blank and
+      comment skip, :167, the indent and strip lines, :169-170, the indent-0 branch, :171-175, the base_commit, paths
+      and forbidden branches, :176-183, and the final checks, :184-190; t71g-R1-5) are present, dedented, and that
+      the two copies are equal (text compared, not line numbers).
+  - AC4: >-
+      End to end over this repository's history (tests/integration/test_task_contract_repo.py, read only, the
+      pinned forms, fixed commits; it needs the full history, as tests/integration/test_gitread_repo.py does, and a
+      shallow clone fails it): TASK-070's contract at the commit that added it (ade98ec4c29430fa821c27bb0111665ab0b756a1) gives "read" with its
+      four write-set paths, task TASK-070, its base_commit and the length of its forbidden list (e698389fc36710be2bffbeea8750941d6b22facb and 193, both taken by
+      script from the blob at that commit); the same commit with task_id TASK-071 gives "unreadable" (the blob
+      missing, reason "tree"); a commit id that does not exist gives "unreadable", reason "git". The fill script runs
+      steps (3) and (4) on that blob first and refuses on "unreadable" (t71g-R1-6, R2-5).
+  - AC5: >-
+      What task_contract.py imports and does: exactly re and aieos_bootstrap.gitread (an AST check); no bare name open,
+      exec, eval, compile, __import__, importlib, input, breakpoint or __builtins__ (the workflow's DENY_NAMES;
+      re.compile as an attribute is allowed; the new tests too use none of them and no tempfile or sqlite3, taking
+      their root from the repository folder by pathlib and __file__; t71d-R2-5), no assert, no attribute now,
+      utcnow, today, time, environ, getenv, system, popen, Popen or stdin, and no attribute run but gitread.run, the one
+      process route; of gitread it uses only run, parse_commit, OBJECT_ID and form_error; no string naming the
+      project-state directory; no string constant exactly "valid", "accepted" or "approved"; no name holding "token",
+      "pass" or "secret" bound to a str constant, in either changed src module (bandit B105, as TASK-070's fix
+      1b391c08; "pwd" too, t71f-R2-10). No hook-side module names task_contract (a test over the six hook-side modules).
+      session_violation.py keeps every pin of R5WhatItDoes and R6Stated; _CORE_KEYS == frozenset(violation.RESULT_KEYS)
+      by a test. At the task's commits the CI steps report no finding: deterministic_rule, OPS-003, SEC-001, SEC-002 and
+      bandit.
+  - AC6: >-
+      The hardening of session_violation, (a) to (c), each a stand-in case: an adapter.violation answer with an item
+      not of type str in findings or in core['findings'] (a str subclass among them), a reason not of type str and not
+      None, a result of None, "other" or a str subclass of "done", a decision of "other" or a str subclass of "STOP:
+      violation", a core whose reason is neither a str nor None or whose result is not exactly "done" or "refused"
+      (t71f-R2-1), or an item of core's appended or duplicate
+      not of type str, or a core that is not None and has a key outside _CORE_KEYS or misses one, gives "refused",
+      "entry", ["entry: adapter.violation gave no result mapping"]; core None passes as today; a dict subclass answer
+      whose reads raise still gives "entry: after the record: <type name>"; a lookup answer that is a StoreResult
+      subclass whose attributes raise, or a "refused" whose findings are not iterable, gives "refused", "lease",
+      ["lease: the lookup gave no tied lease"]; a "refused" whose findings are only str subclasses (raising or not)
+      gives "lease", ["lease: the lookup refused (<reason>)"]; a mixed list gives "lease" with its exact str items
+      only; a "refused" whose findings are a plain str, or whose reason is a str subclass (t71f-R2-10; also with
+      exact str findings, t71g-R2-1), gives "lease", ["lease: the lookup gave no tied lease"]; an
+      event_id of a str subclass, None, an int or bytes gives "argument", ["argument: event_id is not a string"], with
+      the lookup not called
+      and nothing appended (t71d-R2-1, t71e-R2-3); an empty str event_id passes (0) and reaches adapter.violation; a
+      bad event_id with a bad root gives only _session_findings' finding (t71g-R2-4); the StoreResult cases whose
+      findings are a plain str or not
+      iterable are built by setting .findings after construction (the constructor makes a tuple; t71e-R1-4); a
+      lookup that raises keeps
+      "lease: session_lease raised <type name>"; every TASK-070 test passes
+      unchanged but for the two
+      changed definitions of AC8 (the rename of (d) and test_the_partial_outcome's added assert).
+  - AC7: >-
+      What is stated, (d): task_contract.py's docstring states the flow (1) to (6) with the reason table, that
+      "unreadable" never carries a partial or default write-set, that the commit is the caller's and no base is chosen
+      here, that capabilities.shell.allow is not read and no allowlist source is chosen, that its refusals are
+      stricter than G0's and G0's rules are copied not shared, that step (3) refuses a U+FEFF anywhere, a carriage
+      return, NUL, tab and the other C0 controls, DEL, the C1 controls, U+2028 and U+2029, so a committed CRLF contract
+      that G0 accepts is refused (t71e-R2-8, t71f-R1-2, R1-3), the object store only, that the commit is not proven a
+      commit object, the five calls, the caps and the 50-second bound, the replace-refs and outer-repository limits,
+      the tree-size bound of the cap (t71e-R1-7), that run is a test seam a production caller does not pass, and that
+      nothing hook-side calls it yet;
+      session_violation.py's docstring states the four points of (d), (b)'s departure, the direct reading of DA-1 (i),
+      that a production caller passes no lookup, append or release (DA-3 (i)), the limit of (c)'s end: the answer's
+      reason and decision and core's reason are type-checked but not passed through the token filter, and the lease's
+      task_id, the token's epoch, recorder, root and session_id stay isinstance-checked (t71e-R2-10, t71f-R2-5), and,
+      for (0), (a) and (c) (t71f-R2-2): that event_id must be of exact type str; that the answer's and core's fields
+      are checked by exact types and fixed values; that an exception, or refused findings that are not exactly a list
+      or a tuple, collapse to "lease"; and that the ending "entry: adapter.violation gave no result mapping" can
+      follow a record already written; checked by in-suite word checks
+      with whitespace collapsed (D-1286), task_contract.py's in tests/unit/test_task_contract.py and
+      session_violation.py's in tests/unit/test_session_violation_hardening.py, each over a fixed list of phrases the
+      task's commit names in its test module (as TASK-070's R6Stated does), every phrase taken from the words of this
+      criterion; no docstring or string constant names the project-state directory.
+  - AC8: >-
+      Its own tests and the changed ones (GOV-003): every new test function names "TASK-071 ACn" in its own docstring
+      and no other task's AC in qualified form. Allowed changes, by definition: in session_violation.py the module
+      docstring, _token_free, _session_violation and _tied, plus added helpers and added private constants (_CORE_KEYS
+      and those of (a), none named with "token", "pass", "secret" or "pwd"; t71g-R2-2), with _session_findings
+      named as unchanged ((0) is in _session_violation; t71e-R2-2); in
+      tests/unit/test_session_violation.py only the rename of (d); in tests/integration/test_writer_files.py only
+      test_the_partial_outcome, by added lines; in tests/property/test_session_violation_properties.py only added
+      definitions (new property tests in a new class); every other definition present at the base is byte-identical
+      and none is removed, and nothing else changes but added definitions and the imports they need. Definitions are
+      compared one by one, functions and methods each by its own source segment, a class's own lines apart from its
+      methods; a class may gain methods. The hardening tests copy the stand-ins they need as new definitions in their
+      own module and import no test module. An acceptance-time script by source segment lists every changed definition
+      and refuses any other; the rule of (e) is one function, other_task_ids(text), copied byte for byte into each new
+      test module (no test module imports another; the script checks that the copies are equal and holds its own
+      copy), each module's own R7-style test calling it, with unit cases that "TASK-100 AC1", "TASK-0710 AC1" and a
+      "TASK-070" and "AC1" split by a line break are flagged and "TASK-071 AC1" is not (t71c-R2-6); no new test name is a
+      name already present in tests/, the four R7-style tests named test_task_contract_tests_name_their_criteria,
+      test_hardening_tests_name_their_criteria, test_task_contract_properties_name_their_criteria and
+      test_task_contract_repo_tests_name_their_criteria (one per new test module; t71f-R2-4) (the full suite
+      run before the task's commit is the proof that test_ac_tests_tree.py's count is unchanged; t71c-R2-13,
+      t71e-R2-9); the script applies it to every added test function,
+      the renamed test and
+      test_the_partial_outcome being the two expected definitions that keep "TASK-070"; one run of the script against
+      a weakened copy. DA-3 (ii): test_the_partial_outcome asserts writer.held_leases empty after its case. Property
+      tests (standard library, fixed seeds, at most 50 cases each): over contract texts generated from a template (a
+      list of items and a list of mutations; tests/property/test_task_contract_properties.py), "read" implies
+      write_set and forbidden equal to the template's lists, "unreadable" implies the four fields None, every
+      parse-class mutation of AC3's list gives "parse", every task-class mutation "task", every skipped-class
+      mutation (an indent-0 comment, a whitespace-only line) leaves the result unchanged, and every bytes-class
+      mutation gives "bytes", the last through read_contract with a stand-in run, since step (3) runs only there
+      (t71c-R2-4, t71d-R1-8, R2-7); over
+      generated tree texts the same for the walk; over generated step-(1)
+      arguments of session_violation (tests/property/test_session_violation_properties.py, a new class), nothing is
+      called after a refusal. Broken copies, made and run in the scratchpad as for TASK-059 to TASK-070, each fail at
+      least one test, each naming the file it changes: in task_contract.py, a missing write_set read as empty; a
+      default write-set on "unreadable"; the working tree read instead of the object store; git's error text copied
+      into a finding; a non-int exit's value copied into a finding; a 100755 or symlink contract entry accepted; a
+      repeated tree name accepted; an exit of True accepted; an out of type str accepted; run's exception let escape;
+      run bound at definition time instead of call time; a timeout other than 10; non-strict UTF-8 (errors
+      "replace"); the commit text cap removed; the tree text cap removed; the call order changed; the task check run
+      before the parse checks; shared lists returned instead of fresh ones; a carriage return accepted; a tab
+      accepted; a bare "-" line dropped; an item at a wrong indent dropped; a repeated write_set appended; items
+      stripped; the item charset removed; a sixth git call; task_contract.py importing subprocess; a byte-order
+      mark, DEL, a vertical tab, a form feed or a C1 control accepted (one copy each); the control set applied to the
+      raw bytes (so "é" refuses); a U+FEFF accepted after the first character; U+2028 accepted; parse_commit
+      given the decoded text; a sought entry's mode or type unchecked; the
+      cap checked on the first tree only; the parse findings' order changed (the field checks before the lines); the
+      task value form check removed (t71e-R2-7); in
+      session_violation.py, one copy per field of (a), each its own copy (the findings items; core's findings items;
+      the answer's result; the answer's reason; the answer's decision; core's result; core's reason; core's appended
+      items; core's duplicate items), the result constants widened to any str, the decision constant widened to any
+      str, (b) removed, _CORE_KEYS missing one key, (c) giving "entry", isinstance kept at :131, the refused reason's
+      exact-type check removed, (0) removed, the list-or-tuple check removed, a plain-str refused findings list not
+      collapsing (t71f-R2-6); one phrase of AC7's checks removed (one copy per phrase);
+      in one new test module, its copy of other_task_ids narrowed to TASK-0xx (its unit cases and the script's
+      copy comparison catch it); in tests/integration/test_writer_files.py, test_the_partial_outcome's append stand-in
+      changed to start a session s-2, release the lease and then grant the task again to s-2 by writer.grant_lease (as
+      test_the_release_token_race does), so the fence outcome and every earlier assert stay and only DA-3 (ii)'s
+      held_leases assert fails (t71c-R2-5).
+      tests/run_tests.py, unchanged, runs the tests.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC6, AC8]}
+  - {gate: G3, check: constitution, args: [AC5, AC7, AC8, INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003,
+    SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
