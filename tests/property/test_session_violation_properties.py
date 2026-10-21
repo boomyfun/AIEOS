@@ -58,7 +58,7 @@ def lookup_answer(rng, epochs):
         return writer.StoreResult('done', 'tied', value=lease), lease
     return [writer.StoreResult('done', 'tied', value=dict(lease, more=1)),
             writer.StoreResult('done', 'tied', value=dict(lease, task_id='T-1')),
-            writer.StoreResult('done', 'no_lease_row'),
+            writer.StoreResult('done', 'no_lease_row', value=lease),
             writer.StoreResult('refused', rng.choice(('session', 'ended', 'leases')),
                                ['leases: held with epoch %s counter 2' % lease['fencing_token']['epoch']]),
             None][k - 4], None
