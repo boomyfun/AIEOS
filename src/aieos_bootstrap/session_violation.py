@@ -46,7 +46,7 @@ from aieos_bootstrap import adapter
 from aieos_bootstrap import writer
 
 _LEASE_KEYS = frozenset({'task_id', 'fencing_token', 'expires_at'})
-_TOKEN_HIDDEN = 'release: the lease is held with another token (not shown)'
+_HIDDEN = 'release: the lease is held with another token (not shown)'
 _NO_TIED_LEASE = 'lease: the lookup gave no tied lease'
 _NO_RESULT_MAPPING = 'entry: adapter.violation gave no result mapping'
 
@@ -81,7 +81,7 @@ def _hides_token(found):
 
 
 def _filtered(found):
-    return [_TOKEN_HIDDEN if _hides_token(f) else f for f in found]
+    return [_HIDDEN if _hides_token(f) else f for f in found]
 
 
 def _without_token(lease):
@@ -109,9 +109,8 @@ def _token_free(answer):
         copied['duplicate'] = list(core['duplicate'])
         copied['findings'] = _filtered(core['findings'])
         copied['released'] = _without_token(core.get('released'))
-    return {'result': answer['result'], 'reason': answer['reason'], 'findings': _filtered(answer['findings']),
-            'core': copied, 'decision': answer['decision'], 'fencing_token': None,
-            'released': _without_token(answer['released'])}
+    return adapter._result(answer['result'], answer['reason'], _filtered(answer['findings']), copied,
+                           answer['decision'], released=_without_token(answer['released']))
 
 
 def _session_violation(root, session_id, observation, event_id, recorder, now, lookup, append, release):

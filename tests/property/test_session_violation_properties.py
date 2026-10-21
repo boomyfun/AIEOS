@@ -75,9 +75,8 @@ def violation_answer(rng, lease, epochs):
     found = rng.sample(['release: nothing released (token)', refusal, loose, 'plain'], rng.randint(0, 4))
     core = {'result': 'done', 'reason': None, 'findings': found, 'appended': ['ev', 'ev/decision'], 'duplicate': [],
             'released': dict(released) if released else None}
-    return {'result': 'done', 'reason': None, 'findings': rng.sample([refusal, loose, 'plain'], rng.randint(0, 3)),
-            'core': core, 'decision': 'STOP: violation', 'fencing_token': None,
-            'released': released}
+    return adapter._result('done', None, rng.sample([refusal, loose, 'plain'], rng.randint(0, 3)), core,
+                           'STOP: violation', released=released)
 
 
 def case(rng):
