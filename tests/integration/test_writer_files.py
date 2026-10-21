@@ -450,5 +450,169 @@ class ReadHookFiles(unittest.TestCase):
             self.assertEqual(dump(root), before)
 
 
+SV_TASK = 'TASK-070'
+SV_EPOCH = 'epoch-of-the-tied-store-69'
+SV_EV = 'ev-violation-1'
+SV_HIDDEN = 'release: the lease is held with another token (not shown)'
+
+
+def sv_observation(subject=SV_TASK):
+    return {'record_id': 'obs-1', 'fact_kind': 'observation', 'source_class': 'deterministic_tool_local',
+            'recorder': REC, 'subject': subject, 'evidence_type': 'write_outside_write_set', 'outcome': 'blocking',
+            'blocking_kind': 'violation', 'refers_to': 'src/outside.py'}
+
+
+def sv_store(root):
+    """A store with session s-1 holding one unexpired lease on SV_TASK; returns the lease."""
+    writer.open_store(root, SV_EPOCH)
+    writer.start_session(root, 's-1', 'agent-1', T0)
+    return writer.grant_lease(root, SV_TASK, 'READY', 'agent-1', 's-1', T0, T0 + datetime.timedelta(hours=1)).value
+
+
+def sv_events(root):
+    """The log's events, after checking that records.check_log gives no finding."""
+    path = writer.log_path(root)
+    if not os.path.isfile(path):
+        return []
+    log = records.check_log(read(path))
+    assert log.findings() == [], log.findings()
+    return [x.event for x in log.lines]
+
+
+def sv_holds_token(value, epochs):
+    if isinstance(value, dict):
+        if 'epoch' in value and 'counter' in value:
+            return True
+        return any(sv_holds_token(k, epochs) or sv_holds_token(v, epochs) for k, v in value.items())
+    if isinstance(value, (list, tuple)):
+        return any(sv_holds_token(v, epochs) for v in value)
+    if isinstance(value, str):
+        return ('epoch' in value and 'counter' in value) or any(e in value for e in epochs)
+    return False
+
+
+def sv_files(root):
+    return sorted(os.path.relpath(os.path.join(h, n), root).replace(os.sep, '/') for h, _, ns in os.walk(root)
+                  for n in ns)
+
+
+class SessionViolationFiles(unittest.TestCase):
+    """TASK-070's rule R4 on real files: the violation path tied by the live lease, end to end."""
+
+    NOW = T0 + datetime.timedelta(minutes=1)
+
+    def call(self, root, sid='s-1', subject=SV_TASK, now=None, **kw):
+        from aieos_bootstrap import session_violation
+        return session_violation.session_violation(root, sid, sv_observation(subject), SV_EV, REC, now or self.NOW, **kw)
+
+    def test_the_tied_call_and_its_repeat(self):
+        """TASK-070 AC4: the tied call gives "done" and 'STOP: violation'; the log ends with violation.detected and
+        decision.execution under the lease's task and token; no lease is held; the result holds no token; the same call
+        again gives "lease" with "no_lease_row:" and leaves the log unchanged."""
+        with tempfile.TemporaryDirectory() as root:
+            lease = sv_store(root)
+            r = self.call(root)
+            self.assertEqual((r['result'], r['decision']), ('done', 'STOP: violation'))
+            self.assertEqual(r['released'], {'task_id': SV_TASK, 'expires_at': lease['expires_at']})
+            events = sv_events(root)
+            self.assertEqual([e['type'] for e in events], ['violation.detected', 'decision.execution'])
+            for e in events:
+                self.assertEqual((e['task_id'], e['fencing_token']), (SV_TASK, lease['fencing_token']))
+            self.assertEqual((events[1]['payload']['decision'], events[1]['payload']['refers_to']),
+                             ('STOP: violation', SV_EV))
+            self.assertEqual(writer.held_leases(root), [])
+            self.assertFalse(sv_holds_token(r, (SV_EPOCH,)))
+            log = read(writer.log_path(root))
+            again = self.call(root)
+            self.assertEqual((again['result'], again['reason']), ('refused', 'lease'))
+            self.assertTrue(again['findings'][0].startswith('no_lease_row:'), again['findings'])
+            self.assertEqual(read(writer.log_path(root)), log)
+            self.assertEqual(sv_files(root), ['.aieos/events.jsonl', '.aieos/local/state.sqlite'])
+
+    def test_the_lookups_refusals(self):
+        """TASK-070 AC4: a now at or after expires_at gives "leases:"; an ended session s-2 gives "ended:" while s-1
+        holds its lease; an unknown session id gives "session:"; each leaves the log empty and the lease kept."""
+        with tempfile.TemporaryDirectory() as root:
+            lease = sv_store(root)
+            writer.start_session(root, 's-2', 'agent-2', T0)
+            writer.end_session(root, 's-2', T0)
+            for kw, prefix in (({'now': lease['expires_at']}, 'leases:'), ({'sid': 's-2'}, 'ended:'),
+                               ({'sid': 's-9'}, 'session:')):
+                with self.subTest(case=prefix):
+                    r = self.call(root, **kw)
+                    self.assertEqual((r['result'], r['reason']), ('refused', 'lease'))
+                    self.assertTrue(r['findings'][0].startswith(prefix), r['findings'])
+                    self.assertEqual(sv_events(root), [])
+                    self.assertEqual(writer.held_leases(root), [lease])
+
+    def test_another_tasks_observation(self):
+        """TASK-070 AC4: an observation for another task gives "argument"; the log is unchanged and the lease kept."""
+        with tempfile.TemporaryDirectory() as root:
+            lease = sv_store(root)
+            r = self.call(root, subject='TASK-071')
+            self.assertEqual((r['result'], r['reason']), ('refused', 'argument'))
+            self.assertEqual(sv_events(root), [])
+            self.assertEqual(writer.held_leases(root), [lease])
+
+    def test_the_race_with_a_new_holder(self):
+        """TASK-070 AC4: a lookup stand-in giving a lease read before it was released and granted again to s-2 gives
+        "core" with core's reason "fence"; one record.added is appended, no violation.detected; the second lease is
+        kept."""
+        with tempfile.TemporaryDirectory() as root:
+            sv_store(root)
+            old = writer.session_lease(root, 's-1', self.NOW)
+            self.assertEqual(writer.release_lease_token(root, SV_TASK, old.value['fencing_token']).result, 'done')
+            writer.start_session(root, 's-2', 'agent-2', T0)
+            second = writer.grant_lease(root, SV_TASK, 'READY', 'agent-2', 's-2', T0,
+                                        T0 + datetime.timedelta(hours=1)).value
+            r = self.call(root, lookup=lambda root_, sid, now: old)
+            self.assertEqual((r['result'], r['reason'], r['core']['reason']), ('refused', 'core', 'fence'))
+            events = sv_events(root)
+            self.assertEqual([e['type'] for e in events], ['record.added'])
+            self.assertEqual(events[0]['payload']['evidence_type'], 'refused_submission')
+            self.assertEqual(writer.held_leases(root), [second])
+            self.assertFalse(sv_holds_token(r, (SV_EPOCH,)))
+
+    def test_the_partial_outcome(self):
+        """TASK-070 AC4: an append stand-in that releases the lease after the first append gives "core", decision None;
+        the log holds violation.detected and the fence's record.added and no decision.execution."""
+        with tempfile.TemporaryDirectory() as root:
+            lease = sv_store(root)
+            count = []
+
+            def append(*args, **kwargs):
+                w = writer.append_event(*args, **kwargs)
+                if not count:
+                    writer.release_lease_token(root, SV_TASK, lease['fencing_token'])
+                count.append(1)
+                return w
+            r = self.call(root, append=append)
+            self.assertEqual((r['result'], r['reason'], r['decision']), ('refused', 'core', None))
+            self.assertEqual(r['core']['appended'], [SV_EV])
+            self.assertEqual([e['type'] for e in sv_events(root)], ['violation.detected', 'record.added'])
+
+    def test_the_release_token_race(self):
+        """TASK-070 AC4: a release stand-in that releases the lease and grants the task again to s-2 before the release
+        gives "done", 'STOP: violation', released None, the second lease kept, and the fixed finding in core's
+        findings; the result holds no token."""
+        with tempfile.TemporaryDirectory() as root:
+            lease = sv_store(root)
+            second = []
+
+            def release(root_, task_id, token):
+                writer.release_lease_token(root_, task_id, token)
+                writer.start_session(root_, 's-2', 'agent-2', T0)
+                second.append(writer.grant_lease(root_, task_id, 'READY', 'agent-2', 's-2', T0,
+                                                 T0 + datetime.timedelta(hours=1)).value)
+                return writer.release_lease_token(root_, task_id, token)
+            r = self.call(root, release=release)
+            self.assertEqual((r['result'], r['decision'], r['released']), ('done', 'STOP: violation', None))
+            self.assertIn(SV_HIDDEN, r['core']['findings'])
+            self.assertEqual(writer.held_leases(root), second)
+            self.assertNotEqual(second[0]['fencing_token'], lease['fencing_token'])
+            self.assertFalse(sv_holds_token(r, (SV_EPOCH,)))
+            self.assertEqual([e['type'] for e in sv_events(root)], ['violation.detected', 'decision.execution'])
+
+
 if __name__ == '__main__':
     unittest.main()
