@@ -37,7 +37,7 @@ PARSE_MUTATIONS = [lambda t: t + 'Bad line\n', lambda t: t + 'task: TASK-071\n',
                    lambda t: t.replace('    - ', '    - /', 1)]
 SKIP_MUTATIONS = [lambda t: '# a comment\n' + t, lambda t: t.replace('forbidden:\n', ' \nforbidden:\n'),
                   lambda t: t + '\n\n']
-BYTES_MUTATIONS = [lambda t: t + '# \r\n', lambda t: '﻿' + t, lambda t: t + '#  \n', lambda t: t + '#\t\n',
+BYTES_MUTATIONS = [lambda t: t + '# \r\n', lambda t: '\ufeff' + t, lambda t: t + '# \u2028\n', lambda t: t + '#\t\n',
                    lambda t: t + '# \x85\n']
 
 
@@ -61,6 +61,7 @@ class AC8Properties(unittest.TestCase):
         for _ in range(CASES):
             ws, fb = items(rng), items(rng)
             r = tc.parse_contract(template(ws, fb), 'TASK-071')
+            self.assertEqual(r['result'], 'read')
             if r['result'] == 'read':
                 self.assertEqual((r['write_set'], r['forbidden']), (ws, fb))
             else:

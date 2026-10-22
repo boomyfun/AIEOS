@@ -143,7 +143,7 @@ def _bytes_text(out):
         text = out.decode('utf-8')
     except UnicodeDecodeError:
         raise _Refused('bytes', 'bytes: not UTF-8')
-    if '﻿' in text:
+    if '\ufeff' in text:
         raise _Refused('bytes', 'bytes: byte-order mark')
     if _CONTROL.search(text):
         raise _Refused('bytes', 'bytes: control character')
