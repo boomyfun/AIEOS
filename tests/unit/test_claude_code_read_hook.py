@@ -551,5 +551,143 @@ class R7StoreWords(unittest.TestCase):
                 self.assertIn(words, doc)
 
 
+class MadeUpBytes(bytes):
+    """A made-up subclass of bytes (TASK-073 AC5)."""
+
+
+class MadeUpStr(str):
+    """A made-up subclass of str (TASK-073 AC5)."""
+
+
+BAD_ARGUMENTS = [dict(stdin_bytes=bytearray(INPUT)), dict(stdin_bytes=memoryview(INPUT)),
+                 dict(stdin_bytes=INPUT.decode('utf-8')), dict(stdin_bytes=None), dict(environ=list(ENV.items())),
+                 dict(environ=None), dict(working_folder=b'x'), dict(working_folder=1),
+                 dict(now=T0.replace(tzinfo=None)), dict(now=T0.replace(microsecond=5)),
+                 dict(now=T0.astimezone(datetime.timezone(datetime.timedelta(hours=7)))), dict(now=T0.date()),
+                 dict(now=T0.timetz()), dict(now='2026-10-11')]
+
+
+def collapsed_docstrings():
+    """The read hook's module docstring and run's and main's, each with its whitespace collapsed (TASK-073 AC2 and
+    TASK-073 AC3)."""
+    tree = ast.parse((SRC / 'claude_code_read_hook.py').read_bytes().decode('utf-8'))
+    functions = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)}
+    return tuple(' '.join(ast.get_docstring(node).split()) for node in (tree, functions['run'], functions['main']))
+
+
+class T73SaidNoMore(unittest.TestCase):
+
+    def test_the_new_sentences_of_p1_p2_and_p3(self):
+        """TASK-073 AC2: the module docstring holds the new phrases of P1, P2 and P3, run's and main's docstrings each
+        hold "never raises an exception inheriting Exception", and none of the three holds a replaced phrase
+        (whitespace collapsed)."""
+        module, run_doc, main_doc = collapsed_docstrings()
+        for words in ("a kill after add_reads' COMMIT may have stored the read",
+                      'a BaseException that is not an Exception', '(as documented, unmeasured',
+                      'An error inheriting Exception while reading'):
+            with self.subTest(words=words):
+                self.assertIn(words, module)
+        for name, doc in (('run', run_doc), ('main', main_doc)):
+            with self.subTest(name=name):
+                self.assertIn('never raises an exception inheriting Exception', doc)
+        for words in ('timeout stores nothing', 'never raises.', 'An error while reading'):
+            for name, doc in (('module', module), ('run', run_doc), ('main', main_doc)):
+                with self.subTest(words=words, name=name):
+                    self.assertNotIn(words, doc)
+
+
+class T73Wording(unittest.TestCase):
+
+    def test_the_new_wording_of_p5_p6_and_result_keys(self):
+        """TASK-073 AC3: the module docstring holds "kept (decision D-1484 C2)", "specification 5 section 7 and
+        section 11 point 7" and "RESULT_KEYS, the four keys of run's result", and neither "kept because" nor "line
+        108" (whitespace collapsed); RESULT_KEYS is exactly the four keys in their order."""
+        module = collapsed_docstrings()[0]
+        for words in ('kept (decision D-1484 C2)', 'specification 5 section 7 and section 11 point 7',
+                      "RESULT_KEYS, the four keys of run's result"):
+            with self.subTest(words=words):
+                self.assertIn(words, module)
+        for words in ('kept because', 'line 108'):
+            with self.subTest(words=words):
+                self.assertNotIn(words, module)
+        self.assertEqual(hook.RESULT_KEYS, ('exit_code', 'outcome', 'reason', 'findings'))
+
+    def test_every_result_has_the_result_keys(self):
+        """TASK-073 AC3: over the 14 bad-argument cases, and over judge's answers "enforce_nothing", "refuse" and
+        "tied" with read_paths' "uncovered" and "read" and add_reads' "done", "refused" and an exception, each result's
+        key set is set(hook.RESULT_KEYS)."""
+        self.assertEqual(len(BAD_ARGUMENTS), 14)
+        results = [Flow().run(**kw) for kw in BAD_ARGUMENTS]
+        judges = (judged('enforce_nothing', 'no_lease_row'),
+                  judged('refuse', 'session', ['session: no session with this id']), tied())
+        reads = ({'result': 'uncovered', 'reason': 'tool', 'findings': ['made-up tool'], 'read_paths': []}, read())
+        stores = (writer.StoreResult('done', value=1), writer.StoreResult('refused', 'leases', ['leases: x']),
+                  RuntimeError('made-up'))
+        for j in judges:
+            for r in reads:
+                for s in stores:
+                    results.append(Flow(judge=j, paths=r, store=s).run())
+        self.assertEqual(len(results), 14 + 18)
+        self.assertEqual({out['outcome'] for out in results}, {'skip', 'recorded', 'lost'})
+        for out in results:
+            with self.subTest(out=out):
+                self.assertEqual(set(out), set(hook.RESULT_KEYS))
+
+
+class T73Subclasses(unittest.TestCase):
+
+    def test_a_bytes_subclass_is_an_argument(self):
+        """TASK-073 AC5: stdin_bytes of a made-up subclass of bytes gives exit 0, "skip", reason "argument", findings
+        ["argument: stdin_bytes"], and no stand-in is called."""
+        flow = Flow()
+        out = flow.run(stdin_bytes=MadeUpBytes(INPUT))
+        self.assertEqual(out, {'exit_code': 0, 'outcome': 'skip', 'reason': 'argument',
+                               'findings': ['argument: stdin_bytes']})
+        self.assertEqual(flow.calls, [])
+
+    def test_a_str_subclass_session_id_reaches_add_reads(self):
+        """TASK-073 AC5: the read hook itself does not refuse a session id of a made-up subclass of str: with a
+        recording stand-in judge answering "tied" it reaches add_reads, passed unchanged; with the real
+        writer.add_reads and a made-up root, add_reads' exact-type check refuses it before any root is used: exit 0,
+        "lost", reason "argument", findings[0] starting "argument:"."""
+        sid = MadeUpStr('made-up-env-session')
+        env = {hook.SESSION_VAR: sid, hook.ROOT_VAR: ENV_ROOT}
+        flow = Flow()
+        out = flow.run(environ=RecordingEnv(env))
+        self.assertEqual(flow.names(), ['judge', 'read_paths', 'add_reads'])
+        self.assertIs(flow.calls[2][1][1], sid)
+        self.assertEqual(out['outcome'], 'recorded')
+        real, seen = writer.add_reads, []
+
+        def forward(*args):
+            seen.append(args)
+            return real(*args)
+        flow = Flow()
+        with mock.patch.object(claude_code_store, 'judge', flow.make('judge')), \
+                mock.patch.object(claude_code_reads, 'read_paths', flow.make('read_paths')), \
+                mock.patch.object(writer, 'add_reads', forward):
+            out = hook.run(INPUT, RecordingEnv(env), FOLDER, T0)
+        self.assertEqual(flow.names(), ['judge', 'read_paths'])
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(seen[0][0], JUDGED_ROOT)
+        self.assertIs(seen[0][1], sid)
+        self.assertEqual((out['exit_code'], out['outcome'], out['reason']), (0, 'lost', 'argument'))
+        self.assertTrue(out['findings'][0].startswith('argument:'))
+
+
+class T73TheTypeErrorPath(unittest.TestCase):
+
+    def test_findings_that_are_not_iterable_end_in_step_6(self):
+        """TASK-073 AC7: add_reads' stand-in answering a writer.StoreResult('refused', 'path', ['path: x']) whose
+        findings attribute is then set to None gives exit 0, "lost", reason "entry", findings ["entry: TypeError"]
+        (step 6), not step 5's ["entry: add_reads"]; pinned as the code is."""
+        answer = writer.StoreResult('refused', 'path', ['path: x'])
+        answer.findings = None
+        flow = Flow(store=answer)
+        out = flow.run()
+        self.assertEqual(flow.names(), ['judge', 'read_paths', 'add_reads'])
+        self.assertEqual(out, {'exit_code': 0, 'outcome': 'lost', 'reason': 'entry', 'findings': ['entry: TypeError']})
+
+
 if __name__ == '__main__':
     unittest.main()

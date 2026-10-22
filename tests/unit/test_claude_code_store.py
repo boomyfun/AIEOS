@@ -298,9 +298,9 @@ class R5WhatTheModuleDoes(unittest.TestCase):
 class R6WhatIsStated(unittest.TestCase):
 
     def test_the_docstring_states_the_rules_and_limits(self):
-        """TASK-066 AC7: the module docstring states the outcomes and their sources, the values rule, the upward
-        search and its limits, read-only and the lock, the arguments' source and the fail-open direction of now, and
-        that no hook is placed and nothing is measured (whitespace collapsed)."""
+        """TASK-066 AC7 and TASK-073 AC4: the module docstring states the outcomes and their sources, the values rule,
+        the upward search and its limits, read-only and the lock, the arguments' source and the fail-open direction of
+        now, and that no hook is placed and nothing is measured (whitespace collapsed)."""
         doc = ' '.join(ast.get_docstring(tree()).split())
         for words in ('specification 5 section 11 point 7', '"tied" (bullet 3)', '"enforce_nothing" (bullet 5)',
                       '"refuse" (bullet 6, no record)', 'whitespace-only included', 'empty-as-absent rule is this module',
@@ -308,8 +308,9 @@ class R6WhatIsStated(unittest.TestCase):
                       'outside every project\'s folder tree is not judged', 'is a race',
                       'takes only a shared lock', 'refused without a record', 'hot journal', 'UNC',
                       'four tables', 'untested in CI on Linux', 'hard links and bind mounts', 'check and use apart',
-                      'a later contract\'s', 'fail-open direction', 'process clock', 'No hook is placed',
-                      'nothing is measured', 'CC-3', 'C6'):
+                      'this module\'s two hook-side callers, claude_code_read_hook (task TASK-068) and '
+                      'claude_code_pretool_hook (task TASK-072)', 'fail-open direction', 'process clock',
+                      'No hook is placed', 'nothing is measured', 'CC-3', 'C6'):
             with self.subTest(words=words):
                 self.assertIn(words, doc)
 
@@ -334,6 +335,14 @@ class R7TheGuard(unittest.TestCase):
         """TASK-068 AC7 and TASK-068 AC9: the line of _map that J9 changes stays byte-identical, once."""
         text = SOURCE.read_bytes().decode('utf-8')
         self.assertEqual(text.count("answer.reason == 'no_lease_row' and searched:"), 1)
+
+
+class T73StoreWording(unittest.TestCase):
+
+    def test_the_later_contract_wording_is_absent(self):
+        """TASK-073 AC4: the module docstring no longer holds "a later contract's" (whitespace collapsed)."""
+        doc = ' '.join(ast.get_docstring(tree()).split())
+        self.assertNotIn('a later contract\'s', doc)
 
 
 if __name__ == '__main__':
