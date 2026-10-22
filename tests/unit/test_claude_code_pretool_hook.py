@@ -19,7 +19,7 @@ import unittest
 from unittest import mock
 
 from aieos_bootstrap import claude_code_pretool_hook as hook
-from aieos_bootstrap import (claude_code, claude_code_channel, claude_code_hook, claude_code_read_hook,
+from aieos_bootstrap import (adapter, claude_code, claude_code_channel, claude_code_hook, claude_code_read_hook,
                              claude_code_store, gitread, task_contract)
 
 UTC = datetime.timezone.utc
@@ -70,8 +70,9 @@ def unreadable(reason):
 
 
 def done():
-    return {'result': 'done', 'reason': None, 'findings': [], 'core': None, 'decision': 'STOP: violation',
-            'fencing_token': None, 'released': None}
+    out = dict.fromkeys(adapter.RESULT_KEYS)
+    out.update(result='done', findings=[], decision='STOP: violation')
+    return out
 
 
 class Calls:
