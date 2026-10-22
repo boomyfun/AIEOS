@@ -143,7 +143,8 @@ class StepOneProperties(unittest.TestCase):
         nows = [NOW, NOW.replace(tzinfo=None), NOW.replace(microsecond=5), 'now']
         events = ['ev', type('S', (str,), {})('ev'), None, 7, b'ev']
         for _ in range(CASES):
-            args = (rng.choice(roots), rng.choice(sids), rng.choice(nows), rng.choice(events))
+            args = ((ROOT, 's-1', NOW, 'ev') if _ == 0 else
+                    (rng.choice(roots), rng.choice(sids), rng.choice(nows), rng.choice(events)))
             looked, recorded = [], []
 
             def lookup(r, s, n):

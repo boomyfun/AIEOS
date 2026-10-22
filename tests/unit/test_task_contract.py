@@ -98,6 +98,7 @@ class AC1Arguments(unittest.TestCase):
         cases = [((None, COMMIT, 'TASK-071'), 'argument: root'), (('src', COMMIT, 'TASK-071'), 'argument: root'),
                  ((ROOT + '/no-such-folder', COMMIT, 'TASK-071'), 'argument: root'),
                  ((StrSub(ROOT), COMMIT, 'TASK-071'), 'argument: root'),
+                 ((str(SRC / 'task_contract.py'), COMMIT, 'TASK-071'), 'argument: root'),
                  ((ROOT, None, 'TASK-071'), 'argument: commit'), ((ROOT, 'a' * 39, 'TASK-071'), 'argument: commit'),
                  ((ROOT, 'a' * 41, 'TASK-071'), 'argument: commit'), ((ROOT, 'a' * 63, 'TASK-071'), 'argument: commit'),
                  ((ROOT, 'a' * 40 + '\n', 'TASK-071'), 'argument: commit'),
@@ -116,7 +117,7 @@ class AC1Arguments(unittest.TestCase):
                 self.assertEqual([r['task'], r['base_commit'], r['write_set'], r['forbidden']], [None] * 4)
                 self.assertEqual(stand.calls, [])
 
-    def test_no_exception_escapes(self):
+    def test_task_contract_never_raises(self):
         """TASK-071 AC1: a patched gitread.parse_commit that raises gives reason "entry", ["entry: <type name>"]."""
         with mock.patch.object(gitread, 'parse_commit', side_effect=KeyError('x')):
             r = read()
@@ -155,7 +156,7 @@ class AC2GitReads(unittest.TestCase):
     def test_result_faults_at_every_position(self):
         """TASK-071 AC2: each result-check fault, at each of the five call positions, gives its "git" finding."""
         faults = [(ValueError(MARKER), 'git: run raised ValueError'), ([MARKER], 'git: result shape'),
-                  (DictSub(ok(b'')), 'git: result shape'), ({'exit': 0, 'out': b''}, 'git: result shape'),
+                  (DictSub(ok(b'')), 'git: result shape'), ({'exit': 0, 'out': b''}, 'git: result shape'), (dict(ok(b''), extra=1), 'git: result shape'),
                   ({'exit': 0, 'out': b'', 'err': b'', 'error': MARKER}, 'git: error'),
                   ({'exit': 1, 'out': b'', 'err': MARKER.encode(), 'error': None}, 'git: exit 1'),
                   ({'exit': True, 'out': b'', 'err': b'', 'error': None}, 'git: exit not an int'),
@@ -216,7 +217,7 @@ class AC2GitReads(unittest.TestCase):
                  ({TASKS: e('100755', 'blob', BLOB, 'TASK-071.yaml')}, 'tree: contract not a 100644 blob'),
                  ({TASKS: e('120000', 'blob', BLOB, 'TASK-071.yaml')}, 'tree: contract not a 100644 blob'),
                  ({TASKS: e('100644', 'blob', BLOB, '"TASK-071.yaml"')}, 'tree: contract missing'),
-                 ({TASKS: e('100644', 'blob', BLOB, 'TASK-071.yaml ')}, 'tree: contract missing'),
+                 ({TASKS: e('100644', 'blob', BLOB, 'TASK-071.yaml\u2028')}, 'tree: contract missing'),
                  ({TASKS: e('100644', 'blob', BLOB, '\u0085TASK-071.yaml')}, 'tree: contract missing'),
                  ({TREE: e('040000', 'tree', DOCS, 'döcs')}, 'tree: docs missing')]
         for over, finding in cases:
@@ -255,6 +256,64 @@ def mutate(where, line):
                'paths': '    - src/x.py\n', 'forb': '  - docs/**\n', 'ws': 'write_set:\n'}
     a = anchors[where]
     return VALID.replace(a, a + line, 1)
+
+
+class AC2NamesAndOrder(unittest.TestCase):
+
+    def test_no_tree_name_in_any_finding(self):
+        """TASK-071 AC2: with "MARKER" as a well-formed tree name, in a repeated name, beside a missing docs entry and
+        beside a contract of the wrong mode, "MARKER" is absent from the repr of every result."""
+        e = lambda m, t, i, n: tree_text((m, t, i, n))  # noqa: E731
+        cases = [({TREE: e('100644', 'blob', '1' * 40, MARKER) + e('100644', 'blob', '2' * 40, MARKER)},
+                  'tree: repeated name'),
+                 ({TREE: e('100644', 'blob', '1' * 40, MARKER)}, 'tree: docs missing'),
+                 ({TASKS: e('100644', 'blob', '3' * 40, MARKER) + e('100755', 'blob', BLOB, 'TASK-071.yaml')},
+                  'tree: contract not a 100644 blob')]
+        for over, finding in cases:
+            with self.subTest(finding=finding):
+                r = read(**over)
+                self.assertEqual(r['findings'], [finding])
+                self.assertNotIn(MARKER, repr(r))
+
+    def test_a_tree_of_exactly_the_cap_reads(self):
+        """TASK-071 AC2: a tree text of exactly 1 MiB passes, at each of the three trees."""
+        for tid in (TREE, DOCS, TASKS):
+            good = objects()[tid]
+            name = 'z' * (MIB - len(good) - 54)
+            full = good + tree_text(('100644', 'blob', '9' * 40, name))
+            with self.subTest(tree=tid[0]):
+                self.assertEqual(len(full), MIB)
+                self.assertEqual(read(**{tid: full})['result'], 'read')
+
+    def test_the_order_of_each_pair(self):
+        """TASK-071 AC2: for each adjacent pair of step (2)'s and step (3)'s order, a text with both faults gives the
+        first one's finding."""
+        both = {'exit': 1, 'out': b'', 'err': b'', 'error': MARKER}
+        r = tc.read_contract(ROOT, COMMIT, 'TASK-071', run=Stand(at=1, give=dict(both, extra=1)))
+        self.assertEqual(r['findings'], ['git: result shape'])
+        r = tc.read_contract(ROOT, COMMIT, 'TASK-071', run=Stand(at=1, give=both))
+        self.assertEqual(r['findings'], ['git: error'])
+        self.assertEqual(read(**{COMMIT: b'\xff' * (MIB + 1)})['findings'], ['git: commit text over the cap'])
+        self.assertEqual(read(**{TREE: b'\xff' * (MIB + 1)})['findings'], ['tree: tree text over the cap'])
+        self.assertEqual(read(**{TREE: b'\xff bad\n'})['findings'], ['tree: tree text not UTF-8'])
+        good = objects()[TREE]
+        self.assertEqual(read(**{TREE: good + good + b'bad\n'})['findings'], ['tree: line out of form'])
+        dup = tree_text(('100644', 'blob', '1' * 40, 'x'), ('100644', 'blob', '2' * 40, 'x'))
+        self.assertEqual(read(**{TREE: dup})['findings'], ['tree: repeated name'])
+        self.assertEqual(read(b'\xff' * (MIB + 1))['findings'], ['bytes: over the cap'])
+        self.assertEqual(read(b'\xff' + '\ufeff'.encode('utf-8') + VALID.encode())['findings'], ['bytes: not UTF-8'])
+
+    def test_more_parse_cases(self):
+        """TASK-071 AC3: a base_commit under another top-level key is missing; the first "  paths:" with a value is a
+        write_set line out of form."""
+        moved = VALID.replace('  base_commit: ' + BASE + '\n', '') + 'read_set:\n  base_commit: ' + BASE + '\n'
+        self.assertEqual(tc.parse_contract(moved, 'TASK-071')['findings'], ['parse: base_commit missing'])
+        first = VALID.replace('  paths:\n', '  paths: x\n')
+        self.assertEqual(tc.parse_contract(first, 'TASK-071')['findings'], ['parse: write_set line out of form'])
+
+    def test_the_line_id_is_gitreads(self):
+        """TASK-071 AC2: the tree line's id group is gitread.OBJECT_ID's pattern."""
+        self.assertIn('(' + gitread.OBJECT_ID.pattern + ')', tc._LINE.pattern)
 
 
 class AC3Parse(unittest.TestCase):
@@ -343,10 +402,10 @@ class AC3Parse(unittest.TestCase):
     def test_bytes(self):
         """TASK-071 AC3: step (3)'s refusals in their order; a non-ASCII text without controls passes."""
         cases = [(VALID.encode() + b'#' * (MIB + 1 - len(VALID.encode())), 'bytes: over the cap'),
-                 (VALID.encode() + b'\xff', 'bytes: not UTF-8'), ('﻿' + VALID, 'bytes: byte-order mark'),
-                 (VALID + '# ﻿\n', 'bytes: byte-order mark'), ('﻿' + VALID + '\r', 'bytes: byte-order mark')]
+                 (VALID.encode() + b'\xff', 'bytes: not UTF-8'), ('\ufeff' + VALID, 'bytes: byte-order mark'),
+                 (VALID + '# \ufeff\n', 'bytes: byte-order mark'), ('\ufeff' + VALID + '\r', 'bytes: byte-order mark')]
         cases += [(VALID + '# ' + c + '\n', 'bytes: control character')
-                  for c in ['\r', '\x00', '\t', '\x0c', '\x0b', '\x7f', '\x85', '\x9f', ' ', ' ']]
+                  for c in ['\r', '\x00', '\t', '\x0c', '\x0b', '\x7f', '\x85', '\x9f', '\u2028', '\u2029']]
         for contract, finding in cases:
             with self.subTest(finding=finding, tail=repr(contract[-3:])):
                 r = read(contract)
@@ -359,7 +418,7 @@ class AC3Parse(unittest.TestCase):
 
 class AC5WhatItImports(unittest.TestCase):
 
-    def test_imports_and_names(self):
+    def test_task_contract_imports_and_names(self):
         """TASK-071 AC5: task_contract.py imports exactly re and aieos_bootstrap.gitread and uses none of the refused
         names, attributes or strings."""
         text = (SRC / 'task_contract.py').read_bytes().decode('utf-8')
@@ -382,7 +441,7 @@ class AC5WhatItImports(unittest.TestCase):
         names = [t.id for n in ast.walk(tree) if isinstance(n, ast.Assign) for t in n.targets if isinstance(t, ast.Name)]
         self.assertEqual([x for x in names if any(w in x.lower() for w in ('token', 'pass', 'secret', 'pwd'))], [])
 
-    def test_no_hook_side_module_names_it(self):
+    def test_no_hook_side_module_names_task_contract(self):
         """TASK-071 AC5: no hook-side module names task_contract."""
         for name in ('claude_code.py', 'claude_code_hook.py', 'claude_code_channel.py', 'claude_code_reads.py',
                      'claude_code_store.py', 'claude_code_read_hook.py'):

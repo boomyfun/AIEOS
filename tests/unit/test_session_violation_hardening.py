@@ -165,6 +165,17 @@ class AC5Constants(unittest.TestCase):
         self.assertEqual(mods, {'aieos_bootstrap.adapter', 'aieos_bootstrap.writer'})
 
 
+class AC5Names(unittest.TestCase):
+
+    def test_no_secret_named_str_constant(self):
+        """TASK-071 AC5: no module-level name holding "token", "pass", "secret" or "pwd" is bound to a str constant in
+        session_violation.py."""
+        tree = ast.parse((SRC / 'session_violation.py').read_bytes().decode('utf-8'))
+        names = [t.id for n in tree.body if isinstance(n, ast.Assign) and isinstance(n.value, ast.Constant)
+                 and isinstance(n.value.value, str) for t in n.targets if isinstance(t, ast.Name)]
+        self.assertEqual([x for x in names if any(w in x.lower() for w in ('token', 'pass', 'secret', 'pwd'))], [])
+
+
 class AC7Stated(unittest.TestCase):
 
     def test_the_docstring_states_the_hardening(self):
@@ -176,7 +187,7 @@ class AC7Stated(unittest.TestCase):
                       'The lookup\'s lock cost', 'a deliberate fail-closed departure',
                       'read directly after an isinstance test, not through adapter._store_done',
                       'A production caller passes no lookup, append or release',
-                      'type-checked but not passed through the token filter',
+                      'type-checked but not passed through the token filter', 'stay isinstance-checked',
                       'event_id must be of exact type str', 'checked by exact types and fixed values',
                       'collapse to "lease: the lookup gave no tied lease"',
                       'an ending that can follow a record already written'):
