@@ -1,0 +1,653 @@
+# Task contract TASK-072, H2b: the PreToolUse hook program of the Claude Code adapter (Master Plan revision 4, §4 M5;
+# concept line 945; specification 5 revision 4, :59-61, :79-82, :104-119; specification 3 revision 5, :19, :20, :25,
+# :177).
+# Revision 0, a draft, under decisions D-1583 (the H2a/H2b split; C2 to C5), D-1675 C2, D-1699 C4 and D-1700 C4.
+# Revision 1 (D-1701 M1 to M7): the base as the base branch's tip at the grant, carried as a proposal; the
+# unreadable-contract record; GOV-003's review; the token-less path and the refusals without a record named; forbidden
+# not enforced; commit C on main. Revision 2 (round t72a, reviews R1 and R2 on claude-sonnet-5-5, both "changes
+# needed", and round t72g, "gaps found"; D-1703 and its conditions C1 to C6): every finding applied as D-1703 rules.
+# Revision 3 (round t72b, R1 and R2 on claude-sonnet-5-5, both "changes needed"; D-1704 C1 to C5): every finding
+# applied: the clock for step 5 (t72b-R1b-1), the AST rule (R1b-2, R1b-9), AC2's reasons (R1b-3), the base's limit
+# restored (R1b-4), the CI and stand-ins design (R1b-5, R2b-1, R2b-6), and R1b-6 to R1b-8, R1b-10, R2b-2 to R2b-5, R2b-7.
+# Revision 4 (round t72c, the last: R1 "changes needed", R2 "no changes needed"; D-1704 C4): R1c-1 to R1c-6 and
+# R2c-1 to R2c-5 applied by fix text decided without another round; and 4c (D-1705 C1); 4d (D-1706 C1).
+# Brought for review and approval in its own requests; whether it is approved is recorded in the decision files.
+# Fields and value forms follow specification 2 §5.1 and TASK-071's contract (its verification_plan, capabilities,
+# budgets and exit_conditions forms, t72a-R2-5). Values marked "(filled by script)" are written by script from the base
+# just before commit C.
+#
+# What it adds: a new module src/aieos_bootstrap/claude_code_pretool_hook.py, the hook-side program Claude Code would
+# run before a tool call (no hook is placed by this task: spec 5 :7, :92). Its imports, all in the form
+# "from aieos_bootstrap import X" (the separation check flags "from aieos_bootstrap.X import ...",
+# test_claude_code_read_hook.py :387-388): claude_code, claude_code_store, claude_code_hook, claude_code_channel,
+# task_contract and session_violation, and the standard library (t72a-R1-2, R2-2). Its public names:
+# - SESSION_VAR = "AIEOS_SESSION_ID", ROOT_VAR = "AIEOS_ROOT" and BASE_VAR = "AIEOS_BASE", local constants (the first
+#   two tested equal to claude_code_read_hook's, :73-74, without importing that module, which would bring writer into
+#   this module's imports);
+# - OUTCOMES = ("allow", "refuse") and REASONS, the closed set of reason words (t72a-R1-8): "enforce_nothing",
+#   "tied_allow", "store", "base", "contract", "uncovered", "no_record", "record_form", "recorded", "lease_lost",
+#   "core", "entry";
+# - run(stdin_bytes, environ, working_folder, now, clock=None) -> a mapping with exactly the keys exit_code, outcome,
+#   reason, findings; never raises for an Exception; clock is a function of no argument that gives the current time
+#   in UTC rounded up to the next whole second (t72b-R1b-1); and
+# - main(), the process entry (step 7).
+# The flow of run, in this order, the first step that ends giving the result. run's findings are only this module's
+# fixed words and exception type names; nothing is copied from claude_code_store's, entry's, judge's or
+# session_violation's findings, from standard input, from the environment or from a path (t72a-R1-5):
+#   (1) The tie: claude_code_store.judge(environ.get(SESSION_VAR), environ.get(ROOT_VAR), working_folder, now) (spec 5
+#       :108-:112). "enforce_nothing" gives exit_code 0, outcome "allow", reason "enforce_nothing" (spec 5 :111).
+#       "refuse" gives exit_code 2, outcome "refuse", reason "store", the store's reason word kept as findings[0] only
+#       when it is one of claude_code_store's and writer.session_lease's fixed reasons (claude_code_store.py :135-160;
+#       writer.py :1009-1011), else "store: other", and nothing recorded (spec 5 :112, :82). "tied" goes on, with the
+#       lease's task_id and the root (a tie is only ever given with a session id: claude_code_store.py :124-127). Any
+#       other shape of judge's answer gives reason "entry". The session id must then be a str of [A-Za-z0-9._-]{1,128}
+#       (t72a-R1-13, D-1703 C4): one that fails gives exit_code 2, outcome "refuse", reason "store", finding
+#       "store: session id form", and nothing recorded (a refusal with no usable tie to name in a record; a launcher
+#       makes the id, spec 5 :108).
+#   (2) The base (proposed; D-1583 C2; D-1699 C4 (iv); D-1701 M1, M2): the commit at which the contract is read is
+#       environ.get(BASE_VAR), set by the launcher with the session id and the root at the grant: the tip of the base
+#       branch at the grant, written as exactly 40 lowercase hexadecimal characters (stricter than gitread.OBJECT_ID,
+#       which also takes 64, t72a-R1-9 (d)). For the self-build that branch is main (spec 3 :25), which holds the
+#       approved contract from its commit C on (Evaluation path below), so the value is commit C or a later commit of
+#       main. It is never the contract's own input_state.base_commit, at which the contract file does not exist (commit
+#       C's parent): a launcher that passes that value makes every judged call a recorded STOP (contract missing).
+#       Sources: spec 5 :109 ("the write-set is the task contract's write_set.paths at the base"), the primary one; spec
+#       3 :19 (the contract is read "at HEAD") and :20, :177 (HEAD is "the tip of the base branch on which the task's
+#       work lands, never the task's own branch"); spec 5 :34 supports it by analogy. Why not HEAD: gitread can resolve
+#       only HEAD or an object id (gitread.py :7, :92), and the hook's HEAD is the agent's checkout, which the change
+#       controls; never the working tree. Limit (restored, t72b-R1b-4): the base is fixed at the grant, so main
+#       moving during a session is not seen (spec 3 :180, "HEAD moving after the decision"; t72g Q2 (e)). This is not
+#       the "base commit's source" that TASK-066 took (DEF-0084 :21;
+#       TASK-066.yaml :92-93): that was the filling of a contract's own base_commit by script; this is the commit at
+#       which the hook reads the contract. An AIEOS_BASE absent, empty or out of form, with a live tied lease, is read
+#       as "a contract not readable at the base" (step 3), reason "base".
+#   (3) The contract: task_contract.read_contract(root, base, task_id), with no run argument (the run seam closed:
+#       DEF-0091 :27; D-1667 (i)). It runs before the judgement, so every judged call of a leased session pays it (up
+#       to five git calls of ten seconds each, about 50 seconds at worst, task_contract.py :42-44), reads included, and
+#       an unreadable contract gives a recorded STOP even on a Read, Grep or Glob call (t72a-R1-10): spec 5 :113 names
+#       the write-set concern; this task applies it on every concern alike, a stated choice (fail closed). "unreadable"
+#       (or a bad base, step 2) with a live tied lease is a refusal on the write-set concern and section 8's: recorded,
+#       STOP: violation (spec 5 :113), by step 5 with a record of evidence_type write_outside_write_set and the fixed
+#       refers_to "the task contract is not readable at the base" (no new evidence type, D-1701 option 3;
+#       claude_code_channel.EVIDENCE_TYPES :93 stays three), exit_code 2, reason "contract" or "base". The record is
+#       built by this module in judge's record form (claude_code.py :256-259: its recorder is claude_code.RECORDER, then
+#       ", for ", then the recorder of step 5), subject the lease's task_id; it is checked by
+#       claude_code_channel.record_findings (:166-182) before redact; redact leaves the fixed text unchanged (it has no
+#       ":", "\" or leading "/", claude_code_channel.py :193-196). Its event_id and record_id carry the segment
+#       "/pretool-contract/" in place of "/pretool/" (step 5). Limit (D-1701 M3): a path under the root equal to the
+#       fixed text reads the same in refers_to.
+#   (4) The judgement: claude_code_hook.entry(stdin_bytes, root, task_id, write_set, allowlist, record_id, recorder)
+#       (claude_code_hook.py :162), unchanged, with the ids and the recorder of step 5. The allowlist (proposed; D-1583
+#       C3; D-1699 C4 (v)): this task authors no shell policy and reads none: the allowlist is the empty list, until an
+#       approved policy at the base exists (spec 5 :105) and a later contract reads it (claude_code_hook's
+#       allowlist_findings accepts an empty list, :111-121). Cost, stated in plain words: once the owner places this
+#       hook, every shell call of a session holding a live lease is refused and ends the session (spec 5 :79-80), so no
+#       leased task can run a shell command until such a policy exists. The mapping (t72a-R1-8, R1-14): entry's
+#       "allow" (a Read, Grep or Glob call, or a write inside the write-set) gives exit_code 0, outcome "allow", reason
+#       "tied_allow"; "uncovered" gives exit_code 2, outcome "refuse", reason "uncovered", nothing recorded (uncovered is
+#       none of section 8's three concerns, spec 5 :79); "refuse" with a record goes to step 5; "refuse" without a
+#       record gives exit_code 2, outcome "refuse", reason "no_record", nothing recorded (a caller's error, as
+#       claude_code_channel.py :50-52 states). The cases that give a refusal without a record, by file:line (D-1701
+#       M5): entry's "argument" (claude_code_hook.py :137) and "allowlist_form" (:140); judge's "argument"
+#       (claude_code.py :291, among them a root that is not a Windows absolute path, :273-275, so on a UNC or POSIX root
+#       every call of a leased session is refused with no record and no STOP, t72a-R1-12; a task_id or write-set out of
+#       form, :275-279) and "record" (:265, a record that fails records.check_payload); entry passes judge's record only
+#       for "refuse" (claude_code_hook.py :158). Any other shape of entry's answer gives reason "entry".
+#   (5) The record (t72a-R1-1, R1-6, R1-13; D-1703 C4): the recorder is the text "claude_code_pretool_hook, session "
+#       followed by the session id (checked in step 1), the one value passed in steps 3 to 5; so the record's recorder
+#       is claude_code.RECORDER + ", for " + that text and holds the session id, the only tie between a record and its
+#       session (claude_code.py :77). The record must pass claude_code_channel.record_findings, its subject must equal
+#       the lease's task_id and its recorder the text above, and claude_code_channel.redact must give a record; any of
+#       these failing gives exit_code 2, outcome "refuse", reason "record_form", and nothing passed to the core. The
+#       redacted record is passed to session_violation.session_violation(root, session_id, redacted, event_id,
+#       recorder, now_record) with no lookup, append or release argument (the run seam closed: DEF-0084 :30, DEF-0091
+#       :27, TASK-070's DA-3 (i)). now_record is clock() called inside run once, in every path that reaches this call
+#       (the bad-base path included), after every other step of run (read_contract when it was called, entry,
+#       record_findings and redact) and just before this call (t72a-R1-11, t72b-R1b-1, t72c-R1c-2); a clock that
+#       raises, or gives a value session_violation refuses, ends as step 6's "entry" or this step's "core" (fail
+#       closed): a fresh time, so a lease that expired during step 3 reads as
+#       expired; run's now serves steps 1 to 4; when run is given no clock, now is used, a stated limit for tests. The
+#       result: "done" gives reason "recorded"; a "lease" result (the lease lost between the tie and the record, or a
+#       repeat after an earlier STOP released it) gives reason "lease_lost" and nothing appended (no STOP, spec 5 :82;
+#       session_violation.py :46-53); any other result gives reason "core"; in every case exit_code 2 and outcome
+#       "refuse"; findings hold nothing from the result, whose reason only chooses among "recorded", "lease_lost" and
+#       "core" (t72b-R1b-7). No STOP is recorded by this hook for "record_form", "lease_lost" or "core": for the
+#       first two the record is not accepted; "core" may follow a record already appended (session_violation's
+#       partial outcome or its "entry: after the record" ending, session_violation.py :40-43, :50-53); a departure from
+#       spec 5 :79 and :104 of the same kind as step 4's "no_record", stated in AC9 (t72c-R1c-1). The ids (proposed; claude_code_channel.py :66-70 names the candidates): tool_use_id is
+#       read by the same strict parse entry uses (UTF-8, no byte-order mark, one JSON object, no duplicate keys or
+#       constants; claude_code_hook.py :141-152); event_id is "<session_id>/pretool/<tool_use_id>" when tool_use_id is a
+#       str of [A-Za-z0-9_-]{1,200}, else "<session_id>/pretool/sha256-<the SHA-256 of stdin_bytes in hexadecimal>" (on
+#       any parse failure too); record_id the same text with "/record" appended; both hold no whitespace (the session id
+#       form of step 1). The core checks the ids only as non-empty strings (violation.py :116-117, :131-132); this
+#       module keeps each id at most 128 + 21 + 200 + 7 characters by the forms above (t72b-R1b-10). A repeated
+#       identical call after a recorded STOP is refused at step 1 (the lease was released)
+#       with nothing recorded (t72a-R1-3, R2-1); the core's "duplicate" for a repeated event_id can arise only after
+#       session_violation's partial outcome (session_violation.py :51-53) and is shown only with a stand-in for this
+#       module's own reference to session_violation, as AC5 says.
+#   (6) No exception escapes run for an Exception: any gives exit_code 2, outcome "refuse", reason "entry", the type
+#       name only. A BaseException that is not an Exception is not caught (DEF-0089 P2), a stated limit.
+#   (7) main (t72a-R1-7, R2-3): it reads standard input whole as bytes, os.environ, os.getcwd() (an OSError gives the
+#       working folder None, which claude_code_store.judge refuses as "argument" when no session id is set, so the
+#       call is refused, fail closed; with a session id and a root set, the folder is not used, claude_code_store.py
+#       :147-154), and the clock (datetime.now(timezone.utc) rounded up to the next whole second, as
+#       claude_code_read_hook.py :175-179), called once by main for now, the clock function itself passed to run as
+#       clock, which calls it again at step 5 (t72c-R1c-4); it writes nothing to
+#       standard output; on exit_code 2 it writes to standard error the one line "AIEOS: this tool call was refused by
+#       the AIEOS hook (<reason>)", reason a word of REASONS; an exception while writing that line keeps run's exit code;
+#       any other Exception inside main gives 2 with reason "entry" and the same line (never 0 or 1, which would fail
+#       open for a PreToolUse hook; t72b-R1b-6). The module ends with
+#       "if __name__ == '__main__': sys.exit(main())". Exit codes and blocking are cited from documentation and
+#       unmeasured (claude_code_hook.py :20-27; C6).
+#
+# GOV-003's review part (D-1699 C4 (i); DEF-0091 :10; D-1675 C2; D-1701 M4): this task makes task_contract.py an input
+# of the hook's evaluation of a session (the write-set it enforces). Round t72g (claude-sonnet-5-5, its output saved
+# outside the repository) answered whether the pinned evaluator list (aieos-checks.yml :392-395, duplicated at
+# :455-458) covers every input A29 names (decision-matrix.md :90; constitution.md :93-94), and whether the hook's own
+# inputs meet GOV-003's rule. Its verdict "gaps found", none blocking in its view; each gap is ruled at the acceptance
+# decision as blocking or deferred, with its reason, never deferred automatically (GOV-003 is blocking,
+# constitution.md :95); fixing a gap under .github/ is its own A66 decision and is not done by this task (D-1703):
+# - G-1: docs/tasks/** (the contracts G0 and this hook read) is not in the list;
+# - G-2: the normative inputs (the risk rules, the constitution, the assurance model, the governor specification,
+#   specifications 2, 3 and 5; specification 4 is not an input of this task, t72c-R1c-6) are not in the list (t72g calls it worth escalating as a standing item; t72b-R2b-4);
+# - G-3: conformance inputs only partly listed (docs/specs/conformance-files.md, the frozen set file);
+# - G-4: the runtime (runner image, python3, git) is not pinned, and no path list can pin it;
+# - G-5: lockfile and configuration forms missing (Pipfile, Pipfile.lock, poetry.lock, MANIFEST.in, uv.lock,
+#   constraints files, tox.ini, pytest.ini, a conftest.py outside the three test folders, .python-version), narrower
+#   than the workflow's own MANIFESTS (:1477);
+# - G-6: event logs and decision records outside docs/records/** (the replay step reads any events.jsonl);
+# - G-7: the GOV-003 step reports and passes (:423-427), so "never auto-accepted" rests on the acceptance decision;
+# - G-8: the hook cannot show that AIEOS_BASE is main's tip, nor that the root and its Git state are untouched by the
+#   change (a nested runtime, an agent-set base or root; spec 5 :115); t72g's conclusion: the hook's inputs meet
+#   GOV-003's rule by assumption on the launched path and not against a nested runtime, an agent-set base or root, or
+#   Git state the agent controls (t72b-R1b-8); t72g's condition: the acceptance record states it, AC9 keeps its text,
+#   and the deferred item that carries AIEOS_BASE carries this limit too (AC11);
+# - G-9: replace refs, grafts, alternates and an outer repository can change what AIEOS_BASE reads as
+#   (task_contract.py :45-48); this task adds a caller and no new defence.
+# The GOV-003 record of this task cites t72g if the code does not change these inputs; otherwise t72g is run again.
+#
+# Records obligations of the acceptance (outside the write-set; D-1703 C2, t72a-R2-10): the task's records open one
+# deferred item that carries AIEOS_BASE to specification 5's next revision (:108) and to specification 7, with G-8's
+# limit; the acceptance record states G-8 and rules G-1 to G-9.
+#
+# The pins (L-0026), each to pass unchanged unless named here (a full scan is run by script before commit C and its
+# output is brought with the request that approves this contract):
+# - tests/unit/test_claude_code_read_hook.py :35-43 (HOOK_SIDE, OWN_IMPORTS, ALLOWED, THE_PAIR) and :484-519: the new
+#   module becomes a seventh hook-side module; OWN_IMPORTS gets its entry (claude_code, claude_code_store,
+#   claude_code_hook, claude_code_channel, task_contract, session_violation); ALLOWED gets no writer attribute for it;
+#   THE_PAIR unchanged (the new module does not call adapter.violation; it calls session_violation). The docstrings
+#   (t72a-R2-8, t72b-R2b-3): test_claude_code_read_hook.py :485's "the six hook-side modules" becomes "the seven
+#   hook-side modules" (HOOK_SIDE gains the new module); test_task_contract.py :445's "no hook-side module names
+#   task_contract" becomes "no older hook-side module names task_contract" (the seventh names it by design), its
+#   "TASK-071 ACn" tag kept; test_session_violation.py :394's "none of the six hook-side modules names
+#   session_violation" stays (its list is unchanged). The function name test_the_separation_holds_on_the_six_modules
+#   (test_claude_code_read_hook.py :484) is kept, a stated wording limit (renaming a test is outside this task's need).
+#   The separation check stays lexical (it ignores relative and dynamic imports: DEF-0089 P10, touched here and
+#   stated as a limit).
+# - The docstring sentence of session_violation.py :59-60, "Nothing hook-side calls it yet: its caller is H2's
+#   PreToolUse program, a later contract.", and of task_contract.py :48, "Nothing hook-side calls it yet", become
+#   untrue; each is replaced by one sentence naming claude_code_pretool_hook as the one hook-side caller (the exact
+#   new sentences are written in AC10); the pins at test_session_violation.py :419 and its test docstring at :405, and
+#   at test_task_contract.py :466, change to match. The own-tests rules stay: test_session_violation.py's R7OwnTests
+#   (:428-436, every test function names "TASK-070 ACn") and test_task_contract.py's (:472-488, "TASK-071 ACn"): those
+#   pins are changed in place and no test function is added to either module. The new sentences hold no ".aieos" and
+#   not "called only by this function" (test_session_violation.py :422-423; test_task_contract.py :469).
+# - test_task_contract.py :444-449 and test_session_violation.py :393-398 enumerate the six older hook-side modules
+#   that must not name task_contract or session_violation: the list gains no entry (the new module names them by
+#   design); stated here so the change is seen.
+# - session_violation.py's import pins (test_session_violation.py :384, :389; test_session_violation_hardening.py
+#   :165) and its docstring phrase list (test_session_violation_hardening.py :185-193, which stays met while only the
+#   hook-side sentence changes), and task_contract.py's (test_task_contract.py :428, :437): unchanged.
+# - test_gitread.py :370-380 (no module but gitread.py imports subprocess), test_writer.py :396-406 (no open and no
+#   ".aieos" string outside writer.py; the new module and its strings hold neither), the workflow's INV-004 rule
+#   (:1438, :1589-1591), DENY_* lists (:1450-1460: the new test modules use no tempfile, sqlite3, os.makedirs, .mkdir
+#   or open; test_writer_files.py's own allowance, :1463-1470, covers its added definitions; a store is made only
+#   through writer functions; t72c-R2c-4) and per-path ALLOW (:1461-1474; the new module needs
+#   none), OPS-003's words (:1636, :1672) and its label rule (:1644-1664: no MEASURED, ENFORCED or GUARANTEED in the
+#   new docstrings and tests), bandit's B105 name pattern (no name holding "token", "pass", "secret" or "pwd" bound to
+#   a str), test_autonomy.py :238-246, test_evaluation_violation.py :40-45 (adapter.py's code hash: unchanged),
+#   __init__.py :5 and :89-91 (the new module is not added to __all__), tests/integration/test_ac_tests_tree.py :21
+#   (EXPECTED_AMBIGUOUS = 2: it scans TASK-001 to TASK-022 only; the new test names leave it unchanged).
+# - tests/unit/test_bench_isolation.py :35-52 (no file names "bench/" or imports bench),
+#   tests/integration/test_conformance_cb_set.py :79-86, test_conformance_risk_set.py's and
+#   test_conformance_rc_set.py :153-158's naming checks (only a task's own modules name a conformance fixture
+#   folder), and tests/integration/test_task_contract_repo.py :16-20 (TASK-070's write-set as data): unchanged; the
+#   new modules and test_writer_files.py's added definitions name neither "bench/" nor any fixture folder (found by
+#   the full pin scan, D-1705 C2; D-1706 C1).
+#
+# CI and stand-ins (t72a-R2-4, R2-7; D-1703 C3; t72b-R1b-5, R2b-1, R2b-6): judge's root rule is Windows-only
+# (claude_code.py :99, :273) and read_contract's is an absolute path of an existing folder (gitread.py :80-82), and CI
+# runs on ubuntu-24.04 (aieos-checks.yml :84), so no root meets both on CI. So: (a) only step 1's cases use a real store
+# (AC1: enforce_nothing, and each refusal reason of claude_code_store.judge), made by writer.open_store,
+# writer.start_session and writer.grant_lease (that module's own tied_store helper, t72c-R2c-1) in a folder from
+# tempfile.TemporaryDirectory, removed by its context; since the workflow lets
+# only the writer's three test modules use tempfile (aieos-checks.yml :1450-1474), those cases are added definitions in
+# tests/integration/test_writer_files.py, as TASK-071 added there; (b) every judged case (AC2 to AC5) uses stand-ins,
+# set on this module's own references, for claude_code_store.judge (a tie with a Windows-form root), for
+# task_contract.read_contract (a "read" mapping or an "unreadable" one) and for session_violation; (c) read_contract's
+# own use by this module is shown with a stand-in gitread.run, recording the ids asked, on the repository's own root
+# folder (taken from __file__, an existing folder on every platform), in cases that stop at step 2 or step 3; a case
+# that reaches step 4 uses a stand-in read_contract (t72c-R2c-2). Limits: the real Windows-root composition of the store, the contract reader and the
+# judge, and the real-store path of a record and then a repeat, are not shown by CI.
+#
+# DEF-0084's open points (D-1699 C4 (vi)), each mapped:
+# - h4b Y5-6 / the cost of fail closed when a lease expires during a run (DEF-0084 :10): stated in AC9: after an expiry
+#   every hook call is refused without a record until the launcher ends the session (spec 5 :112, :114).
+# - more than one lease per session (:11): the store refuses (claude_code_store "leases"); this task adds nothing.
+# - h4c: the separation of the hook's entry points from the core-only path and its test: AC6; the lookup's lock and its
+#   refusal cost: stated (AC9); the source of the base commit: TASK-066 took the contract's own (DEF-0084 :21), and
+#   step 2 states the hook's (proposed); an unreadable contract on every concern (h4c Y3-2, D-1468 :19): step 3, its cost stated (AC9); a
+#   global hook placement under a parent folder whose store holds a lease row: out of scope, because no hook is placed
+#   by this task (the owner's act), stated as a limit.
+# - h4d: whitespace-only values, links as the store file, the end of the upward search: claude_code_store's (TASK-066),
+#   unchanged; how the violation path is fenced: session_violation's (TASK-070, TASK-071), unchanged; "no hook
+#   program's function reaches it" tested: AC6.
+# - DA-3 (i) (DEF-0084 :27, :30): closed by step 5 and AC5.
+# - Stay deferred, with reasons (t72a-R2-13): the record's place among specification 1 §7's start steps, the lease
+#   length the launcher sets and finding a task's leftover sessions (h4c; the launcher's, specification 7); h4c Y2-10,
+#   Y5-7, Y5-9 (t72b-R2b-7, t72c-R2c-5: DEF-0084 :12 lists these h4c ids without their text; they are not taken
+#   above and stay deferred; h4c Y3-2 is the unreadable-contract case, D-1468 :19, taken by step 3); h4d Y1-3 and Y2-6 (a token-less append while an expired lease row is present: this task's "lease
+#   lost" path appends nothing, so it does not reach them), Y5-7; h4b Y2-6; the token-less observe and point 10's
+#   paths (H4).
+# Forbidden (D-1701 M6): the contract's forbidden list is not enforced by the hook (spec 5 :109 names only
+# write_set.paths); G0 catches a forbidden path afterwards. A stated limit.
+# DEF-0089: P2 stated for this module (step 6, AC9); P3 covered by AC9's "cited from documentation, unmeasured"; P10
+# touched and stated (the pins above); P1 and P7 apply to this module's standard input and arguments in the same way
+# (a kill may store or record nothing; subclasses of bytes or str fail closed by the exact-type checks of the modules
+# called) and are stated in AC9; P4 to P6, P8, P9, P11, P12 stay with claude_code_read_hook.py and
+# claude_code_store.py, not touched. DEF-0091: GOV-003 (:10) and the run seam (:27) taken; R1-3/R4-6 ("no exception
+# escapes" covers read_contract) bears on step 3, which calls read_contract only and treats any non-"read" result as
+# unreadable; the other items (R4-4, R4-5, R3-11, "é", t71s-R1, t71s-R2-1 to R2-9, the triple reading, the five
+# failures) stay deferred: this task changes task_contract.py and session_violation.py in one docstring sentence each,
+# and their test modules in the pins named above only, so the resume condition of DEF-0091 :32 is met in form but no
+# item's text is touched (out of scope, stated). DEF-0088 point 2: the standard-error line names AIEOS (AC7).
+#
+# Owner-kept acts (D-1699 C4 (vii); A51 item (4); spec 5 :7, :92): placing or wiring the hook, choosing a matcher and
+# changing settings.json or any Claude Code setting are the owner's and are not done here; the launcher that sets
+# AIEOS_SESSION_ID, AIEOS_ROOT and AIEOS_BASE is specification 7's and not built here. This task builds and tests the
+# program in the repository only; nothing is measured (C6, P-LOC). owner_kept_act: false.
+# Risk: high (risk rules revision 6, §2 point 3), computed over the base by script before commit C. GOV-003: every path
+# of the write-set is an evaluator path; change class critical_cr, ruled at acceptance. Profile as TASK-071's
+# (functional [unit_test], architecture [deterministic_rule], functional [integration_test], security
+# [static_security_analysis], architecture [ai_review (cross-model)]), plus the evidence_required of the applicable
+# articles, GOV-003's [ai_review] by round t72g as above. Reviews on Sonnet 5.5 (never Fable). Naming (D-544 Q3): every
+# new test function names "TASK-072 ACn" in its own docstring.
+# Not applicable (t72a-R2-12): OPS-001; INV-005 to INV-008, INV-010, INV-011; GOV-001, GOV-004 to GOV-006, SEC-003.
+# INV-004 applies: the writer stays the only module that opens the store and the event log. INV-009 applies through
+# session_violation, unchanged in what it appends.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-072.yaml, has one parent equal to base_commit, and goes
+# to main under its own decision, as TASK-071's did (D-1622); the base of step 2 depends on that (D-1701 M7). The
+# task's commits carry "AIEOS-Task: TASK-072" and go to task/TASK-072; main receives them only at acceptance.
+task: TASK-072
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add, in standard-library Python 3, a new module src/aieos_bootstrap/claude_code_pretool_hook.py, the PreToolUse
+  program of the Claude Code adapter, with run(stdin_bytes, environ, working_folder, now, clock=None) and main():
+  it ties the call to the session's one live lease through claude_code_store.judge, reads the lease task's contract at
+  the base given by the launcher through task_contract.read_contract with no run argument, judges the call through
+  claude_code_hook.entry with an empty allowlist, and records every refusal on the write-set, git push or the shell
+  allowlist, redacted, through session_violation.session_violation with no lookup, append or release argument; with
+  new test modules tests/unit/test_claude_code_pretool_hook.py and tests/property/test_claude_code_pretool_hook_properties.py,
+  added definitions in tests/integration/test_writer_files.py for the real-store cases, the hook-side separation check
+  extended to the new
+  module, and one docstring sentence each of task_contract.py and session_violation.py, with their pins, naming their
+  hook-side caller.
+traces_to:
+  - docs/specs/spec-05-adapter-contract.md#11
+  - docs/specs/spec-05-adapter-contract.md#8
+  - docs/specs/spec-05-adapter-contract.md#6
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#1
+  - docs/specs/risk-rules-gov-aieos.md#2
+input_state:
+  base_commit: 8299e292fc3e8a0a19872c88d477d410920af072
+  depends_on: [TASK-061, TASK-062, TASK-063, TASK-066, TASK-068, TASK-070, TASK-071]
+  intent_versions:
+    docs/specs/spec-05-adapter-contract.md: c2496023175dcc535974f04c9ec6778101da26fb90a35a5424fbc589c0303601
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/specs/spec-02-aieos-file-format.md: 9442edbb9e6e70fcc7ef0b296815315d742c5c9c365e32813e83dbc3a982533b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/claude_code_pretool_hook.py
+    - src/aieos_bootstrap/task_contract.py
+    - src/aieos_bootstrap/session_violation.py
+    - tests/unit/test_claude_code_pretool_hook.py
+    - tests/integration/test_writer_files.py
+    - tests/property/test_claude_code_pretool_hook_properties.py
+    - tests/unit/test_claude_code_read_hook.py
+    - tests/unit/test_task_contract.py
+    - tests/unit/test_session_violation.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/decision-matrix.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - docs/Deferred/DEF-0084-points-carried-from-the-hook-process-drafts.md
+    - docs/Deferred/DEF-0089-the-findings-and-limits-carried-from-the-read-hook-program.md
+    - docs/Deferred/DEF-0091-the-findings-and-limits-carried-from-task-071.md
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.claude_code.RECORDER, aieos_bootstrap.claude_code_store.judge,
+    aieos_bootstrap.claude_code_hook.entry, aieos_bootstrap.claude_code_channel.redact,
+    aieos_bootstrap.claude_code_channel.record_findings, aieos_bootstrap.task_contract.read_contract,
+    aieos_bootstrap.session_violation.session_violation]
+  # The read hook's SESSION_VAR and ROOT_VAR are compared by a test, not imported (t72a-R1-2).
+forbidden:
+  # As TASK-071's list (filled by script from the base's tree before commit C): .github/**, .aieos/**, .claude/**,
+  # CLAUDE.md, AIEOS-concept.md, docs/**, bench/**, tests/conformance/**, .gitattributes, .gitignore, and every existing
+  # path of src/ and tests/ not in the write-set, among them gitread.py, adapter.py, writer.py, violation.py,
+  # eventlog.py, claude_code.py, claude_code_hook.py, claude_code_channel.py, claude_code_store.py and
+  # claude_code_read_hook.py.
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The tie (step 1), with a real store made by writer.open_store, writer.start_session and writer.grant_lease (added definitions in
+      tests/integration/test_writer_files.py): with neither variable set and no store
+      upward, or a store with no lease row, run gives exit 0, outcome "allow", reason "enforce_nothing"; each
+      claude_code_store refusal reason gives exit 2, outcome "refuse", reason "store" and that word as findings[0]
+      (an unknown word gives "store: other", by a stand-in), and nothing appended or released (the store's leases and
+      the log before and after, by writer functions); a session id out of form gives "store: session id form" and
+      nothing recorded.
+  - AC2: >-
+      The base (step 2), with a stand-in gitread.run on the contract reader's call that records the ids asked: the
+      first id asked is AIEOS_BASE and "HEAD" is never asked; AIEOS_BASE absent, empty, of 64 characters, or with an
+      upper-case letter, with a live tied lease (a stand-in tie), gives exit 2, reason "base" and one record passed to
+      the session_violation stand-in with the fixed refers_to; a well-formed AIEOS_BASE naming no commit, or equal to
+      the contract's own input_state.base_commit, gives the recorded STOP, reason "contract" (t72b-R1b-3).
+  - AC3: >-
+      The contract (step 3): read_contract's "unreadable" for each of its reasons gives exit 2, reason "contract" and
+      the record of step 3, in judge's form, passing claude_code_channel.record_findings, left unchanged by redact,
+      with ids holding "/pretool-contract/"; the same on a Read call (step 3 before step 4); a readable contract's
+      write_set is the one judged (a write inside it allowed, reason "tied_allow"; outside it refused and recorded).
+  - AC4: >-
+      The judgement (step 4): allow (a Read, Grep or Glob call; a write inside the write-set) gives exit 0, reason
+      "tied_allow", nothing appended; uncovered gives exit 2, reason "uncovered", nothing appended; a shell call under
+      the empty allowlist is refused and recorded (shell_not_allowed), a git push refused and recorded
+      (git_push_refused), a write outside the write-set refused and recorded (write_outside_write_set); each refusal
+      without a record of step 4 (entry's argument and allowlist_form, judge's argument, among them a POSIX root, and
+      record) gives exit 2, reason "no_record", nothing passed to the core.
+  - AC5: >-
+      The record (step 5): the recorder text of step 5, holding the session id, and the record's recorder equal to
+      claude_code.RECORDER + ", for " + it; the record passed is claude_code_channel.redact's (no command text); a
+      record failing record_findings, a subject or recorder mismatch, or redact giving None gives exit 2, reason
+      "record_form", nothing passed; the ids of step 5 (from tool_use_id, and the SHA-256 fallback for a missing, bad
+      or unparsable tool_use_id), each id within the length of step 5; a repeat of an identical call after a recorded
+      STOP is refused at step 1 with nothing recorded (a stand-in tie that answers "ended" on the second call); a lease
+      lost between the tie and the record (a session_violation stand-in answering "lease") gives reason "lease_lost";
+      the core's "duplicate" shown only with a stand-in set on this module's reference to session_violation. The clock
+      (t72b-R1b-1, t72c-R1c-2): clock is called once in every path that reaches session_violation, the bad-base path
+      included, after every other step (read_contract when it was called, entry, record_findings and redact) and
+      immediately before session_violation, and its value is the now passed to it, shown by a stand-in clock that
+      records a call counter; a clock that raises gives reason "entry", and one whose value is refused gives "core". The run seam (D-1703 C1), by an AST
+      check of the new module: the names task_contract and session_violation appear only as the value of an Attribute
+      naming read_contract and session_violation respectively; that Attribute is the func of an ast.Call with exactly
+      3 (read_contract) or exactly 6 (session_violation) args, none an ast.Starred, and keywords equal to []; no other
+      reference to either module or either function exists (no alias by "as", assignment, argument, return value,
+      getattr, functools.partial, importlib or __import__ call, and no "from aieos_bootstrap.task_contract import" or
+      "from aieos_bootstrap.session_violation import"); string constants count only as arguments to getattr,
+      importlib or __import__; docstrings are exempt; the module uses no other attribute of those two modules. Added
+      rules (t72b-R1b-2, R1b-9): (a) the only binders of the two module names anywhere in the module are the
+      module-level "from aieos_bootstrap import task_contract" and "from aieos_bootstrap import session_violation",
+      one alias node each, exempt from the name rule (t72c-R1c-5), so an argument, a
+      def or class name, an except-as name, a global or nonlocal name, a match name, an "as" name or any assignment
+      target binding either name is refused; (b) any str constant outside docstrings that contains "task_contract",
+      "session_violation" or "read_contract" is refused ("contains" is chosen because none of the module's own strings,
+      its reasons, recorder text, refers_to, ids and standard-error line, contains them); (c) any ast.Name whose id
+      is setattr, delattr, globals, vars, locals, eval, exec, compile or attrgetter, and any Attribute whose attr is
+      __dict__, or modules on the name sys, is refused (an Attribute named compile, as re.compile, is not; t72c-R1c-3); (d) any
+      Attribute whose attr is writer, adapter, eventlog, violation, read_set_record or observe is refused (no chain
+      through an imported module reaches the core). Hostile samples, one per form (a Starred argument, a keyword,
+      **kwargs, an alias, a rebound module name, getattr, partial, a wrapper function, an argument or def named for a
+      module, setattr, globals, a string holding a name, an attribute chain), are each refused by the check, the
+      legitimate calls task_contract.read_contract(a, b, c) and session_violation.session_violation(a, b, c, d, e, f)
+      and the call re.fullmatch(p, s) are accepted, and broken copies of the module with each form are caught.
+  - AC6: >-
+      Separation (spec 5 :109, :119): the new module imports only the standard library and claude_code,
+      claude_code_store, claude_code_hook, claude_code_channel, task_contract and session_violation, each as "from
+      aieos_bootstrap import X"; it opens no file, starts no process, names no ".aieos" string and reaches no record
+      path but session_violation: it imports neither aieos_bootstrap.read_set_record (whose observe,
+      read_set_record.py :177, is the lease holder's read-set record path) nor writer, adapter, eventlog or violation;
+      the core's token-less read-set record path of spec 5 :119 (point 10) does not exist yet (DEF-0084's "token-less
+      observe", H4), and the AST check pins that no call of the new module names a function of those modules; the
+      hook-side separation check of test_claude_code_read_hook.py covers it as a seventh module, with THE_PAIR
+      unchanged; SESSION_VAR and ROOT_VAR equal claude_code_read_hook's.
+  - AC7: >-
+      main (step 7), with stand-ins for standard input, the environment, os.getcwd and the clock: nothing on standard
+      output; on exit 2 exactly the line "AIEOS: this tool call was refused by the AIEOS hook (<reason>)" on standard
+      error, reason a word of REASONS; a standard error whose write raises keeps run's exit code; an OSError from
+      os.getcwd with no session id set gives a refusal, and with a session id and a root set the folder is not used
+      (t72b-R2b-2); any other Exception inside main gives 2, reason "entry", and the line; main passes the clock function itself, not
+      its value, to run.
+  - AC8: >-
+      No exception escapes run or main for an Exception (a property test over arbitrary bytes, environments and
+      folders); findings are only fixed words and type names: never standard input text (text planted in the tool
+      name, the command and the path does not appear), the environment's values or a fencing token; outcome and
+      reason are always in OUTCOMES and REASONS.
+  - AC9: >-
+      The module docstring states, in plain words, these phrases, each pinned by a test: "every shell call is refused"
+      (the empty allowlist's cost once the hook is placed); "refused without a record" (after an expiry and during a
+      long commit); "about 50 seconds" (the worst-case wait of step 3, against Claude Code's unmeasured hook timeout);
+      "AIEOS_BASE is a proposal" (beyond spec 5 :108; a launcher that sets only the session id and the root makes every
+      leased session STOP at its first judged call); "a nested runtime chooses its own" (spec 5 :115's limit extended to
+      the base, G-8); "cannot show that AIEOS_BASE is the tip of main" (G-8; no check 0 of the contract against the
+      approved one, spec 3 :175); "replace refs" (G-9); "forbidden is not enforced"; "unmeasured" (exit codes and
+      blocking, C6); "a BaseException" (DEF-0089 P2); "a kill" (DEF-0089 P1: a killed hook may record nothing);
+      "only with stand-ins" (the real Windows-root composition and the real-store record-then-repeat path are not
+      shown by CI); "the base is fixed at the grant" (t72b-R1b-4); "no STOP is recorded by this hook" (record_form and
+      lease_lost, whose record is not accepted, and core, which may follow a record already appended, a STOP included,
+      session_violation.py :40-43; t72b-R1b-7, t72c-R1c-1); "no hook is placed".
+  - AC10: >-
+      The docstrings of task_contract.py and session_violation.py change in one sentence each and nothing else (an
+      acceptance-time script compares every definition, every other docstring line and every other module-level
+      statement with the base, as TASK-071's AC8): in task_contract.py "Nothing hook-side calls it yet" becomes "Its
+      one hook-side caller is claude_code_pretool_hook (TASK-072)"; in session_violation.py "Nothing hook-side calls it
+      yet: its caller is H2's PreToolUse program, a later contract." becomes "Its one hook-side caller is
+      claude_code_pretool_hook (TASK-072), H2b's PreToolUse program."; the pins at test_task_contract.py :466 and
+      test_session_violation.py :419, and that module's test docstring at :405, change to match, and the docstrings of
+      test_claude_code_read_hook.py :485 and test_task_contract.py :445 change as the pins above say. In
+      tests/integration/test_writer_files.py only added definitions and the imports they need, and in the other three
+      existing test modules only the pins named; every other existing definition byte-identical, by the same
+      acceptance-time script (t72c-R2c-3).
+  - AC11: >-
+      GOV-003: round t72g is the GOV-003 review record of this task when the code does not change the inputs it
+      reviewed (else it is run again), and each of G-1 to G-9 is ruled at the acceptance decision as blocking or
+      deferred, with its reason, the acceptance record states G-8, and the deferred item that carries AIEOS_BASE to
+      specification 5's next revision and to specification 7 is opened and carries G-8's limit (shown by the records,
+      not by a test; t72b-R1b-8, R2b-4).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8]}
+  - {gate: G3, check: constitution, args: [AC6, AC9, AC10, AC11, INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
