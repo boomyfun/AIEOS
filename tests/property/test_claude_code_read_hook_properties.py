@@ -90,5 +90,66 @@ class Properties(unittest.TestCase):
             self.assertEqual(first, second)
 
 
+FORCED_SESSIONS = ('s-1', ' ')
+NOT_A_SESSION = (None, '', 0, b'x')
+
+
+def run_forced(rng, forced):
+    """One generated case of TASK-073 AC7: when forced, judge's answer is the live tie (JUDGED[0]), read_paths' the
+    covered read (READS[0]) and the session id one of FORCED_SESSIONS; otherwise the same with exactly one of the three
+    drawn away from it (another judge answer, another read_paths answer, or a session id from NOT_A_SESSION, None
+    meaning absent). The root name is drawn from VALUES. Returns the environment, the choices, the calls made and
+    run's result."""
+    env = {}
+    sid, j, r = rng.choice(FORCED_SESSIONS), 0, 0
+    if not forced:
+        away = rng.choice(('judge', 'read_paths', 'session'))
+        if away == 'judge':
+            j = rng.randrange(1, len(JUDGED))
+        elif away == 'read_paths':
+            r = rng.randrange(1, len(READS))
+        else:
+            sid = rng.choice(NOT_A_SESSION)
+    if sid is not None:
+        env[hook.SESSION_VAR] = sid
+    v = rng.choice(VALUES)
+    if v is not None:
+        env[hook.ROOT_VAR] = v
+    s = rng.randrange(len(STORED))
+    calls = []
+    with mock.patch.object(claude_code_store, 'judge', answer(JUDGED[j], calls, 'judge')), \
+            mock.patch.object(claude_code_reads, 'read_paths', answer(READS[r], calls, 'read_paths')), \
+            mock.patch.object(writer, 'add_reads', answer(STORED[s], calls, 'add_reads')):
+        out = hook.run(b'{}', env, None, T0)
+    return env, (j, r, s), calls, out
+
+
+class LiveTieProperties(unittest.TestCase):
+
+    def test_add_reads_is_called_if_and_only_if_a_live_tie(self):
+        """TASK-073 AC7 (property): fixed seed 73, 50 cases, every second one forced to the live tie, the covered read
+        and a session id from ('s-1', ' '), the others one step away from it (run_forced): add_reads is called if and
+        only if judge's answer is JUDGED[0], read_paths' answer is READS[0] and the environment's session id is a
+        non-empty str, in the order judge, read_paths, add_reads; the outcome is then "recorded" for STORED[0] and
+        "lost" for every other STORED value."""
+        rng = random.Random(73)
+        forced_sessions, called = set(), 0
+        for i in range(CASES):
+            forced = i % 2 == 0
+            env, (j, r, s), calls, out = run_forced(rng, forced)
+            sid = env.get(hook.SESSION_VAR)
+            if forced:
+                forced_sessions.add(sid)
+            expect = j == 0 and r == 0 and isinstance(sid, str) and sid != ''
+            with self.subTest(case=i, env=env, choices=(j, r, s)):
+                self.assertEqual('add_reads' in calls, expect)
+                if expect:
+                    called += 1
+                    self.assertEqual(calls, ['judge', 'read_paths', 'add_reads'])
+                    self.assertEqual(out['outcome'], 'recorded' if s == 0 else 'lost')
+        self.assertEqual(forced_sessions, set(FORCED_SESSIONS))
+        self.assertGreaterEqual(called, CASES // 2)
+
+
 if __name__ == '__main__':
     unittest.main()

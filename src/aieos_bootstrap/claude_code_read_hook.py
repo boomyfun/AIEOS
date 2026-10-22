@@ -24,10 +24,14 @@ the first step that ends giving the result:
 6. no exception escapes: one gives "skip" or, once add_reads was reached, "lost", reason "entry", with only the
    exception's type name.
 
+RESULT_KEYS, the four keys of run's result in that order, is a public constant of this module, as SESSION_VAR and
+ROOT_VAR (the two names step 2 reads) are.
+
 The working folder is the process's own working folder (os.getcwd()), never the input's cwd, and no key of the hook
 input is read but through read_paths, which reads only tool_name and tool_input: the input's session_id, cwd and
 transcript_path are never read. This program writes no record: the observed read-set record is the launcher's
-(specification 5 line 108; specification 7). read_set_record.observe is core-side: no hook-side module calls it.
+(specification 5 section 7 and section 11 point 7; specification 7). read_set_record.observe is core-side: no
+hook-side module calls it.
 
 ``main()`` reads standard input once, takes os.environ (passed to run unread), the process's working folder (None when
 os.getcwd() raises OSError) and the clock once, calls run and returns its exit code. The clock is the process clock
@@ -35,19 +39,24 @@ rounded up to the next whole second when it has a fraction (the writer takes who
 fail-closed direction, since a now earlier than the real time would make an expired lease read as live, so rounding
 never makes a lease that has expired at the clock's reading read as live. The same now goes to judge and add_reads.
 
-Exit code 0 on every outcome, and the program prints nothing: a PostToolUse hook runs after the read, so a refusal
-would block nothing; it never asks for an approval and never shows a stop (decision D-1469 ruling 1). An error while
-reading standard input, the environment or the clock gives exit code 0 too, with nothing written.
+Exit code 0 on every outcome, and the program prints nothing, for every exception inheriting Exception (a
+BaseException that is not an Exception, or a failure before main runs, can give a non-zero exit code and text): a
+PostToolUse hook runs after the read (as documented, unmeasured: C6), so a refusal
+would block nothing; it never asks for an approval and never shows a stop (decision D-1469 ruling 1). An error
+inheriting Exception while reading standard input, the environment or the clock gives exit code 0 too, with nothing
+written.
 
 Limits: a read may be lost silently, and nothing records the loss: on "lost" (a lock held past add_reads' timeout,
 the bound, a path refused, a damaged store, an exception) and on every "skip" other than "enforce_nothing" while the
 session holds a lease (a Read input read_paths cannot parse, judge refusing "unreadable" during a long commit); the
 read-set stays a lower bound and an estimate. The clock window: now is fixed before the lookups, before judge's
 lookup and before add_reads' lock waits (up to about 5 seconds each), so a lease that expires during the call, up to
-about 10 seconds, may still be judged live and a read stored for it; a limit in the fail-open direction, kept because
-add_reads checks the lease after its own wait, so a second clock reading would leave about 5 seconds anyway. One hook
-call may wait up to about 10 seconds, beside Claude Code's own hook timeout (unmeasured); a hook killed by that
-timeout stores nothing. Judge's limits hold here: a hook call outside every project's folder tree is not judged; an
+about 10 seconds, may still be judged live and a read stored for it; a limit in the fail-open direction,
+kept (decision D-1484 C2): a second clock reading before add_reads would not close it, since add_reads checks the
+lease against the now it is given only after its own lock wait of up to about 5 seconds. One hook call may wait up to
+about 10 seconds, beside Claude Code's own hook timeout (unmeasured); a hook killed by that timeout may store nothing,
+and a kill after add_reads' COMMIT may have stored the read. Judge's limits hold here: a hook call outside every
+project's folder tree is not judged; an
 inner project's store judges alone; a removed or emptied store turns the hook off when no session id is set; a run
 outside the launcher while no task is leased is not judged. With neither name set, a hook inside a project whose
 store holds a lease row stores nothing (in the desktop app's sessions the tie is covered by no measurement). Reads
@@ -144,7 +153,7 @@ def _stored(answer):
 
 def run(stdin_bytes, environ, working_folder, now):
     """The judgement of one PostToolUse hook call (the module docstring states the flow and the limits). Exit code 0
-    always; never raises."""
+    always; never raises an exception inheriting Exception."""
     try:
         wrong = _check_arguments(stdin_bytes, environ, working_folder, now)
     except Exception as e:
@@ -181,7 +190,7 @@ def _whole_second_now():
 
 def main():
     """The hook's process: standard input, the environment, the working folder and the clock to run; returns run's
-    exit code, 0. Prints nothing; never raises."""
+    exit code, 0. Prints nothing; never raises an exception inheriting Exception."""
     try:
         stdin_bytes = sys.stdin.buffer.read()
         try:

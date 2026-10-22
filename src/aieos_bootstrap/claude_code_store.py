@@ -54,11 +54,12 @@ Now is checked here by its type's MRO (a class named datetime in module datetime
 the writer checks it with isinstance; the two checks of now differ and both fail closed (each refuses what it does not
 accept, and the writer checks again).
 
-The session id, the root, the working folder and now are arguments: where the hook entry takes them from is a later
-contract's. A now earlier than the real time would make an expired lease read as unexpired (the fail-open direction),
-so that contract must take now from the process clock. This module reads no clock, no environment and no standard
-input, starts no process and prints nothing. No hook is placed, no matcher chosen, no setting changed and nothing is
-measured (CC-3, the owner's; C6).
+The session id, the root, the working folder and now are arguments: this module's two hook-side callers,
+claude_code_read_hook (task TASK-068) and claude_code_pretool_hook (task TASK-072), take them from the environment,
+the process's own working folder and the process clock. A now earlier than the real time would make an expired lease
+read as unexpired (the fail-open direction), so every caller must take now from the process clock. This module reads
+no clock, no environment and no standard input, starts no process and prints nothing. No hook is placed, no matcher
+chosen, no setting changed and nothing is measured (CC-3, the owner's; C6).
 """
 
 import os

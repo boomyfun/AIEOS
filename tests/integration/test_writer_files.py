@@ -340,20 +340,34 @@ class ReadHookFiles(unittest.TestCase):
         self.assertTrue(out['findings'][0].startswith(reason + ':'), out)
 
     def test_a_read_is_recorded_once(self):
-        """TASK-068 AC4 and TASK-068 AC9: a Read input under a live tied lease gives "recorded" and stored_reads
-        shows the path; the same call again gives "recorded" and the path is stored once."""
+        """TASK-068 AC4 and TASK-068 AC9 and TASK-073 AC6: a Read input under a live tied lease gives "recorded" and
+        stored_reads shows the path; the same call again gives "recorded" and the path is stored once. The store's
+        dump, taken before the first call and after each call, gains at the first call exactly one line, starting
+        'INSERT INTO "reads"' and holding the path, and loses none; the second call leaves it unchanged."""
+        import collections
         with tempfile.TemporaryDirectory() as root:
             tied_store(root)
+            dumps = [dump(root)]
             for _ in range(2):
                 out = self.hook(root, read_input('made-up/a.txt'), ('s-1', root))
                 self.assertEqual(out, {'exit_code': 0, 'outcome': 'recorded', 'reason': None, 'findings': []})
                 self.assertEqual(writer.stored_reads(root, 's-1', 'TASK-001').value, ['made-up/a.txt'])
+                dumps.append(dump(root))
+            gained = collections.Counter(dumps[1]) - collections.Counter(dumps[0])
+            lost = collections.Counter(dumps[0]) - collections.Counter(dumps[1])
+            self.assertEqual(sum(gained.values()), 1, gained)
+            line = next(iter(gained))
+            self.assertTrue(line.startswith('INSERT INTO "reads"'), line)
+            self.assertIn('made-up/a.txt', line)
+            self.assertEqual(lost, collections.Counter())
+            self.assertEqual(dumps[2], dumps[1])
 
     def test_nothing_is_stored_without_a_live_tie(self):
-        """TASK-068 AC4 and TASK-068 AC9: an expired lease, an ended session, an unknown session id, a session id
-        without a root, a root without a session id, a root whose store holds no lease row, a root with no store, two
-        unexpired leases of the session and a store of the three-table form each give "skip", "refuse" with judge's
-        own reason, and the store's tables are unchanged."""
+        """TASK-068 AC4 and TASK-068 AC9 and TASK-073 AC6: an expired lease, an ended session, an unknown session id,
+        a session id without a root, a root without a session id, a root whose store holds no lease row, a root with
+        no store, two unexpired leases of the session and a store of the three-table form each give "skip", "refuse"
+        with judge's own reason, and the store's tables are unchanged; the two "leases" cases give their exact
+        findings, the live lease count 0 for the expired lease and 2 for the two leases."""
         import sqlite3
 
         def other_lease(root):
@@ -385,6 +399,8 @@ class ReadHookFiles(unittest.TestCase):
                  ('no_store', lambda r: None, ('s-1', 'R'), T0),
                  ('leases', two_leases, ('s-1', 'R'), T0),
                  ('tables', three_tables, ('s-1', 'R'), T0)]
+        exact = {('leases', tied_store): ['leases: not exactly one unexpired lease of the session (0)'],
+                 ('leases', two_leases): ['leases: not exactly one unexpired lease of the session (2)']}
         for reason, setup, env, now in cases:
             with self.subTest(reason=reason, setup=setup):
                 with tempfile.TemporaryDirectory() as root:
@@ -393,7 +409,10 @@ class ReadHookFiles(unittest.TestCase):
                     out = self.hook(root, read_input('made-up/a.txt'), tuple(root if v == 'R' else v for v in env),
                                     now=now)
                     self.assert_refused(out, reason)
+                    if (reason, setup) in exact:
+                        self.assertEqual(out['findings'], exact[(reason, setup)])
                     self.assertEqual(dump(root), before)
+        self.assertEqual(sum(1 for c in cases if (c[0], c[1]) in exact), 2)
 
     def test_neither_name_set(self):
         """TASK-068 AC4 and TASK-068 AC9: with neither name set and the working folder the store's root, a store with
@@ -448,6 +467,36 @@ class ReadHookFiles(unittest.TestCase):
             self.assertEqual((out['outcome'], out['reason']), ('lost', 'unreadable'))
             self.assertTrue(out['findings'][0].startswith('unreadable:'))
             self.assertEqual(dump(root), before)
+
+
+class MadeUpStr(str):
+    """A made-up subclass of str (TASK-073 AC5)."""
+
+
+class ReadHookSubclassFiles(unittest.TestCase):
+    """TASK-073 AC5 (c) on real files: a session id of a subclass of str, with the real judge and add_reads."""
+
+    def test_a_str_subclass_session_id_stores_nothing(self):
+        """TASK-073 AC5: on a store made by tied_store, the session id MadeUpStr('s-1') with the real judge and
+        add_reads gives "lost", reason "argument", findings ["argument: ValueError"], and the store's dump is
+        unchanged; the same call with the plain str 's-1' on a second fresh store gives "recorded" and exactly one
+        added line of the dump, starting 'INSERT INTO "reads"', so the unchanged dump is not vacuous."""
+        import collections
+        from aieos_bootstrap import claude_code_read_hook as hook
+        for sid, expect in ((MadeUpStr('s-1'), ('lost', 'argument', ['argument: ValueError'])),
+                            ('s-1', ('recorded', None, []))):
+            with self.subTest(kind=type(sid).__name__):
+                with tempfile.TemporaryDirectory() as root:
+                    tied_store(root)
+                    before = dump(root)
+                    out = hook.run(read_input('made-up/a.txt'), {hook.SESSION_VAR: sid, hook.ROOT_VAR: root}, None, T0)
+                    self.assertEqual((out['outcome'], out['reason'], out['findings']), expect)
+                    added = collections.Counter(dump(root)) - collections.Counter(before)
+                    if type(sid) is str:
+                        self.assertEqual(sum(added.values()), 1, added)
+                        self.assertTrue(next(iter(added)).startswith('INSERT INTO "reads"'), added)
+                    else:
+                        self.assertEqual(dump(root), before)
 
 
 SV_TASK = 'TASK-070'
