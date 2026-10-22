@@ -615,5 +615,121 @@ class SessionViolationFiles(unittest.TestCase):
             self.assertEqual([e['type'] for e in sv_events(root)], ['violation.detected', 'decision.execution'])
 
 
+def pretool_input():
+    """The bytes of a PreToolUse input for a Write call, with a made-up path."""
+    import json
+    return json.dumps({'session_id': 'made-up-input-session', 'tool_name': 'Write', 'tool_use_id': 'toolu_made-up',
+                       'tool_input': {'file_path': 'C:\\made-up\\a.py', 'content': 'x'}}).encode('utf-8')
+
+
+class PretoolHookFiles(unittest.TestCase):
+    """TASK-072's step 1 on real files: the tie through real stores made by writer functions, ending before the
+    contract is read; nothing is appended or released."""
+
+    def run_hook(self, root, env, folder=None, now=T0, leases=True):
+        from aieos_bootstrap import claude_code_pretool_hook as hook
+        names = {}
+        for name, value in zip((hook.SESSION_VAR, hook.ROOT_VAR), env):
+            if value is not None:
+                names[name] = value
+        names[hook.BASE_VAR] = C40
+        before = (writer.held_leases(root) if leases and os.path.isfile(writer.store_path(root)) else None, dump(root),
+                  sv_events(root))
+        out = hook.run(pretool_input(), names, folder, now)
+        after = (writer.held_leases(root) if leases and os.path.isfile(writer.store_path(root)) else None, dump(root),
+                 sv_events(root))
+        self.assertEqual(after, before)
+        return out
+
+    def test_enforce_nothing_on_real_folders(self):
+        """TASK-072 AC1: with neither name set, an empty folder with no store upward and a store with no lease row
+        each give exit 0, "allow", reason "enforce_nothing"; nothing is appended."""
+        with tempfile.TemporaryDirectory() as root:
+            self.assertEqual(self.run_hook(root, (None, None), folder=root),
+                             {'exit_code': 0, 'outcome': 'allow', 'reason': 'enforce_nothing', 'findings': []})
+        with tempfile.TemporaryDirectory() as root:
+            writer.open_store(root, 'epoch-1')
+            self.assertEqual(self.run_hook(root, (None, None), folder=root),
+                             {'exit_code': 0, 'outcome': 'allow', 'reason': 'enforce_nothing', 'findings': []})
+
+    def test_each_reachable_store_refusal(self):
+        """TASK-072 AC1: each store refusal reachable with a real store (argument, root_without_session,
+        session_without_root, root, no_store, session, ended, leases twice, no_lease_row, lease_row_without_session,
+        tables, unreadable) gives exit 2, "refuse", reason "store" and that word as the one finding; nothing is
+        appended or released. search, link and entry are left to stand-ins (tests here make no folder or link)."""
+        import sqlite3
+
+        def other_lease(root):
+            tied_store(root)
+            writer.start_session(root, 's-2', 'agent-2', T0)
+            writer.grant_lease(root, 'TASK-002', 'READY', 'agent-2', 's-2', T0, T0 + datetime.timedelta(hours=1))
+
+        def ended(root):
+            other_lease(root)
+            writer.end_session(root, 's-1', T0)
+
+        def two_leases(root):
+            tied_store(root)
+            writer.grant_lease(root, 'TASK-002', 'READY', 'agent-1', 's-1', T0, T0 + datetime.timedelta(hours=1))
+
+        def three_tables(root):
+            tied_store(root)
+            con = sqlite3.connect(writer.store_path(root), isolation_level=None)
+            try:
+                con.execute('DROP TABLE reads')
+            finally:
+                con.close()
+        missing = os.path.join(os.path.abspath(os.sep), 'made-up-missing-root-72')
+        cases = [('argument', tied_store, ('s-1', 'made-up-relative-root'), None, T0),
+                 ('root_without_session', tied_store, (None, 'R'), None, T0),
+                 ('session_without_root', tied_store, ('s-1', None), None, T0),
+                 ('root', tied_store, ('s-1', missing), None, T0),
+                 ('no_store', lambda r: None, ('s-1', 'R'), None, T0),
+                 ('session', other_lease, ('s-9', 'R'), None, T0),
+                 ('ended', ended, ('s-1', 'R'), None, T0),
+                 ('leases', tied_store, ('s-1', 'R'), None, T0 + datetime.timedelta(hours=2)),
+                 ('leases', two_leases, ('s-1', 'R'), None, T0),
+                 ('no_lease_row', lambda r: writer.open_store(r, 'epoch-1'), ('s-1', 'R'), None, T0),
+                 ('lease_row_without_session', tied_store, (None, None), 'R', T0),
+                 ('tables', three_tables, ('s-1', 'R'), None, T0)]
+        for reason, setup, env, folder, now in cases:
+            with self.subTest(reason=reason, setup=setup):
+                with tempfile.TemporaryDirectory() as root:
+                    setup(root)
+                    out = self.run_hook(root, tuple(root if v == 'R' else v for v in env),
+                                        folder=root if folder == 'R' else folder, now=now,
+                                        leases=reason != 'tables')
+                    self.assertEqual(out, {'exit_code': 2, 'outcome': 'refuse', 'reason': 'store',
+                                           'findings': [reason]})
+
+    def test_a_locked_store_is_refused(self):
+        """TASK-072 AC1: while another connection holds an exclusive lock the store lookup gives "unreadable" after its
+        wait, and run gives reason "store" with that word; nothing is appended or released."""
+        import sqlite3
+        with tempfile.TemporaryDirectory() as root:
+            tied_store(root)
+            con = sqlite3.connect(writer.store_path(root), isolation_level=None)
+            try:
+                con.execute('BEGIN EXCLUSIVE')
+                from aieos_bootstrap import claude_code_pretool_hook as hook
+                out = hook.run(pretool_input(), {hook.SESSION_VAR: 's-1', hook.ROOT_VAR: root, hook.BASE_VAR: C40},
+                               None, T0)
+                con.execute('ROLLBACK')
+            finally:
+                con.close()
+            self.assertEqual(out, {'exit_code': 2, 'outcome': 'refuse', 'reason': 'store', 'findings': ['unreadable']})
+            self.assertEqual(len(writer.held_leases(root)), 1)
+            self.assertEqual(sv_events(root), [])
+
+    def test_a_session_id_out_of_form_on_a_real_tie(self):
+        """TASK-072 AC1: a real live tie whose session id is out of form ("a b") gives "store: session id form";
+        nothing is appended or released."""
+        with tempfile.TemporaryDirectory() as root:
+            tied_store(root, sid='a b')
+            out = self.run_hook(root, ('a b', root))
+            self.assertEqual(out, {'exit_code': 2, 'outcome': 'refuse', 'reason': 'store',
+                                   'findings': ['store: session id form']})
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -33,11 +33,13 @@ ENV = {hook.SESSION_VAR: 'made-up-env-session', hook.ROOT_VAR: ENV_ROOT}
 KEYS = {'exit_code', 'outcome', 'reason', 'findings'}
 SRC = pathlib.Path(__file__).resolve().parents[2] / 'src' / 'aieos_bootstrap'
 HOOK_SIDE = ('claude_code.py', 'claude_code_hook.py', 'claude_code_channel.py', 'claude_code_reads.py',
-             'claude_code_store.py', 'claude_code_read_hook.py')
+             'claude_code_store.py', 'claude_code_read_hook.py', 'claude_code_pretool_hook.py')
 OWN_IMPORTS = {'claude_code.py': {'governor', 'records'}, 'claude_code_hook.py': {'claude_code'},
                'claude_code_channel.py': {'adapter', 'claude_code', 'claude_code_hook'}, 'claude_code_reads.py': set(),
                'claude_code_store.py': {'writer'},
-               'claude_code_read_hook.py': {'claude_code_reads', 'claude_code_store', 'writer'}}
+               'claude_code_read_hook.py': {'claude_code_reads', 'claude_code_store', 'writer'},
+               'claude_code_pretool_hook.py': {'claude_code', 'claude_code_store', 'claude_code_hook',
+                                               'claude_code_channel', 'task_contract', 'session_violation'}}
 ALLOWED = {('claude_code_store.py', 'writer'): {'store_path', 'session_lease', 'StoreResult'},
            ('claude_code_read_hook.py', 'writer'): {'add_reads', 'StoreResult'}}
 THE_PAIR = ('claude_code_channel.py', 'adapter', 'violation')
@@ -482,7 +484,7 @@ class R5WhatTheModulesDo(unittest.TestCase):
                 self.assertFalse([c for c in consts if '.aieos' in c])
 
     def test_the_separation_holds_on_the_six_modules(self):
-        """TASK-068 AC5 and TASK-068 AC9: the separation check gives no finding on the six hook-side modules."""
+        """TASK-068 AC5 and TASK-068 AC9: the separation check gives no finding on the seven hook-side modules."""
         for name in HOOK_SIDE:
             with self.subTest(name=name):
                 self.assertEqual(separation_findings(name, (SRC / name).read_bytes().decode('utf-8')), [])

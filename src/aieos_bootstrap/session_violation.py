@@ -56,8 +56,8 @@ point 10. The lookup's lock cost: a lookup refused "unreadable" during a long co
 The limit of (3b)'s end: the answer's reason and decision and core's reason are type-checked but not passed through the
 token filter, and the lease's task_id, the token's epoch, recorder, root and session_id stay isinstance-checked. It
 never writes an observed read-set record, a reads row or a session row, and never opens the store or the event log
-itself; it opens no file, starts no process, reads no clock, no environment and no standard input. Nothing hook-side
-calls it yet: its caller is H2's PreToolUse program, a later contract.
+itself; it opens no file, starts no process, reads no clock, no environment and no standard input. Its one hook-side
+caller is claude_code_pretool_hook (TASK-072), H2b's PreToolUse program.
 """
 
 from aieos_bootstrap import adapter
