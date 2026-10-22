@@ -1,4 +1,4 @@
-# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md), revision 10: the checks the first code task needs
+# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md), revision 11: the checks the first code task needs
 # (decision D-181, option K1), with the conformance runs of M2 (DM A62; decisions D-217 C5 and D-218). Runs on every push
 # to any branch and checks every pushed commit. It reads only: it writes nothing to the repository and uses no secret.
 # Records: this run's log, its step summary, its annotations and each step's conclusion. Its results are advisory (DM
@@ -85,6 +85,12 @@
 # report and loosens no check; it grants no write access, uses no secret and changes no setting. Limits: G0 still
 # reads a contract only at its contract commit, and the report does not block a change; G-3 to G-7 and G-9 of
 # round t72g stay open (DEF-0092).
+# Revision 11 (decision D-1814; the decision agent's own decision under DM A66; G-5 of round t72g, DEF-0092)
+# adds lockfile and configuration forms to GOV-003's pinned list, in both of its copies: Pipfile, Pipfile.lock,
+# poetry.lock, uv.lock, constraints*.txt, MANIFEST.in, tox.ini, pytest.ini, conftest.py and .python-version, at any
+# depth. None of these files exists today; a later change adding or editing one is now reported as an evaluator
+# change. It adds a report and loosens no check; it grants no write access, uses no secret and changes no setting.
+# Limits: the report does not block a change; G-3, G-4, G-6, G-7 and G-9 of round t72g stay open (DEF-0092).
 name: aieos-checks
 
 on:
@@ -408,6 +414,8 @@ jobs:
                        'docs/specs/risk-rules-gov-aieos.md', 'docs/pre-genesis/constitution.md',
                        'docs/tasks/**',
                        'tests/unit/**', 'tests/integration/**', 'tests/property/**', 'tests/run_tests.py',
+                       '**/Pipfile', '**/Pipfile.lock', '**/poetry.lock', '**/uv.lock', '**/constraints*.txt',
+                       '**/MANIFEST.in', '**/tox.ini', '**/pytest.ini', '**/conftest.py', '**/.python-version',
                        '**/pyproject.toml', '**/setup.cfg', '**/setup.py', '**/requirements*.txt']
           OWNER_PATHS = ['docs/pre-genesis/measurement-protocol.md', 'docs/pre-genesis/measurements/**']
 
@@ -473,6 +481,8 @@ jobs:
                        'docs/specs/risk-rules-gov-aieos.md', 'docs/pre-genesis/constitution.md',
                        'docs/tasks/**',
                        'tests/unit/**', 'tests/integration/**', 'tests/property/**', 'tests/run_tests.py',
+                       '**/Pipfile', '**/Pipfile.lock', '**/poetry.lock', '**/uv.lock', '**/constraints*.txt',
+                       '**/MANIFEST.in', '**/tox.ini', '**/pytest.ini', '**/conftest.py', '**/.python-version',
                        '**/pyproject.toml', '**/setup.cfg', '**/setup.py', '**/requirements*.txt']
           OWNER_PATHS = ['docs/pre-genesis/measurement-protocol.md', 'docs/pre-genesis/measurements/**']
 
