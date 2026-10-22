@@ -19,3 +19,4 @@ TASK-068 (the read hook program of the Claude Code adapter) was accepted at its 
 
 ## Log
 - 2026-10-20: opened (session b62e2485; D-1515).
+- 2026-10-22: TASK-072, accepted under D-1740, states P1, P2 and P7 for its own module and touches P10 (the separation check extended to a seventh module, still lexical); the other points stay with claude_code_read_hook.py and claude_code_store.py (session d12e7fb6).

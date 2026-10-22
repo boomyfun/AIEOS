@@ -33,3 +33,4 @@ TASK-071 (H2a: the task contract reader and the hardening of session_violation c
 
 ## Log
 - 2026-10-22: opened (session e309084b; D-1675).
+- 2026-10-22: TASK-072, accepted under D-1740, took GOV-003's review part (round t72g; G-1 to G-9 ruled at acceptance, DEF-0092, DEF-0093) and the run seam (no run passed to read_contract; AC5's AST check); the other items stay deferred (session d12e7fb6).
