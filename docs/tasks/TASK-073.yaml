@@ -1,0 +1,481 @@
+# Task contract TASK-073 (the scoping note's "TASK-073a"), the text and test fixes of the read hook program and the store
+# lookup (DEF-0089; specification 5 revision 5 at the base: section 7 unchanged since revision 4; revision 5 changed
+# section 11 point 7 only by the base the launcher passes and its limits, not the launcher's writing of the observed
+# read-set record; specification 2 revision 7, section 3).
+# Revision 0, a draft, under decisions D-1761 (the scoping) and D-1762 (the split and the draft; the scoping note, session ccfdbc6a, its sections "1." and "2."
+# and its "Left out" list, and the split into a first task on claude_code_read_hook.py and claude_code_store.py and a
+# second on claude_code_pretool_hook.py). Brought for review and approval in its own requests; whether it is approved is
+# recorded in the decision files, not in this file. Fields and value forms follow specification 2 §5.1 and the
+# contracts of TASK-068 and TASK-072. Values marked "(filled by script)" are written by script from the base just before
+# commit C.
+# Revision 1 (D-1763 C1, C2): P6 cited by section, with no line number (AC3 (b)); the header's decisions; AC5 (c)'s
+# findings from a scratchpad probe on main's code.
+# Revision 2 (D-1764): the dispositions of review round t73a (two reviews on Sonnet 5.5): AC9's copies for AC6 and
+# AC7 (a); AC2 (b)'s sentence at :39-40; AC3 (c)'s place and its key-set test; AC4's referent; AC5 (c)'s control; the
+# specification's revision (the module docstrings' own "specification 5 revision 4" is left: not a DEF-0089 point);
+# one pin kept met (test_autonomy.py).
+#
+# The task id (a reading, for the decision agent to rule): the scoping note calls the two parts "TASK-073a" and
+# "TASK-073b", but every reader of a task id fullmatches "TASK-" and ASCII digits (task_contract.py :57, :224, :252;
+# writer.py :102; records.py :125; governor.py :65; and ac_tests.py :41-42, whose test-name form is "TASK-" and three
+# digits with a word boundary after them, so "TASK-073a AC1" names no task). So this contract's id is TASK-073, its file
+# at commit C docs/tasks/TASK-073.yaml, and every new test names "TASK-073 ACn"; the scoping note's TASK-073b takes the
+# next free id (TASK-074). The "a" is kept only in this draft's file name.
+#
+# What it changes, and nothing else: the docstrings of src/aieos_bootstrap/claude_code_read_hook.py (the module
+# docstring and the docstrings of run and main) and the module docstring of src/aieos_bootstrap/claude_code_store.py,
+# each sentence named with its new text in AC2 to AC4; and tests. No behaviour of either module changes: no statement,
+# expression, constant, import or definition other than those docstrings (AC1). The exceptions to "no behaviour change":
+# none.
+#
+# DEF-0089 (opened by D-1515; its points at DEF-0089 :10-14), each point taken, with where:
+# - P1 (D-1510 C1; :11) "a hook killed by that timeout stores nothing" (claude_code_read_hook.py :49-50): AC2 (a). The
+#   same sentence in TASK-068.yaml's header (:146) is not changed: a code task does not change an accepted contract
+#   (L-0019); it stays for TASK-068.yaml's next revision (DEF-0089 :18), stated in AC10.
+# - P2 (:11) "Exit code 0 on every outcome" (:38) and "never raises" (run :146-147, main :183-184): AC2 (b).
+# - P3 (:11) "a PostToolUse hook runs after the read" (:38): AC2 (c).
+# - P4 (:12) claude_code_store.py's module docstring calls the hook entry "a later contract's" (:57-59): AC4.
+# - P5 (:12) the clock window's "kept because" reason (claude_code_read_hook.py :47-48): AC3 (a); the limit unchanged.
+# - P6 (:12) a specification line number in the module docstring (claude_code_read_hook.py :30, "specification 5 line
+#   108"): AC3 (b), cited by section, with no line number (D-1763 C1 (i)). claude_code_store.py cites sections only, and "concept line 945" (both
+#   modules, :2) cites the concept, v0.5, unchanged (A22); neither is changed.
+# - DA-1 (ii) (:12) RESULT_KEYS, a public constant TASK-068's contract does not name: it is claude_code_read_hook.py
+#   :75 (claude_code_store.py has KEYS, not RESULT_KEYS; the scoping note lists DA-1 (ii) under claude_code_store.py, a
+#   slip): AC3 (c), named in the read hook's docstring and pinned by a test.
+# - P7 (:13) a bytes subclass for stdin_bytes and a str-subclass session id (both fail closed): AC5.
+# - P8 (:13) no broken copy runs the integration class (AC9), and the two-leases and expired-lease cases assert the
+#   reason prefix, not the count (AC6 (b)).
+# - P9 (:13) the property test asserts only the fail-closed direction: AC7 (a).
+# - P12 (:13) broken copies B29 and B30 remove one pinned phrase per check: AC9, one broken copy per pinned phrase.
+# - DA-1 (i) (:13) a StoreResult whose findings is not iterable ends in step (6)'s "entry: TypeError", not step (5)'s
+#   fixed finding: pinned as it is by a test (AC7 (b)); the code is not changed (fail closed either way: "lost").
+# - E1 (D-1510 C2; :10) the "recorded once" case takes no dump of the store's tables: AC6 (a).
+# Left out, with where each goes (the scoping note's "Left out" list):
+# - P10 (the separation check ignores relative imports and is lexical; DA-1 (iii)): with DEF-0092's N5 (stronger seam
+#   rules), at native takeover (A11) or a later seam task; this task changes no import and no check, so P10 is not
+#   reached.
+# - P11 (TASK-068.yaml cites a real session id, :16-17, :549) and P1's half in TASK-068.yaml's header (:146): the next
+#   revision of TASK-068.yaml (DEF-0089 :18), not a code task (L-0019).
+# - DA-3 (iii) (review R5's line references): no change of a file; stays in DEF-0089.
+# - R2's point (an evidence script kept outside the repository): no action (DEF-0089 :14).
+# - The limits only (:15): unchanged and still stated by the module docstring.
+# - claude_code_pretool_hook.py and DEF-0092 (N3, N4, S1-1 to S1-6, T1 to T4): TASK-074 (the scoping note's TASK-073b);
+#   G-1 to G-7 and G-9 (G-2 first): each its own A66 decision; DEF-0091, DEF-0090, DEF-0088: other tasks; round t72c's
+#   h4c Y2-10, Y5-7, Y5-9: specification level.
+# - writer.py's own "a later contract's" in session_lease's docstring (writer.py :1004-1006, pinned by test_writer.py
+#   :895) is not DEF-0089 P4 and writer.py is not in the write-set: unchanged, stated.
+#
+# The pins (L-0026; MY/t73/pinscan73a.txt and the checks below), each to pass unchanged unless named here; a full scan is
+# run by script before commit C and its output is brought with the request that approves this contract:
+# - Changed, in the write-set: tests/unit/test_claude_code_store.py :311, the phrase 'a later contract\'s' of
+#   R6WhatIsStated.test_the_docstring_states_the_rules_and_limits (:300-314) becomes the new phrase of AC4; that is the
+#   only change of that function, its other 25 phrases and its "TASK-066 AC7" docstring kept.
+# - Kept met by the new text, unchanged: test_claude_code_read_hook.py :524-539 (R6WhatIsStated, 22 phrases; the new
+#   sentences keep "PostToolUse", "exit code 0" (lower-case, at :40's "gives exit code 0 too", which stays), "prints
+#   nothing", "now is fixed before the lookups" and the rest); :542-551 (R7StoreWords, four phrases of
+#   claude_code_store.py); test_claude_code_store.py :333-336 (the text "answer.reason == 'no_lease_row' and searched:"
+#   occurs exactly once in the whole source: the new docstring text does not hold it); test_claude_code_read_hook.py
+#   :480-484 and test_claude_code_store.py :290-291 (no str constant, docstrings included, holds ".aieos": the new text
+#   says "project-state directory" if anything); test_session_violation.py :393-398 and test_task_contract.py :444-449
+#   (neither module's text names "session_violation" or "task_contract": AC4's sentence names claude_code_pretool_hook
+#   and claude_code_read_hook only); tests/unit/test_autonomy.py :238-246 (a regex over every src module for an
+#   import or a call of autonomy: the new text names no autonomy).
+# - Unchanged because no code changes (AC1): test_claude_code_read_hook.py :35-45 (HOOK_SIDE, OWN_IMPORTS, ALLOWED,
+#   THE_PAIR), :360-366 (_raw_clock's last statement and the __main__ line), :429-452 (imports and calls), :454-479 (os
+#   and sys uses, absent names), :486-521 (the separation check on the seven modules and its hostile samples);
+#   test_claude_code_store.py :25 (SOURCE), :253-295 (imports, the two writer calls, absent names, '0o170000',
+#   '0o100000', 'st_mode'), :317-331; test_claude_code_pretool_hook.py :163-180 (each store reason found by the pattern
+#   _(?:refuse|refused|named)\('<word>' in claude_code_store.py and writer.py), :709-744 (its own imports, claude_code_store
+#   used only through judge and KEYS) and :746-750 (SESSION_VAR and ROOT_VAR equal the read hook's); the callers of
+#   claude_code_store.judge and of the read hook in test_writer.py :563-608, test_writer_files.py :223-241 and
+#   :326-450 (except the two functions named in AC6), and the stand-ins of
+#   tests/property/test_claude_code_pretool_hook_properties.py :18, :87-90, :181-186 and
+#   tests/property/test_claude_code_store_properties.py; __init__.py (no __all__ change).
+# - Not reached, unchanged: tests/unit/test_bench_isolation.py :35-52 (no new text names "bench/" or imports bench);
+#   tests/integration/test_conformance_cb_set.py :79-86, test_conformance_rc_set.py :153-158 and
+#   test_conformance_risk_set.py :141-150 (no new text names a conformance fixture folder); test_ac_tests_tree.py :21
+#   (it scans TASK-001 to TASK-022 only); no test hashes either module (the workflow's pinned hashes, aieos-checks.yml
+#   :87-104, are of governor.py and resume_check.py).
+# - The workflow, unchanged: deterministic_rule's per-test-module rules (aieos-checks.yml :1449-1474): the unit and
+#   property test additions use no tempfile, sqlite3, open, os.makedirs, .mkdir, exec, eval, compile or __import__;
+#   test_writer_files.py's own allowance (:1463-1470: sqlite3 and tempfile, open only "rb" or "ab") covers its changes,
+#   which reuse its dump helper (:313-323); INV-004's string rule (:1438, :1589-1591); OPS-003's words and its label rule
+#   (:1635, :1644: no MEASURED, ENFORCED or GUARANTEED in the new text; "unmeasured" is lower-case); SEC-001, SEC-002 and
+#   bandit's B105 name pattern (no new name holding "token", "pass", "secret" or "pwd" bound to a str).
+#
+# Risk: high (risk rules revision 6, §2 point 3: R3 matches every path under src/** and tests/**), computed over the base
+# by script before commit C. GOV-003: every path of the write-set is an evaluator path; change class critical_cr, ruled
+# at acceptance; this task changes no evaluator input's code, so no GOV-003 review round is run beyond the profile's.
+# Profile as TASK-068's (functional [unit_test], architecture [deterministic_rule], functional [integration_test],
+# security [static_security_analysis], architecture [ai_review (cross-model)]), plus the evidence_required of the
+# applicable articles. Reviews on Sonnet 5.5 (never Fable). Naming (D-544 Q3): every new test function names "TASK-073
+# ACn" in its own docstring; each changed existing test function keeps its own ids and adds "TASK-073 ACn".
+# Not applicable: OPS-001; INV-005 to INV-011; GOV-001, GOV-004 to GOV-006, SEC-003. INV-004 applies: the writer stays
+# the only module that opens the store; real stores only in tests/integration/test_writer_files.py.
+# Owner-kept acts: none. No hook placed, no matcher, no setting, nothing measured, nothing under .github/ or .claude/.
+# Records obligations of the acceptance (outside the write-set): DEF-0089's log line, naming the points taken and the
+# points left (AC10); DEF-0089 stays open for P10, P11, DA-3 (iii) and P1's contract header.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-073.yaml, has one parent equal to base_commit, and goes to
+# main under its own decision; the task's commits carry "AIEOS-Task: TASK-073" and go to task/TASK-073; main receives
+# them only at acceptance.
+task: TASK-073
+contract_version: v1
+task_type: implementation
+objective: >-
+  Correct, without any change of behaviour, the docstrings of src/aieos_bootstrap/claude_code_read_hook.py and
+  src/aieos_bootstrap/claude_code_store.py that DEF-0089 found saying more than the code does or worded loosely (P1 to
+  P6, DA-1 (ii)), and add or tighten the tests DEF-0089 found missing or narrow (P7, P8, P9, P12, DA-1 (i), E1): in
+  tests/unit/test_claude_code_read_hook.py, tests/unit/test_claude_code_store.py,
+  tests/property/test_claude_code_read_hook_properties.py and tests/integration/test_writer_files.py, each new test
+  naming "TASK-073 ACn".
+traces_to:
+  - docs/specs/spec-05-adapter-contract.md#7
+  - docs/specs/spec-05-adapter-contract.md#11
+  - docs/specs/spec-02-aieos-file-format.md#3
+  - docs/specs/risk-rules-gov-aieos.md#2
+input_state:
+  base_commit: dfa77434660d120750086d4bf5f31f5ffce7b49c
+  depends_on: [TASK-066, TASK-067, TASK-068, TASK-072]
+  intent_versions:
+    docs/specs/spec-05-adapter-contract.md: ae7b99419d303db40b7200e39a22d93b9301b29900f3b1f5a5720b72d8eb9c2b
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/specs/spec-02-aieos-file-format.md: 9442edbb9e6e70fcc7ef0b296815315d742c5c9c365e32813e83dbc3a982533b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/claude_code_read_hook.py
+    - src/aieos_bootstrap/claude_code_store.py
+    - tests/unit/test_claude_code_read_hook.py
+    - tests/unit/test_claude_code_store.py
+    - tests/property/test_claude_code_read_hook_properties.py
+    - tests/integration/test_writer_files.py
+read_set:
+  paths:
+    - AIEOS-concept.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - docs/Deferred/DEF-0089-the-findings-and-limits-carried-from-the-read-hook-program.md
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.claude_code_read_hook.run, aieos_bootstrap.claude_code_read_hook.RESULT_KEYS,
+    aieos_bootstrap.claude_code_store.judge, aieos_bootstrap.writer.add_reads, aieos_bootstrap.writer.StoreResult,
+    aieos_bootstrap.writer.stored_reads, aieos_bootstrap.writer.open_store, aieos_bootstrap.writer.start_session,
+    aieos_bootstrap.writer.grant_lease]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+  # As TASK-072's list: .github/**, .aieos/**, .claude/**, CLAUDE.md, AIEOS-concept.md, docs/** (docs/tasks/TASK-068.yaml
+  # among them), bench/**, tests/conformance/**, .gitattributes, .gitignore, and every existing path of src/ and tests/
+  # not in the write-set, among them writer.py, claude_code_pretool_hook.py, task_contract.py, session_violation.py,
+  # tests/unit/test_claude_code_pretool_hook.py and tests/property/test_claude_code_store_properties.py.
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      No behaviour change. For each of claude_code_read_hook.py and claude_code_store.py, an acceptance-time script
+      parses the base's and the head's source, removes the docstring node of the module and of every function and class,
+      and finds ast.dump of the two trees equal (every statement, expression, constant, import and definition
+      unchanged); it then lists every changed docstring and refuses any not named in AC2 to AC4 (the module docstring and
+      run's and main's of claude_code_read_hook.py; the module docstring of claude_code_store.py), and within them any
+      changed sentence not named there. Every existing test of both modules passes with only the change named in AC4.
+  - AC2: >-
+      The read hook's sentences that said more than the code does (DEF-0089 P1, P2, P3), in claude_code_read_hook.py:
+      (a) P1, at :49-50, "a hook killed by that timeout stores nothing." becomes "a hook killed by that timeout may store
+      nothing, and a kill after add_reads' COMMIT may have stored the read."; (b) P2, at :38, "Exit code 0 on every
+      outcome, and the program prints nothing:" becomes "Exit code 0 on every outcome, and the program prints nothing,
+      for every exception inheriting Exception (a BaseException that is not an Exception, or a failure before main runs,
+      can give a non-zero exit code and text):", and run's "Exit code 0 always; never raises." and main's "Prints
+      nothing; never raises." end "never raises an exception inheriting Exception." in place of "never raises."; and at :39-40 "An error while reading standard input, the environment or the
+      clock gives exit code 0 too, with nothing written." becomes "An error inheriting Exception while reading
+      standard input, the environment or the clock gives exit code 0 too, with nothing written."; (c) P3,
+      at :38, "a PostToolUse hook runs after the read," becomes "a PostToolUse hook runs after the read (as documented,
+      unmeasured: C6),". A new test pins, whitespace collapsed, each new phrase ("a kill after add_reads' COMMIT may have
+      stored the read", "a BaseException that is not an Exception", "(as documented, unmeasured" in the module docstring;
+      "never raises an exception inheriting Exception" in run's and in main's docstring; "An error inheriting
+      Exception while reading" in the module docstring) and that each replaced phrase
+      ("timeout stores nothing", "never raises.", "An error while reading") is absent.
+  - AC3: >-
+      The read hook's wording (DEF-0089 P5, P6, DA-1 (ii)), in claude_code_read_hook.py's module docstring: (a) P5, at
+      :47-48, "a limit in the fail-open direction, kept because add_reads checks the lease after its own wait, so a second
+      clock reading would leave about 5 seconds anyway." becomes "a limit in the fail-open direction, kept (decision
+      D-1484 C2): a second clock reading before add_reads would not close it, since add_reads checks the lease against
+      the now it is given only after its own lock wait of up to about 5 seconds."; (b) P6, at :30, "(specification 5 line
+      108; specification 7)" becomes "(specification 5 section 7 and section 11 point 7; specification 7)"; (c) DA-1 (ii), one
+      sentence added as a new paragraph between step 6 (:24-25) and "The working folder ..." (:27): "RESULT_KEYS, the four keys of run's result in that order, is a
+      public constant of this module, as SESSION_VAR and ROOT_VAR (the two names step 2 reads) are.". A new test pins the three new phrases ("kept
+      (decision D-1484 C2)", "specification 5 section 7 and section 11 point 7", "RESULT_KEYS, the four keys of run's result"), that
+      "kept because" and "line 108" are absent, that hook.RESULT_KEYS equals ('exit_code', 'outcome',
+      'reason', 'findings'), and, in a new test that runs Flow().run(...) over a listed set (the 14 bad-argument cases of
+      :130-136; the judge answers "enforce_nothing", "refuse" and "tied" with read_paths "uncovered" and "read";
+      add_reads "done", "refused" and an exception), that each result's key set equals set(hook.RESULT_KEYS).
+  - AC4: >-
+      The store's wording (DEF-0089 P4), in claude_code_store.py's module docstring at :57-59: "where the hook entry
+      takes them from is a later contract's. A now earlier than the real time would make an expired lease read as
+      unexpired (the fail-open direction), so that contract must take now from the process clock." becomes "this module's two
+      hook-side callers, claude_code_read_hook (task TASK-068) and claude_code_pretool_hook (task TASK-072), take them
+      from the environment, the process's own working folder and the process clock. A now earlier than the real time
+      would make an expired lease read as unexpired (the fail-open direction), so every caller must take now from the
+      process clock." The pin at tests/unit/test_claude_code_store.py :311, 'a later contract\'s', is replaced in place
+      by 'this module\'s two hook-side callers, claude_code_read_hook (task TASK-068) and claude_code_pretool_hook (task
+      TASK-072)', the function's docstring gaining "and TASK-073 AC4"; every other phrase of that function is kept, and
+      "a later contract's" is absent from the module docstring (asserted in a new test).
+  - AC5: >-
+      Subclasses fail closed (DEF-0089 P7), shown as the code is: (a) stdin_bytes of a subclass of bytes (a made-up
+      class) gives exit 0, "skip", reason "argument", findings ["argument: stdin_bytes"], and no stand-in is called;
+      (b) a session id of a subclass of str, with a recording stand-in judge answering "tied", reaches add_reads (the
+      read hook itself does not refuse it, stated in the test's docstring); with the real writer.add_reads and a made-up
+      root, the result is exit 0, "lost", reason "argument", findings[0] starting "argument:" (add_reads' exact-type
+      check, writer.py :690, refuses before any root is used); (c) on a real store (a new class in
+      tests/integration/test_writer_files.py, the store made by tied_store), the same str-subclass session id with the
+      real judge and add_reads gives "lost", reason "argument", and the store's dump is unchanged; the findings are ["argument: ValueError"], as a scratchpad probe on main's code
+      showed (D-1763 C2; a plain str on a fresh store gave "recorded" and one added line of the dump); the same test also
+      makes the call with a plain str 's-1' on a second fresh store and asserts "recorded" and exactly one added line
+      starting 'INSERT INTO "reads"', so the unchanged dump is not vacuous. If the task's
+      run shows another outcome for (c), the worker stops and escalates (spec_conflict) rather than changing the
+      expectation.
+  - AC6: >-
+      The integration class's departures (D-1510 C2 E1; DEF-0089 P8), by in-place changes of two functions of
+      ReadHookFiles in tests/integration/test_writer_files.py: (a) test_a_read_is_recorded_once takes dump(root) before
+      the first call and after each call: after the first, the lines of the dump, counted with collections.Counter, gain
+      exactly one line, which starts 'INSERT INTO "reads"' and holds 'made-up/a.txt', and lose none; after the second the
+      dump equals the one after the first; its existing assertions are kept; (b)
+      test_nothing_is_stored_without_a_live_tie asserts, besides the reason prefix, the exact findings of the two
+      "leases" cases: ['leases: not exactly one unexpired lease of the session (0)'] for the expired lease and ['leases:
+      not exactly one unexpired lease of the session (2)'] for the two leases (writer.py :560), every other case and
+      assertion kept. Each function's docstring adds "and TASK-073 AC6".
+  - AC7: >-
+      The property direction and the TypeError path (DEF-0089 P9, DA-1 (i)): (a) a new property function in
+      tests/property/test_claude_code_read_hook_properties.py, fixed seed 73, at most 50 cases, at least half of them
+      forced to the live tie (JUDGED[0]), the covered read (READS[0]) and a session id drawn from ('s-1', ' '), asserts
+      that add_reads is called if and only if judge's answer is JUDGED[0], read_paths' answer is READS[0] and the
+      environment's session id is a non-empty str, in the order judge, read_paths, add_reads, and that the outcome is
+      "recorded" for STORED[0] and "lost" for every other STORED value; the existing functions are byte-identical; (b) a
+      new unit test: add_reads' stand-in answering a writer.StoreResult('refused', 'path', ['path: x']) whose findings
+      attribute is then set to None gives exit 0, "lost", reason "entry", findings ["entry: TypeError"] (step 6, not
+      step 5's ["entry: add_reads"]), pinned as it is; the code is not changed.
+  - AC8: >-
+      The test files change only as named, and the pins hold. An acceptance-time script by source segment (as TASK-068
+      AC8's) refuses any change in the four test modules other than: added functions, classes and module-level
+      assignments of new names, and the imports they need; the one phrase of test_claude_code_store.py :311 and its
+      function's docstring (AC4); the two functions of AC6; every other existing definition byte-identical, none
+      removed. Every new test function names "TASK-073 ACn" in its own docstring. Every pin named in the header passes
+      unchanged. Before each commit the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns,
+      each count 0; at the task's commits the CI steps deterministic_rule, OPS-003, SEC-001, SEC-002 and bandit report no
+      finding. The unit and property additions use stand-ins only, write no file and read sources only by pathlib's
+      read_bytes relative to __file__; real stores, sqlite3 and tempfile only in tests/integration/test_writer_files.py;
+      no real path of this machine's user folders, no real session id, no credential-shaped string, no literal "/tmp".
+  - AC9: >-
+      Broken copies (DEF-0089 P8, P12), made and run in the scratchpad, outside tests/, each run with all four changed
+      test modules and the integration class ReadHookFiles copied beside the source (P8), each failing at least one test:
+      for every phrase pinned by a docstring word check of the two modules (test_claude_code_read_hook.py R6WhatIsStated's
+      22 and R7StoreWords' 4, test_claude_code_store.py R6WhatIsStated's 26 with AC4's phrase, and the new phrases of AC2
+      to AC4) one copy that removes that phrase alone (P12); one copy per replaced sentence of AC2 to AC4 restoring the
+      base's text; a copy of claude_code_read_hook.py accepting a bytes subclass (type(...) is not bytes replaced by not
+      isinstance(..., bytes)); a copy whose _stored catches the TypeError and gives ["entry: add_reads"]; a copy of the
+      read hook calling add_reads with a session id copied to str (str(session_id)), against AC5 (b); a copy of the read hook that skips add_reads on a whitespace-only session id, against AC7 (a)
+      (the new property function); a scratchpad-only copy of writer.py (writer.py stays outside the write-set) whose
+      finding at :560 counts len(leases) in place of len(live), against AC6 (b)
+      (test_nothing_is_stored_without_a_live_tie); a copy of the read hook that calls writer.add_reads a second time
+      with the extra path 'made-up/b.txt', against AC6 (a) (test_a_read_is_recorded_once); a copy of the read hook
+      that calls add_reads without the live-tie guard, against AC7 (a) (the new property function); and a copy with
+      RESULT_KEYS reordered, against AC3 (its new test). The copy-making script refuses any copy whose edit text is not found exactly once; the
+      list of copies and each one's failing tests go to the decision agent with the acceptance request.
+  - AC10: >-
+      What stays and is stated (shown by the records, not by a test): docs/tasks/TASK-068.yaml is not changed (P1's half
+      in its header, :146, and P11 stay for its next revision, DEF-0089 :18); P10, DA-3 (iii), R2's point and the limits
+      stay in DEF-0089; DEF-0089's log line at the records step names each point taken by this task (P1 to P9, P12,
+      DA-1 (i), DA-1 (ii), E1) and each point left with where it goes, as the header's lists say.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC2, AC3, AC4, AC5, AC6, AC7]}
+  - {gate: G3, check: constitution, args: [AC1, AC8, AC9, AC10, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
