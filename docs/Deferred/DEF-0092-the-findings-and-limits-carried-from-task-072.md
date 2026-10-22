@@ -28,3 +28,4 @@ TASK-072 (H2b: the PreToolUse hook program of the Claude Code adapter) was accep
 
 ## Log
 - 2026-10-22: opened (session d12e7fb6; TASK-072's acceptance).
+- 2026-10-23: G-2 closed by the CI channel's revision 9 (098fe9b4; decisions D-1795 to D-1798): docs/specs/risk-rules-gov-aieos.md and docs/pre-genesis/constitution.md added to GOV-003's pinned list, in both of its copies; the specifications the code only cites (governor-spec.md, assurance-model.md, spec-02 to spec-05) stay off it as a stated limit; G-1, G-3 to G-7 and G-9 stay open (session 4ad18bf8).
