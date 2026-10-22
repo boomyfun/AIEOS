@@ -294,10 +294,12 @@ def _whole_second_now():
 
 
 def _say(reason):
+    """Writes the standard-error line; False when the write raised (the exit code is kept either way)."""
     try:
         sys.stderr.write(STDERR_LINE % reason)
     except Exception:
-        pass
+        return False
+    return True
 
 
 def main():

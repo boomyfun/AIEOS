@@ -15,7 +15,7 @@ import unittest
 from unittest import mock
 
 from aieos_bootstrap import claude_code_pretool_hook as hook
-from aieos_bootstrap import claude_code_channel, claude_code_hook, claude_code_store
+from aieos_bootstrap import adapter, claude_code_channel, claude_code_hook, claude_code_store
 
 UTC = datetime.timezone.utc
 T0 = datetime.datetime(2026, 10, 11, 12, 0, 0, tzinfo=UTC)
@@ -38,13 +38,16 @@ CONTRACTS = ({'result': 'read', 'reason': None, 'findings': [], 'task': 'TASK-00
              {'result': 'unreadable', 'reason': 'git', 'findings': [PLANTED], 'task': None, 'base_commit': None,
               'write_set': None, 'forbidden': None},
              None, KeyError(PLANTED))
-CORES = ({'result': 'done', 'reason': None, 'findings': [PLANTED], 'core': None, 'decision': 'STOP: violation',
-          'fencing_token': None, 'released': None},
-         {'result': 'refused', 'reason': 'lease', 'findings': [PLANTED], 'core': None, 'decision': None,
-          'fencing_token': None, 'released': None},
-         {'result': 'refused', 'reason': PLANTED, 'findings': [], 'core': None, 'decision': None,
-          'fencing_token': None, 'released': None},
-         None, OSError(PLANTED))
+
+
+def core_result(result, reason, findings, decision):
+    out = dict.fromkeys(adapter.RESULT_KEYS)
+    out.update(result=result, reason=reason, findings=list(findings), decision=decision)
+    return out
+
+
+CORES = (core_result('done', None, [PLANTED], 'STOP: violation'), core_result('refused', 'lease', [PLANTED], None),
+         core_result('refused', PLANTED, [], None), None, OSError(PLANTED))
 TOOLS = ('Read', 'Grep', 'Glob', 'Write', 'Edit', 'Bash', 'PowerShell', PLANTED)
 
 
