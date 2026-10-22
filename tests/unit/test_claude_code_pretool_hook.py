@@ -167,6 +167,10 @@ class AC1TheTie(unittest.TestCase):
                  'link', 'unreadable', 'tables', 'lease_row_without_session', 'no_lease_row', 'session', 'ended',
                  'leases')
         self.assertEqual(hook.STORE_REASONS, words)
+        sources = ((SRC / 'claude_code_store.py').read_bytes().decode('utf-8')
+                   + (SRC / 'writer.py').read_bytes().decode('utf-8'))
+        for word in words:
+            self.assertTrue(re.search(r"_(?:refuse|refused|named)\('" + word + "'", sources), word)
         for word in words + ('made-up-word', 7, None):
             with self.subTest(word=word):
                 c = Calls(judge=refused(word) if isinstance(word, str) else dict(refused('x'), reason=word))
@@ -466,6 +470,20 @@ class AC5TheRecord(unittest.TestCase):
             self.assertIsNone(re.search(r'\s', text))
         self.assertEqual(hook._ids(SID, '{}', 'pretool')[0], SID + '/pretool/sha256-' + hashlib.sha256(b'').hexdigest())
 
+    def test_a_bytes_subclass_hashes_its_bytes(self):
+        """TASK-072 AC5: the SHA-256 fallback hashes the actual bytes of a bytes subclass, so two such inputs get two
+        ids."""
+        class Sub(bytes):
+            pass
+        ids = []
+        for path in ('b.py', 'c.py'):
+            data = call_bytes('Write', {'file_path': WIN_ROOT + '\\src\\' + path}, tool_use_id=None)
+            c = Calls()
+            c.run(stdin=Sub(data))
+            self.assertEqual(c.core_args[0][0][3], SID + '/pretool/sha256-' + hashlib.sha256(data).hexdigest())
+            ids.append(c.core_args[0][0][3])
+        self.assertNotEqual(ids[0], ids[1])
+
     def test_a_repeat_after_a_stop_is_refused_at_the_tie(self):
         """TASK-072 AC5: a repeat of an identical call after a recorded STOP is refused at step 1 with nothing
         recorded (a stand-in tie that answers "ended" on the second call)."""
@@ -673,7 +691,15 @@ class AC5TheRunSeam(unittest.TestCase):
                   TEXT + '\nsetattr(session_violation, "x", 1)\n',
                   TEXT + '\n_NAME = "session_violation"\n',
                   TEXT.replace(call_sv, 'session_violation.adapter.violation(root, session_id, redacted, event_id, '
-                                        'recorder, at)')]
+                                        'recorder, at)'),
+                  TEXT + '\nimport functools\nREADER = functools.partial(task_contract.read_contract, None)\n',
+                  TEXT + '\nimport importlib\nimportlib.import_module("aieos_bootstrap.task_contract")\n',
+                  TEXT + '\n__import__("aieos_bootstrap.session_violation")\n',
+                  TEXT + '\n\ndef _wrap(*a):\n    return task_contract.read_contract(*a)\n',
+                  TEXT + '\n\ndef _named(task_contract):\n    return None\n',
+                  TEXT + '\n\ndef session_violation():\n    return None\n',
+                  TEXT + '\ntask_contract = None\n',
+                  TEXT + '\nfrom aieos_bootstrap.task_contract import read_contract\n']
         for text in broken:
             with self.subTest(i=broken.index(text)):
                 self.assertNotEqual(text, TEXT)
@@ -740,7 +766,8 @@ class RaisingStderr:
 
 class AC7Main(unittest.TestCase):
 
-    def main_with(self, run=None, stdin=b'{}', cwd='made-up-folder', stderr=None, environ=None):
+    def main_with(self, run=None, stdin=b'{}', cwd='made-up-folder', stderr=None, environ=None, stdin_obj=None,
+                  clock=None):
         err, out, got = stderr or io.StringIO(), io.StringIO(), []
 
         def fake_run(*args):
@@ -753,9 +780,10 @@ class AC7Main(unittest.TestCase):
             if isinstance(cwd, BaseException):
                 raise cwd
             return cwd
-        patches = [mock.patch.object(hook.sys, 'stdin', FakeStdin(stdin)), mock.patch.object(hook.sys, 'stderr', err),
+        patches = [mock.patch.object(hook.sys, 'stdin', stdin_obj or FakeStdin(stdin)),
+                   mock.patch.object(hook.sys, 'stderr', err),
                    mock.patch.object(hook.sys, 'stdout', out), mock.patch.object(hook.os, 'getcwd', fake_cwd),
-                   mock.patch.object(hook, '_raw_clock', lambda: T0 + datetime.timedelta(microseconds=5))]
+                   mock.patch.object(hook, '_raw_clock', clock or (lambda: T0 + datetime.timedelta(microseconds=5)))]
         if run is not None:
             patches.append(mock.patch.object(hook, 'run', fake_run))
         if environ is not None:
@@ -828,6 +856,23 @@ class AC7Main(unittest.TestCase):
                 code, err, _, _ = self.main_with(run=answer)
                 self.assertEqual((code, err), (2, 'AIEOS: this tool call was refused by the AIEOS hook (entry)\n'))
 
+    def test_a_raising_input_or_clock_inside_main(self):
+        """TASK-072 AC7: a standard input whose read raises, and a clock that raises inside main, each give 2, reason
+        "entry", and the line; a clock reading of a whole second is passed unchanged as now."""
+        class RaisingBuffer:
+            def read(self):
+                raise OSError('made-up')
+
+        def raising_clock():
+            raise OSError('made-up')
+        allow = {'exit_code': 0, 'outcome': 'allow', 'reason': 'tied_allow', 'findings': []}
+        line = 'AIEOS: this tool call was refused by the AIEOS hook (entry)\n'
+        stdin = types.SimpleNamespace(buffer=RaisingBuffer())
+        self.assertEqual(self.main_with(run=allow, stdin_obj=stdin)[:2], (2, line))
+        self.assertEqual(self.main_with(run=allow, clock=raising_clock)[:2], (2, line))
+        code, err, _, got = self.main_with(run=allow, clock=lambda: T0)
+        self.assertEqual((code, err, got[0][3]), (0, '', T0))
+
 
 class AC8Findings(unittest.TestCase):
 
@@ -879,13 +924,24 @@ class AC9WhatIsStated(unittest.TestCase):
 
     def test_every_test_names_its_criteria(self):
         """TASK-072 AC9: every test function of this module names "TASK-072 ACn" in its own docstring and no other
-        task's AC in qualified form."""
+        task's AC in qualified form; so does every test function of the property module and of PretoolHookFiles."""
         tree = ast.parse(pathlib.Path(__file__).read_bytes().decode('utf-8'))
         for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name.startswith('test')]:
             doc = ' '.join((ast.get_docstring(fn) or '').split())
             with self.subTest(test=fn.name):
                 self.assertTrue(re.findall(r'TASK-072 AC[0-9]+', doc))
                 self.assertEqual(re.findall(r'TASK-(?!072 )[0-9]+ AC[0-9]+', doc), [])
+        here = pathlib.Path(__file__).resolve().parents[1]
+        prop_path = here / 'property' / 'test_claude_code_pretool_hook_properties.py'
+        prop = ast.parse(prop_path.read_bytes().decode('utf-8'))
+        files = ast.parse((here / 'integration' / 'test_writer_files.py').read_bytes().decode('utf-8'))
+        cls = [n for n in files.body if isinstance(n, ast.ClassDef) and n.name == 'PretoolHookFiles']
+        self.assertEqual(len(cls), 1)
+        for tree in (prop, cls[0]):
+            for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name.startswith('test')]:
+                doc = ' '.join((ast.get_docstring(fn) or '').split())
+                with self.subTest(test=fn.name):
+                    self.assertTrue(re.findall(r'TASK-072 AC[0-9]+', doc))
 
 
 if __name__ == '__main__':
