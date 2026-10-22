@@ -19,7 +19,8 @@ store's, the judge's or the core's findings, from standard input, from the envir
    environ.get. "enforce_nothing" gives exit code 0, "allow", reason "enforce_nothing". "refuse" gives exit code 2,
    "refuse", reason "store", the store's reason word as the one finding when it is one of the store lookup's fixed
    reasons, else "store: other"; nothing is recorded. "tied" goes on with the lease's task and the root; any other
-   answer gives reason "entry". The session id must then be a str of [A-Za-z0-9._-]{1,128}; one that is not gives
+   answer (a lease task not of the form TASK-<digits> among them) gives reason "entry". The session id must then be
+   a str of [A-Za-z0-9._-]{1,128}; one that is not gives
    reason "store", the finding "store: session id form", and nothing is recorded.
 2. The base: AIEOS_BASE, read through environ.get, must be exactly 40 lowercase hexadecimal characters: the tip of the
    base branch (main for the self-build) at the grant, which holds the approved contract from its commit C on; never
@@ -30,7 +31,8 @@ store's, the judge's or the core's findings, from standard input, from the envir
    :113), on every concern alike, a Read call included (a stated choice, fail closed). Its record is built here in the
    judge's record form, evidence type write_outside_write_set and the fixed refers_to "the task contract is not
    readable at the base", checked by claude_code_channel.record_findings and left unchanged by redact; its ids carry
-   "/pretool-contract/" in place of "/pretool/". Reason "contract" (or "base").
+   "/pretool-contract/" in place of "/pretool/". Reason "contract" (or "base"). A "read" whose write_set is not a
+   non-empty list of str counts as unreadable too.
 4. The judgement: claude_code_hook.entry with the contract's write-set and an empty allowlist. "allow" (a Read, Grep or
    Glob call, or a write inside the write-set) gives exit code 0, "allow", reason "tied_allow"; "uncovered" gives reason
    "uncovered" and nothing recorded (none of section 8's concerns); "refuse" with a record goes to step 5; "refuse"
@@ -42,11 +44,12 @@ store's, the judge's or the core's findings, from standard input, from the envir
    nothing passed. The redacted record goes to the core's violation path tied by the session id, with no lookup,
    append or release passed (the run seam is closed). The time passed is clock() called once, after every other step
    and just before that call, so a lease that expired while the contract was read reads as expired. "done" gives reason
-   "recorded"; a "lease" result (the lease lost between the tie and the record, or a repeat after an earlier STOP
-   released it) gives "lease_lost", nothing appended; anything else gives "core". The ids: event_id is
+   "recorded"; a "lease" result (the lease lost between the tie and the record; a repeat after a STOP is refused
+   earlier, at step 1) gives "lease_lost", nothing appended; anything else gives "core". The ids: event_id is
    "<session id>/pretool/<tool_use_id>" when the input's tool_use_id, read by the same strict parse the entry uses, is a
    str of [A-Za-z0-9_-]{1,200}, else "<session id>/pretool/sha256-<the SHA-256 of the input bytes>"; record_id is the
-   same text with "/record" appended.
+   same text with "/record" appended. The input bytes are hashed for any bytes object, a subclass included; an
+   input that is not bytes is hashed as no bytes, and the entry then refuses it without a record.
 6. No exception escapes run for an Exception: one gives exit code 2, "refuse", reason "entry", the type name only.
 
 ``main()`` reads standard input whole as bytes, os.environ, the process's working folder (None when os.getcwd() raises
@@ -73,7 +76,8 @@ Limits, stated:
   write_set.paths); the gates find a forbidden path afterwards.
 - Calls refused without a record: after a lease expires, every hook call is refused without a record until the
   launcher ends the session; during a long commit the store lookup is refused without a record too (its lock cost);
-  a root that is not a Windows absolute path makes every judged call a refusal with no record and no STOP.
+  on the judged path (steps 4 and 5) a root that is not a Windows absolute path makes every call a refusal with no
+  record and no STOP (the bad-base and contract paths of steps 2 and 3 still pass their record).
 - For these, no STOP is recorded by this hook: "record_form", "lease_lost" and "core"; for the first two the record
   is not accepted; "core" may follow a record already appended, a STOP included (the core path's partial outcome or its
   ending after the record); a departure from specification 5 :79 and :104 of the same kind as "no_record".
@@ -156,10 +160,13 @@ def _no_constant(name):
 
 def _tool_use_id(stdin_bytes):
     """The input's tool_use_id by the entry's strict parse, or None."""
-    if type(stdin_bytes) is not bytes or stdin_bytes.startswith(b'\xef\xbb\xbf'):
+    if not isinstance(stdin_bytes, bytes):
+        return None
+    data = bytes(stdin_bytes)
+    if data.startswith(b'\xef\xbb\xbf'):
         return None
     try:
-        value = json.loads(stdin_bytes.decode('utf-8', 'strict'), object_pairs_hook=_no_duplicates,
+        value = json.loads(data.decode('utf-8', 'strict'), object_pairs_hook=_no_duplicates,
                            parse_constant=_no_constant)
     except (ValueError, RecursionError):
         return None
@@ -175,7 +182,7 @@ def _ids(session_id, stdin_bytes, segment):
     """(event_id, record_id) of step 5; segment is "pretool" or "pretool-contract"."""
     found = _tool_use_id(stdin_bytes)
     if found is None:
-        data = stdin_bytes if type(stdin_bytes) is bytes else b''
+        data = bytes(stdin_bytes) if isinstance(stdin_bytes, bytes) else b''
         found = 'sha256-' + hashlib.sha256(data).hexdigest()
     event_id = session_id + '/' + segment + '/' + found
     return event_id, event_id + '/record'
