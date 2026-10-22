@@ -1,7 +1,7 @@
 """The core violation path tied by the live lease (task TASK-070; specification 5 revision 4, section 8 and section 11
 point 7, bullets 3 to 6; specification 1 revision 2, section 5.3; specification 3 revision 4, section 8). TASK-070
 supersedes TASK-069, which put this call in adapter.py: two accepted tests pin adapter.py's code, so adapter.py is not
-changed and the call lives here.
+changed and the call lives here. TASK-071 hardens it (the points DEF-0084 carries from TASK-070).
 
 One call, a function with no state kept between calls:
 ``session_violation(root, session_id, observation, event_id, recorder, now, lookup=None, append=None, release=None)``
@@ -11,21 +11,36 @@ token). The token is read core-side from that lease and never returned. The step
 the result, a mapping with exactly adapter.RESULT_KEYS:
 
 (1) root and session_id are non-empty strings and now is a timezone-aware datetime in UTC with whole seconds, else
-reason "argument".
+reason "argument"; then event_id must be of exact type str, else "argument: event_id is not a string", before the
+lookup is called and before anything is written.
 (2) The lookup, lookup(root, session_id, now), by default writer.session_lease reached at call time: a refusal gives
 reason "lease" with the lookup's reasons kept as findings[0]'s prefix ("argument", "root", "no_store", "link",
 "unreadable", "tables", "session", "ended", "leases" and the others), and every answer other than a tied lease of the
 checked shape gives "lease"; "lease_row_without_session" and a "no_lease_row" done cannot arise with a session id
-required.
+required. The whole reading of the answer runs inside one try: an exception there, refused findings that are not
+exactly a list or a tuple, or a refused reason that is not exactly a str collapse to "lease: the lookup gave no tied
+lease"; the refused findings keep only their items of exact type str (dropped items never collapse), and with none
+left the fixed "lease: the lookup refused (<reason>)" is given. The answer is read directly after an isinstance test,
+not through adapter._store_done (both fail closed).
 (3) The record, through adapter.violation (reached at call time on the adapter module) with the lease's task_id and
 fencing_token, one now for the lookup and the record; append and release are passed through to it, and it defaults
 them to the writer's; the observation's subject must be the tied lease's task, else "argument" and nothing is appended.
+A production caller passes no lookup, append or release. An exception raised by adapter.violation itself ends as the
+plain "entry: <type name>" (the real one catches its own).
 (3b) The token removed: the result can carry a fencing token by two routes, the released lease (released and
 core['released']) and a release refusal that names the held and the given epoch and counter when another holder has
 the task; so released and core['released'] are copied without fencing_token, and every finding of the writer's
 token-refusal form, or holding both "epoch" and "counter", is replaced by "release: the lease is held with another
-token (not shown)"; the result is a new mapping, the given one never mutated; a raise there gives "entry: after the
-record", although the violation, the decision and the release may already be in the log and the store.
+token (not shown)"; the token filter's breadth: any str holding both "epoch" and "counter" is hidden, an unrelated
+finding of that shape too. The answer's and core's fields are checked by exact types and fixed values: every finding of
+the answer and of core of exact type str, the answer's result and core's result exactly "done" or "refused", the
+answer's decision None or exactly "STOP: violation", the reasons a str or None, core's appended and duplicate items of
+exact type str, and core, when given, a dict whose keys are exactly violation's result keys (a core with another key
+set is refused rather than cut down: a deliberate fail-closed departure from copying only those keys); anything else
+gives "entry: adapter.violation gave no result mapping", an ending that can follow a record already written. A "done"
+may carry released None (a release refused for "token"). The result is a new mapping, the given one never mutated; a
+raise there gives "entry: after the record", although the violation, the decision and the release may already be in
+the log and the store.
 (4) No exception escapes (reason "entry").
 
 A "lease" refusal is no section 8 violation and no STOP: with no live tied lease there is no session to stop and
@@ -37,9 +52,12 @@ lease lost or granted again between them gives the writer's fence refusal, fail 
 with the same event_id while the lease is still held completes it, and a different event_id would repeat the
 observation's record_id); a repeat after "done" gives "lease"; the session tie and now are the caller's (an early now
 makes an expired lease read as live, the fail-open direction); the observed read-set record is left for section 11
-point 10. It never writes an observed read-set record, a reads row or a session row, and never opens the store or the
-event log itself; it opens no file, starts no process, reads no clock, no environment and no standard input. Nothing
-hook-side calls it yet: its caller is H2's PreToolUse program, a later contract.
+point 10. The lookup's lock cost: a lookup refused "unreadable" during a long commit gives "lease", no record, no STOP.
+The limit of (3b)'s end: the answer's reason and decision and core's reason are type-checked but not passed through the
+token filter, and the lease's task_id, the token's epoch, recorder, root and session_id stay isinstance-checked. It
+never writes an observed read-set record, a reads row or a session row, and never opens the store or the event log
+itself; it opens no file, starts no process, reads no clock, no environment and no standard input. Nothing hook-side
+calls it yet: its caller is H2's PreToolUse program, a later contract.
 """
 
 from aieos_bootstrap import adapter
@@ -49,6 +67,10 @@ _LEASE_KEYS = frozenset({'task_id', 'fencing_token', 'expires_at'})
 _HIDDEN = 'release: the lease is held with another token (not shown)'
 _NO_TIED_LEASE = 'lease: the lookup gave no tied lease'
 _NO_RESULT_MAPPING = 'entry: adapter.violation gave no result mapping'
+_EVENT_ID = 'argument: event_id is not a string'
+_CORE_KEYS = frozenset({'result', 'reason', 'findings', 'appended', 'duplicate', 'released'})
+_RESULTS = ('done', 'refused')
+_DECISION = 'STOP: violation'
 
 
 def _session_findings(root, session_id, now):
@@ -88,9 +110,32 @@ def _without_token(lease):
     return None if lease is None else {k: v for k, v in lease.items() if k != 'fencing_token'}
 
 
+def _all_str(items):
+    return all(type(f) is str for f in items)
+
+
+def _str_or_none(value):
+    return value is None or type(value) is str
+
+
+def _fixed(value, allowed):
+    return type(value) is str and value in allowed
+
+
+def _lookup_refusal(answer):
+    """The "lease" result of a lookup answer with no tied lease (TASK-071 (c)); raises are the caller's to collapse."""
+    if isinstance(answer, writer.StoreResult) and answer.result == 'refused':
+        if type(answer.reason) is not str or type(answer.findings) not in (list, tuple):
+            return adapter._result('refused', 'lease', [_NO_TIED_LEASE])
+        found = [f for f in answer.findings if type(f) is str]
+        return adapter._result('refused', 'lease', _filtered(found or ['lease: the lookup refused (%s)' % answer.reason]))
+    return adapter._result('refused', 'lease', [_NO_TIED_LEASE])
+
+
 def _token_free(answer):
-    """adapter.violation's answer checked and copied with no fencing token in it (TASK-070 AC1, AC3): a new mapping,
-    never the given one and never mutated; _NO_RESULT_MAPPING when the answer is not of the checked shape."""
+    """adapter.violation's answer checked and copied with no fencing token in it (TASK-070 AC1, AC3; TASK-071 (a),
+    (b)): a new mapping, never the given one and never mutated; _NO_RESULT_MAPPING when the answer is not of the checked
+    shape."""
     if not isinstance(answer, dict) or set(answer) != set(adapter.RESULT_KEYS):
         return adapter._result('refused', 'entry', [_NO_RESULT_MAPPING])
     core = answer['core']
@@ -98,11 +143,19 @@ def _token_free(answer):
         return adapter._result('refused', 'entry', [_NO_RESULT_MAPPING])
     if not (answer['released'] is None or isinstance(answer['released'], dict)):
         return adapter._result('refused', 'entry', [_NO_RESULT_MAPPING])
+    if not (_all_str(answer['findings']) and _fixed(answer['result'], _RESULTS) and _str_or_none(answer['reason'])
+            and (answer['decision'] is None or _fixed(answer['decision'], (_DECISION,)))):
+        return adapter._result('refused', 'entry', [_NO_RESULT_MAPPING])
     copied = None
     if core is not None:
+        if set(core) != _CORE_KEYS:
+            return adapter._result('refused', 'entry', [_NO_RESULT_MAPPING])
         if not all(isinstance(core.get(k), list) for k in ('appended', 'duplicate', 'findings')):
             return adapter._result('refused', 'entry', [_NO_RESULT_MAPPING])
         if not (core.get('released') is None or isinstance(core.get('released'), dict)):
+            return adapter._result('refused', 'entry', [_NO_RESULT_MAPPING])
+        if not (_all_str(core['findings']) and _all_str(core['appended']) and _all_str(core['duplicate'])
+                and _fixed(core['result'], _RESULTS) and _str_or_none(core['reason'])):
             return adapter._result('refused', 'entry', [_NO_RESULT_MAPPING])
         copied = dict(core)
         copied['appended'] = list(core['appended'])
@@ -116,6 +169,8 @@ def _token_free(answer):
 def _session_violation(root, session_id, observation, event_id, recorder, now, lookup, append, release):
     try:
         found = _session_findings(root, session_id, now)
+        if not found and type(event_id) is not str:  # TASK-071 (0)
+            found = [_EVENT_ID]
     except Exception as exc:  # TASK-070 AC1: an argument whose own methods raise
         found = ['argument: checking the arguments raised %s' % type(exc).__name__]
     if found:
@@ -125,14 +180,14 @@ def _session_violation(root, session_id, observation, event_id, recorder, now, l
         answer = lookup(root, session_id, now)
     except Exception as exc:  # TASK-070 AC2
         return adapter._result('refused', 'lease', ['lease: session_lease raised %s' % type(exc).__name__])
-    lease = _tied(answer)
-    if lease is None:
-        if isinstance(answer, writer.StoreResult) and answer.result == 'refused' and isinstance(answer.reason, str):
-            found = [f for f in answer.findings if isinstance(f, str)]
-            return adapter._result('refused', 'lease',
-                                   _filtered(found or ['lease: the lookup refused (%s)' % answer.reason]))
+    try:  # TASK-071 (c): the whole reading of the answer
+        lease = _tied(answer)
+        if lease is None:
+            return _lookup_refusal(answer)
+        task_id, token = lease['task_id'], lease['fencing_token']
+    except Exception:
         return adapter._result('refused', 'lease', [_NO_TIED_LEASE])
-    answer = adapter.violation(root, lease['task_id'], lease['fencing_token'], observation, event_id, recorder, now,
+    answer = adapter.violation(root, task_id, token, observation, event_id, recorder, now,
                                append=append, release=release)
     try:
         return _token_free(answer)

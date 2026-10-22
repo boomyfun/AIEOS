@@ -400,7 +400,7 @@ class R5WhatItDoes(unittest.TestCase):
 
 class R6Stated(unittest.TestCase):
 
-    def test_the_docstring_states_the_fifth_call(self):
+    def test_the_docstring_states_the_tied_call(self):
         """TASK-070 AC6: session_violation.py's module docstring states the call's tie, the token's removal, the flow, the
         "lease" refusal, the limits and that nothing hook-side calls it yet (whitespace collapsed)."""
         doc = ' '.join(ast.get_docstring(ast.parse((SRC / 'session_violation.py').read_bytes().decode('utf-8'))).split())

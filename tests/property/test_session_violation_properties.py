@@ -132,5 +132,37 @@ class Properties(unittest.TestCase):
             self.assertEqual(first, second)
 
 
+class StepOneProperties(unittest.TestCase):
+
+    def test_nothing_is_called_after_a_step_one_refusal(self):
+        """TASK-071 AC8 (property): over generated step-(1) arguments (root, session_id, now and event_id, each good
+        or bad), a refusal "argument" calls neither the lookup nor adapter.violation; all good arguments call both."""
+        rng = random.Random(71)
+        roots = [ROOT, '', None, 5]
+        sids = ['s-1', '', None, b's']
+        nows = [NOW, NOW.replace(tzinfo=None), NOW.replace(microsecond=5), 'now']
+        events = ['ev', type('S', (str,), {})('ev'), None, 7, b'ev']
+        for _ in range(CASES):
+            args = (rng.choice(roots), rng.choice(sids), rng.choice(nows), rng.choice(events))
+            looked, recorded = [], []
+
+            def lookup(r, s, n):
+                looked.append(1)
+                return writer.StoreResult('done', 'tied', value={'task_id': 'TASK-001', 'expires_at': NOW,
+                                                                  'fencing_token': {'epoch': 'E' * 16, 'counter': 1}})
+
+            def stand_in(*a, **k):
+                recorded.append(1)
+                return adapter._result('refused', 'argument', ['x'])
+            with mock.patch.object(adapter, 'violation', stand_in):
+                out = session_violation.session_violation(args[0], args[1], OBS, args[3], 'r', args[2], lookup=lookup)
+            good = args[0] == ROOT and args[1] == 's-1' and args[2] is NOW and type(args[3]) is str
+            with self.subTest(args=repr(args)):
+                if good:
+                    self.assertEqual((len(looked), len(recorded)), (1, 1))
+                else:
+                    self.assertEqual((out['result'], out['reason'], looked, recorded), ('refused', 'argument', [], []))
+
+
 if __name__ == '__main__':
     unittest.main()
