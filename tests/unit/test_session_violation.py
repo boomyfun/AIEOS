@@ -402,7 +402,7 @@ class R6Stated(unittest.TestCase):
 
     def test_the_docstring_states_the_tied_call(self):
         """TASK-070 AC6: session_violation.py's module docstring states the call's tie, the token's removal, the flow, the
-        "lease" refusal, the limits and that nothing hook-side calls it yet (whitespace collapsed)."""
+        "lease" refusal, the limits and its one hook-side caller (whitespace collapsed)."""
         doc = ' '.join(ast.get_docstring(ast.parse((SRC / 'session_violation.py').read_bytes().decode('utf-8'))).split())
         for words in ('The core violation path tied by the live lease (task TASK-070', 'specification 5 :109, with :108',
                       'The token is read core-side from that lease and never returned',
@@ -416,7 +416,8 @@ class R6Stated(unittest.TestCase):
                       'a retry with the same event_id while the lease is still held completes it',
                       'a repeat after "done" gives "lease"', 'the fail-open direction',
                       'the observed read-set record is left for section 11 point 10',
-                      'It never writes an observed read-set record', 'Nothing hook-side calls it yet'):
+                      'It never writes an observed read-set record',
+                      'Its one hook-side caller is claude_code_pretool_hook (TASK-072), H2b\'s PreToolUse program'):
             with self.subTest(words=words):
                 self.assertIn(words, doc)
         self.assertNotIn('.' + 'aieos', doc)

@@ -442,7 +442,7 @@ class AC5WhatItImports(unittest.TestCase):
         self.assertEqual([x for x in names if any(w in x.lower() for w in ('token', 'pass', 'secret', 'pwd'))], [])
 
     def test_no_hook_side_module_names_task_contract(self):
-        """TASK-071 AC5: no hook-side module names task_contract."""
+        """TASK-071 AC5: no older hook-side module names task_contract."""
         for name in ('claude_code.py', 'claude_code_hook.py', 'claude_code_channel.py', 'claude_code_reads.py',
                      'claude_code_store.py', 'claude_code_read_hook.py'):
             with self.subTest(module=name):
@@ -463,7 +463,7 @@ class AC7Stated(unittest.TestCase):
                       'The object store only', 'The commit is not proven a commit object', 'The five calls',
                       'about 50 seconds', 'the tree-size bound of the cap', 'the replace-refs limit',
                       'the outer-repository limit', 'run is a test seam: a production caller does not pass it',
-                      'Nothing hook-side calls it yet', 'The reason table'):
+                      'Its one hook-side caller is claude_code_pretool_hook (TASK-072)', 'The reason table'):
             with self.subTest(words=words):
                 self.assertIn(words, doc)
         self.assertNotIn('.' + 'aieos', doc)

@@ -45,7 +45,7 @@ Stated limits:
 - git is trusted as gitread trusts it: replace refs, grafts and alternates can change what a commit reads as (the
   replace-refs limit); an existing folder inside another repository is read as that outer repository (the
   outer-repository limit).
-- Nothing hook-side calls it yet.
+- Its one hook-side caller is claude_code_pretool_hook (TASK-072).
 """
 import re
 
