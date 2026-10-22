@@ -590,6 +590,7 @@ class SessionViolationFiles(unittest.TestCase):
             self.assertEqual((r['result'], r['reason'], r['decision']), ('refused', 'core', None))
             self.assertEqual(r['core']['appended'], [SV_EV])
             self.assertEqual([e['type'] for e in sv_events(root)], ['violation.detected', 'record.added'])
+            self.assertEqual(writer.held_leases(root), [])
 
     def test_the_release_token_race(self):
         """TASK-070 AC4: a release stand-in that releases the lease and grants the task again to s-2 before the release
