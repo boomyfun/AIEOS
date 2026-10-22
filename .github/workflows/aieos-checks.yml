@@ -1,4 +1,4 @@
-# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md), revision 8: the checks the first code task needs
+# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md), revision 9: the checks the first code task needs
 # (decision D-181, option K1), with the conformance runs of M2 (DM A62; decisions D-217 C5 and D-218). Runs on every push
 # to any branch and checks every pushed commit. It reads only: it writes nothing to the repository and uses no secret.
 # Records: this run's log, its step summary, its annotations and each step's conclusion. Its results are advisory (DM
@@ -71,6 +71,14 @@
 # stays with the task's tests and review, TASK-024 AC1, AC2 and AC12); routes the rules do not follow (for example
 # the posix or nt modules, os.environ edits, or a computed name) stay with review, as for every file; git's own
 # reading of the repository's configuration is not closed by the workflow (TASK-024 AC10).
+# Revision 9 (decision D-1796; the decision agent's own decision under DM A66; G-2 of round t72g,
+# DEF-0092) adds two paths to GOV-003's pinned list, in both of its copies: docs/specs/risk-rules-gov-aieos.md
+# (the policy that scope_reconcile reads at the base) and docs/pre-genesis/constitution.md (the home of
+# GOV-003, which scope_drift already keeps out of its non-task set). A change to either is now reported as
+# an evaluator change. It adds a report and loosens no check; it grants no write access, uses no secret and
+# changes no setting. Limits: the specifications the code only cites and does not read (governor-spec.md,
+# assurance-model.md, spec-02 to spec-05) stay off the list; G-1, G-3 and G-5 of round t72g stay open
+# (DEF-0092).
 name: aieos-checks
 
 on:
@@ -391,6 +399,7 @@ jobs:
 
           EVALUATOR = ['.github/**', 'src/aieos_bootstrap/**', 'tests/conformance/**',
                        'docs/pre-genesis/conformance-scenarios-initial.md', 'docs/records/**',
+                       'docs/specs/risk-rules-gov-aieos.md', 'docs/pre-genesis/constitution.md',
                        'tests/unit/**', 'tests/integration/**', 'tests/property/**', 'tests/run_tests.py',
                        '**/pyproject.toml', '**/setup.cfg', '**/setup.py', '**/requirements*.txt']
           OWNER_PATHS = ['docs/pre-genesis/measurement-protocol.md', 'docs/pre-genesis/measurements/**']
@@ -454,6 +463,7 @@ jobs:
 
           EVALUATOR = ['.github/**', 'src/aieos_bootstrap/**', 'tests/conformance/**',
                        'docs/pre-genesis/conformance-scenarios-initial.md', 'docs/records/**',
+                       'docs/specs/risk-rules-gov-aieos.md', 'docs/pre-genesis/constitution.md',
                        'tests/unit/**', 'tests/integration/**', 'tests/property/**', 'tests/run_tests.py',
                        '**/pyproject.toml', '**/setup.cfg', '**/setup.py', '**/requirements*.txt']
           OWNER_PATHS = ['docs/pre-genesis/measurement-protocol.md', 'docs/pre-genesis/measurements/**']
