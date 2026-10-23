@@ -823,6 +823,90 @@ def stored_reads(root, session_id, task_id, timeout=5.0):
         return _named('unreadable', e)
 
 
+_SESSION_LEASES_ENDED = 'SELECT ended_at FROM sessions WHERE session_id = ?'
+
+
+def _session_leases_answer(con, session_id):
+    """Inside _session_leases_read's deferred transaction (task TASK-078): the table check, the session's row, then
+    the session's lease rows in fencing-counter order."""
+    try:
+        _check_schema(con)
+    except ValueError:
+        return _refused('tables', _TABLES_FINDING)
+    row = con.execute(_SESSION_LEASES_ENDED, (session_id,)).fetchone()
+    if row is None:
+        return _refused('session', 'session: no session with this id')
+    leases = [_lease(r) for r in con.execute(_LEASES_OF_SESSION, (session_id,))]
+    return StoreResult('done', 'rows', value={'ended': row[0] is not None, 'leases': leases})
+
+
+def _session_leases_read(real, timeout, session_id):
+    """session_leases' read (task TASK-078), in the form of _read_reads: _store_uri's "?mode=ro" URI for the checked
+    realpath, the timeout, no implicit transaction, BEGIN DEFERRED, the reads, then ROLLBACK (only while a transaction
+    is open) and close in finally blocks, whose failure gives "unreadable". It writes and creates nothing."""
+    con = None
+    result = None
+    try:
+        try:
+            con = sqlite3.connect(_store_uri(real, os.sep, os.altsep), uri=True, timeout=timeout,
+                                  isolation_level=None)
+            con.execute('BEGIN DEFERRED')
+            result = _session_leases_answer(con, session_id)
+        except Exception as e:
+            result = _named('unreadable', e)
+        finally:
+            if con is not None:
+                try:
+                    if con.in_transaction:
+                        con.execute('ROLLBACK')
+                except Exception as e:
+                    result = _named('unreadable', e)
+    finally:
+        if con is not None:
+            try:
+                con.close()
+            except Exception as e:
+                result = _named('unreadable', e)
+    return result
+
+
+def session_leases(root, session_id, now, timeout=5.0):
+    """A session's lease rows, each with its expiry, and whether the session has ended (task TASK-078; specification
+    6 section 4, the status tool's reading), read only. Core-only.
+
+    The result is a StoreResult: "done" with reason "rows" and value {"ended": a bool, "leases": the session's lease
+    rows in eventlog.LEASE_KEYS' form, in fencing-counter order}; or "refused" with one finding, in the order
+    "argument" (session_id as add_reads'; now a timezone-aware UTC datetime with whole seconds; timeout above 0 and at
+    most 60), "root", "no_store", "unreadable" or "link" (_store_present's steps), "unreadable" (the open or a read, a
+    lock past the timeout included), "tables", "session" (no session with this id). The value is a stated choice. No
+    exception escapes.
+
+    Limits, stated: ``now`` is checked for its form only; comparing each expiry with the time is the caller's. An
+    "expired" row exists only between a lease's expiry and the next expire_leases, which removes it; end_session
+    removes an ended session's rows, so an ended session has none. More than one unexpired row of one session breaks
+    the one-lease rule as this task reads it; this function reports the rows as they are. The read is a hand-kept copy
+    of session_lease's and _read_reads' transaction steps, kept in step by hand; the presence step and the link check
+    are _store_present's, unchanged. It connects through SQLite's read-only mode, runs one BEGIN DEFERRED, and ends the
+    transaction and closes the connection on every path; it writes and creates nothing."""
+    try:
+        _check_reads_session(session_id)
+        _check_time(now, 'now')
+        _check_reads_timeout(timeout)
+    except Exception as e:
+        return _named('argument', e)
+    try:
+        _check_lookup_root(root)
+    except Exception as e:
+        return _named('root', e)
+    try:
+        refusal, real = _store_present(root)
+        if refusal is not None:
+            return refusal
+        return _session_leases_read(real, timeout, session_id)
+    except Exception as e:
+        return _named('unreadable', e)
+
+
 def remove_reads(root, session_id, task_id, timeout=5.0):
     """Remove every stored path of a session and a task in one write transaction (task TASK-067; specification 2
     revision 7 section 3: the reads are removed once the session's observed read-set record is appended or found

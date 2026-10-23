@@ -1952,5 +1952,169 @@ class R21TheReviewPoints(ReadsCase):
         self.assertFalse(any(s.lstrip().startswith('SELECT path FROM reads') for s in seen), seen)
 
 
+class R22SessionLeases(Case):
+    """writer.session_leases (task TASK-078 AC1) over real stores."""
+
+    def rows(self, sid='s-1', now=T0):
+        r = writer.session_leases(self.root, sid, now)
+        self.assertEqual((r.result, r.reason), ('done', 'rows'), r)
+        return r.value
+
+    def test_no_store_and_unknown_session(self):
+        """TASK-078 AC1: no store gives "no_store"; a session never started gives "session"."""
+        r = writer.session_leases(self.root, 's-1', T0)
+        self.assertEqual((r.result, r.reason), ('refused', 'no_store'))
+        self.store()
+        r = writer.session_leases(self.root, 's-1', T0)
+        self.assertEqual((r.result, r.reason), ('refused', 'session'))
+        self.assertEqual(len(r.findings), 1)
+
+    def test_a_started_session_with_no_row(self):
+        """TASK-078 AC1: a started session with no lease row gives {ended: False, leases: []}."""
+        self.store()
+        self.session()
+        self.assertEqual(self.rows(), {'ended': False, 'leases': []})
+
+    def test_one_unexpired_and_one_expired_row(self):
+        """TASK-078 AC1: one row is returned with its expiry, whether it is unexpired or expired at now (expired rows
+        stay until expire_leases)."""
+        self.store()
+        self.session()
+        self.assertEqual(self.grant().result, 'done')
+        live = self.rows(now=T0)
+        self.assertEqual(live['ended'], False)
+        self.assertEqual([(x['task_id'], x['expires_at']) for x in live['leases']], [(TASK, T0 + H1)])
+        later = self.rows(now=T0 + 2 * H1)
+        self.assertEqual([(x['task_id'], x['expires_at']) for x in later['leases']], [(TASK, T0 + H1)])
+        self.assertEqual(sorted(later['leases'][0]), sorted(eventlog.LEASE_KEYS))
+        writer.expire_leases(self.root, T0 + 2 * H1)
+        self.assertEqual(self.rows(now=T0 + 2 * H1)['leases'], [])
+
+    def test_two_rows_in_counter_order(self):
+        """TASK-078 AC1: two rows of one session come in fencing-counter order."""
+        self.store()
+        self.session()
+        self.assertEqual(self.grant(task='TASK-016').result, 'done')
+        self.assertEqual(self.grant(task='TASK-017').result, 'done')
+        got = self.rows()['leases']
+        self.assertEqual([x['task_id'] for x in got], ['TASK-016', 'TASK-017'])
+        counters = [x['fencing_token']['counter'] for x in got]
+        self.assertEqual(counters, sorted(counters))
+
+    def test_an_ended_session(self):
+        """TASK-078 AC1: an ended session gives {ended: True, leases: []} (end_session removes its rows)."""
+        self.store()
+        self.session()
+        self.grant()
+        self.assertEqual(writer.end_session(self.root, 's-1', T0).result, 'done')
+        self.assertEqual(self.rows(), {'ended': True, 'leases': []})
+
+    def test_the_argument_and_root_refusals(self):
+        """TASK-078 AC1: a session id, now or timeout out of form gives "argument"; a root out of form "root"."""
+        self.store()
+        naive = datetime.datetime(2026, 10, 11, 12, 0, 0)
+        cases = [('', T0, 5.0), (None, T0, 5.0), (3, T0, 5.0), ('s-1', naive, 5.0),
+                 ('s-1', T0.replace(microsecond=1), 5.0), ('s-1', T0, 0), ('s-1', T0, 61), ('s-1', T0, True)]
+        for sid, now, timeout in cases:
+            with self.subTest(sid=sid, now=now, timeout=timeout):
+                r = writer.session_leases(self.root, sid, now, timeout)
+                self.assertEqual((r.result, r.reason), ('refused', 'argument'))
+        for root in ('', 'relative/root', os.path.join(self.root, 'missing'), None):
+            with self.subTest(root=root):
+                self.assertEqual(writer.session_leases(root, 's-1', T0).reason, 'root')
+
+    def test_it_writes_and_creates_nothing(self):
+        """TASK-078 AC1: a call leaves the store's bytes and the folder's files as they were."""
+        self.store()
+        self.session()
+        self.grant()
+        path = writer.store_path(self.root)
+        before, files = read(path), files_under(self.root)
+        self.rows()
+        writer.session_leases(self.root, 's-9', T0)
+        self.assertEqual((read(path), files_under(self.root)), (before, files))
+        with tempfile.TemporaryDirectory() as empty:
+            writer.session_leases(empty, 's-1', T0)
+            self.assertEqual(files_under(empty), [])
+
+
+class R23TheNamesAtTheBase(unittest.TestCase):
+    """writer.py's names (task TASK-078 AC2)."""
+
+    BASE = frozenset([
+        'GRANT_STATES', 'LOCAL_DIR', 'LOG_NAME', 'STATE_DIR', 'STORE_NAME', 'StoreResult', 'TABLES', 'WriteResult',
+        '_CREATE_READS', '_DRIVE_LETTERS', '_KIND_BITS', '_LEASES', '_LEASES_OF_SESSION', '_LEASE_OF_TASK',
+        '_LOOKUP_TIMEOUT_MAX', '_PRE_READS_TABLES', '_READS_COUNT', '_READS_INSERT', '_READS_IN_ORDER', '_READS_MAX',
+        '_READS_PATHS', '_READS_REMOVE', '_READS_TOP', '_READ_PATH_MAX', '_REGULAR_FILE', '_RO_SUFFIX', '_RW_SUFFIX',
+        '_SCHEMA', '_TABLES_FINDING', '_TASK', '_TIME', '_URI_KEEP', '_UTC', '_ZERO', '_add_work', '_append_line',
+        '_check_lookup', '_check_lookup_root', '_check_read_path', '_check_reads_session', '_check_reads_task',
+        '_check_reads_timeout', '_check_root', '_check_schema', '_check_task', '_check_time', '_check_token',
+        '_connect', '_digest', '_existing_store', '_is_str', '_lease', '_live_lease', '_migrate_work', '_named',
+        '_read_log', '_read_reads', '_read_store', '_reads_answer', '_refused', '_store_answer', '_store_present',
+        '_store_uri', '_tables', '_time_text', '_time_value', '_transaction', '_write_steps', '_write_store',
+        'add_reads', 'append_event', 'datetime', 'end_session', 'eventlog', 'expire_leases', 'grant_lease', 'hashlib',
+        'held_lease', 'held_leases', 'log_path', 'migrate_store', 'open_store', 'os', 're', 'read_log', 'release_lease',
+        'release_lease_token', 'remove_reads', 'secrets', 'session_lease', 'sqlite3', 'start_session', 'store_path',
+        'stored_reads'])
+
+    @staticmethod
+    def names(tree):
+        out = set()
+        for n in tree.body:
+            if isinstance(n, (ast.FunctionDef, ast.ClassDef)):
+                out.add(n.name)
+            elif isinstance(n, ast.Assign):
+                for t in n.targets:
+                    if isinstance(t, ast.Name):
+                        out.add(t.id)
+                    elif isinstance(t, ast.Tuple):
+                        out.update(e.id for e in t.elts if isinstance(e, ast.Name))
+            elif isinstance(n, ast.AnnAssign) and isinstance(n.target, ast.Name):
+                out.add(n.target.id)
+            elif isinstance(n, (ast.Import, ast.ImportFrom)):
+                out.update((a.asname or a.name).split('.')[0] for a in n.names)
+        return out
+
+    def test_only_the_new_function_and_its_helpers_are_added(self):
+        """TASK-078 AC2: writer.py's top-level names are exactly the base's 94 plus session_leases and names that
+        begin "_session_leases" or "_SESSION_LEASES", all above the TASK-066 marker."""
+        text = read(os.path.join(SRC, 'writer.py')).decode('utf-8')
+        names = self.names(ast.parse(text))
+        self.assertEqual(len(self.BASE), 94)
+        self.assertLessEqual(self.BASE, names)
+        added = names - self.BASE
+        self.assertIn('session_leases', added)
+        for name in added - {'session_leases'}:
+            self.assertTrue(name.startswith(('_session_leases', '_SESSION_LEASES')), name)
+        head, part = text.split('# ---- the read-only lookup of the store (task TASK-066) ----', 1)
+        for name in added:
+            with self.subTest(name=name):
+                self.assertTrue(('def %s(' % name) in head or ('%s = ' % name) in head, name)
+                self.assertNotIn('def %s(' % name, part)
+
+
+class R24StatusOverRealStores(Case):
+    """mcp_server.status over real stores (task TASK-078 AC5): the stand-in tests' join to the real function."""
+
+    def status(self, now):
+        from aieos_bootstrap import mcp_server
+        return mcp_server.status({'AIEOS_SESSION_ID': 's-1', 'AIEOS_ROOT': self.root}, now)
+
+    def test_live_expired_none_and_ended(self):
+        """TASK-078 AC5: live with its expiry, expired with its task, none with no row, none for an ended session,
+        and no_session with no store, over real stores."""
+        self.assertEqual(self.status(T0), (None, 'no_session'))
+        self.store()
+        self.assertEqual(self.status(T0), ({'task': None, 'lease': 'none'}, None))
+        self.session()
+        self.assertEqual(self.status(T0), ({'task': None, 'lease': 'none'}, None))
+        self.grant()
+        self.assertEqual(self.status(T0), ({'task': TASK, 'lease': 'live', 'expires_at': '2026-10-11T13:00:00Z'},
+                                           None))
+        self.assertEqual(self.status(T0 + 2 * H1), ({'task': TASK, 'lease': 'expired'}, None))
+        writer.end_session(self.root, 's-1', T0 + 2 * H1)
+        self.assertEqual(self.status(T0 + 2 * H1), ({'task': None, 'lease': 'none'}, None))
+
+
 if __name__ == '__main__':
     unittest.main()
