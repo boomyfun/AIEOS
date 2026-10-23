@@ -1,0 +1,411 @@
+# TASK-075: the shell allowlist reader of the Claude Code adapter's PreToolUse program (M5; specification 2 revision 8,
+# section 7.2; specification 5 revision 5, section 11 points 5 and 6). Revision 2, drafted in session 58b6a0c7 under
+# decisions D-1930 to D-1954 (rounds t75a and t75b applied; revision 2 read by the decision agent).
+#
+# Scope (D-1944, D-1945): a new module src/aieos_bootstrap/claude_code_shell_allow.py reads, at the base the launcher
+# gives (AIEOS_BASE, as the PreToolUse program already reads it), two lists from Git's object store only: the policy's
+# `shell_allow` in the policy file and the lease task's `capabilities.shell.allow` in docs/tasks/<task>.yaml; checks
+# each with claude_code_hook.allowlist_findings, reading a list with any finding as empty; and gives one list, the longer
+# entry of each pair of a policy entry and a contract entry where one is a word prefix of the other (specification 2
+# section 7.2). The PreToolUse program passes that list to claude_code_hook.entry in place of its empty list, and reads
+# the lists only for a Bash or PowerShell call (D-1953, R1-10).
+#
+# Precondition: the CI channel's revision 12 (fa4e4574, DM A66, D-1946 to D-1949) lets this one new module hold strings
+# naming the project-state directory and lets it open no file; it is on main with CI green (run 39900775702). The hook
+# program gets no such allowance: its source and docstring name only "the policy file" (the :742 pin stays).
+#
+# Owner-act boundary: the task adds no entry to any list, writes no policy file, places no hook and changes no setting
+# (A51 item (4); CR-002 part 4 limit 5 not reached). Every entry of `shell_allow` is a policy change approved on its own
+# (specification 5 :108).
+#
+# Stated limits. In the new module's docstring: the policy file's path .aieos/project.yaml and the limits below. In the
+# hook's docstring: the same limits, naming the file only as "the policy file".
+# - The tree walk is a copy of task_contract's (its object-store walk), kept in step by hand, as R-4 of DEF-0092 states
+#   for the hook's other copies; native takeover (A11) retires it. A contract that read_contract refuses only at its
+#   parse or task step may still give a shell list here; harmless, since the hook stops at its step 3 first.
+# - Each existing contract's capabilities.shell.allow reads as empty, by no entries or by entries outside the form; the
+#   count comes from the acceptance-time scan (AC3); only a contract written later with entries in the form gains any.
+# - No policy file exists: the policy list reads as empty, so every leased shell call stays refused, and by
+#   specification 5 section 8 ends the session, until a policy file with entries exists at the base.
+# - The entry check accepted with TASK-062 refuses a first word such as timeout or python (claude_code_hook.py
+#   :68-70), so no list can allow the project's own command forms (for example "timeout 110 python ..."); this task's
+#   own capabilities line reads empty for that reason; under a placed hook those commands stay refused whatever the
+#   policy holds (a point for the M5 exit review).
+# - The grammars of AC2 and AC3 are this module's fixed forms, narrower than YAML: any other shape reads as empty.
+# - For a Bash or PowerShell call the new reads share the commit and root-tree calls: at most seven more git calls of
+#   ten seconds each on top of the hook's own five, twelve calls, about 120 seconds at worst for the git calls alone;
+#   other tools keep the hook's five; against Claude Code's hook timeout (unmeasured, C6).
+#
+# The pins (L-0026; MY2/shell/pinscan75.txt and rounds t75a and t75b). Line numbers are those of main's head
+# fa4e45743fbdc264415eef4f3f36651cecfd8c47. Each pin passes unchanged unless named here:
+# - Changed, in the write-set: tests/unit/test_claude_code_pretool_hook.py: Calls.patches() (:121-131) gains the new
+#   reader's stand-in appended after index 4 (:547's patches()[:4] slice unchanged; the shell tests at :362-364, :420
+#   and :891 run through Calls and so get it); the patch sites :124, :260 and :289 (Read inputs, never reaching the
+#   reader); :394-407 (the empty-allowlist test) stays for the no-list case and is joined by AC6's cases; the run-seam
+#   check (:558-579: SEAM_STRINGS at :559, the module tuple at :579; the attribute special cases at :620 and :627-629;
+#   the "two imports" message at :633-634; LEGIT and the samples :638-710, the hostile bodies :656-675 and the call
+#   sample :687) admits claude_code_shell_allow with read_allowlist as a three-argument call and no run seam, and
+#   TEXT.count of each core call stays exactly once; the imports and names (:719-752; the import set :731-734;
+#   attrs_of :749-752, where claude_code stays {'RECORDER'} at :752 and claude_code_shell_allow gains
+#   {'read_allowlist'}); AC9WhatIsStated (:916-931) and the phrases at :922-929 and :995-1001 change in step with the
+#   new limits ("about 50 seconds" becomes the twelve-call sentence; "every shell call is refused" stays for the case of
+#   no policy file); test_every_test_names_its_criteria (:933-956; regexes :941-942 and :952; :956 stays TASK-072 only
+#   for PretoolHookFiles; the property loop) admits "TASK-075 ACn" and still refuses every other task.
+#   tests/property/test_claude_code_pretool_hook_properties.py: its patches (:93, :162, :190, :226) gain the new
+#   reader's stand-in. tests/unit/test_claude_code_read_hook.py: HOOK_SIDE (:35-36) and OWN_IMPORTS (:37-42) admit
+#   claude_code_shell_allow (its own imports as the code fixes them), ALLOWED (:43-44) gains the pairs it needs, and the
+#   separation check still holds over eight modules.
+# - Kept, unchanged: :742 ('.' + 'aieos' absent from the hook's source); tests/integration/test_writer_files.py :674-769
+#   (PretoolHookFiles, outside the write-set): its Write inputs end at step 1, so the reader is not reached there; the
+#   docstring phrases read by test_claude_code_store.py :312, test_session_violation.py :420 and test_task_contract.py
+#   :466; no test and no workflow line hashes these modules.
+# - The workflow: revision 12's allowance for the new module (aieos-checks.yml :1515-1518); its string rule covers src/
+#   only (:1477-1478), so test fixtures may hold the policy path as a plain literal; every other per-module rule unchanged;
+#   OPS-003's words (no MEASURED, ENFORCED or GUARANTEED; "unmeasured" lower-case); SEC-001, SEC-002, bandit.
+#
+# Risk: high (risk rules revision 6, §2 point 3: R3 matches every path under src/** and tests/**), computed over the base
+# by script before commit C. GOV-003: every path of the write-set is an evaluator path; change class critical_cr, ruled
+# at acceptance as TASK-072's (the hook program's code changes).
+# Profile as TASK-074's (functional [unit_test], architecture [deterministic_rule], functional [integration_test],
+# security [static_security_analysis], architecture [ai_review (cross-model)]), plus the evidence_required of the
+# applicable articles. Reviews on Sonnet 5.5 (never Fable). Naming (D-544 Q3): every new test function names "TASK-075
+# ACn" in its own docstring; each changed existing test function keeps its own ids and adds "TASK-075 ACn".
+# Not applicable: OPS-001; INV-005 to INV-011; GOV-001, GOV-004 to GOV-006, SEC-003. INV-004 applies: the writer stays
+# the only module that opens the store or writes the project-state directory; the new module opens no file.
+# Owner-kept acts: none. No hook placed, no matcher, no setting, nothing measured, nothing under .github/ or .claude/.
+# Records obligations of the acceptance (AC10; outside the write-set): DEF-0092's log line (R-4's copies now include the
+# new module's walk); the M5 exit review's note on the refused first words; specification 2 section 7.2's sentence "no
+# module reads `shell_allow` until a task adds the reading" (:261) and section 5.1's row (:109) go stale at acceptance:
+# a specification 2 revision or a decision follows.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-075.yaml, has one parent equal to base_commit, and goes to
+# main under its own decision; the task's commits carry "AIEOS-Task: TASK-075" and go to task/TASK-075; main receives
+# them only at acceptance. X, in AC3 and the records, is the task head at acceptance.
+task: TASK-075
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add src/aieos_bootstrap/claude_code_shell_allow.py, which reads at the given base, from Git's object store only, the
+  policy's shell_allow list in .aieos/project.yaml and the task contract's capabilities.shell.allow in
+  docs/tasks/<task>.yaml, each by a fixed grammar that fails closed to an empty list, checks each with
+  claude_code_hook.allowlist_findings (a list with any finding read as empty), and gives the one list of specification 2
+  section 7.2; and make src/aieos_bootstrap/claude_code_pretool_hook.py pass that list to claude_code_hook.entry in place
+  of its empty list, with its docstring's limits updated; tests in the four test modules of the write-set, each new test
+  naming "TASK-075 ACn".
+traces_to:
+  - docs/specs/spec-02-aieos-file-format.md#7.2
+  - docs/specs/spec-05-adapter-contract.md#11
+  - docs/specs/risk-rules-gov-aieos.md#2
+input_state:
+  base_commit: fa4e45743fbdc264415eef4f3f36651cecfd8c47
+  depends_on: [TASK-061, TASK-062, TASK-071, TASK-072, TASK-074]
+  intent_versions:
+    docs/specs/spec-05-adapter-contract.md: ae7b99419d303db40b7200e39a22d93b9301b29900f3b1f5a5720b72d8eb9c2b
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/specs/spec-02-aieos-file-format.md: 1bef711ded3b700ac528df4fa5a2ea47f3d844f02e52d570439646c764eb412f
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/claude_code_shell_allow.py
+    - src/aieos_bootstrap/claude_code_pretool_hook.py
+    - tests/unit/test_claude_code_shell_allow.py
+    - tests/property/test_claude_code_shell_allow_properties.py
+    - tests/unit/test_claude_code_pretool_hook.py
+    - tests/property/test_claude_code_pretool_hook_properties.py
+    - tests/unit/test_claude_code_read_hook.py
+read_set:
+  paths:
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.claude_code_shell_allow.read_allowlist, aieos_bootstrap.claude_code_shell_allow.combine,
+    aieos_bootstrap.claude_code_shell_allow.parse_policy, aieos_bootstrap.claude_code_shell_allow.parse_contract_shell,
+    aieos_bootstrap.claude_code_hook.allowlist_findings, aieos_bootstrap.claude_code_hook.entry,
+    aieos_bootstrap.gitread.run, aieos_bootstrap.gitread.form_error, aieos_bootstrap.gitread.OBJECT_ID,
+    aieos_bootstrap.task_contract.read_contract, aieos_bootstrap.claude_code_pretool_hook.run]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The reader. read_allowlist(root, base, task_id, run=None) reads both files at base through gitread.run only, by a
+      walk copied from task_contract's (commit, root tree, then the path's trees, then the blob; each call
+      "cat-file -p <id>" with 10 s; the same caps: 1 MiB, strict UTF-8, no U+FEFF, no C0 control but the line feed, no
+      DEL, C1, U+2028 or U+2029); the two walks share the commit and root-tree calls, at most seven git calls in all. It
+      gives a mapping with exactly result, policy, contract, allowlist and findings: result "read" when both arguments
+      and walks were attempted, or "unreadable" for an argument out of form (root, base, task_id as read_contract checks
+      them), with every list empty and one finding. Tests in tests/unit/test_claude_code_shell_allow.py: an absent
+      .aieos tree, an absent project.yaml, a project.yaml that is not a blob, an unreadable or over-cap blob, and a
+      contract missing at the base each give that list empty, the other list still read; a stand-in run that raises
+      gives both empty. The walk is held equal to task_contract's: the new test module builds, in its own code, stand-in
+      object stores of task_contract's shape extended with a capabilities line and a .aieos tree, and asserts the new
+      walk reaches the same contract blob as read_contract and leaves the contract list empty in every case read_contract
+      refuses at its git, tree or bytes step. No file is opened.
+  - AC2: >-
+      The policy grammar (parse_policy(text)): the list is the lines after a top-level line exactly "shell_allow:" up to
+      the next top-level line, each exactly "  - " followed by the entry text; blank and "#"-comment lines skipped as
+      task_contract skips them. Any second top-level line starting "shell_allow:", an item line of any other form, an
+      empty section, or "shell_allow:" with a value on its line gives an empty list. Tests: each of those cases, and a
+      valid list of three made-up entries read in order.
+  - AC3: >-
+      The contract grammar (parse_contract_shell(text)): within the top-level "capabilities:" section, the value of the
+      line beginning "  shell: " together with the following lines indented four or more spaces, joined by single
+      spaces after their indentation is removed, must be exactly "{allow: [" then zero or more double-quoted strings
+      separated by ", " then "]}", read by a quoted-string scan (a string may hold ", "); a string holding a backslash
+      or a double quote inside, or any other shape, gives an empty list. Also empty: a second "  shell: " line, a second
+      top-level "capabilities:", a blank or comment line inside the continuation. Tests: each of those; a made-up text
+      of TASK-074.yaml's shape (an entry with "<", a first word "timeout", a line wrap inside a string) reads empty after
+      allowlist_findings; a well-formed list of two made-up entries over two lines is read. The acceptance-time scan of
+      every contract is AC10's.
+  - AC4: >-
+      The form check. Each list is passed to claude_code_hook.allowlist_findings; any finding makes that whole list
+      empty (specification 2 section 7.2), the finding words kept in findings. Tests: one malformed entry among good
+      ones voids its list; a list of only good entries stays.
+  - AC5: >-
+      The one list (combine(policy, contract)): for every pair of a policy entry and a contract entry where one's words
+      are a prefix of the other's (split on single spaces), the longer of the two, without repeats, in policy order then
+      contract order. A property test in tests/property/test_claude_code_shell_allow_properties.py over generated word
+      lists checks that a simple command matches the one list by the judge's rule (claude_code.py :327-331) exactly
+      when it matches an entry of each list; either list empty gives an empty list.
+  - AC6: >-
+      The hook program. claude_code_pretool_hook gains a strict parse helper for the input's tool_name, as strict as
+      _tool_use_id (:167-184): stdin_bytes a bytes object, no BOM, strict UTF-8, duplicate keys and the constants NaN,
+      Infinity and -Infinity refused, a dict, tool_name a str; it parses the object itself, as the entry does. run reads
+      the lists only when that tool_name is exactly 'Bash' or 'PowerShell' (literals in the hook; a test pins them equal
+      to claude_code.SHELL_TOOLS, so the :752 attrs pin stays), and then passes read_allowlist(root, base,
+      task)["allowlist"] to claude_code_hook.entry in place of [] (:274), after step 3's contract read and only on the
+      judged path; any parse failure, any other tool, a reader result of another shape or an exception from the reader
+      gives [] (fail closed: a shell call is then refused; other tools are unaffected). Every other step, reason and
+      record is unchanged. Tests, with the real new module over a stand-in gitread.run: a Bash call matching both lists
+      gives run reason "tied_allow"; one matching only the policy list gives run reason "recorded" (entry reason
+      "allowlist", evidence_type "shell_not_allowed"); with both lists empty every shell call is refused as before;
+      for a Read, a Write and an Edit call the verdict, reason and record are the same with [] and with any list that
+      passes allowlist_findings, and the reader is not called; each parse failure and a non-str tool_name give [] and no
+      read; the reader is not called on the bad-base and contract paths. Stated: a bytes subclass whose __bytes__ gives
+      other bytes can only cause an extra read or a refusal (the entry judges the object); when the entry would refuse
+      for parse or push, the reads are made anyway (a cost, not a loosening). The docstring: its opening sentence
+      (:5-6), step 4 (:36) and the limit at :67-70 are rewritten to the header's limits, naming the file only as "the
+      policy file".
+  - AC7: >-
+      Pins kept in step, as the header's pin list names them, at main's head: in tests/unit/test_claude_code_pretool_hook.py
+      Calls.patches() (:121-131) and the patch sites (:124, :260, :289), the empty-allowlist test (:394-407), the
+      run-seam check and its samples (:558-579, :620, :627-629, :633-634, :638-710: SEAM_MODULES gains
+      claude_code_shell_allow with ('read_allowlist', 3), and LEGIT, the hostile bodies and the call samples list three
+      modules), the imports and attrs (:719-752), AC9WhatIsStated and the phrases at :922-929 and :995-1001, and
+      test_every_test_names_its_criteria (:933-956, regexes :941-942 and :952, and the property loop: TASK-075 admitted,
+      every other task still refused); in the property module the patches (:93, :162, :190, :226); in
+      tests/unit/test_claude_code_read_hook.py HOOK_SIDE, OWN_IMPORTS and ALLOWED (:35-45), the separation check still
+      holding. The :742 pin and tests/integration/test_writer_files.py :674-769 pass unchanged. The new test modules' own
+      naming test refuses a test not naming "TASK-075 ACn".
+  - AC8: >-
+      No entry and no policy anywhere: no path under .aieos/ and no file named project.yaml is added; every shell_allow
+      or capabilities list with entries in the change sits inside a test's in-memory fixture and holds only made-up
+      entries, never one of the project's command forms; and no test writes a file; test fixtures are built as
+      in-memory Git object stand-ins, never on disk.
+  - AC9: >-
+      Broken copies (as TASK-074's AC9): for each of AC1 to AC7 at least one copy of the source with one change that
+      breaks it, each failing the test its AC names and no other cause, among them a copy that reads the lists for every
+      tool (AC6) and a copy of the naming test that admits another task (AC7); the list and the failing tests go to the
+      decision agent with the acceptance request.
+  - AC10: >-
+      Acceptance-time checks and records (shown by scripts and records, not by a test): shell_allow_scan75.py, a
+      read-only script kept in the scratchpad, reads every docs/tasks/*.yaml at X through gitread and reports how many
+      read as empty (AC3's limit); the records obligations of the header (DEF-0092's log line, the M5 exit review's note,
+      specification 2's stale sentences) are carried at the records step.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7]}
+  - {gate: G3, check: constitution, args: [AC8, AC9, AC10, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
