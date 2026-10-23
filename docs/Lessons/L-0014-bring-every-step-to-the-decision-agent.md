@@ -31,6 +31,9 @@ One occurrence in session 2026-10-18-2107 (../History/2026-10/2026-10-18-2107-th
 One occurrence in session 2026-10-18-2345 (../History/2026-10/2026-10-18-2345-the-pages-d1340-to-d1357-and-the-contract-of-task-066-on-main.md):
 - **2026-10-18 (D-1358).** After the app's auto mode classifier stopped the setup script and then a request to the decision agent, Claude ended a turn to ask the owner to choose how to go on, a question that DM A71 gives to the decision agent. The owner answered (:167): "hãy hỏi lại agent quyết định, prompt đã yêu cầu và bài học cũng đã ghi, hãy làm theo bài học". The request then went to the decision agent in neutral wording and was decided there (D-1358).
 
+One occurrence in session 2026-10-23-1555 (../History/2026-10/2026-10-23-1555-the-later-part-the-resumed-session-the-archive-and-the-pages-d1965-to-d2027.md):
+- **2026-10-23 (D-2026).** The end of the session, a turn end that the owner would have to resume, was never brought to the decision agent as its own question ("end now, or go on?"); the end steps of D-2018 C3 were taken as covering it.
+
 ## Why it happens
 - Claude treats a step as mechanical (a display, a change of order, a turn end) and does not see it as a decision.
 - The request checklist of the decision agent's definition was not applied before sending.

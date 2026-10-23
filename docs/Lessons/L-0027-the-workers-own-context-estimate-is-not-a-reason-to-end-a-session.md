@@ -14,6 +14,7 @@ The worker cannot see the context level; its estimate, counted from the conversa
 - **2026-10-22 (session e42ef211, D-1572).** An end on a too-high estimate. The worker's figure was about 68%; the owner's was 58%.
 - **2026-10-22 (session f205d0b2, :2718, D-1603).** The worker estimated about 80%; the owner reported 68%; the session resumed.
 - **2026-10-22 (session fb20852c, D-1615, D-1616, D-1626, D-1629).** D-1615 ended the session at an estimate of about 50%, withdrawn by D-1616; the session later ended by a slip rule with the worker's estimate at about 80 to 85%; the owner reported 58%; the session resumed (D-1629).
+- **2026-10-23 (session 308d8b07, :5833; D-2026).** After the listed work items and the records commit, Claude sent a last reply as if the session ended, with no system context warning and no word of the owner; the owner asked why. The decision agent ruled the end wrong under rule 11 as amended: its own decisions D-2018 C3 and D-2023 C3 to D-2025 had set the end steps as the next step without weighing going on. The work resumed in the same session.
 
 ## Why it happens
 The level is shown to the owner by the app, not to the worker. The worker counts what it has read and written, and that count runs high (long tool outputs and agent reports weigh less than they seem, or the window is larger than assumed). Which of these holds is a guess.
