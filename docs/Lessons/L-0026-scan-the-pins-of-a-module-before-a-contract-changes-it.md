@@ -12,6 +12,9 @@ A contract put new code in a module whose code accepted tests of earlier tasks p
 ## Occurrences
 - **2026-10-21 (session 1d7a0412; D-1547).** TASK-069 (approved under D-1537) put session_violation in adapter.py; tests/unit/test_evaluation_violation.py and tests/unit/test_evaluation_repeated.py pin the SHA-256 of adapter.py's code after its docstring (TASK-053, TASK-054). TASK-069 ended on spec_conflict before any code commit; TASK-070 put the call in a new module after a read-only pin scan (D-1548).
 
+One in session 2026-10-23-1555 (../History/2026-10/2026-10-23-1555-the-pages-d1960-to-d1964-task-076-landed-specification-2-revision-9-and-m5s-exit.md):
+- **2026-10-23 (D-1975).** TASK-075 (contracted under D-1955) let `claude_code_shell_allow.py` name the project-state directory; `tests/unit/test_writer.py` R8 pins the exact set of modules allowed to do so, and neither the contract nor its two review rounds named it, although the CI channel's revision 12 had been changed for that module. The first local suite run in the clone found it, before any code commit; TASK-076 put R8 in its write-set (D-1979).
+
 ## Why it happens
 Reviews and drafts read the module to be changed and the tests of that module, not the tests of other tasks that guard it; a hash pin lives far from the module it guards.
 

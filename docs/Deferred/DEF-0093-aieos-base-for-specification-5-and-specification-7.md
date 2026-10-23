@@ -17,3 +17,4 @@
 ## Log
 - 2026-10-22: opened (session d12e7fb6; TASK-072's acceptance).
 - 2026-10-23: specification 5 revision 5 already carries AIEOS_BASE as proposed text (section 11 point 7); its citations of claude_code_pretool_hook.py at section 11 points 6 and 7 (:63-65, :66-67) are stale since TASK-074 changed that module's docstring (the right lines on main are :67-70), for specification 5's next revision (review finding s2r8 R2-5, carried by D-1933 C3); the launcher half stays with specification 7 (session 58b6a0c7).
+- 2026-10-23: specification 5 section 11 point 6's text, not only its citations, is stale: it leaves the shell allowlist's source and reading to specification 2's next revision and a later contract, which specification 2 revision 9 section 7.2 and TASK-076 have settled; for specification 5's next revision (review m5x-R1 of the M5 exit review; session 308d8b07).

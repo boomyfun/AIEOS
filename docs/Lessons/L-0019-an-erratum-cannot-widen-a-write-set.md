@@ -13,6 +13,9 @@ A contract conflict found during the code is fixed by an erratum that adds paths
 One in session 2026-10-15-0830 (../History/2026-10/2026-10-15-0830-the-benchmark-workflow-accepted-and-on-main.md):
 - **2026-10-15 (D-774 to D-776).** Erratum E2 to TASK-038 added two earlier tests to its write-set; the first task commit 7c6596a0 failed CI run 255 only in G0 scope ("path outside the write-set" for both); TASK-039's contract, with E1 and E2 written into its text, superseded TASK-038.
 
+One in session 2026-10-23-1555 (../History/2026-10/2026-10-23-1555-the-pages-d1960-to-d1964-task-076-landed-specification-2-revision-9-and-m5s-exit.md):
+- **2026-10-23 (D-1979).** The missed R8 pin of TASK-075 (L-0026) needed `tests/unit/test_writer.py` in the write-set; G0 reads the contract only at its adding commit 6eb56b29, so TASK-076's contract, with TASK-075's content and the wider write-set, superseded TASK-075 before any code commit.
+
 ## Why it happens
 An erratum is a recorded reading of a contract; the CI's G0 step reads the contract's bytes at the commit that added them, and no erratum reaches it.
 
