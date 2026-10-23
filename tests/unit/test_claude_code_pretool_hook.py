@@ -64,6 +64,11 @@ def readable(write_set=('src/a.py',)):
             'write_set': list(write_set), 'forbidden': ['docs/**']}
 
 
+def shell_lists(allowlist=()):
+    return {'result': 'read', 'policy': list(allowlist), 'contract': list(allowlist), 'allowlist': list(allowlist),
+            'findings': []}
+
+
 def unreadable(reason):
     return {'result': 'unreadable', 'reason': reason, 'findings': ['%s: made-up' % reason], 'task': None,
             'base_commit': None, 'write_set': None, 'forbidden': None}
@@ -78,11 +83,13 @@ def done():
 class Calls:
     """The stand-ins and the order of their calls."""
 
-    def __init__(self, judge=DEFAULT, contract=DEFAULT, core=DEFAULT):
+    def __init__(self, judge=DEFAULT, contract=DEFAULT, core=DEFAULT, shell=DEFAULT):
         self.log, self.judge_args, self.contract_args, self.core_args = [], [], [], []
+        self.shell_args = []
         self.judge_answer = tied() if judge is DEFAULT else judge
         self.contract_answer = readable() if contract is DEFAULT else contract
         self.core_answer = done() if core is DEFAULT else core
+        self.shell_answer = shell_lists() if shell is DEFAULT else shell
 
     def judge(self, *args):
         self.log.append('judge')
@@ -118,6 +125,13 @@ class Calls:
         self.log.append('clock')
         return T0 + datetime.timedelta(seconds=5)
 
+    def read_allowlist(self, *args, **kwargs):
+        self.log.append('read_allowlist')
+        self.shell_args.append((args, kwargs))
+        if isinstance(self.shell_answer, BaseException):
+            raise self.shell_answer
+        return self.shell_answer
+
     def patches(self, channel=None, entry=None):
         return [mock.patch.object(hook, 'claude_code_store', types.SimpleNamespace(judge=self.judge,
                                                                                    KEYS=claude_code_store.KEYS)),
@@ -128,7 +142,9 @@ class Calls:
                     record_findings=self.record_findings, redact=self.redact,
                     RECORDER_JOIN=claude_code_channel.RECORDER_JOIN)),
                 mock.patch.object(hook, 'session_violation',
-                                  types.SimpleNamespace(session_violation=self.session_violation))]
+                                  types.SimpleNamespace(session_violation=self.session_violation)),
+                mock.patch.object(hook, 'claude_code_shell_allow',
+                                  types.SimpleNamespace(read_allowlist=self.read_allowlist))]
 
     def run(self, stdin=READ, env=ENV, folder=None, now=T0, clock='own', channel=None, entry=None):
         ps = self.patches(channel, entry)
@@ -555,8 +571,9 @@ class AC5TheRecord(unittest.TestCase):
         self.assertEqual(out['reason'], 'core')
 
 
-SEAM_MODULES = {'task_contract': ('read_contract', 3), 'session_violation': ('session_violation', 6)}
-SEAM_STRINGS = ('task_contract', 'session_violation', 'read_contract')
+SEAM_MODULES = {'task_contract': ('read_contract', 3), 'session_violation': ('session_violation', 6),
+                'claude_code_shell_allow': ('read_allowlist', 3)}
+SEAM_STRINGS = ('task_contract', 'session_violation', 'read_contract', 'claude_code_shell_allow', 'read_allowlist')
 SEAM_NAMES = {'setattr', 'delattr', 'globals', 'vars', 'locals', 'eval', 'exec', 'compile', 'attrgetter'}
 SEAM_ATTRS = {'writer', 'adapter', 'eventlog', 'violation', 'read_set_record', 'observe'}
 
@@ -576,7 +593,8 @@ def seam_findings(text):
     binders = []
     for n in ast.walk(tree):
         if isinstance(n, ast.ImportFrom):
-            if (n.module or '') in ('aieos_bootstrap.task_contract', 'aieos_bootstrap.session_violation'):
+            if (n.module or '') in ('aieos_bootstrap.task_contract', 'aieos_bootstrap.session_violation',
+                                    'aieos_bootstrap.claude_code_shell_allow'):
                 findings.append('from-import out of %s' % n.module)
             for a in n.names:
                 if (a.asname or a.name) in SEAM_MODULES or a.name in SEAM_MODULES:
@@ -617,28 +635,32 @@ def seam_findings(text):
                         and not any(isinstance(a, ast.Starred) for a in call.args)):
                     findings.append('%s used other than as the call %s.%s with %d arguments'
                                     % (n.id, n.id, attr, count))
-            elif n.id in ('read_contract',):
-                findings.append('the name read_contract')
+            elif n.id in ('read_contract', 'read_allowlist'):
+                findings.append('the name %s' % n.id)
         elif isinstance(n, ast.Attribute):
             if n.attr in SEAM_ATTRS:
                 findings.append('the attribute %s' % n.attr)
             if n.attr == '__dict__' or (n.attr == 'modules' and isinstance(n.value, ast.Name) and n.value.id == 'sys'):
                 findings.append('the attribute %s' % n.attr)
-            if n.attr in ('read_contract', 'session_violation') and not (
+            if n.attr in ('read_contract', 'session_violation', 'read_allowlist') and not (
                     isinstance(n.value, ast.Name) and SEAM_MODULES.get(n.value.id, ('',))[0] == n.attr):
                 findings.append('the attribute %s on another object' % n.attr)
         elif isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docs:
             if any(s in n.value for s in SEAM_STRINGS):
                 findings.append('a string naming the seam')
     if sorted(binders) != sorted(SEAM_MODULES):
-        findings.append('the two module-level imports are not exactly once each')
+        findings.append('the three module-level imports are not exactly once each')
     return findings
 
 
-LEGIT = ('from aieos_bootstrap import task_contract\nfrom aieos_bootstrap import session_violation\nimport re\n'
-         'def f(a, b, c, d, e, g):\n    """Docstrings may name task_contract and session_violation."""\n'
+LEGIT = ('from aieos_bootstrap import task_contract\nfrom aieos_bootstrap import session_violation\n'
+         'from aieos_bootstrap import claude_code_shell_allow\nimport re\n'
+         'def f(a, b, c, d, e, g):\n    """Docstrings may name task_contract, session_violation and read_allowlist."""\n'
          '    task_contract.read_contract(a, b, c)\n    session_violation.session_violation(a, b, c, d, e, g)\n'
+         '    claude_code_shell_allow.read_allowlist(a, b, c)\n'
          '    return re.fullmatch(a, b), re.compile(a)\n')
+HEAD = ('from aieos_bootstrap import task_contract\nfrom aieos_bootstrap import session_violation\n'
+        'from aieos_bootstrap import claude_code_shell_allow\n')
 
 
 class AC5TheRunSeam(unittest.TestCase):
@@ -651,9 +673,22 @@ class AC5TheRunSeam(unittest.TestCase):
     def test_hostile_samples_are_refused(self):
         """TASK-072 AC5: one hostile sample per form is refused: a Starred argument, a keyword, **kwargs, an alias, a
         rebound module name, getattr, partial, a wrapper function, an argument or def named for a module, setattr,
-        globals, a string holding a name, an attribute chain, and the other forms the contract lists."""
-        head = 'from aieos_bootstrap import task_contract\nfrom aieos_bootstrap import session_violation\n'
-        bodies = ['task_contract.read_contract(*a)\n', 'task_contract.read_contract(a, b, c, run=d)\n',
+        globals, a string holding a name, an attribute chain, and the other forms the contract lists. TASK-076 AC7: the
+        head holds the three module-level imports, and the forms are repeated for read_allowlist."""
+        head = HEAD
+        self.assertEqual(seam_findings(head), [])
+        bodies = [
+                  'claude_code_shell_allow.read_allowlist(*a)\n',
+                  'claude_code_shell_allow.read_allowlist(a, b, c, run=d)\n',
+                  'claude_code_shell_allow.read_allowlist(a, b, c, None)\n',
+                  'claude_code_shell_allow.read_allowlist(a, b)\n',
+                  'x = claude_code_shell_allow\n', 'claude_code_shell_allow = 1\n',
+                  'getattr(claude_code_shell_allow, "read_allowlist")(a, b, c)\n',
+                  's = "read_allowlist"\n', 'm.read_allowlist(a, b, c)\n', 'read_allowlist(a, b, c)\n',
+                  'def claude_code_shell_allow():\n    pass\n',
+                  'import aieos_bootstrap.claude_code_shell_allow\n',
+                  'from aieos_bootstrap.claude_code_shell_allow import read_allowlist\n',
+                  'task_contract.read_contract(*a)\n', 'task_contract.read_contract(a, b, c, run=d)\n',
                   'task_contract.read_contract(a, b, c, **k)\n',
                   'session_violation.session_violation(a, b, c, d, e, g, h)\n',
                   'task_contract.read_contract(a, b, c, d)\n', 'x = task_contract\n', 'task_contract = 1\n',
@@ -676,19 +711,35 @@ class AC5TheRunSeam(unittest.TestCase):
         for body in bodies:
             with self.subTest(body=body):
                 self.assertTrue(seam_findings(head + body))
+        third = 'from aieos_bootstrap import claude_code_shell_allow\n'
         self.assertTrue(seam_findings('from aieos_bootstrap import task_contract as t\n'
-                                      'from aieos_bootstrap import session_violation\n'))
-        self.assertTrue(seam_findings('from aieos_bootstrap import task_contract, session_violation\n'))
+                                      'from aieos_bootstrap import session_violation\n' + third))
+        self.assertTrue(seam_findings('from aieos_bootstrap import task_contract, session_violation\n' + third))
         self.assertTrue(seam_findings('def f():\n    from aieos_bootstrap import task_contract\n'
+                                      'from aieos_bootstrap import session_violation\n' + third))
+        self.assertTrue(seam_findings('from aieos_bootstrap import task_contract\n'
                                       'from aieos_bootstrap import session_violation\n'))
+        self.assertTrue(seam_findings('from aieos_bootstrap import task_contract\n'
+                                      'from aieos_bootstrap import session_violation\n'
+                                      'from aieos_bootstrap import claude_code_shell_allow as s\n'))
 
     def test_broken_copies_of_the_module_are_caught(self):
-        """TASK-072 AC5: broken copies of the new module, each with one form of a seam bypass, are caught."""
+        """TASK-072 AC5: broken copies of the new module, each with one form of a seam bypass, are caught. TASK-076 AC7:
+        the shell allowlist reader's call is there exactly once, and copies that bypass it are caught too."""
         call_rc = 'task_contract.read_contract(root, base, task)'
         call_sv = 'session_violation.session_violation(root, session_id, redacted, event_id, recorder, at)'
+        call_ra = 'claude_code_shell_allow.read_allowlist(root, base, task)'
         self.assertEqual(TEXT.count(call_rc), 1)
         self.assertEqual(TEXT.count(call_sv), 1)
-        broken = [TEXT.replace(call_rc, 'task_contract.read_contract(root, base, task, run=None)'),
+        self.assertEqual(TEXT.count(call_ra), 1)
+        broken = [TEXT.replace(call_ra, 'claude_code_shell_allow.read_allowlist(root, base, task, run=None)'),
+                  TEXT.replace(call_ra, 'claude_code_shell_allow.read_allowlist(*(root, base, task))'),
+                  TEXT.replace(call_ra, 'getattr(claude_code_shell_allow, "read_allowlist")(root, base, task)'),
+                  TEXT + '\nREADER = claude_code_shell_allow.read_allowlist\n',
+                  TEXT + '\n_NAME = "read_allowlist"\n',
+                  TEXT.replace('from aieos_bootstrap import claude_code_shell_allow\n', ''),
+                  TEXT + '\nfrom aieos_bootstrap.claude_code_shell_allow import read_allowlist\n',
+TEXT.replace(call_rc, 'task_contract.read_contract(root, base, task, run=None)'),
                   TEXT.replace(call_rc, 'task_contract.read_contract(*(root, base, task))'),
                   TEXT.replace(call_sv, call_sv[:-1] + ', lookup=None)'),
                   TEXT.replace(call_sv, call_sv[:-1] + ', None)'),
@@ -720,7 +771,8 @@ class AC6Separation(unittest.TestCase):
         """TASK-072 AC6: the new module imports only datetime, hashlib, json, os, re and sys and, each as "from
         aieos_bootstrap import X", claude_code, claude_code_channel, claude_code_hook, claude_code_store,
         session_violation and task_contract; it opens no file, starts no process, names no project-state string and
-        uses no attribute of writer, adapter, eventlog, violation or read_set_record."""
+        uses no attribute of writer, adapter, eventlog, violation or read_set_record. TASK-076 AC7: it imports
+        claude_code_shell_allow too, and uses only its read_allowlist."""
         tree = ast.parse(TEXT)
         imports = set()
         for n in ast.walk(tree):
@@ -730,8 +782,8 @@ class AC6Separation(unittest.TestCase):
                 imports.update((n.module, a.name) for a in n.names)
         self.assertEqual(imports, {('import', m) for m in ('datetime', 'hashlib', 'json', 'os', 're', 'sys')}
                          | {('aieos_bootstrap', m) for m in ('claude_code', 'claude_code_channel', 'claude_code_hook',
-                                                             'claude_code_store', 'session_violation',
-                                                             'task_contract')})
+                                                             'claude_code_shell_allow', 'claude_code_store',
+                                                             'session_violation', 'task_contract')})
         names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
         attrs = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
         self.assertFalse((names | attrs) & {'open', 'print', 'exec', 'eval', '__import__', 'importlib', 'subprocess',
@@ -750,6 +802,7 @@ class AC6Separation(unittest.TestCase):
         self.assertEqual(attrs_of['claude_code_hook'], {'entry', 'RESULT_KEYS'})
         self.assertEqual(attrs_of['claude_code_channel'], {'record_findings', 'redact', 'RECORDER_JOIN'})
         self.assertEqual(attrs_of['claude_code'], {'RECORDER'})
+        self.assertEqual(attrs_of['claude_code_shell_allow'], {'read_allowlist'})
 
     def test_the_names_equal_the_read_hooks(self):
         """TASK-072 AC6: SESSION_VAR and ROOT_VAR equal the read hook's; BASE_VAR is AIEOS_BASE; OUTCOMES and REASONS
@@ -760,6 +813,167 @@ class AC6Separation(unittest.TestCase):
         self.assertEqual(hook.OUTCOMES, ('allow', 'refuse'))
         self.assertEqual(hook.REASONS, ('enforce_nothing', 'tied_allow', 'store', 'base', 'contract', 'uncovered',
                                         'no_record', 'record_form', 'recorded', 'lease_lost', 'core', 'entry'))
+
+
+POLICY = b'version: 1\nshell_allow:\n  - ls\n  - git status\n  - cat\n'
+CONTRACT = b'task: TASK-001\ncapabilities:\n  shell: {allow: ["ls -la", "git status"]}\n'
+
+
+def object_store(policy=POLICY, contract=CONTRACT):
+    """An in-memory object store at BASE with the policy file (when policy is not None) and the contract."""
+    ids = {k: k * 40 for k in 'abcdef'}
+    root_tree = '040000 tree %s\tdocs\n' % ids['d']
+    objects = {BASE: ('tree %s\nauthor A <a> 1 +0000\ncommitter A <a> 1 +0000\n\nm\n' % ids['a']).encode(),
+               ids['d']: ('040000 tree %s\ttasks\n' % ids['e']).encode(),
+               ids['e']: ('100644 blob %s\t%s.yaml\n' % (ids['f'], TASK)).encode(), ids['f']: contract}
+    if policy is not None:
+        root_tree = '040000 tree %s\t.aieos\n' % ids['b'] + root_tree
+        objects[ids['b']] = ('100644 blob %s\tproject.yaml\n' % ids['c']).encode()
+        objects[ids['c']] = policy
+    objects[ids['a']] = root_tree.encode()
+    return objects
+
+
+class AC6TheShellList(unittest.TestCase):
+
+    def real(self, stdin, objects, entry=None):
+        """run with the real claude_code_shell_allow over a stand-in gitread.run serving objects (and a stand-in
+        gitread.form_error accepting the made-up root); the other stand-ins as Calls sets them."""
+        c, asked = Calls(), []
+
+        def fake_run(root, args, timeout):
+            asked.append(args[2])
+            if args[2] not in objects:
+                return {'exit': 128, 'out': b'', 'err': b'', 'error': None}
+            return {'exit': 0, 'out': objects[args[2]], 'err': b'', 'error': None}
+        ps = c.patches(entry=entry)[:5]
+        for p in ps:
+            p.start()
+        try:
+            with mock.patch.object(gitread, 'run', fake_run), \
+                    mock.patch.object(gitread, 'form_error', lambda *a: None):
+                out = hook.run(stdin, ENV, None, T0, c.clock)
+        finally:
+            for p in reversed(ps):
+                p.stop()
+        return c, out, asked
+
+    def test_a_shell_call_matching_both_lists_is_allowed(self):
+        """TASK-076 AC6: with the real reader, a Bash or PowerShell call matching an entry of both lists gives run
+        reason "tied_allow" and nothing passed to the core; the reader asks at most seven objects."""
+        for stdin in (call_bytes('Bash', {'command': 'ls -la'}), call_bytes('PowerShell', {'command': 'git status'})):
+            with self.subTest(stdin=stdin):
+                c, out, asked = self.real(stdin, object_store())
+                self.assertEqual(out, {'exit_code': 0, 'outcome': 'allow', 'reason': 'tied_allow', 'findings': []})
+                self.assertEqual(c.core_args, [])
+                self.assertLessEqual(len(asked), 7)
+                self.assertEqual(asked[0], BASE)
+
+    def test_a_call_matching_only_the_policy_is_recorded(self):
+        """TASK-076 AC6: a call matching only the policy list gives run reason "recorded", the entry's reason
+        "allowlist" and evidence type shell_not_allowed."""
+        seen = []
+
+        def entry(*args):
+            r = claude_code_hook.entry(*args)
+            seen.append(r)
+            return r
+        c, out, _ = self.real(call_bytes('Bash', {'command': 'cat a.txt'}), object_store(), entry)
+        self.assertEqual(out['reason'], 'recorded')
+        self.assertEqual(seen[0]['reason'], 'allowlist')
+        self.assertEqual(c.passed()['evidence_type'], 'shell_not_allowed')
+
+    def test_both_lists_empty_refuse_every_shell_call(self):
+        """TASK-076 AC6: with no policy file at the base, or a contract without entries, every shell call is refused
+        and recorded as before."""
+        stores = (object_store(policy=None), object_store(contract=b'task: TASK-001\n'),
+                  object_store(policy=None, contract=b'task: TASK-001\n'))
+        for objects in stores:
+            for command in ('ls -la', 'git status', 'ls'):
+                with self.subTest(command=command):
+                    c, out, _ = self.real(call_bytes('Bash', {'command': command}), objects)
+                    self.assertEqual(out['reason'], 'recorded')
+                    self.assertEqual(c.passed()['evidence_type'], 'shell_not_allowed')
+
+    def test_other_tools_are_unaffected_and_not_read(self):
+        """TASK-076 AC6: for a Read, a Write and an Edit call the verdict, the reason and the record are the same with
+        an empty list and with a well-formed list, and the reader is not called."""
+        edit = call_bytes('Edit', {'file_path': WIN_ROOT + '\\src\\b.py', 'old_string': 'a', 'new_string': 'b'})
+        for stdin in (READ, WRITE_IN, WRITE_OUT, edit):
+            with self.subTest(stdin=stdin):
+                outs = []
+                for shell in (shell_lists(), shell_lists(['ls', 'git status'])):
+                    c = Calls(shell=shell)
+                    outs.append((c.run(stdin=stdin), c.core_args[0][0][2] if c.core_args else None))
+                    self.assertNotIn('read_allowlist', c.log)
+                self.assertEqual(outs[0], outs[1])
+        self.assertEqual(claude_code_hook.allowlist_findings(['ls', 'git status']), [])
+
+    def test_parse_failures_give_no_read(self):
+        """TASK-076 AC6: an input that is not bytes, starts with a byte-order mark, is not UTF-8, holds a duplicate key
+        or a NaN, Infinity or -Infinity constant, is not an object, or has a tool_name that is not exactly Bash or
+        PowerShell (a non-str among them) gives the empty list and no read."""
+        bash = call_bytes('Bash', {'command': 'ls'})
+        inputs = ['{}', b'\xef\xbb\xbf' + bash, b'\xff' + bash, b'[1]',
+                  b'{"tool_name": "Bash", "tool_name": "Bash", "tool_input": {"command": "ls"}}',
+                  b'{"tool_name": "Bash", "tool_input": {"command": "ls"}, "x": NaN}',
+                  b'{"tool_name": "Bash", "tool_input": {"command": "ls"}, "x": Infinity}',
+                  b'{"tool_name": "Bash", "tool_input": {"command": "ls"}, "x": -Infinity}',
+                  call_bytes(7, {'command': 'ls'}), call_bytes('bash', {'command': 'ls'}),
+                  call_bytes(['Bash'], {'command': 'ls'}), call_bytes(None, {'command': 'ls'})]
+        for stdin in inputs:
+            with self.subTest(stdin=stdin):
+                c = Calls(shell=shell_lists(['ls']))
+                c.run(stdin=stdin)
+                self.assertNotIn('read_allowlist', c.log)
+                self.assertEqual(hook._allowlist(stdin, WIN_ROOT, BASE, TASK), [])
+
+    def test_the_reader_is_not_called_on_the_bad_base_and_contract_paths(self):
+        """TASK-076 AC6: with AIEOS_BASE out of form, or the contract unreadable, a Bash call reads no list."""
+        bash = call_bytes('Bash', {'command': 'ls'})
+        c = Calls(shell=shell_lists(['ls']))
+        self.assertEqual(c.run(stdin=bash, env=dict(ENV, **{hook.BASE_VAR: ''}))['reason'], 'base')
+        self.assertNotIn('read_allowlist', c.log)
+        c = Calls(shell=shell_lists(['ls']), contract=unreadable('git'))
+        self.assertEqual(c.run(stdin=bash)['reason'], 'contract')
+        self.assertNotIn('read_allowlist', c.log)
+
+    def test_the_reader_gets_root_base_and_task_and_its_list_is_passed(self):
+        """TASK-076 AC6: on the judged path the reader gets the tie's root, AIEOS_BASE and the lease's task, three
+        arguments and no run; its list reaches the entry: a listed command is allowed."""
+        got = []
+
+        def entry(*args):
+            got.append(args[4])
+            return claude_code_hook.entry(*args)
+        c = Calls(shell=shell_lists(['ls']))
+        out = c.run(stdin=call_bytes('Bash', {'command': 'ls'}), entry=entry)
+        self.assertEqual(c.shell_args, [((WIN_ROOT, BASE, TASK), {})])
+        self.assertEqual(got, [['ls']])
+        self.assertEqual(out['reason'], 'tied_allow')
+        self.assertEqual(c.log, ['judge', 'read_contract', 'read_allowlist'])
+
+    def test_a_raising_reader_or_an_answer_of_another_shape_gives_empty(self):
+        """TASK-076 AC6: a reader that raises, or answers None, a list, a mapping without a list of str under
+        "allowlist", gives the empty list: the shell call is refused and recorded."""
+        answers = (RuntimeError('made-up'), None, [], {}, {'allowlist': 'ls'}, {'allowlist': [7]},
+                   {'allowlist': ('ls',)}, KeyError('x'))
+        for answer in answers:
+            with self.subTest(answer=answer):
+                got = []
+
+                def entry(*args):
+                    got.append(args[4])
+                    return claude_code_hook.entry(*args)
+                c = Calls(shell=answer)
+                out = c.run(stdin=call_bytes('Bash', {'command': 'ls'}), entry=entry)
+                self.assertEqual(got, [[]])
+                self.assertEqual(out['reason'], 'recorded')
+
+    def test_the_shell_tools_equal_the_judges(self):
+        """TASK-076 AC6: the hook's own SHELL_TOOLS literals equal claude_code.SHELL_TOOLS."""
+        self.assertEqual(hook.SHELL_TOOLS, claude_code.SHELL_TOOLS)
+        self.assertEqual(hook.SHELL_TOOLS, ('Bash', 'PowerShell'))
 
 
 class FakeStdin:
@@ -917,9 +1131,12 @@ class AC9WhatIsStated(unittest.TestCase):
 
     def test_the_docstring_states_the_limits(self):
         """TASK-072 AC9: the module docstring states each pinned phrase exactly as AC9 writes it, case kept and
-        whitespace collapsed, and no effect label."""
+        whitespace collapsed, and no effect label. TASK-076 AC7: the timing phrase is the twelve-call one, and the
+        policy file, the refused first words and the copied walk are stated."""
         doc = ' '.join(ast.get_docstring(ast.parse(TEXT)).split())
-        for words in ('every shell call is refused', 'refused without a record', 'about 50 seconds',
+        for words in ('every shell call is refused', 'refused without a record',
+                      'twelve calls, about 120 seconds at worst for the git calls alone', 'the policy file',
+                      'refuses a first word such as timeout or python', 'kept in step by hand',
                       'AIEOS_BASE is a proposal', 'a nested runtime chooses its own',
                       'cannot show that AIEOS_BASE is the tip of main', 'replace refs', 'forbidden is not enforced',
                       'unmeasured', 'a BaseException', 'a kill', 'only with stand-ins',
@@ -931,15 +1148,18 @@ class AC9WhatIsStated(unittest.TestCase):
         self.assertIsNone(re.search(r'\b(' + labels + r')\b', TEXT))
 
     def test_every_test_names_its_criteria(self):
-        """TASK-072 AC9 and TASK-074 AC7: every test function of this module names "TASK-072 ACn" or "TASK-074 ACn" in
-        its own docstring and no other task's AC in qualified form; every test function of the property module names
-        "TASK-072 ACn" or "TASK-074 ACn", and every test function of PretoolHookFiles names "TASK-072 ACn"."""
+        """TASK-072 AC9, TASK-074 AC7 and TASK-076 AC7: every test function of this module names "TASK-072 ACn",
+        "TASK-074 ACn" or "TASK-076 ACn" in its own docstring and no other task's AC in qualified form; every test
+        function of the property module names one of those three, and every test function of PretoolHookFiles names
+        "TASK-072 ACn"."""
         tree = ast.parse(pathlib.Path(__file__).read_bytes().decode('utf-8'))
         for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name.startswith('test')]:
             doc = ' '.join((ast.get_docstring(fn) or '').split())
             with self.subTest(test=fn.name):
-                self.assertTrue(re.findall(r'TASK-07[24] AC[0-9]+', doc))
-                self.assertEqual(re.findall(r'TASK-(?!07[24] )[0-9]+ AC[0-9]+', doc), [])
+                self.assertTrue(re.findall(r'TASK-07[246] AC[0-9]+', doc))
+                self.assertEqual(re.findall(r'TASK-(?!07[246] )[0-9]+ AC[0-9]+', doc), [])
+        self.assertEqual(re.findall(r'TASK-(?!07[246] )[0-9]+ AC[0-9]+', 'TASK-073 AC1 TASK-075 AC2'),
+                         ['TASK-073 AC1', 'TASK-075 AC2'])
         here = pathlib.Path(__file__).resolve().parents[1]
         prop_path = here / 'property' / 'test_claude_code_pretool_hook_properties.py'
         prop = ast.parse(prop_path.read_bytes().decode('utf-8'))
@@ -949,7 +1169,7 @@ class AC9WhatIsStated(unittest.TestCase):
         for fn in [n for n in ast.walk(prop) if isinstance(n, ast.FunctionDef) and n.name.startswith('test')]:
             doc = ' '.join((ast.get_docstring(fn) or '').split())
             with self.subTest(test=fn.name):
-                self.assertTrue(re.findall(r'TASK-07[24] AC[0-9]+', doc))
+                self.assertTrue(re.findall(r'TASK-07[246] AC[0-9]+', doc))
         for fn in [n for n in ast.walk(cls[0]) if isinstance(n, ast.FunctionDef) and n.name.startswith('test')]:
             doc = ' '.join((ast.get_docstring(fn) or '').split())
             with self.subTest(test=fn.name):
@@ -989,14 +1209,15 @@ class WhatIsStatedTask074(unittest.TestCase):
         self.assertNotIn('is hashed as no bytes, and the entry then refuses it without a record', doc)
 
     def test_the_s1_1_and_s1_2_sentences(self):
-        """TASK-074 AC3: main's sentence cites the documentation as unmeasured, and the 50 seconds count the git calls
-        alone; the old sentences are gone."""
+        """TASK-074 AC3: main's sentence cites the documentation as unmeasured, and the seconds count the git calls
+        alone; the old sentences are gone. TASK-076 AC7: the 50 seconds became the twelve calls' 120 seconds."""
         doc = ' '.join(ast.get_docstring(ast.parse(TEXT)).split())
         for words in ("as Claude Code's documentation states (unmeasured, C6)",
-                      'about 50 seconds at worst for the git calls alone'):
+                      'about 120 seconds at worst for the git calls alone'):
             with self.subTest(words=words):
                 self.assertIn(words, doc)
-        for words in ('exception, which would let the call go ahead', 'about 50 seconds at worst, against'):
+        for words in ('exception, which would let the call go ahead', 'about 50 seconds at worst, against',
+                      'about 50 seconds', 'an empty shell allowlist', 'authors no shell policy'):
             with self.subTest(words=words):
                 self.assertNotIn(words, doc)
 
