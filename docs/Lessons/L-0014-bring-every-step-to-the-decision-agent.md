@@ -34,6 +34,9 @@ One occurrence in session 2026-10-18-2345 (../History/2026-10/2026-10-18-2345-th
 One occurrence in session 2026-10-23-1555 (../History/2026-10/2026-10-23-1555-the-later-part-the-resumed-session-the-archive-and-the-pages-d1965-to-d2027.md):
 - **2026-10-23 (D-2026).** The end of the session, a turn end that the owner would have to resume, was never brought to the decision agent as its own question ("end now, or go on?"); the end steps of D-2018 C3 were taken as covering it.
 
+One occurrence in session 2026-10-23-1555, later part 6 (../History/2026-10/2026-10-23-1555-the-later-part-6-task-080-the-context-compiler-v1-as-a-pure-module.md):
+- **2026-10-24 (D-2198).** The review folder rs80z and review t80s-S2 were started before the CI read of the fix commit was brought to the decision agent, against the order D-2197 set; accepted after the fact.
+
 ## Why it happens
 - Claude treats a step as mechanical (a display, a change of order, a turn end) and does not see it as a decision.
 - The request checklist of the decision agent's definition was not applied before sending.
