@@ -1,0 +1,466 @@
+# TASK-081: the reader of files at the base (specification 7 revision 2, section 6; M7's first task). Plan: decisions
+# D-2270 to D-2273 (session 3797498a): M7's cut (D-2271), the pin scan (MYSP/t81/pinscan81-out.txt and
+# pinscan81-reading.md at af834d5d, D-2273), the risk run (MYSP/t81/risk/risk_class81.py); r1: reviews rv81a
+# (claude-sonnet-5-5) and rv81b (claude-opus-5-5, partial) of r0 and their dispositions (MYSP/t81/disp81.md, D-2275);
+# r2: round-2 reviews rv81c (claude-sonnet-5-5) and rv81d (claude-opus-5-5) of r1 and their dispositions
+# (MYSP/t81/disp81r2.md, D-2277). AC5's decision-matrix value ac8a6116… was checked by machine as the SHA-256 of git
+# show e0378695:docs/pre-genesis/decision-matrix.md in the dry run of decision D-2259 (exec_s7_d.sh :32, "pre ok").
+#
+# Scope:
+# - A new src/aieos_bootstrap/base_files.py with two public functions that read the repository at a commit through
+#   gitread.run's fixed forms only (src/aieos_bootstrap/gitread.py :4-15): read_file(repo, commit, path, read=None) and
+#   list_paths(repo, commit, prefix, read=None). read is injectable (default gitread.run, the same signature
+#   (repo, args, timeout) and result {exit, out, err, error}), so unit tests run with no Git.
+# - It imports exactly hashlib, re and aieos_bootstrap.gitread, and uses on gitread exactly run, parse_commit and
+#   form_error; it starts no
+#   process but through read; it opens, writes and appends no file, reads no clock and no environment, makes no os
+#   call, and never raises: every failure gives findings.
+# - What it does not do: no caller yet (TASK-082 calls it for get_work_order and query); no MCP tool; no change to
+#   gitread.py, scope_reconcile.py or any other existing file.
+#
+# The walk (D-2271 C1; specification 7 :56, "(proposed: reuse that walk for any path)"). Options:
+# - (a) a new walk in base_files.py modelled on scope_reconcile._blob_at (src/aieos_bootstrap/scope_reconcile.py
+#   :168-230: _read_failure, _cat, _listing, _blob_at);
+# - (b) a public function made from _blob_at in scope_reconcile.py, which meets the proposal but changes an accepted
+#   module and its pins (tests/unit/test_scope_reconcile.py, tests/integration/test_scope_reconcile_log.py);
+# - (c) importing the private name _blob_at into src, rejected (a private name of an accepted module as an interface).
+# This task's choice: (a). It departs from specification 7's "reuse that walk"; the departure is listed for
+# specification 7's next revision. Its real differences from _blob_at: rev-parse and cat-file -t of the commit,
+# gitread.form_error before any read, the name form of every listed name, the bounds below,
+# the refusal of symbolic links, submodules and quoted names, MAX_DEPTH, the blob hash check, TIMEOUT 60 against
+# gitread's default 30, and findings in place of _Stop. AC5 uses _blob_at as a test-only oracle.
+#
+# The functions (each returns (value, None) or (None, findings: a non-empty list of strs); on findings no value):
+# - Inputs, checked before any read call: repo a str whose form gitread.form_error(repo, <the first fixed form>,
+#   TIMEOUT) accepts (gitread.py :77-83: an absolute path to an existing directory), called by base_files itself
+#   before any read, so a relative or missing repo gives findings with zero read calls; commit 40 or 64 lowercase
+#   hexadecimal characters; path a repository path: "/"-separated names, each name 1 or more characters of
+#   printable ASCII 0x21-0x7e other than `"` and `\` (so no space, no control character [\x00-\x1f\x7f], no
+#   non-ASCII, nothing Git quotes), no name "." or "..", no leading or trailing "/", at most 4096 characters, at most
+#   MAX_DEPTH names; path "" refused; prefix the same form, or "" for the root; exact type(x) is str and fullmatch;
+#   read None or callable. Any other input gives findings with no read call.
+# - The commit: rev-parse --verify --end-of-options <commit> must give back the commit itself (output stripped of its
+#   final newline); cat-file -t <commit>'s output stripped of its final newline must equal b"commit"; cat-file -p
+#   <commit> parsed by gitread.parse_commit must give no error and a tree id of 40 or 64 lowercase hexadecimal
+#   characters (as scope_reconcile.py :239). A tag, a tree or a blob id, or a commit whose bytes parse_commit refuses
+#   (a non-UTF-8 message among them, gitread.py :166-169) gives findings.
+# - The walk: each tree is listed with cat-file -p <tree id>; each listing line is "<mode> <type> <id>\t<name>" as
+#   scope_reconcile._LISTING reads it (:109); a line out of form, a name listed twice, or a listed name that does
+#   not fit the path-name form above (a name beginning with `"`, which Git quotes; a space; a non-ASCII character,
+#   which a Git with core.quotePath false may give unquoted; "." or "..") gives findings, so a tree holding such a
+#   name fails closed; a listing over MAX_BYTES gives findings. Listings are cached by tree id: each distinct tree id
+#   is read once, and every place it appears gives its paths.
+# - read_file: the walk along path, a tree for every name but the last and a blob for the last, each mode fitting its
+#   type (scope_reconcile.py :110, MODES); then cat-file -p <blob id>; the bytes must be at most MAX_BYTES, must hash as
+#   Git hashes a blob ("blob <len>\0" + bytes: hashlib.sha1(data, usedforsecurity=False) for a 40-character id, so
+#   bandit's B324 does not apply, and hashlib.sha256 for a 64-character id) to the listed id, and must be UTF-8;
+#   value {"blob": <blob id>, "text": <the text>}. A missing name, a wrong type or mode, a symbolic link (mode
+#   120000), a submodule (type commit) or any check above gives findings.
+# - list_paths: the walk to the tree at prefix, then every blob path under it, depth first; value: the sorted list of
+#   repository paths (code-point order). A prefix that names a blob or is missing, a symbolic link or a submodule
+#   anywhere under the prefix (fail closed), more than MAX_ENTRIES paths, more than MAX_TREES distinct trees (the
+#   root tree counted), more than MAX_PLACES tree places visited (a cached tree counted at every place it appears),
+#   more than MAX_TOTAL_BYTES read in the call (listings and blobs), or a depth over MAX_DEPTH names counted from the
+#   root (the prefix's names and the names below) gives findings; the walk stops at the first bound crossed.
+# - Every read call is guarded, as scope_reconcile._read_failure (:168-178) checks: a call that raises (caught as
+#   Exception and turned into findings, never pass or continue), a result that is not a dict with exit, out, err and
+#   error, an error that is not None, a nonzero exit, or an out that is not bytes gives findings naming the
+#   subcommand. Every call passes TIMEOUT.
+#
+# Stated choices (this task's; specification 7 section 10 point 8 stays open for its next revision):
+# - The walk (a), above. The two public names and their value shapes. Module constants, read at call time so tests
+#   may lower them: MAX_BYTES 4194304 (per blob and per listing), MAX_TOTAL_BYTES 67108864 (per call), MAX_ENTRIES
+#   100000 paths, MAX_TREES 20000 distinct trees, MAX_PLACES 200000 tree places, MAX_DEPTH 64 names from the root,
+#   TIMEOUT 60 seconds. Symbolic links and submodules give findings, never followed, in list_paths too: a tree that
+#   holds one cannot be listed from above it (the trade-off of failing closed).
+#   Path names limited to unquoted printable ASCII.
+#
+# Owner-act boundary: none reached. Nothing is launched or connected; no hook, setting, policy or measurement.
+#
+# Stated limits.
+# - Git is trusted as the contract reader trusts it (specification 5 :121); gitread's own limits hold (gitread.py
+#   :42-51), output not capped among them: MAX_BYTES is checked after a read returns.
+# - A path with a non-ASCII or other quoted name cannot be read or listed.
+# - Limit L2 of scope_reconcile (:53-56): a raw newline inside a name, from a stand-in or a Git that does not quote, can
+#   make a listing line that is in form and wrong.
+# - cat-file honours refs/replace: a tree read may not be the commit's own; a blob is checked by its hash, a tree
+#   cannot be (cat-file -p prints text).
+# - No wall-time bound beyond TIMEOUT per call times the reads MAX_TREES allows.
+# - The function reads what the commit holds; that the commit is the base the launcher passed is the caller's
+#   (TASK-082, TASK-084).
+#
+# The pins (L-0026; MYSP/t81/pinscan81-reading.md at af834d5d; D-2273):
+# - .github/workflows/aieos-checks.yml :1489-1517 and :1597-1620 (the deterministic rule): base_files.py and its tests
+#   get NONE: no deny-listed module (subprocess, importlib, socket and the others), name (exec, eval, compile,
+#   __import__, open, input, breakpoint, __builtins__, as ast.Name, :1620) or os call; standard library and
+#   aieos_bootstrap only; tests patch open by the string "builtins.open" and read sources with pathlib's read_bytes.
+# - aieos-checks.yml :1512-1514, :1537-1584 and :1598-1599 (gitread's pattern rule; only gitread.py imports
+#   subprocess): unchanged; base_files.py uses gitread.run only.
+# - aieos-checks.yml :1677-1721 (OPS-003's pattern rule): no MEASURED, ENFORCED or GUARANTEED without a DM row on the
+#   line; no src string constant exactly valid, accepted or approved (:1680-1681, :1716). :1727-1755 (bandit, every
+#   test on src, and on tests every test but B101 and B311): no bare assert (B101), no try/except/pass (B110), no
+#   try/except/continue (B112) in base_files.py, and no insecure hash call (B324): SHA-1 only as
+#   hashlib.sha1(..., usedforsecurity=False), in the module and the tests.
+# - aieos-checks.yml :423 and :490 (GOV-003's EVALUATOR list, src/aieos_bootstrap/**): a new evaluator path; its change
+#   class ruled at acceptance; the list unchanged.
+# - tests/unit/test_gitread.py :370-380 (only gitread imports subprocess); tests/unit/test_writer.py :397-411 (R8: no
+#   open, .open or .connect call, no ".aieos" string); tests/unit/test_autonomy.py :237-246 (no src module imports or
+#   calls autonomy): met by the import set.
+# - tests/unit/test_claude_code_read_hook.py :35, :38, :492 (HOOK_SIDE, eight modules): base_files.py is not hook side
+#   and no hook-side module imports it.
+# - The conformance set tests (tests/integration/test_conformance_cb_set.py :75-83, test_conformance_rc_set.py
+#   :153-158, test_conformance_risk_set.py :87-95): the new files name no conformance fixture folder.
+# - tests/unit/test_bench_isolation.py :32-52: no new file holds "bench/".
+# - tests/integration/test_ac_tests_tree.py :63 reads every test module but checks the naming of TASK-001 to TASK-022
+#   only (:13); the new modules' own naming test (AC9) checks "TASK-081 ACn".
+# - src/aieos_bootstrap/__init__.py :90 is not changed.
+#
+# Risk: high, computed over the base by MYSP/t81/risk/risk_class81.py (R2 medium and R3 high, not evaluable, for each
+# path). GOV-003: src/aieos_bootstrap/** is an evaluator path; change class ruled at acceptance. Profile as TASK-080's.
+# Reviews on Sonnet 5.5 or Opus 5.5 (never Fable). Naming (D-544 Q3): every new test function names "TASK-081 ACn" in
+# its own docstring.
+# Not applicable: OPS-001; INV-005 to INV-011; GOV-001, GOV-004 to GOV-006, SEC-003. INV-004 is not reached (the module
+# writes nothing); it stays listed for the evaluator path's profile.
+# Owner-kept acts: none in this task.
+# Shadow (D-2042 C3 as amended by D-2068): the governor's evaluate at acceptance, any difference named.
+# Records obligations of the acceptance (AC10; outside the write-set): the shadow's result; the walk's departure (a)
+# and the stated choices listed for specification 7's next revision.
+# Local runs: the unit group in three parts.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-081.yaml, has one parent equal to base_commit, and goes
+# to main under its own decision; the task's commits carry "AIEOS-Task: TASK-081" and go to task/TASK-081; main
+# receives them only at acceptance. X, in AC10 and the records, is the task head at acceptance.
+task: TASK-081
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add src/aieos_bootstrap/base_files.py with read_file and list_paths, which read a file's text and the paths under a
+  tree at a commit through gitread.run's fixed forms only, with read injectable, bounded, findings never an exception,
+  and nothing written; tests in tests/unit/test_base_files.py, tests/integration/test_base_files_repo.py and
+  tests/property/test_base_files_properties.py, each new test naming "TASK-081 ACn".
+traces_to:
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#6
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#10
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#5
+  - docs/specs/spec-05-adapter-contract.md#11
+input_state:
+  base_commit: af834d5d4e1e85657bb6c08c823fd16c1b106682
+  depends_on: [TASK-024, TASK-034, TASK-035]
+  intent_versions:
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 613cbd72dca411586ca03d790cd01bb044d0eb8e9a2885d9c3f8bb25cc9f5efb
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: d2fa59ae3f203b3a2108e55d23ddfb875e64ab57d27372c9d413bf30d7c2cbdd
+    docs/specs/spec-05-adapter-contract.md: ae7b99419d303db40b7200e39a22d93b9301b29900f3b1f5a5720b72d8eb9c2b
+    docs/specs/spec-02-aieos-file-format.md: 8e744daa31928621137db59a8a9d91ecf163879420e1f8e148232b149cafcdb7
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/base_files.py
+    - tests/integration/test_base_files_repo.py
+    - tests/property/test_base_files_properties.py
+    - tests/unit/test_base_files.py
+read_set:
+  paths:
+    - docs/specs/spec-07-cli-and-zero-friction-path.md
+    - docs/specs/spec-06-mcp-protocol-and-work-orders.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.gitread.run, aieos_bootstrap.gitread.parse_commit, aieos_bootstrap.gitread.form_error,
+    "aieos_bootstrap.scope_reconcile._blob_at (a test-only oracle in AC5)"]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_context_compiler_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_mcp_server_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The inputs: read_file and list_paths take the header's forms and return (None, findings) with a non-empty list
+      otherwise, never raising, and with zero read calls for every refused input (the stand-in counts its calls);
+      among the cases, not a closed list: a commit that is not 40 or 64 lowercase hex characters; a path or prefix
+      with an empty name, ".", "..", a backslash, a `"`, a space, a control character [\x00-\x1f\x7f], a non-ASCII
+      character, a leading or trailing "/", over 4096 characters or over MAX_DEPTH names; path ""; a non-str argument
+      or a str subclass; a non-callable read; a relative or missing repo (refused by gitread.form_error, called by
+      base_files before any read). Tests in tests/unit/test_base_files.py.
+  - AC2: >-
+      read_file's commit and walk: rev-parse's output other than the commit, cat-file -t's stripped output other than
+      b"commit" (a tag, a tree, a blob; with cat-file -p of that object giving bytes parse_commit accepts, so the -t
+      check is what refuses), parse_commit's error, a tree id out of form; then a missing name, a tree where a blob is
+      due or a blob where a tree is due, a mode that does not fit its type, a symbolic link, a submodule, a listing line
+      out of form, a name listed twice, a listed name out of the path-name form (beginning with `"`, holding a space or
+      a non-ASCII character, or equal to "." or ".."; each placed as a sibling of a walked element in a listing that is
+      read), a listing or a blob over MAX_BYTES, a blob whose Git hash differs from its id (a SHA-1 id and a SHA-256
+      id), and bytes not UTF-8 each give findings; otherwise {"blob", "text"}. Tests with a stand-in read giving each
+      answer, MAX_BYTES lowered by the test.
+  - AC3: >-
+      list_paths: every blob path under the prefix, sorted in code-point order (the stand-in listing entries in an
+      order other than sorted); "" lists the whole tree; a tree id that appears at two places is read once and gives
+      its paths at both (the stand-in counts the reads); a prefix naming a blob, a missing prefix, a symbolic link or a
+      submodule anywhere under the prefix, a listed name out of the path-name form, a listing over MAX_BYTES, more than
+      MAX_TOTAL_BYTES in the call, more than MAX_ENTRIES paths, more than MAX_TREES distinct trees, more than
+      MAX_PLACES tree places (a tree of repeated subtrees with no blob among them), and a depth over MAX_DEPTH each give
+      findings, the walk stopping at the bound (the reads counted). Tests with a stand-in read, the bounds lowered by
+      the test.
+  - AC4: >-
+      The read calls: only gitread's fixed forms are passed (rev-parse --verify --end-of-options, cat-file -t,
+      cat-file -p), each with TIMEOUT, and gitread.form_error gives None for each with the repository root as repo; a
+      read that raises, returns a non-dict, lacks a key, gives an error, a nonzero exit, a timeout or non-bytes out
+      gives findings naming the subcommand; read defaults to gitread.run. Tests that record every call of a stand-in.
+  - AC5: >-
+      This repository's history, as tests/integration/test_gitread_repo.py reads it (fixed commits of main, read only,
+      gitread.run as read): at base_commit, read_file of docs/specs/spec-07-cli-and-zero-friction-path.md gives text
+      whose UTF-8 SHA-256 is that file's intent_versions value, and list_paths of docs/specs gives its nine paths; at
+      e0378695ff7c251d65049f2e20cf6986bae412f6 (before specification 7 and F63), read_file of
+      docs/pre-genesis/decision-matrix.md gives text whose UTF-8 SHA-256 is
+      ac8a611640714aa282bf311197a9fe2d64b303e82ba46bcc193aa38a64252577, read_file of the specification 7 path gives
+      findings (missing), and list_paths of docs/specs gives eight paths; and the conformance with the existing walk,
+      scope_reconcile._blob_at used as a test-only oracle: on a fixed set of paths at base_commit (the nine docs/specs
+      paths and the two files read_base reads, scope_reconcile's POLICY_PATH and WORKFLOW_PATH) both give the same
+      blob id and text, and on hostile stand-in listings (a duplicate name, a bad mode, a control character, non-UTF-8
+      bytes) read_file gives findings where _blob_at raises its stop (caught by the test). Tests in
+      tests/integration/test_base_files_repo.py.
+  - AC6: >-
+      Purity: no open (patched by the string "builtins.open"), no clock and no environment read; every Git call goes
+      through read. Tests with stand-ins installed after the import, and by ast.
+  - AC7: >-
+      What the module may touch: base_files.py imports exactly hashlib, re and aieos_bootstrap.gitread, and uses on
+      gitread exactly run, parse_commit and form_error; every hashlib.sha1 call passes usedforsecurity=False, in the
+      module and the tests; no subprocess; no ast.Name compile, open, exec or eval; no call of .open, .connect,
+      .read_text, .read_bytes, .listdir, .scandir, .stat or .walk; no ".aieos" string, no "bench/", no name of a
+      conformance fixture folder (taken from the conformance module's constants), no src string constant exactly
+      valid, accepted or approved, no try/except/pass or try/except/continue. Tests by ast over pathlib's read_bytes.
+  - AC8: >-
+      Properties: over seeded random trees given by a stand-in read, list_paths gives exactly the blob paths a
+      reference walk in the test computes, and read_file of each gives its text; over seeded random byte changes of a
+      listing, list_paths and read_file never raise and give either findings or the value the reference walk gives for
+      the changed listing. The reference walk models the listing form, the name form, duplicate names, modes and
+      types, caching by tree id, the bounds and the blob hash. Tests in tests/property/test_base_files_properties.py.
+  - AC9: >-
+      Every existing test passes, the pins of the header among them; the full suite runs locally in three unit parts,
+      integration and property before the first code commit; the deterministic rule's local run gives no finding. The
+      docstring of base_files.py holds, whitespace read as single spaces, the phrases "reads through gitread.run
+      only", "read is injectable", "never raises", "writes nothing", "modelled on scope_reconcile._blob_at", "cached
+      by tree id", "fails closed" and "this task's choice", read by a test by ast over pathlib's read_bytes; every new
+      test names "TASK-081 ACn".
+  - AC10: >-
+      Broken copies, each failing the tests of its AC (and allowed to fail only the further tests named): (1) accepts
+      ".." (AC1's zero-calls test); (2) skips cat-file -t (AC4's call record; may also fail AC2); (3) follows a
+      symbolic link (AC2, AC3); (4) takes a tree for a blob (AC2); (5) drops the duplicate-name check (AC2, AC5's
+      hostile listing); (6) keeps a quoted name (AC2, AC3); (7) drops the blob hash check (AC2); (8) drops MAX_BYTES
+      (AC2, AC3), MAX_TOTAL_BYTES (AC3), MAX_ENTRIES (AC3), MAX_TREES (AC3), MAX_PLACES (AC3) or MAX_DEPTH (AC1,
+      AC3), each its own copy, run with the constants lowered, and one that reads a bound at import time instead of at
+      call time (AC2, AC3); (9) reads each tree once per place, not once per id (AC3); (10) passes a form gitread
+      refuses (AC4; may also fail AC5); (11) ignores a nonzero exit or lets a raising read through (AC4); (12) reads
+      the working tree (AC5's older commit; may also fail AC6, AC7); (13) imports subprocess (AC7; may also fail
+      test_gitread.py :370-380); (14) sorts paths otherwise (AC3, AC8); (15) uses SHA-1 for a 64-character id (AC2);
+      (16) drops the UTF-8 check (AC2); (17) drops the rev-parse echo check (AC2); (18) ignores parse_commit's error
+      (AC2); (19) drops the name-form check of listed names (AC2, AC3); (20) skips gitread.form_error (AC1's
+      zero-calls test); the governor's evaluate at acceptance (the shadow) with any difference named; the walk's
+      departure and the stated choices in the records (not tests).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9]}
+  - {gate: G3, check: constitution, args: [AC10, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
