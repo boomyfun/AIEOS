@@ -269,11 +269,11 @@ class AC3TheContractGrammar(unittest.TestCase):
     def test_a_text_of_task_074s_shape_reads_empty(self):
         """TASK-076 AC3: a made-up text of TASK-074.yaml's shape (an entry with "<", a first word "timeout", a line
         wrap inside a string) parses, but reads empty after allowlist_findings."""
-        text = ('capabilities:\n  filesystem: {read: [x]}\n  shell: {allow: ["timeout 110 python t.py < /dev/null", '
-                '"timeout 110 python <a made-up\n    script> < /dev/null"]}\n  network: {allow: []}\n')
+        text = ('capabilities:\n  filesystem: {read: [x]}\n  shell: {allow: ["timeout 5 make demo < in.txt", '
+                '"timeout 5 make <a made-up\n    target> < in.txt"]}\n  network: {allow: []}\n')
         parsed = sa.parse_contract_shell(text)
         self.assertEqual(len(parsed), 2)
-        self.assertEqual(parsed[1], 'timeout 110 python <a made-up script> < /dev/null')
+        self.assertEqual(parsed[1], 'timeout 5 make <a made-up target> < in.txt')
         self.assertTrue(claude_code_hook.allowlist_findings(parsed))
         out, _ = read(store(contract=CONTRACT.split(b'capabilities:')[0] + text.encode()))
         self.assertEqual((out['contract'], out['allowlist']), ([], []))
