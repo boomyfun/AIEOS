@@ -55,6 +55,16 @@ Limits (TASK-001 AC7):
   neither read_paths nor the name gets none of them. The paths are the writer's statements: no path form is checked
   (specification 2 section 10 point 13), and how the recorder names the adapter and the session, in words, is not
   checked (a limit).
+- The session claims of specification 2 revision 10 (TASK-077 AC2 to AC4): the record keys session, acs and text
+  (so check_record no longer refuses them as unknown keys), and their form rules: session, when present, a non-empty
+  string, on a record of any fact_kind (a reading); session is set when it is present and a non-empty string; text,
+  when present, a non-empty string, allowed only on a record whose fact_kind is claim and whose session is set; acs,
+  when present, a non-empty list of distinct non-empty strings, allowed only on a record with gate set or on a claim
+  whose session is set, where it holds exactly one id. These findings are "6.2:session", "6.2:text" and "6.2:acs".
+  Each value is the writer's statement, recorded and not checked against anything else; no check derives standing
+  from these keys' values. ci_run is not a record key. The pinned identities of governor.py and resume_check.py do not
+  see this module: a change here changes which records are well formed for the governor and the evaluator, and
+  neither pin sees it (a limit).
 - record_id is checked as a non-empty string; whether it is unique across a log is not checked. evidence_type and
   dimension are open vocabularies, checked as non-empty strings only.
 - An ignored duplicate is reported as such whether or not the line it repeats has findings of its own.
@@ -87,7 +97,8 @@ BINDING_KINDS = frozenset({'contract', 'acceptance', 'change_request', 'baseline
 RECORD_REQUIRED = ('record_id', 'fact_kind', 'source_class', 'recorder', 'subject')
 RECORD_KEYS = frozenset(RECORD_REQUIRED + (
     'evidence_type', 'dimension', 'gate', 'outcome', 'blocking_kind', 'commit', 'intent_versions', 'approval_binding',
-    'decision_ref', 'models', 'basis', 'stands_for', 'refers_to', 'risk_class', 'evidence_profile', 'read_paths'))
+    'decision_ref', 'models', 'basis', 'stands_for', 'refers_to', 'risk_class', 'evidence_profile', 'read_paths',
+    'session', 'acs', 'text'))
 # The audit copies of specification 2 revision 4 (TASK-029 AC7).
 AUDIT_COPY_TYPES = ('risk_class', 'evidence_profile')
 AUDIT_COPY_SOURCES = frozenset({'deterministic_tool_local', 'deterministic_tool_external_ci'})
@@ -312,6 +323,7 @@ def check_record(record, extra_keys=frozenset(), where='record', section='6.2'):
             findings.append(Finding('6.2:' + key, '%s %r is not a non-empty string' % (where, key)))
     findings.extend(check_audit_copy(record, where))
     findings.extend(check_read_set(record, where))
+    findings.extend(check_session_claim(record, where))
     return findings
 
 
@@ -391,6 +403,33 @@ def check_read_set(record, where='record'):
         if key in record:
             findings.append(Finding('6.2:read_set_forbidden', '%s is an observed read-set record that carries %r'
                                     % (where, key)))
+    return findings
+
+
+def check_session_claim(record, where='record'):
+    """The rules of the keys session, text and acs of specification 2 revision 10 (TASK-077 AC2 to AC4), for one
+    record (a dict). The findings are "6.2:session", "6.2:text" and "6.2:acs"; a record that carries none of the three
+    keys gets none."""
+    findings = []
+    if 'session' in record and not _is_str(record['session']):
+        findings.append(Finding('6.2:session', '%s session is not a non-empty string' % where))
+    session_claim = record.get('fact_kind') == 'claim' and _is_str(record.get('session'))
+    if 'text' in record:
+        if not _is_str(record['text']):
+            findings.append(Finding('6.2:text', '%s text is not a non-empty string' % where))
+        elif not session_claim:
+            findings.append(Finding('6.2:text', '%s carries text, but it is not a claim whose session is set' % where))
+    if 'acs' in record:
+        acs = record['acs']
+        if not _is_read_paths(acs) or not acs:
+            findings.append(Finding('6.2:acs', '%s acs is not a non-empty list of distinct non-empty strings' % where))
+        elif session_claim:
+            if len(acs) != 1:
+                findings.append(Finding('6.2:acs', '%s is a claim whose session is set, and its acs does not hold '
+                                        'exactly one id' % where))
+        elif 'gate' not in record:
+            findings.append(Finding('6.2:acs', '%s carries acs, but it has no gate and is not a claim whose session is '
+                                    'set' % where))
     return findings
 
 
