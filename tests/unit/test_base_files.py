@@ -201,9 +201,9 @@ class TASK081AC2ReadFile(Base):
     def test_walk_refusals(self):
         """TASK-081 AC2: a missing name, a blob where a tree is due, a tree where a blob is due."""
         g, head = sample()
-        for path in ['none.txt', 'a.txt/x', 'dir', 'dir/none']:
-            findings = self.refused(base_files.read_file(ROOT, head, path, g))
-        self.assertIn('not a blob', self.refused(base_files.read_file(ROOT, head, 'dir', g))[0])
+        for path, reason in [('none.txt', 'is missing'), ('a.txt/x', 'not a tree'), ('dir', 'not a blob'),
+                             ('dir/none', 'is missing')]:
+            self.assertIn(reason, self.refused(base_files.read_file(ROOT, head, path, g))[0], path)
 
     def test_modes_links_and_submodules(self):
         """TASK-081 AC2: a mode that does not fit its type, a symbolic link and a submodule give findings."""
@@ -263,6 +263,11 @@ class TASK081AC3ListPaths(Base):
         g, head = sample()
         self.assertEqual(base_files.list_paths(ROOT, head, '', g), (['a.txt', 'b.sh', 'dir/c.txt'], None))
         self.assertEqual(base_files.list_paths(ROOT, head, 'dir', g), (['dir/c.txt'], None))
+        g = Git()
+        sub = g.tree([('100644', 'blob', g.blob('z'), 'z')])
+        head = g.commit(g.tree([('040000', 'tree', sub, 'b'), ('100644', 'blob', g.blob('a'), 'a.txt'),
+                                ('100644', 'blob', g.blob('c'), 'c')]))
+        self.assertEqual(base_files.list_paths(ROOT, head, '', g), (['a.txt', 'b/z', 'c'], None))
 
     def test_shared_tree_read_once(self):
         """TASK-081 AC3: a tree id at two places is read once and gives its paths at both."""
@@ -295,6 +300,21 @@ class TASK081AC3ListPaths(Base):
                 self.refused(base_files.list_paths(ROOT, head, '', g))
             self.assertEqual(base_files.list_paths(ROOT, head, '', g)[0], ['a.txt', 'b.sh', 'dir/c.txt'], name)
 
+    def test_walk_stops_at_the_bound(self):
+        """TASK-081 AC3: the walk stops at MAX_TREES and at MAX_ENTRIES, the reads counted."""
+        g, head = sample()
+        with mock.patch.object(base_files, 'MAX_TREES', 1):
+            self.assertIn('MAX_TREES', self.refused(base_files.list_paths(ROOT, head, '', g))[0])
+        self.assertEqual((g.reads_of(g.ids['root']), g.reads_of(g.ids['sub'])), (1, 0))
+        g = Git()
+        blobs = [g.blob(t) for t in ('p', 'q', 'r')]
+        root = g.tree([('100644', 'blob', b, n) for b, n in zip(blobs, ('p', 'q', 'r'))])
+        head = g.commit(root)
+        with mock.patch.object(base_files, 'MAX_ENTRIES', 1):
+            self.assertIn('MAX_ENTRIES', self.refused(base_files.list_paths(ROOT, head, '', g))[0])
+        self.assertEqual(g.reads_of(root), 1)
+        self.assertEqual(sum(g.reads_of(b) for b in blobs), 0)
+
     def test_places_bound_on_repeated_subtrees(self):
         """TASK-081 AC3: a tree of repeated subtrees with no blob stops at MAX_PLACES, each tree read once."""
         g = Git()
@@ -308,7 +328,8 @@ class TASK081AC3ListPaths(Base):
         self.assertLessEqual(sum(1 for _, a, _ in g.calls if a[:2] == ['cat-file', '-p']), 32)
 
     def test_depth_bound(self):
-        """TASK-081 AC3: a path deeper than MAX_DEPTH names from the root gives findings."""
+        """TASK-081 AC3: a path deeper than MAX_DEPTH names from the root gives findings; one of exactly MAX_DEPTH
+        names is listed."""
         g = Git()
         t = g.tree([('100644', 'blob', g.blob('x'), 'f')])
         for name in ['c', 'b', 'a']:
@@ -317,6 +338,8 @@ class TASK081AC3ListPaths(Base):
         with mock.patch.object(base_files, 'MAX_DEPTH', 3):
             self.refused(base_files.list_paths(ROOT, head, '', g))
             self.refused(base_files.list_paths(ROOT, head, 'a', g))
+        with mock.patch.object(base_files, 'MAX_DEPTH', 4):
+            self.assertEqual(base_files.list_paths(ROOT, head, '', g), (['a/b/c/f'], None))
         self.assertEqual(base_files.list_paths(ROOT, head, 'a', g)[0], ['a/b/c/f'])
 
 
