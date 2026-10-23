@@ -83,13 +83,13 @@ def done():
 class Calls:
     """The stand-ins and the order of their calls."""
 
-    def __init__(self, judge=DEFAULT, contract=DEFAULT, core=DEFAULT, shell=DEFAULT):
+    def __init__(self, judge=DEFAULT, contract=DEFAULT, core=DEFAULT, reader=DEFAULT):
         self.log, self.judge_args, self.contract_args, self.core_args = [], [], [], []
         self.shell_args = []
         self.judge_answer = tied() if judge is DEFAULT else judge
         self.contract_answer = readable() if contract is DEFAULT else contract
         self.core_answer = done() if core is DEFAULT else core
-        self.shell_answer = shell_lists() if shell is DEFAULT else shell
+        self.shell_answer = shell_lists() if reader is DEFAULT else reader
 
     def judge(self, *args):
         self.log.append('judge')
@@ -903,7 +903,7 @@ class AC6TheShellList(unittest.TestCase):
             with self.subTest(stdin=stdin):
                 outs = []
                 for shell in (shell_lists(), shell_lists(['ls', 'git status'])):
-                    c = Calls(shell=shell)
+                    c = Calls(reader=shell)
                     outs.append((c.run(stdin=stdin), c.core_args[0][0][2] if c.core_args else None))
                     self.assertNotIn('read_allowlist', c.log)
                 self.assertEqual(outs[0], outs[1])
@@ -923,7 +923,7 @@ class AC6TheShellList(unittest.TestCase):
                   call_bytes(['Bash'], {'command': 'ls'}), call_bytes(None, {'command': 'ls'})]
         for stdin in inputs:
             with self.subTest(stdin=stdin):
-                c = Calls(shell=shell_lists(['ls']))
+                c = Calls(reader=shell_lists(['ls']))
                 c.run(stdin=stdin)
                 self.assertNotIn('read_allowlist', c.log)
                 self.assertEqual(hook._allowlist(stdin, WIN_ROOT, BASE, TASK), [])
@@ -931,10 +931,10 @@ class AC6TheShellList(unittest.TestCase):
     def test_the_reader_is_not_called_on_the_bad_base_and_contract_paths(self):
         """TASK-076 AC6: with AIEOS_BASE out of form, or the contract unreadable, a Bash call reads no list."""
         bash = call_bytes('Bash', {'command': 'ls'})
-        c = Calls(shell=shell_lists(['ls']))
+        c = Calls(reader=shell_lists(['ls']))
         self.assertEqual(c.run(stdin=bash, env=dict(ENV, **{hook.BASE_VAR: ''}))['reason'], 'base')
         self.assertNotIn('read_allowlist', c.log)
-        c = Calls(shell=shell_lists(['ls']), contract=unreadable('git'))
+        c = Calls(reader=shell_lists(['ls']), contract=unreadable('git'))
         self.assertEqual(c.run(stdin=bash)['reason'], 'contract')
         self.assertNotIn('read_allowlist', c.log)
 
@@ -946,7 +946,7 @@ class AC6TheShellList(unittest.TestCase):
         def entry(*args):
             got.append(args[4])
             return claude_code_hook.entry(*args)
-        c = Calls(shell=shell_lists(['ls']))
+        c = Calls(reader=shell_lists(['ls']))
         out = c.run(stdin=call_bytes('Bash', {'command': 'ls'}), entry=entry)
         self.assertEqual(c.shell_args, [((WIN_ROOT, BASE, TASK), {})])
         self.assertEqual(got, [['ls']])
@@ -965,7 +965,7 @@ class AC6TheShellList(unittest.TestCase):
                 def entry(*args):
                     got.append(args[4])
                     return claude_code_hook.entry(*args)
-                c = Calls(shell=answer)
+                c = Calls(reader=answer)
                 out = c.run(stdin=call_bytes('Bash', {'command': 'ls'}), entry=entry)
                 self.assertEqual(got, [[]])
                 self.assertEqual(out['reason'], 'recorded')

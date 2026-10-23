@@ -21,8 +21,8 @@ The flow, in this order:
     narrower than YAML, that gives an empty list for any other shape.
 (4) the form check: allowlist_findings over each list; any finding makes that whole list empty.
 (5) result "read": policy and contract are the checked lists, allowlist is combine(policy, contract), findings hold
-    the steps' findings, each prefixed "policy: " or "contract: " (the walk's fixed words and the form check's words,
-    never text from git, a tree or a file).
+    the steps' findings: a walk's and the form check's prefixed "policy: " or "contract: ", a refusal at the commit or
+    the root tree unprefixed ("git: ..." or "tree: ..."); fixed words only, never text from git, a tree or a file.
 (6) no exception escapes: one outside the git steps gives "unreadable", every list empty, "entry: <type name>".
 
 combine(policy, contract): for every pair of a policy entry and a contract entry where one's words (split on single
@@ -152,7 +152,7 @@ def _bytes_text(out):
         text = out.decode('utf-8')
     except UnicodeDecodeError:
         raise _Refused('bytes: not UTF-8')
-    if '﻿' in text:
+    if chr(0xFEFF) in text:
         raise _Refused('bytes: byte-order mark')
     if _CONTROL.search(text):
         raise _Refused('bytes: control character')
