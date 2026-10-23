@@ -1,0 +1,434 @@
+# TASK-080: the Context Compiler v1 as a pure module (specification 6 revision 7, sections 5 and 6; M6's third slice,
+# S3a). Plan: decisions D-2170 to D-2172; reviews m80-R1 to m80-R3 and their dispositions: D-2173 to D-2175 (session
+# 308d8b07).
+#
+# Scope (D-2171):
+# - A new src/aieos_bootstrap/context_compiler.py with one public function build_work_order(inputs) that returns the
+#   Work Order object of specification 6 section 5 from values given, in resume_check.check's pure form: it reads no
+#   file, no clock and no environment, starts no process, writes and appends nothing, mutates no input, never raises,
+#   and imports only the standard library and aieos_bootstrap.resume_check, of which it uses only meet and matches
+#   (specification 3 :55, :56); it never calls resume_check.check, which would recompute layer 1 (specification 6 :60:
+#   not recomputed). No import of writer, gitread, eventlog, execution or mcp_server. The name "compile" is a name the
+#   deterministic rule refuses (aieos-checks.yml :1494, :1620), so neither the module nor its tests name it (D-2174 B1).
+# - What it does not do (S3b, which waits for M7, D-2171): no reader of the inputs at the base, no MCP tool
+#   (get_work_order and query stay unlisted in mcp_server.py; tests/unit/test_mcp_server.py :99 and :447 use
+#   "get_work_order" as an unlisted name, a pin for S3b's contract). execution.py (TASK-032) appends the Resume Check
+#   record and grants the lease with inputs its caller gives; the caller that reads those inputs is the launcher's (M7).
+#
+# The inputs (D-2171 C2), a dict with exactly these keys:
+# - task: "TASK-" and digits; session_id: [A-Za-z0-9._-]{1,128}; base: 40 or 64 lowercase hex digits.
+# - contract: the task contract read at the base, a dict of specification 2's keys (§5.1, spec 2 :94-114), with at
+#   least task (equal to task), contract_version ("v" and digits), traces_to (a list of strs), write_set {paths: strs},
+#   read_set {paths, interfaces, schemas: strs, an absent subkey read as [], as resume_check.py :292 does} and
+#   acceptance_criteria (a list of one-entry maps from an AC id to its text); contract_hash: 64 lowercase hex digits,
+#   the caller's (specification 2 §2).
+# - resume_record: the Resume Check record that made the grant (spec 3 :112-136), a dict whose decision is CONTINUE or
+#   CONTINUE_WITH, whose constitution is {applicable, violated, no_result: lists of article ids} (resume_check.py
+#   :689), and whose subject, contract_hash and contract_version equal task, contract_hash and
+#   contract.contract_version (spec 3 :113, :119; D-2174 N1); its base and HEAD are not compared with base (spec 6
+#   :54).
+# - articles: {article id: its text at the base}, keyed exactly by resume_record.constitution.applicable.
+# - components: a list of {id, paths: strs, tags: strs}; interfaces: a list of {id, component} (spec 2 :83).
+# - adrs: {ADR id: its text at the base}; an entry of contract.traces_to that is a key of adrs is an ADR; adrs holds
+#   no other key. traced: {entry: its text at the base}, keyed exactly by the traces_to entries that are not ADRs.
+# - files: {repository path: its text at the base}; an entry no rule below selects is ignored (D-2175 R3-3);
+#   derived_read_set: a list of repository paths (spec 3 :63).
+# - last_handoff: null or {ref: str, text: str}.
+# - budgets: {layer name: an int above 0, not a bool, of bytes} for the five layers; required, no default (D-2171;
+#   specification 6 §11 point 9: the numbers stay open).
+# - Values (D-2174 N2; D-2175 R3-4): every map and the contract hold JSON values only (str, int, finite float, bool,
+#   None, list, dict with str keys; a float in json.dumps's form; NaN and infinity refused), every str encodes as
+#   UTF-8; anything else, a missing or extra key, or any failure gives findings, never an exception.
+#
+# The output (specification 6 revision 7 §5 and §6): build_work_order returns (work_order, None) or (None, findings: a
+# non-empty list of strs); on findings no partial Work Order. The Work Order is a dict with exactly the keys task,
+# contract_version, contract_hash, base, session_id, decision, contract, layers and work_order_hash (spec 6 :52):
+# contract is every key of the contract as given (spec 6 :53); decision is the record's; work_order_hash is the SHA-256
+# hex of the canonical form of the object without that key: UTF-8, keys sorted, no insignificant whitespace (this
+# task: json.dumps with sort_keys, separators (',', ':') and ensure_ascii False). The same inputs give the same bytes.
+# - The declared read-set is read_set.paths, read_set.interfaces and read_set.schemas (spec 3 :62); a component path
+#   with no wildcard is read as "<it>/**" (spec 3 :57; D-2174 B2). The selected components are those one of whose paths
+#   meets (resume_check.meet) a write-set pattern or a read_set.paths pattern, and those a read_set.interfaces entry
+#   names through the interfaces input (an entry naming no given interface gives findings) (D-2175 R3-1).
+# - Schemas (D-2175, spec 3 :71, :73): each read_set.schemas entry resolves to the one path of files whose last name
+#   without its extension equals the entry and which lies under (resume_check.matches) a path of a component that a
+#   read_set.interfaces entry names or of a component whose paths meet the write-set or read_set.paths; no such path,
+#   or more than one, gives findings (fail closed).
+# - layers: a list of five {layer: 1..5, name, items} in the concept's order (spec 6 :60):
+#   (1) "constitution": one item per article of resume_record.constitution.applicable (not recomputed).
+#   (2) "components": one item per selected component, with the interfaces that name it (the registry from declared
+#   interfaces only, spec 6 :65).
+#   (3) "traced": one item per traces_to entry that is not an ADR, one per AC of the contract, one per ADR.
+#   (4) "files": one item per path of files that a write-set pattern or a read_set.paths pattern matches
+#   (resume_check.matches), that lies under a path of a component a read_set.interfaces entry names, that a schema
+#   resolves to, or that derived_read_set holds (D-2174 B3; D-2175); a pattern matching no file gives none.
+#   (5) "handoff": the last handoff, or no item.
+# - Items: {ref, hash, content} or {ref, hash} (spec 6 :63); every content is a str: an article's, an entry's, an
+#   ADR's, a file's or the handoff's text; an AC's text; a component's the canonical JSON of {"component": <its
+#   declaration>, "interfaces": [the ids that name it, sorted]} (D-2174 B4); hash is the SHA-256 hex of the content's
+#   UTF-8 bytes; refs are unique within a layer (a collision gives findings); items are ordered by ref in Python's str
+#   order (code points).
+# - The budget: a layer's bytes are the sum of its items' content UTF-8 bytes; while over its budget, items become
+#   references ({ref, hash}, never a summary or a shortened content, spec 6 :64).
+#
+# Stated choices (each "this task's choice; specification 6 §11 point N stays open for its next revision", D-2171):
+# - The order of turning items into references: the largest content first, ties by ref (§11 point 9).
+# - Item refs: an article's id; "component:<id>"; a traces_to entry as written; "<AC id>"; "adr:<id>"; a repository
+#   path; the handoff's own ref (§11 points 7 and 8).
+# - ADRs only through traces_to and adrs, one item each (§11 point 8); the layer and item shapes (§11 point 7); the
+#   findings form and "no partial Work Order" (§11 point 13).
+#
+# Owner-act boundary: none reached. Nothing is launched or connected; no hook, setting, policy or measurement.
+#
+# Stated limits.
+# - The inputs' truth is the caller's: build_work_order checks their form and their ties, not that they are what the
+#   base holds; derived_read_set is not compared with the record's read_set (D-2174 N1).
+# - "The last" handoff is the caller's choice (specification 6 §11 point 6 stays open).
+# - No reader and no MCP tool (S3b, M7); nothing calls build_work_order but its tests.
+#
+# The pins (L-0026 read for what each line binds; MYSP/m6s3/pinscan80-out.txt and pinscan80-reading.md at 2c0ef3b7;
+# reviews m80-R1 to m80-R3; D-2172, D-2174, D-2175):
+# - tests/unit/test_writer.py :397-411 (R8): context_compiler.py makes no open, .open or .connect call and holds no
+#   ".aieos" string.
+# - .github/workflows/aieos-checks.yml :1489-1517 and :1597-1620 (the deterministic rule): the module and both test
+#   modules get NONE: no deny-listed module (builtins among them), name (compile, open, __builtins__ among them) or os
+#   call; standard library and aieos_bootstrap only; tests patch open by the string "builtins.open" and read sources
+#   with pathlib's read_bytes (D-2174 N9).
+# - aieos-checks.yml :1677-1721 (OPS-003's pattern rule): no MEASURED, ENFORCED or GUARANTEED without a DM row on the
+#   line; no src string constant exactly valid, accepted or approved. :1727-1755 (bandit, every test on src): no bare
+#   assert (B101), no try/except/pass (B110) and no try/except/continue (B112) in context_compiler.py; every caught
+#   failure returns findings (D-2174 N6; D-2175 R3-6).
+# - tests/unit/test_gitread.py :370-380 (only gitread imports subprocess) and tests/unit/test_autonomy.py :237-246 (no
+#   src module imports or calls autonomy): met by the import set.
+# - The conformance set tests (tests/integration/test_conformance_rc_set.py :153-158 and the cb and risk sets): the new
+#   files name no conformance fixture folder; AC7's check takes the names from the conformance module's constants.
+# - tests/unit/test_bench_isolation.py :35-52: no new file holds "bench/" (D-2174 N7).
+# - tests/integration/test_ac_tests_tree.py :63: every new test names "TASK-080 ACn".
+# - src/aieos_bootstrap/__init__.py is not changed (only tests/unit/test_execution.py :739-741 pins it, for execution).
+#
+# Risk: high, computed over the base by MYSP/m6s3/risk_class80.py (R2 medium and R3 high for each path). GOV-003:
+# src/aieos_bootstrap/** is an evaluator path (aieos-checks.yml :423, :490); change class ruled at acceptance. Profile as
+# TASK-079's. Reviews on Sonnet 5.5 or Opus 5.5 (never Fable). Naming (D-544 Q3): every new test function names
+# "TASK-080 ACn" in its own docstring.
+# Not applicable: OPS-001; INV-005 to INV-011; GOV-001, GOV-004 to GOV-006, SEC-003. INV-004 is not reached (the module
+# writes nothing); it stays listed for the evaluator path's profile.
+# Owner-kept acts: none in this task.
+# Shadow (D-2042 C3 as amended by D-2068): the governor's evaluate at acceptance, any difference named.
+# Records obligations of the acceptance (AC10; outside the write-set): the shadow's result; S3b's dependence on M7
+# named; the stated choices listed for specification 6's next revision.
+# Local runs: the unit group in three parts.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-080.yaml, has one parent equal to base_commit, and goes
+# to main under its own decision; the task's commits carry "AIEOS-Task: TASK-080" and go to task/TASK-080; main
+# receives them only at acceptance. X, in AC10 and the records, is the task head at acceptance.
+task: TASK-080
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add src/aieos_bootstrap/context_compiler.py, a pure build_work_order(inputs) that returns specification 6 revision
+  7's Work Order (its five layers, items, byte budgets with references and its canonical hash) from given values,
+  reading, writing and calling nothing; tests in tests/unit/test_context_compiler.py and
+  tests/property/test_context_compiler_properties.py, each new test naming "TASK-080 ACn".
+traces_to:
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#5
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#6
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#11
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#3
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#5
+input_state:
+  base_commit: 2c0ef3b7c873bd4f3f1affcf2126523b6fc8a1f0
+  depends_on: [TASK-008, TASK-079]
+  intent_versions:
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: d2fa59ae3f203b3a2108e55d23ddfb875e64ab57d27372c9d413bf30d7c2cbdd
+    docs/specs/spec-05-adapter-contract.md: ae7b99419d303db40b7200e39a22d93b9301b29900f3b1f5a5720b72d8eb9c2b
+    docs/specs/spec-02-aieos-file-format.md: 8e744daa31928621137db59a8a9d91ecf163879420e1f8e148232b149cafcdb7
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+write_set:
+  paths:
+    - src/aieos_bootstrap/context_compiler.py
+    - tests/property/test_context_compiler_properties.py
+    - tests/unit/test_context_compiler.py
+read_set:
+  paths:
+    - docs/specs/spec-06-mcp-protocol-and-work-orders.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.resume_check.meet, aieos_bootstrap.resume_check.matches]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_mcp_server_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The inputs: build_work_order takes exactly the header's keys in their forms and returns (None, findings) with a
+      non-empty list otherwise, never raising; among the cases, not a closed list: a missing or extra key; a decision
+      other than CONTINUE or CONTINUE_WITH; a record whose subject, contract_hash or contract_version differs; articles
+      keys other than constitution.applicable; traced or adrs keys other than the header's; a contract whose task
+      differs; a missing, non-int, bool or non-positive budget; a duplicate ref; a non-JSON value (a float NaN or
+      infinity, a set, a non-str key, a str UTF-8 cannot encode); a read_set.interfaces entry naming no given
+      interface; malformed files or derived_read_set; no partial Work Order. A read_set without schemas, and a finite
+      float in the contract, are taken. Tests for each in tests/unit/test_context_compiler.py.
+  - AC2: >-
+      The Work Order's keys and hash: exactly the nine keys of specification 6 §5; contract is the contract as given;
+      decision the record's; work_order_hash the SHA-256 of the canonical form without it; the same inputs give the
+      same bytes, and any change of an included value changes the hash. Tests, among them a hash recomputed by the test
+      from the object.
+  - AC3: >-
+      The layers: five, in order 1 to 5 with the header's names; layer 1 from constitution.applicable only (an article
+      of the contract's constitution that is not applicable is absent); layer 2 the components that meet a write-set
+      or read_set.paths pattern, a bare component path read as "<it>/**", and those a read_set.interfaces entry names,
+      with their interfaces; layer 3 the non-ADR traces_to entries, the ACs and the ADRs, each once; layer 4 the files
+      that a write-set or read_set.paths pattern matches (a "**" entry among the tests), the files under an interface's
+      component, the schemas' files and the derived paths present in files; an unselected entry of files is absent;
+      layer 5 the last handoff or nothing. Tests for each layer and each exclusion.
+  - AC4: >-
+      Schemas (specification 3 :71, :73): a read_set.schemas entry resolves to the one file of files whose last name
+      without its extension equals it, under a path of a component an interface entry names or a component the write-set
+      or read_set.paths meet, and that file is in layer 4; no such file gives findings; two such files give findings; a
+      schema under a component named only by an interface resolves. Tests for each in tests/unit/test_context_compiler.py.
+  - AC5: >-
+      The items and budgets: items {ref, hash, content} with content a str as the header states (a component's the
+      canonical JSON of its declaration and interfaces) and hash the SHA-256 of its UTF-8 bytes, ordered by ref in
+      code-point order; over a layer's budget, items become {ref, hash} largest first, ties by ref, until the layer
+      fits; never a shortened content; a budget large enough keeps every content. Tests, among them one at the exact
+      budget.
+  - AC6: >-
+      Purity: build_work_order reads no file, clock or environment, starts no process and mutates no input (deep-equal
+      before and after). Tests with stand-ins installed after the import that fail on any open (patched by the string
+      "builtins.open"), time or environment call, and by ast.
+  - AC7: >-
+      What the module may touch: context_compiler.py imports only the standard library and aieos_bootstrap.resume_check;
+      the attributes it uses on resume_check are exactly meet and matches; no name compile; no open, .open or .connect
+      call, no ".aieos" string, no "bench/", no name of a conformance fixture folder (the names taken from the
+      conformance module's constants); no try/except/pass or try/except/continue. Tests by ast over pathlib's
+      read_bytes.
+  - AC8: >-
+      Properties: over seeded random inputs of the header's form, build_work_order returns a Work Order whose hash
+      matches its canonical form, whose every layer fits its budget or holds only references, and whose references
+      keep the hash of the content they replace. Tests in tests/property/test_context_compiler_properties.py.
+  - AC9: >-
+      Every existing test passes, the pins of the header among them; the full suite runs locally in three unit parts,
+      integration and property before the first code commit; the deterministic rule's local run gives no finding. The
+      docstring of context_compiler.py holds, whitespace read as single spaces, the phrases "a pure module", "reads no
+      file, no clock and no environment", "never calls resume_check.check", "layer 1 is not recomputed", "budgets are
+      required", "the largest content first, ties by ref", "never a summary", "this task's choice", "S3b waits for M7"
+      and "the inputs' truth is the caller's", read by a test in tests/unit/test_context_compiler.py by ast over
+      pathlib's read_bytes; every new test names "TASK-080 ACn".
+  - AC10: >-
+      Broken copies, each failing the tests its AC names and no other cause: for each of AC1 to AC8 at least one, among
+      them a copy that recomputes layer 1 from the contract's constitution instead of the record, one that calls
+      resume_check.check, one that drops the folder reading of a bare component path, one that matches the declared
+      read-set by exact path only, one that drops read_set.interfaces, one that drops schemas, one that shortens a
+      content over budget, one that turns items into references smallest first, one that hashes with keys unsorted,
+      one that keeps work_order_hash inside the hashed form, and one that reads a file; the governor's evaluate at
+      acceptance (the shadow) with any difference named; S3b's dependence on M7 and the stated choices in the records
+      (not tests).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9]}
+  - {gate: G3, check: constitution, args: [AC10, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
