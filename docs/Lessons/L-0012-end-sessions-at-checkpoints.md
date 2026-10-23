@@ -23,6 +23,9 @@ One incident in session 2026-10-06-0306 (../History/2026-10/2026-10-06-0306-real
 One correction in session 2026-10-07-0100 (../History/2026-10/2026-10-07-0100-a14-steps-1-5-audit.md):
 - **2026-10-07 (:466; D-058).** Claude stopped the session at about 30-35% context because step 6 was a new phase, as the rule then said. The owner removed the checkpoint end points: sessions end by context level only.
 
+One occurrence in session 2026-10-23-1014 (../History/2026-10/2026-10-23-1014-the-later-part-task-074-landed-and-specification-2-revision-8.md):
+- **2026-10-23 (session 58b6a0c7, D-1908, D-1909, D-1911, D-1912).** The decision agent stopped TASK-074's part 4 at the second text slip on the D-1867 precedent, without reading D-1873, which had withdrawn that precedent; the session's records and last reply followed at a guessed 30 to 40%. The owner asked why (:1114); the session resumed. A slip stops a call, never a session (D-1912 C2); and D-1912 C1 repeated D-1873 C1's relay error, replaced by D-1913 as D-1874 had done.
+
 ## Why it happens
 - There was no rule for ending sessions, so the work continued across many phases.
 
@@ -31,3 +34,4 @@ One correction in session 2026-10-07-0100 (../History/2026-10/2026-10-07-0100-a1
 - The next-session prompt points to the source files: the decision log, the DM, the records and these docs.
 - After a compaction, re-read the source files before acting. Do not rely on the summary.
 - The owner wrote: "context window đạt 60% là sẽ dừng ? Hãy nâng lên 80% 90%" (session 5fd3e494, :1237). Those words do not state which number sets which step; that is settled before the rule is written into the rules book (DEF-0012).
+- A slip rule never ends a session (D-1873, D-1912).
