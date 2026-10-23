@@ -604,13 +604,32 @@ class TASK079AC4Ids(unittest.TestCase):
     def test_a_differing_call_gets_new_ids(self):
         """TASK-079 AC4: a call that differs anywhere, one with the same text at the same place among them, gets new
         ids; an identical call the same ids."""
-        a = expected_ids('acknowledge', {'assumptions': ['a', 'b']})
-        b = expected_ids('acknowledge', {'assumptions': ['a', 'c']})
-        self.assertNotEqual(a[0], b[0])
+        a, b = Stand(), Stand()
+        a.run('acknowledge', {'assumptions': ['a', 'b']})
+        b.run('acknowledge', {'assumptions': ['a', 'c']})
+        ids_a = [r['record_id'] for r in a.records()]
+        ids_b = [r['record_id'] for r in b.records()]
+        self.assertEqual(len(ids_a), 2)
+        self.assertFalse(set(ids_a) & set(ids_b))
         s1, s2 = Stand(), Stand()
         self.assertEqual(s1.run('ask', {'question': 'q'}), s2.run('ask', {'question': 'q'}))
-        self.assertNotEqual(expected_ids('ask', {'question': 'q'}), expected_ids('ask', {'question': 'q'},
-                                                                                session='s-2'))
+        other = Stand()
+        other.run('ask', {'question': 'q'}, env={'AIEOS_SESSION_ID': 's-2', 'AIEOS_ROOT': ROOT})
+        self.assertNotEqual(s1.records()[0]['record_id'], other.records()[0]['record_id'])
+
+    def test_a_non_ascii_text_keeps_its_characters(self):
+        """TASK-079 AC4: a non-ASCII text keeps its characters in the call digest (canonical JSON in UTF-8, non-ASCII
+        kept), so the ids are those of ensure_ascii False, not those of ensure_ascii True."""
+        text = 'é ü 中 a'
+        args = {'assumptions': [text]}
+        s = Stand()
+        s.run('acknowledge', args)
+        got = [(c[1][3], c[1][2]['record_id']) for c in s.calls if c[0] == 'append_event']
+        self.assertEqual(got, expected_ids('acknowledge', args))
+        ascii_c = sha(json.dumps(args, sort_keys=True, separators=(',', ':'), ensure_ascii=True))
+        d = sha('\n'.join(['s-1', 'TASK-9', 'acknowledge', ascii_c, 'assumptions', '1', text]))
+        self.assertNotEqual(got[0], ('mcp-' + d, 'mcp-claim/' + d))
+        self.assertEqual(s.records()[0]['text'], text)
 
     def test_a_duplicate_answers_the_same_ids(self):
         """TASK-079 AC4: the log's "duplicate" is a success naming the same record ids."""
