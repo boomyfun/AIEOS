@@ -1,0 +1,354 @@
+# TASK-077: the record checker accepts the keys session, acs and text (specification 2 revisions 3 and 10, section 6.2;
+# specification 6 revision 6, section 11 point 5). Plan: decisions D-2059 to D-2062 (session 308d8b07).
+#
+# Scope: src/aieos_bootstrap/records.py: RECORD_KEYS gains session, acs and text, and check_record checks their form as
+# specification 2 section 6.2 states it, with two readings marked: session a non-empty str, accepted on a record of any
+# fact_kind (spec 2 :149 names no restriction: a reading); "session is set" means present and a non-empty str; text a
+# non-empty str, allowed only on a record whose fact_kind is claim and whose session is set; acs, when present, a
+# non-empty list of distinct non-empty strs (spec 2 :152: absent where none is named), allowed only on a record with
+# gate set (a gate result) or on a claim whose session is set, where it holds exactly one id (any other placement:
+# a finding, fail closed: a reading of spec 2 :152). Each value is the writer's statement, recorded and not checked
+# against anything else; no check derives standing from these keys' values (spec 2 section 10 point 11 stays open); a
+# record that carries them and was refused as malformed becomes well formed, so it may now count where its other keys
+# let it (the pinned-identity limit below). ci_run stays outside RECORD_KEYS (a stated limit). The observed read-set
+# rule is unchanged: session stays forbidden on such a record (records.py READ_SET_FORBIDDEN :98).
+#
+# Owner-act boundary: none reached; no hook, setting, policy or measurement; nothing under .github/ or .claude/.
+#
+# Stated limits.
+# - The pinned identities are governor.py's hash alone (AIEOS_PINNED_GOVERNOR) and resume_check.py's alone
+#   (AIEOS_PINNED_RESUME_CHECK, aieos-checks.yml :135), although the governor's decisions depend on records.py
+#   (aieos-checks.yml :19-21) and resume_check.py imports records (resume_check.py :42): this task changes which records
+#   are well formed for the governor and the evaluator, and neither pin sees it.
+# - Four docstring sentences go stale after this task, left by decision D-2061, resumed at each module's next text
+#   change (DEF log lines at acceptance); tests/unit/test_t0.py :359 pins the first:
+#   src/aieos_bootstrap/t0.py :48 (quoted on one line):
+#     "- The session is named only in the recorder's words, since records.py has no ``session`` key (specification 2"
+#   src/aieos_bootstrap/claude_code.py :77 (from one source line, wrapped over 2 contract lines):
+#     "session only in the recorder's words (records.py has no ``session`` key). This module is called only by its
+#     tests;"
+#   src/aieos_bootstrap/verification_records.py :37 (quoted on one line):
+#     "- records.py does not gain the keys session, ci_run and acs of specification 2 revision 3 (DEF-0051, line 24)."
+#   src/aieos_bootstrap/claude_code_channel.py :18-19 (from two source lines, joined and wrapped over 3 contract
+#   lines):
+#     "- The session is tied in words only, by a recorder that holds session_id verbatim: specification 2 revision 6
+#     keeps no session key on a record (section 6.2), and adapter.violation takes no session id. The core does not
+#     check it."
+# - The benchmark ports keep their own key lists (bench/go/records.go :30, bench/ts/records.ts :20,
+#   bench/rust/src/records.rs :51 and their round-2 copies) without the three keys; no test compares them with
+#   records.py's RECORD_KEYS; the benchmark's round inputs carry none of the keys, so its references are unchanged
+#   (a stated gap, a DEF line at acceptance).
+#
+# The pins (L-0026; MYSP/ck/pinscan-out.txt and hashscan-out.txt at 99a8e0b1). Each passes unchanged unless named:
+# - tests/property/test_records_execution_properties.py :131 draws from EXECUTION_KEYS minus RECORD_KEYS, which stays
+#   non-empty (records.py :110-113 holds none of the three keys); tests/unit/test_records_execution.py :69 skips keys
+#   in RECORD_KEYS and :82 names none of the three; tests/unit/test_records_audit_copies.py :43-46;
+#   tests/unit/test_records_read_set.py :33-36, :55-61 (session still a forbidden key there, its value a non-empty
+#   string), :78-84 (check_read_set's ten findings), :87-101 (the docstring phrases at :92-93 kept, the imports
+#   collections, datetime, json and re unchanged).
+# - The export pins: tests/unit/test_export_round2.py :61-62 and tests/unit/test_export_reference.py :57, whose
+#   generators write none of the keys; if either moved, it would be a spec_conflict, not a change in this task.
+# - tests/unit/test_t0.py :359 reads the stale t0.py :48 sentence: it passes unchanged (t0.py is forbidden) and is
+#   named in the DEF line, to change with t0.py.
+# - No test and no workflow line hashes records.py's bytes.
+#
+# Risk: high, computed over the base 99a8e0b1 by MYSP/ck/risk_class77.py (a copy of risk_class62.py with this
+# task's write set; output risk77-out.txt): R2 medium and R3 high (point 3, src/** and tests/**). GOV-003:
+# src/aieos_bootstrap/** is an evaluator path (aieos-checks.yml :423, :490); change class as TASK-076's, ruled at
+# acceptance. Profile as TASK-076's (functional [unit_test], architecture [deterministic_rule], functional
+# [integration_test], security [static_security_analysis], architecture [ai_review (cross-model)]), plus the
+# evidence_required of the applicable articles. Reviews on Sonnet 5.5 or Opus 5.5 (never Fable). Naming (D-544 Q3):
+# every new test function names "TASK-077 ACn" in its own docstring.
+# Not applicable: OPS-001; INV-005 to INV-011; GOV-001, GOV-004 to GOV-006, SEC-003. INV-004 applies unchanged.
+# Owner-kept acts: none.
+# Shadow Resume Check: not run; the bootstrap has no input reader for resume_check.check (its 22 inputs;
+# resume_check.py :29-31); deferred to M7's launcher; D-2042 C3 amended by D-2068 to the governor's evaluate only
+# until then.
+# Records obligations of the acceptance (AC10; outside the write-set): DEF-0051's log line (verification_records.py);
+# a DEF log line for t0.py (with test_t0.py :359), claude_code.py and claude_code_channel.py; a DEF line for the
+# benchmark ports' key lists.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-077.yaml, has one parent equal to base_commit, and goes to
+# main under its own decision; the task's commits carry "AIEOS-Task: TASK-077" and go to task/TASK-077; main receives
+# them only at acceptance. X, in AC10 and the records, is the task head at acceptance.
+task: TASK-077
+contract_version: v1
+task_type: implementation
+objective: >-
+  Make src/aieos_bootstrap/records.py accept the record keys session, acs and text with the form checks of
+  specification 2 section 6.2 (revisions 3 and 10), leaving the observed read-set rule and every other rule unchanged;
+  tests in tests/unit/test_records_session_claims.py, each new test naming "TASK-077 ACn".
+traces_to:
+  - docs/specs/spec-02-aieos-file-format.md#6.2
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#11
+  - docs/specs/risk-rules-gov-aieos.md#2
+input_state:
+  base_commit: 99a8e0b1918fe5a2ab348562dc54c5e5e6f7b09d
+  depends_on: [TASK-001, TASK-029, TASK-064]
+  intent_versions:
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: f066bb59448243928c502ec8618b69f0a3f3150cb845209b9718c0be6365b6da
+    docs/specs/spec-02-aieos-file-format.md: 8e744daa31928621137db59a8a9d91ecf163879420e1f8e148232b149cafcdb7
+    docs/specs/spec-04-verification-and-evidence.md: 48d4f5bf06461ad49409f21bc6ea8d511d17a84eaac15adda14277483176a8d5
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/records.py
+    - tests/unit/test_records_session_claims.py
+read_set:
+  paths:
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-06-mcp-protocol-and-work-orders.md
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.records.check_record, aieos_bootstrap.records.check_payload,
+    aieos_bootstrap.records.check_read_set, aieos_bootstrap.records.RECORD_KEYS]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The keys. RECORD_KEYS holds session, acs and text; ci_run stays out. A record otherwise well formed that carries
+      any of the three in form gets no "6.2:unknown_key" finding; a record with ci_run still gets it. Tests in
+      tests/unit/test_records_session_claims.py.
+  - AC2: >-
+      session: a value that is not a non-empty str gives the finding "6.2:session"; a non-empty str gives none, on a
+      record of any fact_kind. Tests in tests/unit/test_records_session_claims.py with None, '', 3, a list and
+      a dict, and passing values.
+  - AC3: >-
+      text: a value that is not a non-empty str gives "6.2:text"; a non-empty str on a record whose fact_kind is claim
+      and whose session is set (present and a non-empty str) gives none; text on a record of any other fact_kind, with
+      session absent, or with session present but invalid gives "6.2:text" (with "6.2:session" in the last case).
+      Tests in tests/unit/test_records_session_claims.py for each case.
+  - AC4: >-
+      acs: a value that is not a non-empty list of distinct non-empty strs gives "6.2:acs" (None, a str, [], an empty
+      string inside, a repeat, a non-str inside); acs on a record without gate set and not a claim whose session is
+      set gives "6.2:acs"; on a claim whose session is set, a list of other than exactly one id gives "6.2:acs" and no
+      acs gives none; on a record with gate set, a list of one or more distinct ids gives none. Tests in
+      tests/unit/test_records_session_claims.py for each case.
+  - AC5: >-
+      The observed read-set rule is unchanged: a record of evidence_type observed_read_set with session still gives
+      "6.2:read_set_forbidden"; check_read_set is unchanged (its ten findings for the all-bad record of
+      tests/unit/test_records_read_set.py :80-83); the docstring keeps the phrases read at :92-93 and the module its
+      imports collections, datetime, json and re. Tests in tests/unit/test_records_session_claims.py and the existing
+      tests.
+  - AC6: >-
+      Every existing test passes unchanged, the pins of the header among them (the enumerating tests, the export
+      pins, test_t0.py :359); the full suite runs locally in a scratch clone before the first code commit; no module
+      but records.py changes in src/.
+  - AC7: >-
+      The docstring of records.py states the three keys' rules and the limits of the header (the writer's statement,
+      no standing derived from the values, ci_run out, the pinned-identity limit) in words a test in
+      tests/unit/test_records_session_claims.py reads; the four stale sentences of the header are not changed.
+  - AC8: >-
+      Naming: every test function of tests/unit/test_records_session_claims.py names "TASK-077 ACn" in its own
+      docstring;
+      the module's own naming test refuses a test that does not (as TASK-076's AC7).
+  - AC9: >-
+      Broken copies: for each of AC1 to AC5, AC7 and AC8 at least one copy (of records.py, or of the test module for
+      AC8) with one change that breaks it, each failing the test its AC names and no other cause, among them a copy
+      of the naming test that admits another task's id; the list and the failing tests go to the decision agent
+      with the acceptance request.
+  - AC10: >-
+      Acceptance-time records (not a test): the DEF log lines of the header; the governor's evaluate at acceptance,
+      with any difference from the decision agent's decision named (the shadow mode as D-2068 amends it).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8]}
+  - {gate: G3, check: constitution, args: [AC9, AC10, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
