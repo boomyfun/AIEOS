@@ -1,0 +1,393 @@
+# TASK-078: the MCP server's frame and its status tool (specification 6 revision 6, sections 3, 4 and 8; M6's first
+# slice). Plan: decisions D-2103 to D-2106 (session 308d8b07).
+#
+# Scope (D-2103 (a) to (c), D-2105, D-2106):
+# - src/aieos_bootstrap/mcp_server.py (new): MCP over stdio, one JSON-RPC 2.0 message per line, in the Python 3
+#   standard library only (spec 6 section 3, the bootstrap limit); the methods initialize, notifications/initialized,
+#   tools/list and tools/call, and no other; tools/list lists only status (the six other tools of section 4 are added
+#   by the slices that build them, D-2103 (b)); the identity from the environment (AIEOS_SESSION_ID, AIEOS_ROOT; the
+#   names of claude_code_pretool_hook.py :130-131); AIEOS_BASE is not read in this slice (status does not need it);
+#   the closed error vocabulary of section 8, of which status uses no_session and core_error; and status, which
+#   writes nothing. A function main(stdin, stdout, environ, clock) runs the loop over the given streams until end of
+#   input, so tests drive it; a __main__ guard calls it with the process's streams, environment and UTC clock.
+# - src/aieos_bootstrap/writer.py: one new read-only function, session_leases(root, session_id, now, timeout=5.0),
+#   the session's lease rows each with its expiry and whether the session has ended. It calls the existing helpers
+#   _check_lookup_root, _store_present (session_lease's presence step and link check, kept for TASK-067's
+#   functions), _store_uri, _check_schema, _lease, _named and _refused unchanged; only its read is its own (a
+#   read-only connection, BEGIN DEFERRED, its reads, ROLLBACK, the connection closed in finally), as TASK-067's
+#   _read_reads (writer.py :659) is. Its code stands above the marker at writer.py :906, beside TASK-067's code:
+#   "# ---- the read-only lookup of the store (task TASK-066) ----"; its queries are module-level str constants.
+#   Every existing function and constant is unchanged. Its read is a hand-kept copy of session_lease's transaction
+#   steps, kept in step by hand (a stated limit, as DEF-0092 R-4 states for the walk copies).
+# - The status mapping (D-2104, D-2105, D-2109 N4), word for word in AC5.
+#
+# Owner-act boundary: none reached. The server is a program nobody runs but its tests: launching it in a runtime and
+# connecting it to one (a Claude Code setting) are the owner's (spec 6 section 10; A51 item (4)); no hook, setting,
+# policy or measurement; nothing under .github/ or .claude/.
+#
+# Stated limits.
+# - MCP alone is at most tier T2, as a target and unmeasured (spec 6 section 2); nothing here is measured.
+# - Whether a server started by a runtime inherits the runtime's environment is unmeasured (spec 6 section 3).
+# - "expired" exists only between a lease's expiry and the next expire_leases (writer.py :487-502), which removes
+#   expired rows; status reports what the store holds at its read.
+# - More than one unexpired lease row for one session: this contract reads spec 3's one-lease rule (spec 3 :157, as
+#   spec 6 section 9 quotes it, "one lease at a time") as at most one unexpired row per session, an inference;
+#   status answers more than one with core_error and does not name the rows.
+# - The protocol version the server answers is a stated choice, "2025-06-18"; it negotiates nothing else.
+# - session_leases' read is a hand-kept copy of session_lease's transaction steps (above).
+# - The server reads the store only through the writer's read functions (INV-004; spec 6 section 2) and opens no file.
+# - The answer forms are stated choices: session_leases' {ended, leases} with reason "rows"; status's success object
+#   and its expires_at in YYYY-MM-DDTHH:MM:SSZ; a tool error as a tools/call result with isError true and the text
+#   {"error": <word>}.
+# - The refusal mapping is a stated choice where spec 6 section 4's status row does not fix it: argument (only the
+#   server's own clock or timeout, the identity being checked first) gives core_error; root and no_store give
+#   no_session; session (an id the store never saw, so no lease row for it) gives {"task": null, "lease": "none"};
+#   unreadable, link, tables and any other answer give core_error.
+#
+# The pins (L-0026; MYSP/m6t/pinscan78-out.txt at 3a3e578f; D-2104, D-2106). Each passes unchanged:
+# - tests/unit/test_writer.py R8 (:396-411): only writer.py opens files or names the project-state directory (with
+#   claude_code_shell_allow.py's strings); mcp_server.py opens nothing and names no such directory.
+# - tests/unit/test_claude_code_read_hook.py HOOK_SIDE (:35, eight modules at :492) and OWN_IMPORTS (:38): the new
+#   module is not hook-side.
+# - The export pins: tests/unit/test_export_round2.py :61-62 and tests/unit/test_export_reference.py :57.
+# - The deterministic rule (aieos-checks.yml :1484-1637): mcp_server.py is under NONE (json, os's environ, sys,
+#   datetime, re and the own package); writer.py's ALLOW (sqlite3, os.makedirs, open rb/ab, the directory's name) is
+#   unchanged and covers session_leases; tests/unit/test_writer.py is one of WRITER_TESTS (sqlite3, tempfile).
+#   tests/unit/test_mcp_server.py and tests/property/test_mcp_server_properties.py are under NONE: no tempfile,
+#   sqlite3 or open; they read source by pathlib's read_bytes and use no real store (stand-ins only).
+# - tests/unit/test_writer.py :860-880 (R14): writer.py split at the marker at writer.py :906, exactly two
+#   "finally:" below it, no PRAGMA, INSERT, UPDATE, DELETE or makedirs below it; tests/unit/test_writer.py
+#   :1725-1737 (TASK-067 AC9): the helpers' defs above the marker and the same count; tests/unit/test_writer.py
+#   :1694-1719 (R20): every execute query a str constant or a module-level str constant. Each passes unchanged by the
+#   placement above. No test hashes writer.py; __init__.py's __all__ is not changed. These three pins were missed
+#   by the plan's own scan and by decision D-2106, and found by both contract reviews (D-2109).
+#
+# Risk: high, computed over the base by MYSP/m6t/risk_class78c.py (R2 medium and R3 high for each path). GOV-003:
+# src/aieos_bootstrap/** is an evaluator path (aieos-checks.yml :423, :490); change class critical_cr, as TASK-077's,
+# ruled at acceptance. Profile as TASK-077's (functional [unit_test], architecture [deterministic_rule], functional
+# [integration_test], security [static_security_analysis], architecture [ai_review (cross-model)]), plus the
+# evidence_required of the applicable articles. Reviews on Sonnet 5.5 or Opus 5.5 (never Fable). Naming (D-544 Q3):
+# every new test function names "TASK-078 ACn" in its own docstring.
+# Not applicable: OPS-001; INV-005 to INV-011; GOV-001, GOV-004 to GOV-006, SEC-003. INV-004 applies (the writer).
+# Owner-kept acts: none in this task (launching and connecting the server stay the owner's and are not done).
+# Shadow (D-2042 C3 as amended by D-2068): the governor's evaluate at acceptance, any difference named.
+# Records obligations of the acceptance (AC10; outside the write-set): the shadow's result; DEF-0092's log line: the
+# session_leases sibling path as a further hand-kept copy (R-4); any DEF line the reviews leave.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-078.yaml, has one parent equal to base_commit, and goes
+# to main under its own decision; the task's commits carry "AIEOS-Task: TASK-078" and go to task/TASK-078; main
+# receives them only at acceptance. X, in AC9 and the records, is the task head at acceptance.
+task: TASK-078
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add src/aieos_bootstrap/mcp_server.py, the MCP server's frame over stdio in the standard library with one tool,
+  status, and one read-only function writer.session_leases that status reads the store through; every existing
+  function and constant of writer.py unchanged; tests in tests/unit/test_mcp_server.py,
+  tests/property/test_mcp_server_properties.py and tests/unit/test_writer.py, each new test naming "TASK-078 ACn".
+traces_to:
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#3
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#4
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#8
+  - docs/specs/risk-rules-gov-aieos.md#2
+input_state:
+  base_commit: 3a3e578ff5d79dd73a6db58323b7b6fc364167fc
+  depends_on: [TASK-016, TASK-066, TASK-067, TASK-077]
+  intent_versions:
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: f066bb59448243928c502ec8618b69f0a3f3150cb845209b9718c0be6365b6da
+    docs/specs/spec-05-adapter-contract.md: ae7b99419d303db40b7200e39a22d93b9301b29900f3b1f5a5720b72d8eb9c2b
+    docs/specs/spec-02-aieos-file-format.md: 8e744daa31928621137db59a8a9d91ecf163879420e1f8e148232b149cafcdb7
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/mcp_server.py
+    - src/aieos_bootstrap/writer.py
+    - tests/property/test_mcp_server_properties.py
+    - tests/unit/test_mcp_server.py
+    - tests/unit/test_writer.py
+read_set:
+  paths:
+    - docs/specs/spec-06-mcp-protocol-and-work-orders.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.writer.session_lease, aieos_bootstrap.writer.store_path,
+    aieos_bootstrap.writer.StoreResult, aieos_bootstrap.writer.open_store, aieos_bootstrap.writer.start_session,
+    aieos_bootstrap.writer.grant_lease, aieos_bootstrap.writer.end_session, aieos_bootstrap.writer.release_lease,
+    aieos_bootstrap.writer.expire_leases]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      writer.session_leases(root, session_id, now, timeout=5.0): read-only; never raises; answers in StoreResult's
+      form: "done" with reason "rows" and value {ended, leases}, where ended is a bool and leases is the session's lease
+      rows in eventlog.LEASE_KEYS' form, ordered by fencing counter (empty when the session is ended or holds none);
+      or "refused" with one finding and one of the reasons argument (session_id not a non-empty str, now not a
+      timezone-aware UTC datetime with whole seconds, timeout out of (0, 60]), root, no_store, link, unreadable, tables,
+      session (no session with this id). The store's bytes are unchanged and no file or folder is created by a call.
+      Tests in tests/unit/test_writer.py over real stores: no store; a session never started; a started session with no
+      row, with one unexpired row, with one expired row (expires_at <= now), with two rows; an ended session; the
+      argument and root refusals.
+  - AC2: >-
+      Every existing function and constant of writer.py is unchanged: tests/unit/test_writer.py's existing tests
+      pass unchanged, R8 (writer.py stays the one module that opens files), R14 (tests/unit/test_writer.py
+      :860-880) and R20 (tests/unit/test_writer.py :1694-1737) among them; a new test reads writer.py's top-level
+      names by ast and finds exactly the names at the base plus session_leases and its private helpers and
+      constants, each named with "_session_leases" or "_SESSION_LEASES" at its start, all above the marker at
+      writer.py :906.
+  - AC3: >-
+      The protocol, in mcp_server.main(stdin, stdout, environ, clock), each input line taken in this order: (1) an
+      empty or whitespace-only line gets no answer; (2) a line that is not JSON answers -32700 with id null; (3) a
+      JSON value that is not an object (a batch array included) answers -32600 with id null; (4) an object whose
+      "jsonrpc" is not "2.0", whose "method" is not a str, or whose "id" is present but not a str, an int (not a
+      bool) or null answers -32600 with its id when that id is valid, else null; (5) an object without "id" is a
+      notification and gets no answer (notifications/initialized among them); (6) initialize is answered with
+      protocolVersion "2025-06-18", serverInfo {name: "aieos", version: "0.1"} and capabilities {tools: {}};
+      tools/list answers exactly one tool, status, with an input schema of an object with no properties; tools/call
+      whose params is not an object, whose "name" is absent or not a str, or which names any tool but status answers
+      -32602; tools/call with name status runs status; any other method answers -32601. Every answer is one line of
+      JSON on stdout; main returns 0 at end of input and never raises. Tests for each case; a property test over
+      arbitrary lines finds no exception and one answer line at most per input line.
+  - AC4: >-
+      The identity: AIEOS_SESSION_ID absent, empty or not of the form [A-Za-z0-9._-]{1,128}, or AIEOS_ROOT absent, empty
+      or not absolute, gives status's error no_session; AIEOS_BASE is not read. Tests for each case.
+  - AC5: >-
+      status's mapping over writer.session_leases(root, session id, now from the clock): done with ended true, or
+      with no lease row: {"task": null, "lease": "none"}; done with exactly one unexpired row (expires_at > now):
+      {"task": <its task_id>, "lease": "live", "expires_at": <its expiry as YYYY-MM-DDTHH:MM:SSZ>}; done with one
+      or more rows and none unexpired: {"task": <the task_id of the row with the highest fencing counter>,
+      "lease": "expired"}; done with more than one unexpired row: the error core_error; refused with session:
+      {"task": null, "lease": "none"}; refused with root or no_store: the error no_session; refused with argument,
+      unreadable, link or tables, or any other answer: the error core_error. A tool error is answered as a
+      tools/call result with isError true and the text {"error": <word>}; a success as a result whose one text item
+      is the JSON object above. Tests for each row with a stand-in for session_leases in
+      tests/unit/test_mcp_server.py, and one test in tests/unit/test_writer.py that imports mcp_server and runs
+      status over real stores for the live, expired, none and ended cases.
+  - AC6: >-
+      mcp_server.py writes nothing: it calls no writer function but session_leases, opens no file, names no
+      project-state directory, and imports only json, os, re, sys, datetime and aieos_bootstrap.writer; tests read its
+      source (pathlib's read_bytes) by ast and check that a status call through stand-ins calls only
+      session_leases.
+  - AC7: >-
+      Every existing test passes unchanged, the pins of the header among them (R8, HOOK_SIDE and OWN_IMPORTS, the export
+      pins); the full suite runs locally in a scratch clone before the first code commit; the deterministic rule's
+      local run over the clone gives no finding.
+  - AC8: >-
+      The docstrings of mcp_server.py and of session_leases state the scope and the limits of the header (the protocol
+      version, the methods, the one tool, the identity, "expired" until expire_leases, more than one unexpired row as
+      core_error, the sibling open path, launching and connecting the owner's, T2 unmeasured) in words a test reads;
+      every new test function names "TASK-078 ACn" in its own docstring, and the modules' naming test refuses one that
+      does not or that names another task's AC.
+  - AC9: >-
+      Broken copies: for each of AC1 to AC6 and AC8 at least one copy with one change that breaks it, each failing the
+      test its AC names and no other cause, among them a session_leases copy that reports an expired row as no row, a
+      status copy that answers a session with no row as expired, and a naming-test copy that admits another task's id;
+      the list and the failing tests go to the decision agent with the acceptance request.
+  - AC10: >-
+      Acceptance-time records (not a test): the governor's evaluate at acceptance (the shadow, D-2068) with any
+      difference from the decision agent's decision named; any DEF line the reviews leave.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8]}
+  - {gate: G3, check: constitution, args: [AC9, AC10, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
