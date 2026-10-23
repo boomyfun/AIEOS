@@ -35,3 +35,4 @@ One occurrence in session 2026-10-23-1014 (../History/2026-10/2026-10-23-1014-th
 - After a compaction, re-read the source files before acting. Do not rely on the summary.
 - The owner wrote: "context window đạt 60% là sẽ dừng ? Hãy nâng lên 80% 90%" (session 5fd3e494, :1237). Those words do not state which number sets which step; that is settled before the rule is written into the rules book (DEF-0012).
 - A slip rule never ends a session (D-1873, D-1912).
+- From 2026-10-23 (the owner's "có" to decision D-1939; rules book rule 11 as amended): a session is not ended on a context estimate; work goes on with a checkpoint after each part, and stops only on a system context warning with no checkpoint written; the "context level" wording of this lesson's Rule line is read in that sense.
