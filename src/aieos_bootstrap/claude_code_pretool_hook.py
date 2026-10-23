@@ -2,8 +2,9 @@
 :79-82 and :104-119; specification 3 revision 5, :19, :20, :25 and :177; concept line 945).
 
 A program for a PreToolUse hook: before a tool call it ties the call to the session's one live lease, reads the lease
-task's contract at the base the launcher gives, judges the call against that contract's write-set and an empty shell
-allowlist, and records every refusal on the write-set, git push or the shell allowlist through the core's violation
+task's contract at the base the launcher gives, judges the call against that contract's write-set and, for a Bash or
+PowerShell call, the shell allowlist read at that base from the policy file and the contract (TASK-076), and records
+every refusal on the write-set, git push or the shell allowlist through the core's violation
 path. Here no hook is placed: nothing wires this program into Claude Code, no matcher is chosen and no setting
 is changed by this task; placing it is the owner's (A51 item (4)), and the launcher that sets AIEOS_SESSION_ID,
 AIEOS_ROOT and AIEOS_BASE is specification 7's and not built here.
@@ -33,7 +34,12 @@ store's, the judge's or the core's findings, from standard input, from the envir
    readable at the base", checked by claude_code_channel.record_findings and left unchanged by redact; its ids carry
    "/pretool-contract/" in place of "/pretool/". Reason "contract" (or "base"). A "read" whose write_set is not a
    non-empty list of str counts as unreadable too.
-4. The judgement: claude_code_hook.entry with the contract's write-set and an empty allowlist. "allow" (a Read, Grep or
+4. The judgement: claude_code_hook.entry with the contract's write-set and the shell allowlist: for a call whose
+   tool_name, read by a strict parse as strict as the entry's, is exactly Bash or PowerShell, the one list of
+   the shell allowlist reader (read_allowlist of claude_code_shell_allow, given the root, the base and the task), read
+   only here, on the judged path; for any other tool,
+   a parse failure, a reader answer of another shape or an exception from the reader, an empty allowlist (fail
+   closed: a shell call is then refused; other tools are unaffected). "allow" (a Read, Grep or
    Glob call, or a write inside the write-set) gives exit code 0, "allow", reason "tied_allow"; "uncovered" gives reason
    "uncovered" and nothing recorded (none of section 8's concerns); "refuse" with a record goes to step 5; "refuse"
    without a record (the entry's or the judge's argument refusals, a malformed allowlist, a record the judge's own check
@@ -65,9 +71,15 @@ code; any other exception inside main gives exit code 2, reason "entry", and the
 exception, which, as Claude Code's documentation states (unmeasured, C6), would let the call go ahead.
 
 Limits, stated:
-- The empty allowlist: this task authors no shell policy and reads none, so once the owner places this hook every shell
-  call is refused (and ends the session, specification 5 :79-80) while a session holds a live lease, until an approved
-  policy at the base exists and a later contract reads it.
+- The shell allowlist (TASK-076): no policy file exists, so the policy list reads as empty and, once the owner places
+  this hook, every shell call is refused (and ends the session, specification 5 :79-80) while a session holds a live
+  lease, until a policy file with entries exists at the base. Each existing contract's capabilities.shell.allow reads as
+  empty, by no entries or by entries outside the reader's form; only a contract written later with entries in the form
+  gains any. The reader's grammars are fixed forms, narrower than YAML: any other shape reads as empty. The entry check
+  accepted with TASK-062 refuses a first word such as timeout or python, so no list can allow the project's own command
+  forms (for example "timeout 110 python ..."); under a placed hook those commands stay refused whatever the policy
+  holds. The reader's tree walk is a copy of the contract reader's, kept in step by hand; native takeover (A11) retires
+  it.
 - AIEOS_BASE is a proposal, beyond specification 5 :108: a launcher that sets only the session id and the root makes
   every leased session STOP at its first judged call. And the base is fixed at the grant, so main moving during a
   session is not seen. Specification 5 :115's limit extends to the base: a nested runtime chooses its own session
@@ -76,8 +88,10 @@ Limits, stated:
   :175). Git is trusted as the contract reader trusts it: replace refs, grafts, alternates and an outer repository
   can change what AIEOS_BASE reads as.
 - The contract is read before the judgement on every judged call, reads included: up to five git calls of ten seconds
-  each, about 50 seconds at worst for the git calls alone (the store lookup's lock wait and the core path's own
-  waits come on top), against Claude Code's own hook timeout (unmeasured).
+  each; for a Bash or PowerShell call the shell allowlist's reads come on top, at most seven more git calls of ten
+  seconds each, twelve calls, about 120 seconds at worst for the git calls alone (the store lookup's lock wait and the
+  core path's own waits come on top), against Claude Code's own hook timeout (unmeasured). Other tools keep the five
+  calls.
 - The contract's forbidden list: forbidden is not enforced by this hook (specification 5 :109 names only
   write_set.paths); the gates find a forbidden path afterwards.
 - Calls refused without a record: after a lease expires, every hook call is refused without a record until the
@@ -108,6 +122,7 @@ import sys
 from aieos_bootstrap import claude_code
 from aieos_bootstrap import claude_code_channel
 from aieos_bootstrap import claude_code_hook
+from aieos_bootstrap import claude_code_shell_allow
 from aieos_bootstrap import claude_code_store
 from aieos_bootstrap import session_violation
 from aieos_bootstrap import task_contract
@@ -115,6 +130,7 @@ from aieos_bootstrap import task_contract
 SESSION_VAR = 'AIEOS_SESSION_ID'
 ROOT_VAR = 'AIEOS_ROOT'
 BASE_VAR = 'AIEOS_BASE'
+SHELL_TOOLS = ('Bash', 'PowerShell')
 OUTCOMES = ('allow', 'refuse')
 REASONS = ('enforce_nothing', 'tied_allow', 'store', 'base', 'contract', 'uncovered', 'no_record', 'record_form',
            'recorded', 'lease_lost', 'core', 'entry')
@@ -182,6 +198,43 @@ def _tool_use_id(stdin_bytes):
     if type(found) is str and _TOOL_USE.fullmatch(found):
         return found
     return None
+
+
+def _tool_name(stdin_bytes):
+    """The input's tool_name by a strict parse as strict as _tool_use_id's, or None (TASK-076 AC6)."""
+    if not isinstance(stdin_bytes, bytes):
+        return None
+    data = bytes(stdin_bytes)
+    if data.startswith(b'\xef\xbb\xbf'):
+        return None
+    try:
+        value = json.loads(data.decode('utf-8', 'strict'), object_pairs_hook=_no_duplicates,
+                           parse_constant=_no_constant)
+    except (ValueError, RecursionError):
+        return None
+    if not isinstance(value, dict):
+        return None
+    found = value.get('tool_name')
+    if type(found) is str:
+        return found
+    return None
+
+
+def _allowlist(stdin_bytes, root, base, task):
+    """Step 4's shell allowlist: the one list read at the base for a Bash or PowerShell call, else [] (any other tool,
+    a parse failure, a reader answer of another shape or an exception from the reader)."""
+    if _tool_name(stdin_bytes) not in SHELL_TOOLS:
+        return []
+    try:
+        answer = claude_code_shell_allow.read_allowlist(root, base, task)
+    except Exception:
+        return []
+    if not isinstance(answer, dict):
+        return []
+    found = answer.get('allowlist')
+    if type(found) is not list or not all(type(e) is str for e in found):
+        return []
+    return list(found)
 
 
 def _ids(session_id, stdin_bytes, segment):
@@ -271,7 +324,8 @@ def _run(stdin_bytes, environ, working_folder, now, clock):
         return _record(root, session_id, task, recorder, _contract_record(record_id, recorder, task), event_id, now,
                        clock, bad)
     event_id, record_id = _ids(session_id, stdin_bytes, 'pretool')
-    judged = claude_code_hook.entry(stdin_bytes, root, task, paths, [], record_id, recorder)
+    allowlist = _allowlist(stdin_bytes, root, base, task)
+    judged = claude_code_hook.entry(stdin_bytes, root, task, paths, allowlist, record_id, recorder)
     if not isinstance(judged, dict) or set(judged) != set(claude_code_hook.RESULT_KEYS):
         return _result('entry', ['entry: judgement'])
     verdict = judged['verdict']

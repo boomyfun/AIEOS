@@ -396,12 +396,17 @@ def opens_and_strings(path):
 class R8SingleWriter(unittest.TestCase):
 
     def test_only_the_writer_opens_files_or_names_the_directory(self):
+        """TASK-076 AC7: only writer.py opens files; besides it, exactly claude_code_shell_allow.py may hold strings
+        naming the project-state directory (the policy file it reads from Git objects), its opens still refused."""
         names = sorted(n for n in os.listdir(SRC) if n.endswith('.py'))
         self.assertIn('writer.py', names)
+        self.assertIn('claude_code_shell_allow.py', names)
         for name in names:
             opens, strings, _ = opens_and_strings(os.path.join(SRC, name))
             if name == 'writer.py':
                 self.assertTrue(opens and strings)
+            elif name == 'claude_code_shell_allow.py':
+                self.assertEqual((name, opens), (name, []))
             else:
                 self.assertEqual((name, opens, strings), (name, [], []))
 
