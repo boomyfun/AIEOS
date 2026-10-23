@@ -7,6 +7,7 @@ import os
 import sqlite3
 import tempfile
 import unittest
+from unittest import mock
 
 from aieos_bootstrap import eventlog, records, writer
 
@@ -2114,6 +2115,175 @@ class R24StatusOverRealStores(Case):
         self.assertEqual(self.status(T0 + 2 * H1), ({'task': TASK, 'lease': 'expired'}, None))
         writer.end_session(self.root, 's-1', T0 + 2 * H1)
         self.assertEqual(self.status(T0 + 2 * H1), ({'task': None, 'lease': 'none'}, None))
+
+
+class R25ClaimToolsOverRealStores(Case):
+    """The MCP server's claim tools over real stores (task TASK-079): the stand-in tests' join to the real writer."""
+
+    HANDOFF = {'done': ['d1', 'd2'], 'not_done': ['n'], 'assumptions': [], 'discoveries': ['x'], 'risks': [],
+               'proposals': []}
+
+    def claim(self, tool, args, root=None, now=T0):
+        from aieos_bootstrap import mcp_server
+        return mcp_server.claim(tool, args, {'AIEOS_SESSION_ID': 's-1', 'AIEOS_ROOT': root or self.root}, now)
+
+    def events(self):
+        report = records.check_log(writer.read_log(self.root))
+        self.assertEqual([str(f) for _, f in report.findings()], [])
+        return [line.event for line in report.lines]
+
+    def live(self):
+        self.store()
+        self.session()
+        r = self.grant()
+        self.assertEqual(r.result, 'done')
+        return r.value
+
+    def test_the_four_tools_append_valid_claims(self):
+        """TASK-079 AC3: the four tools append record.added claims under the lease's task and token, the log reads
+        back through records.check_log with no finding, and the answers name the records in order."""
+        held = self.live()
+        calls = [('acknowledge', {'assumptions': ['a1', 'a2']}), ('ask', {'question': 'q?'}),
+                 ('report', {'criteria': [{'ac': 'AC1', 'text': 'met'}], 'notes': 'n'}), ('handoff', self.HANDOFF)]
+        ids = []
+        for tool, args in calls:
+            obj, word = self.claim(tool, args)
+            self.assertIsNone(word, tool)
+            ids.extend(obj['records'])
+        events = self.events()
+        self.assertEqual([e['payload']['record_id'] for e in events], ids)
+        for e in events:
+            self.assertEqual((e['type'], e['task_id'], e['fencing_token']), ('record.added', TASK,
+                                                                             held['fencing_token']))
+            self.assertEqual((e['payload']['fact_kind'], e['payload']['source_class'], e['payload']['session']),
+                             ('claim', 'agent_declared', 's-1'))
+
+    def test_a_retry_appends_nothing_and_a_differing_call_appends(self):
+        """TASK-079 AC4: an identical repeated call answers the same record ids and appends nothing; a call with an
+        item of the same text at the same place but another input appends new events."""
+        self.live()
+        first = self.claim('acknowledge', {'assumptions': ['a', 'b']})
+        n = len(self.events())
+        self.assertEqual(n, 2)
+        self.assertEqual(self.claim('acknowledge', {'assumptions': ['a', 'b']}), first)
+        self.assertEqual(len(self.events()), n)
+        obj, word = self.claim('acknowledge', {'assumptions': ['a', 'c']})
+        self.assertIsNone(word)
+        self.assertNotEqual(obj['records'][0], first[0]['records'][0])
+        self.assertEqual(len(self.events()), n + 2)
+
+    def test_a_lease_that_expires_before_an_append(self):
+        """TASK-079 AC5: a lease expired and removed between the tool's lease read and its second append is refused by
+        the writer's fence; the writer's refusal record stands, the first claim stays, and the tool reads the lease
+        again and answers no_lease."""
+        self.live()
+        real = writer.append_event
+        seen = []
+
+        def append_then_expire(*args, **kw):
+            r = real(*args, **kw)
+            seen.append(r.result)
+            if len(seen) == 1:
+                writer.expire_leases(self.root, T0 + 2 * H1)
+            return r
+        with mock.patch.object(writer, 'append_event', append_then_expire):
+            self.assertEqual(self.claim('acknowledge', {'assumptions': ['a', 'b', 'c']}), (None, 'no_lease'))
+        self.assertEqual(seen, ['appended', 'refused'])
+        events = self.events()
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0]['payload']['text'], 'a')
+        refusal = events[1]['payload']
+        self.assertEqual((refusal['fact_kind'], refusal['evidence_type'], refusal['recorder']),
+                         ('observation', 'refused_submission', 'aieos mcp_server, session s-1'))
+
+    def test_a_cut_off_handoff_completed_by_its_retry(self):
+        """TASK-079 AC6: a handoff cut off after two of its items, called again with the same lists, appends the
+        rest, the first two answering "duplicate"."""
+        self.live()
+        real = writer.append_event
+        count = []
+
+        def cut(*args, **kw):
+            count.append(1)
+            if len(count) == 3:
+                raise OSError('made up: cut off')
+            return real(*args, **kw)
+        with mock.patch.object(writer, 'append_event', cut):
+            self.assertEqual(self.claim('handoff', self.HANDOFF), (None, 'core_error'))
+        self.assertEqual(len(self.events()), 2)
+        obj, word = self.claim('handoff', self.HANDOFF)
+        self.assertIsNone(word)
+        events = self.events()
+        self.assertEqual([e['payload']['record_id'] for e in events], obj['records'])
+        self.assertEqual([e['payload']['refers_to'] for e in events],
+                         ['handoffs/%s-s-1.md#%s' % (TASK, x) for x in ('done/1', 'done/2', 'not_done/1',
+                                                                          'discoveries/1')])
+
+    def test_a_different_second_handoff_is_refused(self):
+        """TASK-079 AC6: after a whole handoff, a superset of it and another handoff answer invalid_input and append
+        nothing; the identical call is a retry that appends nothing."""
+        self.live()
+        self.assertIsNone(self.claim('handoff', self.HANDOFF)[1])
+        n = len(self.events())
+        for args in (dict(self.HANDOFF, risks=['r']), dict(self.HANDOFF, done=['d1'])):
+            with self.subTest(args=args):
+                self.assertEqual(self.claim('handoff', args), (None, 'invalid_input'))
+        self.assertEqual(len(self.events()), n)
+        self.assertIsNone(self.claim('handoff', self.HANDOFF)[1])
+        self.assertEqual(len(self.events()), n)
+
+    def test_a_second_handoff_under_another_task_is_refused(self):
+        """TASK-079 AC6: a session that handed off under one task and then holds a lease on another cannot hand off
+        again (once per session); its other tools still write."""
+        self.live()
+        self.assertIsNone(self.claim('handoff', self.HANDOFF)[1])
+        writer.release_lease(self.root, TASK)
+        self.assertEqual(self.grant(task='TASK-017').result, 'done')
+        n = len(self.events())
+        self.assertEqual(self.claim('handoff', self.HANDOFF), (None, 'invalid_input'))
+        self.assertEqual(len(self.events()), n)
+        self.assertIsNone(self.claim('ask', {'question': 'q'})[1])
+        self.assertEqual(self.events()[-1]['task_id'], 'TASK-017')
+
+    def test_the_unreadable_link_and_tables_refusals(self):
+        """TASK-079 AC7: session_leases answers "link" when the store resolves elsewhere, "unreadable" for a store
+        file that is not a database, and "tables" for a store with a table of another form; status and the claim tools
+        answer core_error on each."""
+        from aieos_bootstrap import mcp_server
+
+        def check(root, reason):
+            r = writer.session_leases(root, 's-1', T0)
+            self.assertEqual((r.result, r.reason), ('refused', reason))
+            env = {'AIEOS_SESSION_ID': 's-1', 'AIEOS_ROOT': root}
+            self.assertEqual(mcp_server.claim('ask', {'question': 'q'}, env, T0), (None, 'core_error'))
+            self.assertEqual(mcp_server.status(env, T0), (None, 'core_error'))
+        with tempfile.TemporaryDirectory() as root:
+            writer.open_store(root, 'epoch-1')
+            elsewhere = os.path.join(root, 'elsewhere', 'state.sqlite')
+            real = os.path.realpath
+
+            def moved(p, *a, **k):
+                if os.path.normcase(p) == os.path.normcase(writer.store_path(root)):
+                    return elsewhere
+                return real(p, *a, **k)
+            with mock.patch.object(writer.os.path, 'realpath', moved):
+                check(root, 'link')
+        with tempfile.TemporaryDirectory() as root:
+            with mock.patch.object(writer, '_SCHEMA', ('CREATE TABLE broken (',)):
+                with self.assertRaises(sqlite3.Error):
+                    writer.open_store(root, 'epoch-1')
+            with open(writer.store_path(root), 'ab') as f:
+                f.write(b'made-up bytes, not a store. ' * 5)
+            check(root, 'unreadable')
+        with tempfile.TemporaryDirectory() as root:
+            writer.open_store(root, 'epoch-1')
+            con = sqlite3.connect(writer.store_path(root))
+            try:
+                con.execute('CREATE TABLE extra (task_id TEXT)')
+                con.commit()
+            finally:
+                con.close()
+            check(root, 'tables')
 
 
 if __name__ == '__main__':
