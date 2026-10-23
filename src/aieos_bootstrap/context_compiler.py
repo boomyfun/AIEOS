@@ -33,8 +33,9 @@ turning items into references; the item refs (an article's id, "component:<id>",
 id, "adr:<id>", a repository path, the handoff's own ref); the layer and item shapes; the findings form.
 
 Limits: the inputs' truth is the caller's; this module checks their form and their ties, not that they are what the
-base holds, and "the last" handoff is the caller's choice. No reader of the inputs and no MCP tool are here: S3b waits
-for M7. Nothing calls build_work_order but its tests.
+base holds, and "the last" handoff is the caller's choice. Inputs nested more than MAX_DEPTH (200) deep, or holding
+more than MAX_NODES (1,000,000) values in all, a shared value counted at each place it appears, give findings. No
+reader of the inputs and no MCP tool are here: S3b waits for M7. Nothing calls build_work_order but its tests.
 """
 import hashlib
 import json
@@ -55,6 +56,9 @@ INTERFACE_KEYS = frozenset({'id', 'component'})
 HANDOFF_KEYS = frozenset({'ref', 'text'})
 # The depth beyond which a value is refused rather than walked (a cycle among the inputs ends here too).
 MAX_DEPTH = 200
+# The number of values walked, a shared value counted at each place, beyond which the inputs are refused; it bounds the
+# walk and the copy of a value that refers to itself more than once or doubles at each level (review t80s-S1, D-2192).
+MAX_NODES = 1000000
 
 _TASK = re.compile(r'TASK-[0-9]+')
 _SESSION = re.compile(r'[A-Za-z0-9._-]{1,128}')
@@ -120,11 +124,20 @@ def _utf8(text):
     return True
 
 
-def _json_value(value, where, findings, depth):
+def _json_value(value, where, findings, depth, count=None):
     """Appends a finding for each part of value that is not JSON: a float that is not finite, a str or key UTF-8
-    cannot encode, a key that is not a str, any other type, or nesting deeper than MAX_DEPTH."""
-    if depth > MAX_DEPTH:
+    cannot encode, a key that is not a str, any other type, or nesting deeper than MAX_DEPTH; and one finding, after
+    which nothing more is walked, when more than MAX_NODES values are visited (count holds the visits so far)."""
+    if count is None:
+        count = [0]
+    if count[0] > MAX_NODES:
+        return
+    count[0] += 1
+    if count[0] > MAX_NODES:
+        findings.append('inputs hold more than %d values, a shared value counted at each place' % MAX_NODES)
+    elif depth > MAX_DEPTH:
         findings.append('%s is nested more than %d deep' % (where, MAX_DEPTH))
+        count[0] = MAX_NODES + 1  # one finding of this kind: nothing more is walked
     elif value is None or isinstance(value, (bool, int)):
         return
     elif isinstance(value, float):
@@ -135,7 +148,7 @@ def _json_value(value, where, findings, depth):
             findings.append(where + ' is a str UTF-8 cannot encode')
     elif isinstance(value, list):
         for i, x in enumerate(value):
-            _json_value(x, '%s[%d]' % (where, i), findings, depth + 1)
+            _json_value(x, '%s[%d]' % (where, i), findings, depth + 1, count)
     elif isinstance(value, dict):
         for k, x in value.items():
             if not isinstance(k, str):
@@ -143,7 +156,7 @@ def _json_value(value, where, findings, depth):
             elif not _utf8(k):
                 findings.append(where + ' has a key UTF-8 cannot encode')
             else:
-                _json_value(x, where + '.' + k, findings, depth + 1)
+                _json_value(x, where + '.' + k, findings, depth + 1, count)
     else:
         findings.append('%s is not a JSON value (%s)' % (where, type(value).__name__))
 
