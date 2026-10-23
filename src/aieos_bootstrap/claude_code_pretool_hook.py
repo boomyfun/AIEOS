@@ -49,7 +49,12 @@ store's, the judge's or the core's findings, from standard input, from the envir
    "<session id>/pretool/<tool_use_id>" when the input's tool_use_id, read by the same strict parse the entry uses, is a
    str of [A-Za-z0-9_-]{1,200}, else "<session id>/pretool/sha256-<the SHA-256 of the input bytes>"; record_id is the
    same text with "/record" appended. The input bytes are hashed for any bytes object, a subclass included; an
-   input that is not bytes is hashed as no bytes, and the entry then refuses it without a record.
+   input that is not bytes is hashed as no bytes: on the judged path (steps 4 and 5) the entry then refuses it without
+   a record, while on the bad-base and contract paths of steps 2 and 3 its record goes to step 5 (the form check,
+   redaction, then the core path) with the empty-bytes hash in its ids (main passes bytes only, so main reaches
+   neither). The tool_use_id and the hash are read from bytes() of the input while the entry parses the object
+   itself, so a bytes subclass whose __bytes__ gives other bytes gets ids from those other bytes (main cannot reach it
+   either).
 6. No exception escapes run for an Exception: one gives exit code 2, "refuse", reason "entry", the type name only.
 
 ``main()`` reads standard input whole as bytes, os.environ, the process's working folder (None when os.getcwd() raises
@@ -57,7 +62,7 @@ OSError) and the clock (the process clock rounded up to the next whole second) o
 function itself to run. It writes nothing to standard output; on exit code 2 it writes to standard error the one line
 "AIEOS: this tool call was refused by the AIEOS hook (<reason>)"; an exception while writing that line keeps run's exit
 code; any other exception inside main gives exit code 2, reason "entry", and the line. It never returns 0 or 1 after an
-exception, which would let the call go ahead.
+exception, which, as Claude Code's documentation states (unmeasured, C6), would let the call go ahead.
 
 Limits, stated:
 - The empty allowlist: this task authors no shell policy and reads none, so once the owner places this hook every shell
@@ -71,7 +76,8 @@ Limits, stated:
   :175). Git is trusted as the contract reader trusts it: replace refs, grafts, alternates and an outer repository
   can change what AIEOS_BASE reads as.
 - The contract is read before the judgement on every judged call, reads included: up to five git calls of ten seconds
-  each, about 50 seconds at worst, against Claude Code's own hook timeout (unmeasured).
+  each, about 50 seconds at worst for the git calls alone (the store lookup's lock wait and the core path's own
+  waits come on top), against Claude Code's own hook timeout (unmeasured).
 - The contract's forbidden list: forbidden is not enforced by this hook (specification 5 :109 names only
   write_set.paths); the gates find a forbidden path afterwards.
 - Calls refused without a record: after a lease expires, every hook call is refused without a record until the

@@ -1,9 +1,12 @@
 """Property tests of aieos_bootstrap.claude_code_pretool_hook (TASK-072 AC8), standard library only, fixed seeds, at
-most 200 cases each: over arbitrary input bytes, generated environments and working folders, and generated answers of
+most 200 cases each: over generated input bytes (random bytes and JSON calls built from small fixed sets), environments
+and working folders drawn from small fixed sets, and generated answers of
 the store lookup, the contract reader and the core path (stand-ins set on the module's own references), run never
 raises for an Exception, its result has exactly its four keys, outcome and reason are always in OUTCOMES and REASONS,
 the exit code is 0 exactly for an allow, the core is reached only after a live tie, and the findings hold no planted
-text. main gives only 0 or 2. Stand-ins only: no file is written or opened."""
+text. main gives only 0 or 2. Stand-ins for the store lookup, the contract reader and the core path, except in
+test_the_real_tie_over_folders, which runs the real store lookup read-only over the host's folders (host-dependent,
+not hermetic); the entry and the channel are the real ones. No file is written."""
 
 import datetime
 import io
@@ -15,7 +18,7 @@ import unittest
 from unittest import mock
 
 from aieos_bootstrap import claude_code_pretool_hook as hook
-from aieos_bootstrap import adapter, claude_code_store
+from aieos_bootstrap import adapter, claude_code_channel, claude_code_hook, claude_code_store
 
 UTC = datetime.timezone.utc
 T0 = datetime.datetime(2026, 10, 11, 12, 0, 0, tzinfo=UTC)
@@ -195,6 +198,38 @@ class AC8Properties(unittest.TestCase):
                 self.assertIn(word, hook.REASONS)
             else:
                 self.assertEqual(err.getvalue(), '')
+
+
+class AC6TheRealEntryAndChannel(unittest.TestCase):
+
+    def test_the_entry_and_the_channel_stay_real(self):
+        """TASK-074 AC6: with the store lookup, the contract reader and the core path replaced as run_with replaces
+        them, the entry and the channel are the real modules during run, and a tied Write outside the write-set
+        reaches the core with a record that record_findings accepts."""
+        calls, seen, passed = [], [], []
+
+        def read_contract(*args, **kwargs):
+            calls.append('read_contract')
+            seen.append((hook.claude_code_hook is claude_code_hook, hook.claude_code_channel is claude_code_channel))
+            return CONTRACTS[0]
+
+        def session_violation(*args, **kwargs):
+            calls.append('session_violation')
+            passed.append(args[2])
+            return CORES[0]
+        store = types.SimpleNamespace(judge=answer(JUDGED[0], calls, 'judge'), KEYS=claude_code_store.KEYS)
+        reader = types.SimpleNamespace(read_contract=read_contract)
+        core = types.SimpleNamespace(session_violation=session_violation)
+        env = {hook.SESSION_VAR: 's-1', hook.ROOT_VAR: ROOT, hook.BASE_VAR: VALUES[7]}
+        stdin = json.dumps({'tool_name': 'Write', 'tool_input': {'file_path': ROOT + '\\src\\b.py', 'content': 'x'},
+                            'tool_use_id': 'toolu_1'}).encode('utf-8')
+        with mock.patch.object(hook, 'claude_code_store', store), mock.patch.object(hook, 'task_contract', reader), \
+                mock.patch.object(hook, 'session_violation', core):
+            out = hook.run(stdin, env, None, T0)
+        self.assertEqual(seen, [(True, True)])
+        self.assertEqual(out['reason'], 'recorded')
+        self.assertEqual(calls, ['judge', 'read_contract', 'session_violation'])
+        self.assertEqual(claude_code_channel.record_findings(passed[0]), [])
 
 
 if __name__ == '__main__':

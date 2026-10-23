@@ -374,11 +374,14 @@ class AC4TheJudgement(unittest.TestCase):
     def test_refusals_without_a_record(self):
         """TASK-072 AC4: the entry's argument refusal (stdin not bytes), the judge's argument refusal (a POSIX root),
         the entry's allowlist_form refusal and the judge's record refusal (stand-in entries) give exit 2, reason
-        "no_record", nothing passed to the core."""
+        "no_record", nothing passed to the core. TASK-074 AC5: the first two cases assert that nothing reached the core
+        too."""
         c = Calls()
         self.assertEqual(c.run(stdin='{}')['reason'], 'no_record')
+        self.assertEqual(c.core_args, [])
         c = Calls(judge=tied(root='/made-up-root'))
         self.assertEqual(c.run(stdin=WRITE_OUT)['reason'], 'no_record')
+        self.assertEqual(c.core_args, [])
         for reason in ('allowlist_form', 'record', 'argument'):
             with self.subTest(reason=reason):
                 c = Calls()
@@ -445,7 +448,8 @@ class AC5TheRecord(unittest.TestCase):
     def test_the_ids(self):
         """TASK-072 AC5: event_id is "<session id>/pretool/<tool_use_id>" for a tool_use_id of the form, else the
         SHA-256 fallback of the input bytes (a missing, bad or unparsable tool_use_id); record_id adds "/record"; each
-        id within 128 + 21 + 200 + 7 characters."""
+        id within 128 + 21 + 200 + 7 characters. TASK-074 AC5: each fallback input also reaches the core through run,
+        with a stand-in entry answering a refusal with a record."""
         c = Calls()
         c.run(stdin=WRITE_OUT)
         self.assertEqual(c.core_args[0][0][3], SID + '/pretool/toolu_made-up-1')
@@ -463,6 +467,10 @@ class AC5TheRecord(unittest.TestCase):
                     self.assertEqual(c.core_args[0][0][3], want)
                 else:
                     self.assertEqual(hook._ids(SID, stdin, 'pretool')[0], want)
+                c = Calls()
+                c.run(stdin=stdin, entry=lambda *a: refusal_with_record())
+                c.assert_one()
+                self.assertEqual(c.core_args[0][0][3], want)
         longest = hook._ids('x' * 128, call_bytes('Read', {}, 'y' * 200), 'pretool-contract')
         self.assertEqual(len(longest[0]), 128 + 18 + 200)
         self.assertLessEqual(len(longest[1]), 128 + 21 + 200 + 7)
@@ -923,25 +931,131 @@ class AC9WhatIsStated(unittest.TestCase):
         self.assertIsNone(re.search(r'\b(' + labels + r')\b', TEXT))
 
     def test_every_test_names_its_criteria(self):
-        """TASK-072 AC9: every test function of this module names "TASK-072 ACn" in its own docstring and no other
-        task's AC in qualified form; so does every test function of the property module and of PretoolHookFiles."""
+        """TASK-072 AC9 and TASK-074 AC7: every test function of this module names "TASK-072 ACn" or "TASK-074 ACn" in
+        its own docstring and no other task's AC in qualified form; every test function of the property module names
+        "TASK-072 ACn" or "TASK-074 ACn", and every test function of PretoolHookFiles names "TASK-072 ACn"."""
         tree = ast.parse(pathlib.Path(__file__).read_bytes().decode('utf-8'))
         for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name.startswith('test')]:
             doc = ' '.join((ast.get_docstring(fn) or '').split())
             with self.subTest(test=fn.name):
-                self.assertTrue(re.findall(r'TASK-072 AC[0-9]+', doc))
-                self.assertEqual(re.findall(r'TASK-(?!072 )[0-9]+ AC[0-9]+', doc), [])
+                self.assertTrue(re.findall(r'TASK-07[24] AC[0-9]+', doc))
+                self.assertEqual(re.findall(r'TASK-(?!07[24] )[0-9]+ AC[0-9]+', doc), [])
         here = pathlib.Path(__file__).resolve().parents[1]
         prop_path = here / 'property' / 'test_claude_code_pretool_hook_properties.py'
         prop = ast.parse(prop_path.read_bytes().decode('utf-8'))
         files = ast.parse((here / 'integration' / 'test_writer_files.py').read_bytes().decode('utf-8'))
         cls = [n for n in files.body if isinstance(n, ast.ClassDef) and n.name == 'PretoolHookFiles']
         self.assertEqual(len(cls), 1)
-        for tree in (prop, cls[0]):
-            for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name.startswith('test')]:
-                doc = ' '.join((ast.get_docstring(fn) or '').split())
-                with self.subTest(test=fn.name):
-                    self.assertTrue(re.findall(r'TASK-072 AC[0-9]+', doc))
+        for fn in [n for n in ast.walk(prop) if isinstance(n, ast.FunctionDef) and n.name.startswith('test')]:
+            doc = ' '.join((ast.get_docstring(fn) or '').split())
+            with self.subTest(test=fn.name):
+                self.assertTrue(re.findall(r'TASK-07[24] AC[0-9]+', doc))
+        for fn in [n for n in ast.walk(cls[0]) if isinstance(n, ast.FunctionDef) and n.name.startswith('test')]:
+            doc = ' '.join((ast.get_docstring(fn) or '').split())
+            with self.subTest(test=fn.name):
+                self.assertTrue(re.findall(r'TASK-072 AC[0-9]+', doc))
+
+
+def refusal_with_record():
+    """A refusal of the entry with a record of the judge's form for this session (as test_a_record_out_of_form_is_not
+    _passed builds it)."""
+    record = claude_code.judge({'tool_name': 'Write', 'tool_input': {'file_path': WIN_ROOT + '\\x'}}, WIN_ROOT, TASK,
+                               ['src/a.py'], [], 'r', RECORDER)['record']
+    return claude_code_hook._result('refuse', 'write', 'write_set', (), record)
+
+
+def contract_case_any_root(test, c, out, reason, root):
+    test.assertEqual(out['reason'], reason)
+    c.assert_one()
+    record = c.passed()
+    test.assertEqual(record['evidence_type'], 'write_outside_write_set')
+    test.assertEqual(record['refers_to'], NOT_READABLE)
+    args = c.core_args[0][0]
+    test.assertEqual(args[0], root)
+    test.assertIn('/pretool-contract/', args[3])
+
+
+class WhatIsStatedTask074(unittest.TestCase):
+
+    def test_the_n3_and_n4_sentences(self):
+        """TASK-074 AC2: the module docstring states the judged path's refusal, the bad-base and contract paths'
+        record with the empty-bytes hash, and the __bytes__ difference; the old sentence is gone."""
+        doc = ' '.join(ast.get_docstring(ast.parse(TEXT)).split())
+        for words in ('on the judged path (steps 4 and 5) the entry then refuses it without a record',
+                      'its record goes to step 5 (the form check, redaction, then the core path) with the empty-bytes '
+                      'hash', 'whose __bytes__ gives other bytes'):
+            with self.subTest(words=words):
+                self.assertIn(words, doc)
+        self.assertNotIn('is hashed as no bytes, and the entry then refuses it without a record', doc)
+
+    def test_the_s1_1_and_s1_2_sentences(self):
+        """TASK-074 AC3: main's sentence cites the documentation as unmeasured, and the 50 seconds count the git calls
+        alone; the old sentences are gone."""
+        doc = ' '.join(ast.get_docstring(ast.parse(TEXT)).split())
+        for words in ("as Claude Code's documentation states (unmeasured, C6)",
+                      'about 50 seconds at worst for the git calls alone'):
+            with self.subTest(words=words):
+                self.assertIn(words, doc)
+        for words in ('exception, which would let the call go ahead', 'about 50 seconds at worst, against'):
+            with self.subTest(words=words):
+                self.assertNotIn(words, doc)
+
+
+class AC2PinnedAsItIs(unittest.TestCase):
+
+    def test_a_str_input_on_the_bad_base_and_contract_paths(self):
+        """TASK-074 AC2: a str input with AIEOS_BASE absent gives reason "base", and with an unreadable contract
+        reason "contract", each with the core called once and the event id of the empty-bytes hash."""
+        want = SID + '/pretool-contract/sha256-' + hashlib.sha256(b'').hexdigest()
+        env = dict(ENV)
+        del env[hook.BASE_VAR]
+        c = Calls()
+        self.assertEqual(c.run(stdin='{}', env=env)['reason'], 'base')
+        c.assert_one()
+        self.assertEqual(c.core_args[0][0][3], want)
+        c = Calls(contract=unreadable('git'))
+        self.assertEqual(c.run(stdin='{}')['reason'], 'contract')
+        c.assert_one()
+        self.assertEqual(c.core_args[0][0][3], want)
+
+    def test_a_bytes_subclass_whose_bytes_differ(self):
+        """TASK-074 AC2: on the judged path, a bytes subclass whose __bytes__ gives other bytes gets the event id of
+        those other bytes, while the entry gets the object itself."""
+        own = call_bytes('Write', {'file_path': WIN_ROOT + '\\src\\b.py'}, tool_use_id=None)
+        other = call_bytes('Write', {'file_path': WIN_ROOT + '\\src\\c.py'}, tool_use_id=None)
+
+        class Other(bytes):
+            def __bytes__(self):
+                return other
+        got = []
+
+        def entry(*args):
+            got.append(args[0])
+            return refusal_with_record()
+        c = Calls()
+        self.assertEqual(c.run(stdin=Other(own), entry=entry)['reason'], 'recorded')
+        c.assert_one()
+        self.assertEqual(c.core_args[0][0][3], SID + '/pretool/sha256-' + hashlib.sha256(other).hexdigest())
+        self.assertIs(type(got[0]), Other)
+        self.assertEqual(bytes.__getitem__(got[0], slice(None)), own)
+
+
+class AC4NonWindowsRoot(unittest.TestCase):
+
+    def test_the_bad_base_and_contract_paths_pass_their_record(self):
+        """TASK-074 AC4: with a tie whose root is not a Windows absolute path, AIEOS_BASE absent gives reason "base"
+        and an unreadable contract reason "contract", each passing step 3's record once; the judged path gives
+        "no_record" with nothing passed."""
+        root = '/made-up-root'
+        env = dict(ENV)
+        del env[hook.BASE_VAR]
+        c = Calls(judge=tied(root=root))
+        contract_case_any_root(self, c, c.run(env=env), 'base', root)
+        c = Calls(judge=tied(root=root), contract=unreadable('git'))
+        contract_case_any_root(self, c, c.run(), 'contract', root)
+        c = Calls(judge=tied(root=root))
+        self.assertEqual(c.run(stdin=WRITE_OUT)['reason'], 'no_record')
+        self.assertEqual(c.core_args, [])
 
 
 if __name__ == '__main__':
