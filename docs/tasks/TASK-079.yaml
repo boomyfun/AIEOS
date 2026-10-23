@@ -1,0 +1,420 @@
+# TASK-079: the MCP server's four claim tools (specification 6 revision 7, sections 3, 4, 7 and 8; M6's second slice,
+# S2). Plan: decisions D-2131 and D-2132; reviews and revision 7: D-2133 to D-2137 (session 308d8b07).
+#
+# Scope (D-2131 (a) to (e), D-2132):
+# - src/aieos_bootstrap/mcp_server.py gains the tools acknowledge, ask, report and handoff (specification 6 section 4,
+#   rows 4 to 7), listed by tools/list beside status, in one task (D-2131 (e)).
+# - The lease rule as code (section 3 bullet 5): every tool but status first reads writer.session_leases with the
+#   session id and root of TASK-078's identity: exactly one unexpired row is the live lease; a session never seen, an
+#   ended session or one with no row answers no_lease; rows of which none is unexpired answer lease_expired; more than
+#   one unexpired row answers core_error (TASK-078's one-lease reading); the refusals of session_leases map as status's
+#   do (root and no_store no_session; argument, unreadable, link, tables and any other core_error). An error the tool
+#   finds before its first append writes nothing (specification 6 revision 7 section 8).
+# - The order (D-2134 N2; D-2139): the identity first (AIEOS_SESSION_ID or AIEOS_ROOT missing or out of form:
+#   no_session, as status, before any writer call); then the inputs from params.arguments and their shape (arguments
+#   missing or not an object: invalid_input); then the lease; then, for handoff, the log; then the appends, one item
+#   at a time.
+# - Other outcomes (D-2134 N1): any other refusal of writer.append_event ('event', 'log', 'log_after'), an answer of
+#   another form, any exception of a writer call, and a fence reread that finds exactly one unexpired row answer
+#   core_error; each tool body runs under the guard status runs under (mcp_server.py :114-121).
+# - The claim form (section 4; specification 2 section 6.2 as TASK-077 checks it): each item is one record.added event
+#   appended through writer.append_event, its payload the record {record_id, fact_kind "claim", source_class
+#   "agent_declared", recorder "aieos mcp_server, session <id>", subject <the lease's task>, session <the session id>,
+#   text <the item>}, a report criterion's record also carrying acs [<its AC id>]; the event's task_id is the lease's
+#   task and its fencing_token the live lease's token, taken from the store's answer, never from the agent's input;
+#   appended_at is the clock's time; the recorder argument passed to writer.append_event is the payload's recorder,
+#   "aieos mcp_server, session <id>", which the writer's fence-refusal record also carries (D-2139).
+# - The ids (D-2131 (c); D-2134 B1, B2), a stated rule: C = SHA-256 hex of the call's checked arguments as canonical
+#   JSON (UTF-8, keys sorted, no insignificant whitespace, non-ASCII kept); for the item at place n (from 1) of the
+#   argument L of a call of tool T, digest = SHA-256 hex of the UTF-8 text of session id, task id, T, C, L, n and the
+#   item's text joined by LF; L is the argument's name (acknowledge "assumptions"; ask "question", n 1; report
+#   "criteria", the item's text its AC id and its text joined by a space, and "notes", n 1; handoff each of its six
+#   lists by its name); event_id "mcp-" + digest; record_id "mcp-claim/" + digest. Only an identical call repeats
+#   the ids: an identical repeated call is a retry, the log answers "duplicate" and the tool answers the same record
+#   ids (a stated choice; acknowledge and report "may be called more than once" for calls that differ); a call that
+#   differs anywhere gets new ids.
+# - The fence (D-2131 (d); specification 6 revision 7 section 8): a lease that changes or expires between the tool's
+#   lease read and an append is refused by the writer's fence; the tool then reads session_leases again and answers
+#   no_lease, lease_expired or core_error by the rule above; the refusal record the writer appends is the writer's, as
+#   a refused submission is recorded; the claims the call appended before it stay, each a valid claim under the lease
+#   live at its append; the answer names the error.
+# - handoff (D-2131 (a), (b); D-2134 B2, B4): its six lists done, not_done, assumptions, discoveries, risks and
+#   proposals, each required, each a list of non-empty strs, with at least one item in all six (else invalid_input);
+#   called once per session (D-2133 C1): before appending, the tool reads the log through writer.read_log; if the log
+#   holds earlier claims whose payload session is the session id and whose refers_to begins "handoffs/" (under any
+#   task the session held, D-2139), the call goes on only
+#   when every such claim's record_id is among the record ids this call computes, which with C in the digest means
+#   the identical call (a cut-off handoff completed by its retry: the items already appended answer "duplicate", the
+#   rest are appended); otherwise invalid_input, nothing appended; each item's record carries refers_to
+#   "handoffs/<task>-<session>.md#<list>/<n>", n its place from 1 (specification 2 section 5.2). Writing the handoff
+#   file itself, after the submission or the session's end, is the launcher's (specification 7, M7): not in this
+#   task, a stated limit and a DEF line at acceptance.
+# - Inputs and outputs (section 4): acknowledge {assumptions: a non-empty list of non-empty strs}, ask {question: a
+#   non-empty str}, report {criteria: a list of {ac, text}, ac matching AC followed by digits and text a non-empty str,
+#   notes: a str, possibly empty, a call with no criterion and empty notes answering invalid_input}; any other shape
+#   answers invalid_input; the success answer is {"records": [the record ids in the order appended]}, for ask a list
+#   of one (a stated choice, one answer form; specification 6 :41 says "the record id"); report's notes, when not
+#   empty, is one more claim without acs.
+# - DEF-0092's three points (D-2131 C2): a line whose JSON nests too deep (json.loads raising RecursionError) answers
+#   -32700 like any line that is not JSON; tests of session_leases' unreadable, link and tables refusals in
+#   tests/unit/test_writer.py; a session holding two tasks' unexpired leases stays core_error (stated again).
+#
+# Owner-act boundary: none reached. Launching the server in a runtime and connecting it to one stay the owner's
+# (specification 6 section 10; A51 item (4)); nothing here does either; no hook, setting, policy or measurement.
+#
+# Stated limits.
+# - Every record is the agent's statement: source_class agent_declared; nothing here raises its standing
+#   (specification 4, as section 7 says).
+# - writer.read_log reads the whole log (its cost grows with the log, unmeasured) and has no link check, unlike
+#   session_leases; the once-per-session check rests on it; writer.append_event makes no link check either
+#   (writer.py :46-48).
+# - The read of the lease and the append are two steps; the writer's fence check at the append is the guard, and its
+#   refusal record is the writer's (specification 6 revision 7 section 8).
+# - A retried call after a new lease was granted carries another token; the log then answers "conflict" for the same
+#   event_id, which the tool answers core_error.
+# - The handoff file is not written (above); the review queue of discoveries and proposals stays open (section 11).
+# - MCP alone is at most tier T2, as a target and unmeasured; environment inheritance unmeasured (as TASK-078).
+#
+# The pins (L-0026 read for what each line binds; MYSP/m6s2/pinscan79-out.txt at 8d317dec; D-2132):
+# - tests/unit/test_mcp_server.py :79-83 (tools/list lists exactly status), :93-95 (acknowledge as an unknown tool),
+#   :251-289 (AC6: the imports and the writer attributes {session_leases, StoreResult}), :297-301 (AC8's phrases;
+#   those this task makes false, "writes nothing" among them, reworded), :309-312 (names_its_criteria, its regex
+#   admitting TASK-078 only) and :316-331 (AC8Naming: TASK-078 only): changed in this task, in its write-set; the
+#   naming rule is widened to "TASK-078 or TASK-079 ACn and no other task's AC" in both MCP test modules (a named
+#   pin change, as TASK-076's).
+# - tests/property/test_mcp_server_properties.py :24 (an ask call among the arbitrary lines): stays met; the call has
+#   no arguments, so it answers invalid_input before any lease read or append, and the test checks only the answer's
+#   form.
+# - tests/unit/test_writer.py R14 (:860-880), R20 (:1694-1737), R23 and R24: unchanged; writer.py is not changed.
+# - tests/unit/test_writer.py R8 (:396-411) binds every src module, mcp_server.py among them: the new code makes no
+#   open, .open or .connect call and names no ".aieos" string (AC8).
+# - The deterministic rule: mcp_server.py stays under NONE (writer calls only; hashlib is in the standard library).
+# - records.check_payload for record.added (eventlog.py :198): every claim passes it, shown over real stores.
+# - No test hashes mcp_server.py; the export pins and HOOK_SIDE are not reached.
+#
+# Risk: high, computed over the base by MYSP/m6s2/risk_class79.py (R2 medium and R3 high for each path). GOV-003:
+# src/aieos_bootstrap/** is an evaluator path (aieos-checks.yml :423, :490); change class critical_cr, as TASK-078's,
+# ruled at acceptance. Profile as TASK-078's, plus the evidence_required of the applicable articles. Reviews on Sonnet
+# 5.5 or Opus 5.5 (never Fable). Naming (D-544 Q3): every new test function names "TASK-079 ACn" in its own docstring.
+# Not applicable: OPS-001; INV-005 to INV-008, INV-010, INV-011; GOV-001, GOV-004 to GOV-006, SEC-003. INV-004
+# applies (the writer); INV-009 applies (every event an idempotent id: the id rule, AC4). INV-008: every claim is
+# agent_declared and no src module reads acs, so nothing here raises a record's standing.
+# Owner-kept acts: none in this task.
+# Shadow (D-2042 C3 as amended by D-2068): the governor's evaluate at acceptance, any difference named.
+# Records obligations of the acceptance (AC10; outside the write-set): the shadow's result; a DEF line for the handoff
+# file (the launcher's, M7); DEF-0092's log line closing its three TASK-078 points as this task meets them.
+# Local runs: the unit group in three parts (suite79_unitA, B and C, D-2131 C1).
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-079.yaml, has one parent equal to base_commit, and goes
+# to main under its own decision; the task's commits carry "AIEOS-Task: TASK-079" and go to task/TASK-079; main
+# receives them only at acceptance. X, in AC9 and the records, is the task head at acceptance.
+task: TASK-079
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add to src/aieos_bootstrap/mcp_server.py the tools acknowledge, ask, report and handoff, each writing claim records
+  through writer.append_event under the session's live lease with the store's fencing token, with handoff once per
+  session; writer.py unchanged; tests in tests/unit/test_mcp_server.py, tests/property/test_mcp_server_properties.py
+  and tests/unit/test_writer.py, each new test naming "TASK-079 ACn".
+traces_to:
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#4
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#7
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#3
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#8
+  - docs/specs/spec-02-aieos-file-format.md#5.2
+  - docs/specs/spec-02-aieos-file-format.md#6.2
+input_state:
+  base_commit: cddd51d27ba7fcdc0a52119d078cfb508992c796
+  depends_on: [TASK-016, TASK-077, TASK-078]
+  intent_versions:
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: d2fa59ae3f203b3a2108e55d23ddfb875e64ab57d27372c9d413bf30d7c2cbdd
+    docs/specs/spec-05-adapter-contract.md: ae7b99419d303db40b7200e39a22d93b9301b29900f3b1f5a5720b72d8eb9c2b
+    docs/specs/spec-02-aieos-file-format.md: 8e744daa31928621137db59a8a9d91ecf163879420e1f8e148232b149cafcdb7
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/mcp_server.py
+    - tests/property/test_mcp_server_properties.py
+    - tests/unit/test_mcp_server.py
+    - tests/unit/test_writer.py
+read_set:
+  paths:
+    - docs/specs/spec-06-mcp-protocol-and-work-orders.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.writer.session_leases, aieos_bootstrap.writer.append_event,
+    aieos_bootstrap.writer.read_log, aieos_bootstrap.writer.StoreResult, aieos_bootstrap.writer.WriteResult,
+    aieos_bootstrap.eventlog.append, aieos_bootstrap.records.check_payload, aieos_bootstrap.records.check_record,
+    aieos_bootstrap.records.check_log]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The listing and the inputs: tools/list answers status, acknowledge, ask, report and handoff, each with an object
+      input schema of section 4's keys; each tool reads its input from params.arguments and checks its shape first,
+      as the header states (non-empty strs; handoff's six lists required with one item at least; report with a
+      criterion or notes), and answers invalid_input for any other shape, a missing or non-object arguments among
+      them, before any writer call. Tests for each tool and shape in tests/unit/test_mcp_server.py.
+  - AC2: >-
+      The lease rule: before writing, each of the four tools reads writer.session_leases; no row, an ended session or a
+      session never seen answers no_lease; rows of which none is unexpired answer lease_expired; more than one unexpired
+      row answers core_error; root and no_store answer no_session; argument, unreadable, link, tables and any other
+      answer core_error; on every one of these the tool calls no other writer function; any other append_event refusal,
+      answer of another form or exception of a writer call answers core_error; a missing or out-of-form identity
+      answers no_session with no writer call. Tests with stand-ins for each.
+  - AC3: >-
+      The claim form: each item is one record.added event through writer.append_event whose payload is the header's
+      record, task_id the lease's task and fencing_token the lease's token from session_leases (never a value from the
+      tool's input, which takes no token); a report criterion carries acs with its one AC id, its notes none; every
+      record passes records.check_record; the recorder argument of each append_event call is the payload's
+      recorder. Tests with stand-ins recording the calls, and one test in
+      tests/unit/test_writer.py over real stores that runs the four tools and reads the log's new events back through
+      records.check_log with no finding.
+  - AC4: >-
+      The ids: event_id and record_id follow the header's rule exactly (the call digest, the argument name, the place
+      from 1), for ask's question and report's notes too; an identical repeated call answers the same record ids and
+      appends nothing new (the log's "duplicate"); a call that differs anywhere, one with an item of the same text at
+      the same place among them, appends new events. Tests over real stores in tests/unit/test_writer.py.
+  - AC5: >-
+      The fence (specification 6 revision 7 section 8): when writer.append_event refuses on the fence, the tool reads
+      session_leases again and answers by AC2's rule, exactly one unexpired row answering core_error; the refusal
+      record the writer appends is the writer's; items appended earlier in the call stay. Tests with a stand-in
+      refusal in tests/unit/test_mcp_server.py, and over a real store whose lease expires before the append in
+      tests/unit/test_writer.py.
+  - AC6: >-
+      handoff: its six lists, each item one claim whose refers_to is "handoffs/<task>-<session>.md#<list>/<n>", n
+      from 1; a handoff cut off after some of its items, called again with the same lists, appends the rest (the
+      earlier items answering "duplicate"); a different second handoff of the session, a superset of the first among
+      them, found by reading writer.read_log, answers invalid_input and appends nothing; no handoff file is written.
+      An earlier handoff of the same session under another task also makes a second one invalid_input. Tests with
+      stand-ins in tests/unit/test_mcp_server.py, and over real stores in tests/unit/test_writer.py for a cut-off
+      handoff completed by its retry, for a different second handoff refused, and for a second handoff of the
+      session under another task refused.
+  - AC7: >-
+      DEF-0092's three points: a line that makes json.loads raise RecursionError answers -32700 with id null; tests of
+      session_leases' unreadable, link and tables refusals in tests/unit/test_writer.py; two unexpired leases of one
+      session answer core_error. Tests for each.
+  - AC8: >-
+      What the module may touch: mcp_server.py imports only datetime, hashlib, json, os, re, sys and
+      aieos_bootstrap.writer; it uses no writer attribute but session_leases, append_event, read_log, StoreResult and
+      WriteResult; it opens no file and names no project-state directory. Tests by ast in tests/unit/test_mcp_server.py.
+  - AC9: >-
+      Every existing test passes, the pins of the header among them, those this task changes changed as the header
+      states; the full suite runs locally in three unit parts, integration and property before the first code commit;
+      the deterministic rule's local run gives no finding. The docstring of mcp_server.py states the scope and the
+      limits of the header in words a test reads; every new test names "TASK-079 ACn", and the naming test admits
+      "TASK-078 ACn" and "TASK-079 ACn" only.
+  - AC10: >-
+      Broken copies, each failing the tests its AC names and no other cause: for each of AC1 to AC8 at least one, among
+      them a copy that takes the fencing token from the tool's input, one that skips the once-per-session check, one
+      that refuses a cut-off handoff's retry, one that lets a superset second handoff through, one that counts places
+      from 0, one that appends on a no_lease answer, and a naming-test copy that admits
+      another task's id; the governor's evaluate
+      at acceptance (the shadow) with any difference named; the DEF lines of the header (not tests).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9]}
+  - {gate: G3, check: constitution, args: [AC10, INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
