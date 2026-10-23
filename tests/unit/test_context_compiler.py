@@ -231,6 +231,27 @@ class TASK080AC1Inputs(Base):
         inp['contract']['extra'] = loop
         self.refused(inp)
 
+    def test_wide_cycle_and_doubling_value(self):
+        """TASK-080 AC1: a list holding itself twice, and an acyclic value doubling at each level, give findings (the
+        bound on the values walked) instead of a walk without end; an input of 1,000 values is taken."""
+        wide = []
+        wide.append(wide)
+        wide.append(wide)
+        inp = inputs()
+        inp['contract']['extra'] = wide
+        self.refused(inp)
+        doubling = 'leaf'
+        for _ in range(60):
+            doubling = [doubling, doubling]
+        inp = inputs()
+        inp['contract']['extra'] = doubling
+        findings = self.refused(inp)
+        self.assertEqual(len(findings), 1)
+        self.assertIn(str(context_compiler.MAX_NODES), findings[0])
+        inp = inputs()
+        inp['contract']['extra'] = list(range(1000))
+        self.built(inp)
+
     def test_interface_entry_naming_nothing(self):
         """TASK-080 AC1: a read_set.interfaces entry naming no given interface gives findings, as does an interface
         naming no given component."""
