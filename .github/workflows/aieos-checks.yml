@@ -1,4 +1,4 @@
-# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md), revision 11: the checks the first code task needs
+# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md), revision 12: the checks the first code task needs
 # (decision D-181, option K1), with the conformance runs of M2 (DM A62; decisions D-217 C5 and D-218). Runs on every push
 # to any branch and checks every pushed commit. It reads only: it writes nothing to the repository and uses no secret.
 # Records: this run's log, its step summary, its annotations and each step's conclusion. Its results are advisory (DM
@@ -91,6 +91,17 @@
 # depth. None of these files exists today; a later change adding or editing one is now reported as an evaluator
 # change. It adds a report and loosens no check; it grants no write access, uses no secret and changes no setting.
 # Limits: the report does not block a change; G-3, G-4, G-6, G-7 and G-9 of round t72g stay open (DEF-0092).
+# Revision 12 (decisions D-1946 and D-1947; the decision agent's own decision under
+# DM A66) loosens one check, deterministic_rule, for exactly one path, sized to the task that reads the shell
+# allowlist (specification 2 revision 8, section 7.2): src/aieos_bootstrap/claude_code_shell_allow.py may hold strings
+# naming .aieos (the policy file .aieos/project.yaml, which it reads at the base from Git's object store through
+# gitread). It gets no module, no os name and no mode of open: it may open no file at all, so it can neither read
+# nor write the project-state directory on disk. Everything else stays refused for it, and every other file's
+# rules are unchanged, as is the refusal of any changed path under .aieos/. It grants no write access, uses no
+# secret and changes no setting. Limits: the path is matched by name, so the allowance follows the file name, not
+# its content's purpose; that the module only reads Git objects stays with that task's tests and review; the rules
+# stay an accident filter, not a containment; constitution INV-004 (only the core writes the project-state
+# directory) is unchanged, since the allowance lets the module name the directory, not write to it.
 name: aieos-checks
 
 on:
@@ -1463,7 +1474,8 @@ jobs:
           #   others: a module bound by assignment, reached through an attribute chain, sys.modules, vars() or a computed
           #   name (getattr); the posix and nt modules and other low-level modules; standard-library routes not on the
           #   deny-lists; these stay with review;
-          # - INV-004: no changed path under .aieos/; no string in src/ that names .aieos, except in the core's single writer;
+          # - INV-004: no changed path under .aieos/; no string in src/ that names .aieos, except in the core's single writer
+          #   and (revision 12) in the shell allowlist reader, which may open no file;
           # - revision 7 (TASK-016): the single writer src/aieos_bootstrap/writer.py and its three test modules get exactly
           #   the allowances in ALLOW below; the builtin open is allowed there only as a call open(<path>, <mode>) with
           #   exactly two positional arguments, no keyword, and the mode a constant "rb" or "ab"; nothing else is relaxed.
@@ -1500,6 +1512,10 @@ jobs:
           GITREAD = 'src/aieos_bootstrap/gitread.py'
           ALLOW[GITREAD] = {'modules': frozenset({'subprocess'}), 'os': frozenset(), 'open_modes': frozenset(),
                             'aieos_string': False}
+          # revision 12: the shell allowlist reader may name .aieos (the policy file it reads from Git objects); nothing else
+          SHELL_ALLOW = 'src/aieos_bootstrap/claude_code_shell_allow.py'
+          ALLOW[SHELL_ALLOW] = {'modules': frozenset(), 'os': frozenset(), 'open_modes': frozenset(),
+                                'aieos_string': True}
           SUBCOMMANDS = ('cat-file', 'diff-tree', 'rev-list', 'rev-parse')
           RUN_KEYWORDS = {'shell', 'stdin', 'stdout', 'stderr', 'capture_output', 'cwd', 'timeout', 'check', 'env'}
           MANIFESTS = {'setup.py', 'setup.cfg', 'pyproject.toml', 'Pipfile', 'Pipfile.lock', 'poetry.lock', 'MANIFEST.in'}
