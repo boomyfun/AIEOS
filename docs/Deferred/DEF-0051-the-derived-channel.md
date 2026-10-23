@@ -28,3 +28,4 @@ DEF-0030 (the core's caller); TASK-024 (the Git reader).
 
 ## Log
 - 2026-10-12: opened (decisions D-563, D-564; specification 2 revision 3, DM F36, on main as b586f9ea). ../History/2026-10/2026-10-11-2336-spec-2-revision-3-and-the-git-reader-contract.md
+- 2026-10-23: TASK-077, accepted under D-2089 at b2c39d22 (its records docs/records/TASK-077.jsonl approved in D-2089), adds the record keys session, acs and text to records.py's RECORD_KEYS with their form rules (specification 2 revision 10 section 6.2); ci_run stays out; each value stays the writer's statement and no check derives standing from it, so section 10 point 11 and this item stay open; a sentence left stale by decision D-2061: src/aieos_bootstrap/verification_records.py :37, "records.py does not gain the keys session, ci_run and acs of specification 2 revision 3 (DEF-0051, line 24).", untrue since TASK-077 for session and acs, to change with that module's next text change (session 308d8b07).
