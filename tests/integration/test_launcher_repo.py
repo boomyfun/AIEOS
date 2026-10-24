@@ -61,8 +61,9 @@ def written(*args, **kwargs):
 
 
 def ended(*args, **kwargs):
-    return {'result': 'done', 'reason': None, 'findings': [], 'core': None, 'decision': None, 'fencing_token': None,
-            'released': None}
+    out = dict.fromkeys(adapter.RESULT_KEYS)
+    out.update({'result': 'done', 'findings': []})
+    return out
 
 
 class TASK086AC11Repository(unittest.TestCase):

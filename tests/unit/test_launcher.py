@@ -193,9 +193,10 @@ def store(result='done', reason=None, value=None):
 
 
 def ended(result='done'):
-    return {'result': result, 'reason': None if result == 'done' else 'session', 'findings':
-            [] if result == 'done' else ['an end finding'], 'core': None, 'decision': None, 'fencing_token': None,
-            'released': None}
+    out = dict.fromkeys(adapter.RESULT_KEYS)
+    out.update({'result': result, 'reason': None if result == 'done' else 'session',
+                'findings': [] if result == 'done' else ['an end finding']})
+    return out
 
 
 STORE = (('read_log', writer.read_log), ('expire', writer.expire_leases), ('held', writer.held_lease),
