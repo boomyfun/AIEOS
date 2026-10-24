@@ -1,0 +1,488 @@
+# TASK-088: the rest of the Resume Check's inputs, read at a given commit and from the log, in a new module
+# resume_log_inputs.py (specification 3 revision 5, sections 1 and 2; conformance-files.md section 9; DEF-0097; M7's
+# fifth task, its second part; planned as TASK-085b (D-2533, D-2582), numbered TASK-088 (D-2585), done before
+# TASK-086). Plan: decisions D-2582 to D-2585 (session 3797498a): the scope note
+# (MYSP/t85b/scope85b.md) and the nine rulings of D-2582 as amended by D-2584 (a new module, so resume_inputs.py and
+# its tests stay untouched), the pin scan (MYSP/t85b/pinscan85b-out.txt at ed4d482e and its reading
+# MYSP/t85b/pinscan85b-reading.md, D-2583, D-2584), the risk run (MYSP/t85b/risk/risk_class85b.py), the forbidden list
+# (MYSP/t85b/forbid85b.txt, the two write-set files under src/ that exist left out), DEF-0100's draft
+# (MYSP/t85b/def0100.md).
+#
+# Scope:
+# - A new module src/aieos_bootstrap/resume_log_inputs.py with one public function, log_inputs(repo, commit, task_id,
+#   log, read=None), returning (a dict, None) or (None, findings), findings a non-empty list of strs, never a partial
+#   dict. The dict holds exactly seven of the Resume Check's 22 input keys (resume_check.py :44-48), in
+#   conformance-files.md section 9's forms (:94): dependencies, observed_read_set, budget_use, intent_current,
+#   articles, risk_rules and policy_version. With TASK-085's ten (resume_inputs.git_inputs), the 22 are covered once
+#   TASK-086
+#   adds task_id and runtime and derives log_seq, task_state and approved_contract_hash from the log (disp88 row 2);
+#   the call that joins them and calls resume_check.check is TASK-086's. read defaults, at call time, to gitread.run.
+# - In src/aieos_bootstrap/execution.py, by added lines only (no existing line changed), two public functions over its
+#   existing helpers (D-2582 rulings 3 and 4):
+#   - task_states(log, task_ids): for each id, {state, stale_evidence}: state the one _project gives over the log's
+#     lines (records.check_log, duplicates left out), or null when the log holds no task.approved of it (tested in
+#     the lines before _project is called, since _project's two refusals share one reason, execution.py :209, :220;
+#     any _Stop of _project then fails closed; disp88 row 7); stale_evidence true when the log holds
+#     an evidence.stale event of that task after its last task.done, else false (false when the task has no
+#     task.done; disp88 row 8; an evidence.stale with no task_id, records.py :675, never counted; disp88c row 7);
+#     returns (a dict, None) or (None, findings);
+#   - rework_count(log, task_id): the count of the task's decision.acceptance events with next_task_state REWORK after
+#     its last task.approved (specification 1 section 5.1's retries), an int, 0 when the log holds no task.approved
+#     of the task (disp88 row 8); (int, None) or (None, findings).
+#   They add no import and name nothing tests/unit/test_execution.py :704-727 refuses.
+# - In src/aieos_bootstrap/scope_reconcile.py, by added lines only, one public function policy_block(text): the
+#   policy's section 3 yaml block's lines as _block gives them, or None (D-2582 ruling 7). It adds no import, no
+#   "assert " text and no attribute call that tests/unit/test_scope_reconcile.py :508-532 refuses.
+# - What it does not do: no write, append, grant or lease; resume_check.py, resume_inputs.py and their tests are not
+#   changed; no gitread form is added.
+#
+# The rulings (D-2582 as amended by D-2584), each this task's choice (proposed):
+# - The contract: base_inputs.contract_at at the given commit (TASK-085's wrapper), for depends_on, intent_versions
+#   and autonomy.budgets, a contract without input_state, depends_on, intent_versions or autonomy.budgets in form
+#   failing closed (disp88 row 8); the log given as bytes.
+# - dependencies: execution.task_states(log, contract's depends_on), keyed by task id; state null when the log does
+#   not know the task (resume_check check 5 then gives BLOCKED); stale_evidence as above (a reading, carried to
+#   DEF-0100).
+# - observed_read_set: null, by rule: specification 3 takes the observed source only from a runtime of tier T3 or above
+#   and no tier counts until the owner measures it (read_set_record.py :38-43; C6, P-LOC).
+# - budget_use: for each budget named in the contract's autonomy.budgets: retries {used: rework_count, reported:
+#   true}; every other budget {used: 0, reported: false} (no source reads a runtime's reports; used 0 because
+#   resume_check's form check refuses null, resume_check.py :266-267, the R5 F2 reading; disp88 row 9); the retries
+#   limit stays a str in the contract (base_inputs.py
+#   :17), so check 8 names retries as "a form that cannot be parsed" (resume_check.py :652-655), a stated limit carried
+#   to DEF-0100 (rv85b N11).
+# - intent_current: for each entity of the contract's input_state.intent_versions, read as a repository path at the
+#   given commit: the SHA-256 hex of the file's bytes (base_files.read_file's text encoded as UTF-8, which gives the
+#   bytes back exactly, as contract_at does; a non-UTF-8 or over-size file fails closed; disp88 row 6), or null when
+#   the path is not in its folder's listing
+#   (base_inputs.paths_under then base_files.read_file); an entity that is not a path in base_files' form fails
+#   closed. resume_check check 4 compares by equality (:584-595), so the self-build's file hashes compare directly.
+# - articles: docs/pre-genesis/constitution.md at the given commit; one entry per heading "### <ID> · " (the id in the
+#   form [A-Z]+-[0-9]+), in file order: {id, scope, applicability, violated: null}; applicability
+#   {task_types: [...]} when the article's "Applicability: <words>." prose is a comma-separated list of lowercase words
+#   ([a-z][a-z_-]*), else null; scope the article's "Scope: <text>" prose as a str, running from "Scope: " to
+#   the first ". " or the line's end (so SEC-003's is "`.github/`", constitution.md :125; disp88c row 6; disp88 row 1):
+#   a scope that is not a mapping makes resume_check's _scope_patterns give None (:425-426), so every article whose
+#   applicability is null or names the contract's task_type counts as applicable (_applicable tests applicability
+#   first, :443-447; disp88c row 1), as specification 3 :45 says for a scope that cannot be evaluated (a null scope
+#   would give [] and leave an unlisted article out, :421-424, :450-453); a stated departure from section 9's {paths,
+#   components} form, which _check_inputs does not check (:251-255); an article with no "Scope:" prose gets the str ""
+#   (also not a mapping); violated null (no check result at an unevaluated commit; check 6 names each applicable one as
+#   uncovered, :624-625). A constitution with no heading, or one id twice, fails closed.
+# - risk_rules: scope_reconcile.rules_from_policy over docs/specs/risk-rules-gov-aieos.md at the given commit (no
+#   parser copied, INV-003), each rule {match, class} turned into section 7's {match: {paths: [...]}, risk: class};
+#   a component_tags rule is given as its TAGS_MATCH entry's paths ({match: {paths: [src/**, tests/**]}, risk: high}
+#   for R3), the risk rules' point 3 (:18) reading, not a departure (D-2602 C1, reversing D-2589 C1; disp88c rows 3
+#   and 4), so a write-set path outside src/ and tests/ that no other rule meets stays unmatched and check 7's
+#   ESCALATE (point 2, :17) can fire; any refused rule (class null) fails closed.
+# - policy_version: the value of the block line "policy_version: <v>" in scope_reconcile.policy_block's lines, exactly
+#   one such line, or fail closed.
+# - The output: exactly the seven keys, or (None, findings); never raises. Every Git read goes through read, one
+#   memoized read shared by all calls in one call (as resume_inputs): log_inputs' own memo, passed as read to
+#   contract_at, paths_under and base_files.read_file, whose own caches sit inside it (disp88 row 5).
+#
+# Stated limits: seven of the 22 inputs; observed_read_set null; three budgets unreported; the retries limit unparsed
+# by check 8, so check 8 is inert for every budget of the self-build; stale_evidence a reading (an evidence.stale with
+# no task_id never counted); every article's scope its prose (a stated departure) and violated null; component_tags
+# rules read as point 3's paths until the architecture names components; intent_current as file hashes, a non-UTF-8
+# or over-size file failing the call; the repository read at one moment; a listed folder with a symbolic link, a
+# submodule or an out-of-form name fails the call (base_files' rules), and an intent entity at the repository root
+# lists the whole tree (base_inputs.py :415-418), so one such entry anywhere fails it (disp88c row 8). Those named in
+# DEF-0100 are carried there for specification 3's next revision (disp88 row 4).
+#
+# DEF-0097: stays open (disp88 row 2): task_id and runtime are the launcher's (DEF-0097 :13), so it closes at
+# TASK-086's records, once every input is read by TASK-085, TASK-088 or TASK-086, or stated and moved to DEF-0100.
+# DEF-0100 (MYSP/t85b/def0100.md) is written with the records as a second path.
+#
+# Owner-act boundary: none reached. The module reads only; no hook, setting, policy, gitread form, measurement or
+# runtime tier (DM A51 item (4)).
+#
+# The pins (L-0026; MYSP/t85b/pinscan85b-out.txt at ed4d482e; D-2583, D-2584): tests/unit/test_execution.py :704-744
+# (R10Purity: execution.py imports exactly datetime, re and aieos_bootstrap's records, resume_check and writer; no
+# ast.Assert; no Name open, exec, eval, compile, __import__, importlib, subprocess, os, sys or time; no attribute now,
+# utcnow, today, environ, getenv, system, Popen, write, open_store, start_session, end_session, expire_leases,
+# release_lease or evaluate; no ".aieos" string; the docstring's nine phrases; __init__.py names execution), kept;
+# tests/unit/test_execution_list_tasks.py, unchanged and passing; tests/unit/test_scope_reconcile.py :508-532 (imports
+# exactly datetime, hashlib, re and gitread, records, scope_drift, writer; no bare call open, eval, exec, compile,
+# __import__; no attribute call write, now, utcnow, time, run, Popen, system, getenv, import_module; no "assert " in the
+# text; the docstring's four phrases), kept; tests/unit/test_resume_inputs.py and resume_inputs.py, unchanged.
+# __init__.py is not changed, so __all__ does not name the new module. The package-wide scans test_writer.py :397-412,
+# test_gitread.py :370-380 and test_autonomy.py :238-246 hold for the new module. The deterministic rule
+# (.github/workflows/aieos-checks.yml :1489-1513): no allowance for any write-set path, so no DENY_MODULES module
+# (tempfile, sqlite3, shutil among them), no DENY_NAMES name, no DENY_OS call, no DENY_ATTR_CALLS call, no one-argument
+# .replace(. GOV-003's EVALUATOR list (src/aieos_bootstrap/**, aieos-checks.yml :423), unchanged. No change under
+# .github/.
+#
+# Risk: high, computed over the base by MYSP/t85b/risk/risk_class85b.py (R2 medium and R3 high, not evaluable, for each
+# path). GOV-003: an evaluator path; change class ruled at acceptance. Reviews on Sonnet 5.5 and Opus 5.5 (never
+# Fable), read tools only; the acceptance review on Sonnet 5.5, by the two-models rule for a way-2 review (governor.py
+# :270-275; disp88 row 15). Naming (D-544 Q3): every new
+# test function names "TASK-088 ACn" in its own docstring. Not applicable: OPS-001; INV-005 to INV-011; GOV-001, GOV-004
+# to GOV-006, SEC-003. INV-004 is not reached (nothing is written); it stays listed for the evaluator path's profile.
+# Owner-kept acts: none in this task.
+# Shadow (D-2042 C3 as amended by D-2068): the governor's evaluate at acceptance, any difference named.
+# Local runs: the unit group in three parts.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-088.yaml, has one parent equal to base_commit, and goes
+# to main under its own decision; the task's commits carry "AIEOS-Task: TASK-088" and go to task/TASK-088; main
+# receives them only at acceptance.
+task: TASK-088
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add src/aieos_bootstrap/resume_log_inputs.py with log_inputs(repo, commit, task_id, log, read=None): the Resume
+  Check's inputs dependencies, observed_read_set, budget_use, intent_current, articles, risk_rules and policy_version,
+  read at the given commit and from the log in conformance-files.md section 9's forms, as (a dict, None) or (None,
+  findings), never raising; add to execution.py task_states and rework_count and to scope_reconcile.py policy_block, by
+  added lines only; tests in tests/unit/test_resume_log_inputs.py and tests/integration/test_resume_log_inputs_repo.py,
+  each new test naming "TASK-088 ACn".
+traces_to:
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#1
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#2
+  - docs/specs/spec-01-state-and-event-model.md#5
+input_state:
+  base_commit: ed4d482e42396f0ec0b2a447a1b3b43174051f36
+  depends_on: [TASK-008, TASK-032, TASK-034, TASK-081, TASK-082, TASK-084, TASK-085]
+  intent_versions:
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 613cbd72dca411586ca03d790cd01bb044d0eb8e9a2885d9c3f8bb25cc9f5efb
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: d2fa59ae3f203b3a2108e55d23ddfb875e64ab57d27372c9d413bf30d7c2cbdd
+    docs/specs/spec-05-adapter-contract.md: ae7b99419d303db40b7200e39a22d93b9301b29900f3b1f5a5720b72d8eb9c2b
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 8e744daa31928621137db59a8a9d91ecf163879420e1f8e148232b149cafcdb7
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/resume_log_inputs.py
+    - src/aieos_bootstrap/execution.py
+    - src/aieos_bootstrap/scope_reconcile.py
+    - tests/unit/test_resume_log_inputs.py
+    - tests/integration/test_resume_log_inputs_repo.py
+read_set:
+  paths:
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/specs/conformance-files.md
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/Deferred/DEF-0097-the-readers-of-the-resume-checks-inputs.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.base_inputs.contract_at, aieos_bootstrap.base_inputs.paths_under,
+    aieos_bootstrap.base_files.read_file, aieos_bootstrap.scope_reconcile.rules_from_policy,
+    aieos_bootstrap.records.check_log, aieos_bootstrap.resume_inputs.git_inputs, aieos_bootstrap.resume_check.check]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_base_files_repo.py
+  - tests/integration/test_base_inputs_repo.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_mcp_server_work_order_repo.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_resume_inputs_repo.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_base_files_properties.py
+  - tests/property/test_base_inputs_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_context_compiler_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_mcp_server_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_base_files.py
+  - tests/unit/test_base_inputs.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_execution_list_tasks.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_mcp_server_work_order.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_resume_inputs.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The arguments and the reader: log_inputs(repo, commit, task_id, log, read=None); repo not a str, commit not 40
+      or 64 lowercase hex, task_id not TASK-<digits>, log not bytes, or read neither None nor callable, each give
+      (None, findings) with zero reads; read defaults, at call time, to gitread.run (a patch after import is the one
+      called); every read is one of gitread's fixed forms (gitread.form_error gives None for each recorded call).
+  - AC2: >-
+      dependencies through execution.task_states: for a log built by eventlog.append, a dependency approved and done
+      gives state DONE, one approved and blocked BLOCKED, one with no task.approved null; stale_evidence is true only
+      when an evidence.stale of that task follows its last task.done (one before it, or of another task, gives false);
+      a duplicate line is not counted; a task.* event _project does not name (made, since records.EVENT_TYPES leaves
+      no such type, by mock.patch.object(execution, 'STATE_OF', …) as TASK-084's tests do; disp88 row 11), or a log
+      check_log refuses, gives findings; task_states over an empty id list gives {}.
+  - AC3: >-
+      budget_use: one entry per budget of the contract's autonomy.budgets, exactly {used, reported}; retries'
+      used is execution.rework_count (two decision.acceptance events with next_task_state REWORK after the last
+      task.approved give 2, one before it does not count, one with ACCEPTED does not count) with reported true; every
+      other budget {used: 0, reported: false}; a contract with no retries budget gives no retries entry; a contract
+      without input_state, depends_on, intent_versions or autonomy.budgets in form gives findings (disp88c row 5).
+  - AC4: >-
+      intent_current: for each intent_versions entity, the SHA-256 of the file's bytes at the given commit (a changed
+      byte changes it, an unchanged file equals the contract's value; the stand-in file holds non-ASCII text and a
+      trailing newline, so a hash of another encoding or of a stripped text differs, disp88 row 6); an absent file
+      gives null; an entity out of base_files' path form gives findings.
+  - AC5: >-
+      articles: one entry per "### <ID> · " heading of the constitution at the commit, in file order, exactly {id,
+      scope, applicability, violated}, scope the article's Scope prose as a str ("" when there is none), running to
+      the first ". " or the line's end (SEC-003's is "`.github/`"), violated null; applicability
+      {task_types: [...]} from
+      "Applicability: implementation, refactoring." and null for a prose that is not a list of lowercase words; a
+      constitution with no heading, or an id twice, gives findings.
+  - AC6: >-
+      risk_rules and policy_version: each rule of the policy at the commit as {match: {paths: [...]}, risk: class},
+      in order, a component_tags rule as its TAGS_MATCH entry's paths ({match: {paths: [src/**, tests/**]}, risk:
+      class}); with a write set outside src/ and tests/ (docs/x.md) that no other stand-in rule meets, resume_check's
+      _task_risk leaves it unmatched, so check 7's ESCALATE can fire (D-2602 C1); a rule rules_from_policy refuses
+      gives findings; policy_version the block's value;
+      a policy with no block, or no or two policy_version lines, gives findings.
+  - AC7: >-
+      The output and failing closed: exactly the seven keys, observed_read_set null; merged with TASK-085's git_inputs
+      over the same stand-in commit and fixed task_id, log_seq, task_state, approved_contract_hash and runtime, the 22
+      keys equal resume_check.INPUT_KEYS and resume_check.check gives a record with no error, whose uncovered list
+      names "article <id>: no check result at HEAD" for every article of the stand-in constitution whose
+      applicability is null or names the stand-in contract's task_type, listed or not (disp88c row 1), and an unlisted
+      stand-in article whose applicability leaves out that task_type is not named; a read that raises
+      (RuntimeError, RecursionError, MemoryError), an answer out of form, or a refused log give (None, findings); no
+      call raises or returns a partial dict.
+  - AC8: >-
+      The modules: by ast over pathlib's read_bytes, execution.py's and scope_reconcile.py's import sets are exactly
+      those their tests pin (tests/unit/test_execution.py :704-727 and tests/unit/test_scope_reconcile.py :508-532
+      unchanged and passing); task_states, rework_count and policy_block exist and give their stated values; by
+      ast, task_states and rework_count use no attribute of writer and task_states calls _project (TASK-084's AC5 and
+      AC6 forms; disp88 row 12); the
+      existing lines of both files are unchanged (checked at review from C..X); the new module imports only hashlib and
+      re of the standard library and aieos_bootstrap's base_files, base_inputs, execution, gitread, resume_check and
+      scope_reconcile, and names no open, exec, eval, compile, __import__, subprocess, os, sys, time or autonomy, no
+      attribute now, environ, getenv, write, grant_lease, append_event or expire_leases, and no ".aieos" string.
+  - AC9: >-
+      Over this repository (an integration test through gitread.run, the repository found by pathlib; it needs the
+      full history): log_inputs at ed4d482e42396f0ec0b2a447a1b3b43174051f36 for TASK-085 with the log b"" gives
+      intent_current equal to TASK-085.yaml's intent_versions for all ten entities (the ten hashes confirmed at
+      ed4d482e by ivhash88, D-2587; disp88 row 13); articles whose ids are exactly the
+      constitution's headings in order (INV-001 first); risk_rules of twelve rules, the second (R2) a paths rule as
+      the policy writes it and the third (R3) as {match: {paths: [src/**, tests/**]}, risk: high}; policy_version "v4";
+      dependencies with every one
+      of TASK-085's three
+      dependencies null (the log is empty); budget_use retries {used: 0, reported: true}.
+  - AC10: >-
+      Every existing test passes, the pins of the header among them; resume_inputs.py, resume_check.py and their tests
+      are unchanged; the full suite runs locally in three unit parts, integration and property before the first code
+      commit; the deterministic rule's local run gives no finding. The new module's docstring holds, whitespace read as
+      single spaces, "the commit is an argument", "read is injectable", "never raises", "writes nothing", "fails
+      closed", "this task's choice", "seven of the 22 inputs", "DEF-0100" and "observed_read_set is null"; execution.py
+      and scope_reconcile.py each gain a docstring paragraph naming their new functions and "TASK-088", execution.py's
+      saying that task_states and rework_count read the log for TASK-088's readers while execute itself still gathers no
+      Resume Check input (the kept phrase "it gathers no Resume Check input" unchanged), scope_reconcile.py's holding
+      no "assert " text and no .run( call (disp88 row 10); every new test
+      names "TASK-088 ACn".
+  - AC11: >-
+      Broken copies, each naming its file and failing the tests of its AC: (1) resume_log_inputs.py binds read at
+      import time (AC1); (2) execution.py's task_states counts an evidence.stale before the last task.done (AC2); (3)
+      execution.py's task_states gives READY for an unknown task (AC2); (4) execution.py's rework_count counts events
+      before the last task.approved (AC3); (5) resume_log_inputs.py marks every budget reported (AC3); (6)
+      resume_log_inputs.py hashes the decoded text with another encoding or a stripped text (AC4); (7)
+      resume_log_inputs.py gives an absent intent file an empty hash instead of null (AC4); (8) resume_log_inputs.py
+      skips the last heading (AC5); (9) resume_log_inputs.py drops a refused rule and goes on (AC6); (10)
+      scope_reconcile.py's policy_block returns the lines after the block (AC6); (11) resume_log_inputs.py returns the
+      dict found so far on a read error (AC7); (12) execution.py gains an import (AC8); (13) resume_log_inputs.py
+      skips the contract-keys check (AC3); each copy made in a scratchpad
+      script at G3 (brk85b, as brk85), not committed; copy (12)'s text is shown failing AC8's ast check; the governor's
+      evaluate at acceptance (the shadow) with any difference named; the stated choices in the records (not tests).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1200k, wall_time: 6h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9, AC10]}
+  - {gate: G3, check: constitution, args: [AC11, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
