@@ -42,6 +42,20 @@ caught and becomes a result with the step's reason; none escapes.
 writer.append_event, writer.grant_lease, writer.release_lease_token, writer.held_lease and resume_check.check; tests
 pass stand-ins.
 
+``list_tasks(root, now, read_log=None, held_leases=None)`` (task TASK-084; specification 6 section 1, specification 7
+section 3, specification 1 section 5) gives the tasks that may be taken, as a core function, not an MCP tool: every
+task the log has a task.approved of whose state, by the same projection as execute's, is READY or REWORK and that
+holds no unexpired lease in the store, as (a list, None) of {task, state, contract_hash, lease} sorted by task number,
+lease "none" or "expired" (a row whose expires_at is at or before now, which the launcher's expiry has not yet
+removed), or (None, findings) with no partial list. It reads only: the log once through read_log, then the store once
+through held_leases (defaulting, at call time, to writer.read_log and writer.held_leases); it grants, releases,
+expires and appends nothing, and it never raises. A held lease out of eventlog.LEASE_KEYS' form, or whose task_id is
+not in the TASK- form, two leases on one task, or a lease on a task with no task.approved, fail the whole list; an
+in-form lease on a task the log has in another state only leaves that task out (a stop between task.submitted and the
+lease's release leaves one, submit.py). Its limits: dependencies are not re-checked, since READY already needs them
+DONE at task.approved (DEF-0099, for the launcher's grant path); no transition check (DEF-0055 P6); the store is read
+at one moment, so a lease may be granted after the list is made; the list grants nothing.
+
 Readings (the implementer's, not the contract's own words):
 - The task's events are those whose task_id is the task, ignored duplicate lines left out; the seq compared with the
   inputs' log_seq is that of the log's last line, duplicate or not.
@@ -393,3 +407,81 @@ def execute(root, task_id, inputs, code_sha256, grant_request, recorder, now, re
         else:
             kept = lease
     return _result('decided', None, [], decision, record_id, appended, duplicate, kept, released, uncovered)
+
+
+# ---- list_tasks (task TASK-084) ----
+
+def _task_key(task_id):
+    """TASK-084 AC2: the sort key by task number, with no int(): the digits' length with leading zeros stripped, those
+    digits, then the whole id (so TASK-9 comes before TASK-10, and TASK-07 and TASK-7 keep one order)."""
+    digits = task_id[len('TASK-'):].lstrip('0')
+    return (len(digits), digits, task_id)
+
+
+def _lease_task(lease):
+    """TASK-084 AC3: the task_id of one held lease in eventlog.LEASE_KEYS' form, else a refusal."""
+    task_id = lease.get('task_id') if isinstance(lease, dict) else None
+    if not (isinstance(task_id, str) and _TASK.fullmatch(task_id) is not None):
+        raise _Stop('lease', ['lease: a held lease has no task_id of TASK- followed by digits'])
+    if not _lease_form(lease, task_id):
+        raise _Stop('lease', ['lease: the held lease of %s is not in eventlog.LEASE_KEYS\' form' % task_id])
+    return task_id
+
+
+def list_tasks(root, now, read_log=None, held_leases=None):
+    """The tasks that may be taken (TASK-084 AC1 to AC6): (a list of {task, state, contract_hash, lease}, None), or
+    (None, findings)."""
+    read_log = writer.read_log if read_log is None else read_log
+    held_leases = writer.held_leases if held_leases is None else held_leases
+    try:
+        found = []
+        if not _text(root):
+            found.append('argument: root is not a non-empty string')
+        if not _utc_whole(now):
+            found.append('argument: now is not a timezone-aware datetime in UTC with whole seconds')
+    except Exception as exc:  # AC1: an argument whose own methods raise
+        found = ['argument: checking the arguments raised %s' % type(exc).__name__]
+    if found:
+        return None, found
+
+    try:
+        lines = _log(read_log, root)
+        ids = {line.event.get('task_id') for line in lines
+               if line.duplicate_of is None and line.event.get('type') == 'task.approved'}
+        approved = sorted((t for t in ids if isinstance(t, str) and _TASK.fullmatch(t) is not None), key=_task_key)
+        states = {}
+        for task_id in approved:
+            state, contract_hash = _project(lines, task_id)
+            if state == 'IN_PROGRESS':
+                raise _Stop('state', ['state: the log gives %s the state IN_PROGRESS, which only a held lease gives'
+                                      % task_id])
+            states[task_id] = (state, contract_hash)
+        leases = held_leases(root)
+        if not isinstance(leases, list):
+            raise _Stop('lease', ['lease: held_leases gave %s, not a list' % type(leases).__name__])
+        held = {}
+        for lease in leases:
+            task_id = _lease_task(lease)
+            if task_id in held:
+                raise _Stop('lease', ['lease: two held leases on %s' % task_id])
+            if task_id not in states:
+                raise _Stop('lease', ['lease: a lease is held on %s, of which the log has no task.approved' % task_id])
+            held[task_id] = lease
+        listed = []
+        for task_id in approved:
+            state, contract_hash = states[task_id]
+            if state not in GRANT_STATES:
+                continue  # AC3: an in-form lease on such a task only leaves it out
+            lease = held.get(task_id)
+            if lease is None:
+                mark = 'none'
+            elif lease['expires_at'] > now:
+                continue
+            else:
+                mark = 'expired'
+            listed.append({'task': task_id, 'state': state, 'contract_hash': contract_hash, 'lease': mark})
+        return listed, None
+    except _Stop as stop:
+        return None, list(stop.findings)
+    except Exception as exc:  # AC4: no exception escapes
+        return None, ['list_tasks: a step raised %s' % type(exc).__name__]
