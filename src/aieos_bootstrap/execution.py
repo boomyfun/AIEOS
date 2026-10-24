@@ -56,6 +56,15 @@ lease's release leaves one, submit.py). Its limits: dependencies are not re-chec
 DONE at task.approved (DEF-0099, for the launcher's grant path); no transition check (DEF-0055 P6); the store is read
 at one moment, so a lease may be granted after the list is made; the list grants nothing.
 
+``task_states(log, task_ids)`` and ``rework_count(log, task_id)`` (task TASK-088; specification 1 section 5.1) read
+the log for TASK-088's readers (resume_log_inputs): the log is given as bytes and checked by records.check_log,
+ignored duplicates left out. task_states gives, for each id, {state, stale_evidence}: the state by the same
+projection as execute's, or None when the log holds no task.approved of the task, and stale_evidence true when an
+evidence.stale of the task follows its last task.done (one with no task_id is never counted); rework_count gives the
+count of the task's decision.acceptance events with next_task_state REWORK after its last task.approved, 0 when there
+is none. Both give (a value, None) or (None, findings) and never raise; they append, grant and release nothing, and
+execute itself still gathers no Resume Check input.
+
 Readings (the implementer's, not the contract's own words):
 - The task's events are those whose task_id is the task, ignored duplicate lines left out; the seq compared with the
   inputs' log_seq is that of the log's last line, duplicate or not.
@@ -485,3 +494,62 @@ def list_tasks(root, now, read_log=None, held_leases=None):
         return None, list(stop.findings)
     except Exception as exc:  # AC4: no exception escapes
         return None, ['list_tasks: a step raised %s' % type(exc).__name__]
+
+
+# ---- task_states and rework_count (task TASK-088) ----
+
+def _given_log(log):
+    """TASK-088 AC2, AC3: the lines of the log given as bytes, after records.check_log finds nothing (execute's _log
+    over a reader that gives those bytes)."""
+    return _log(lambda root: log, None)
+
+
+def _own_events(lines, task_id):
+    """TASK-088 AC2, AC3: the task's events in log order, ignored duplicate lines left out (as _project takes them)."""
+    return [line.event for line in lines if line.duplicate_of is None and line.event.get('task_id') == task_id]
+
+
+def task_states(log, task_ids):
+    """For each id of task_ids, {state, stale_evidence} (TASK-088 AC2): (a dict keyed by task id, None), or (None,
+    findings). state is the one _project gives, or None when the log holds no task.approved of the task (tested
+    before _project is called, whose two refusals share one reason); stale_evidence is true when an evidence.stale of
+    the task follows its last task.done, else false (an evidence.stale with no task_id is never counted)."""
+    try:
+        if not (isinstance(task_ids, list)
+                and all(isinstance(t, str) and _TASK.fullmatch(t) is not None for t in task_ids)):
+            return None, ['argument: task_ids is not a list of TASK- followed by digits']
+        lines = _given_log(log)
+        states = {}
+        for task_id in task_ids:
+            mine = _own_events(lines, task_id)
+            if any(e['type'] == 'task.approved' for e in mine):
+                state = _project(lines, task_id)[0]
+            else:
+                state = None
+            done = [i for i, e in enumerate(mine) if e['type'] == 'task.done']
+            stale = bool(done) and any(e['type'] == 'evidence.stale' for e in mine[done[-1] + 1:])
+            states[task_id] = {'state': state, 'stale_evidence': stale}
+        return states, None
+    except _Stop as stop:
+        return None, list(stop.findings)
+    except Exception as exc:  # TASK-088 AC2: no exception escapes
+        return None, ['task_states: a step raised %s' % type(exc).__name__]
+
+
+def rework_count(log, task_id):
+    """The count of the task's decision.acceptance events with next_task_state REWORK after its last task.approved
+    (specification 1 section 5.1's retries; TASK-088 AC3): (an int, None), 0 when the log holds no task.approved of
+    the task, or (None, findings)."""
+    try:
+        if not (isinstance(task_id, str) and _TASK.fullmatch(task_id) is not None):
+            return None, ['argument: task_id is not TASK- followed by digits']
+        mine = _own_events(_given_log(log), task_id)
+        approved = [i for i, e in enumerate(mine) if e['type'] == 'task.approved']
+        if not approved:
+            return 0, None
+        return sum(1 for e in mine[approved[-1] + 1:] if e['type'] == 'decision.acceptance'
+                   and isinstance(e['payload'], dict) and e['payload'].get('next_task_state') == 'REWORK'), None
+    except _Stop as stop:
+        return None, list(stop.findings)
+    except Exception as exc:  # TASK-088 AC3: no exception escapes
+        return None, ['rework_count: a step raised %s' % type(exc).__name__]
