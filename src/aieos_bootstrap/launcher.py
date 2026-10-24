@@ -4,13 +4,23 @@ adapter.start and adapter.end (TASK-051), callable by tests. It starts no runtim
 hook placed, no setting changed; running `aieos launch` with a runtime stays the owner's (DM A51 item (4)).
 
 ``start(root, repo, task_id, adapter_name, max_risk, holder, recorder, now, expires_at, ...)`` returns a mapping with
-exactly START_KEYS and never raises. In order (specification 7 :47's order without its first step):
+exactly START_KEYS and never raises. In order (specification 7 :47's order: the gone sessions' records, then the
+expiry, then the Resume Check, then the grant):
 
 1. The arguments: root an absolute path (a drive letter followed by ":/" or ":\\", or a leading "/"), repo checked by
    gitread.form_error with the HEAD read's form and TIMEOUT, task_id TASK-<digits>, adapter_name, holder and recorder
    non-empty strings, max_risk None or one of RISKS, now and expires_at timezone-aware UTC whole seconds with
    expires_at after now, every callee None or callable; a wrong one gives "refused" with reason "argument" and no
    callee called.
+1a. The gone sessions' records, before the expiry (task TASK-090; specification 5 section 11 point 10; specification
+   7 :47): read_sessions(root, task_id) lists the sessions that hold stored reads for the task; for each, in order,
+   session_leases(root, session_id, now) is read once and the session is skipped when any of its rows is unexpired at
+   now, whatever the row's task and whatever "ended" says (a session whose lease row is still unexpired is not
+   processed); otherwise stored_reads, then read_set_record.observe_gone with 'lease gone (released or expired)' and
+   the recorder followed by " at the next start, for session " and the session id, as the core's own observation with
+   no fencing token, written even when no read is stored; then remove_reads once the record is found present. Every
+   outcome is a "gone_records: <session_id>: " line (the listing's own lines name the task), put first in the findings
+   of every result after the arguments; a failure ends that session only, and start goes on.
 2. The core's expiry, expire(root, now) (writer.expire_leases): the core's expiry runs before a grant (specification
    5 :112).
 3. HEAD, read once through read by gitread's fixed form; an answer that is not exactly 40 lowercase hex characters
@@ -73,10 +83,15 @@ The rulings, each this task's choice (decisions D-2673, D-2675, D-2681):
   change between the reads gives execute's "inputs" refusal, which fails closed, as does a lease taken between
   task_view and execute.
 
-Stated limits: start leaves the observed read-set record to end. end writes it at two of its three call places, the
-normal end and the gone session's record at the end after a violation or an expiry, with the stored reads' removal (task
-TASK-089); the third, the next start's record of a session gone without an end, is TASK-090's, so launching with a
-runtime is not before TASK-090 lands (a statement, not a lock; DEF-0101). end's limits: on the fail-closed paths the
+Stated limits: the observed read-set record is written at its three call places: end writes it at the normal end and
+for the gone session at the end after a violation or an expiry, with the stored reads' removal (task TASK-089), and
+start's step 1a writes it at the next start, before the expiry, for a session gone without an end (task TASK-090);
+launching with a runtime is not before DEF-0101's open points are closed: the base-tip check, check 0 and max_risk (a
+statement, not a lock). Step 1a's limits: with no later start of the task no record is written; a gone session that
+stored no read is never listed; now is the caller's, so a now later than the real time reads a live lease as expired;
+it writes records and removes reads even when start then refuses or does not grant; a session that can never be
+processed keeps its reads and gives its line at every start; a project with no store gives a line at each start; the
+listing, the rows and the reads are read at separate moments. end's limits: on the fail-closed paths the
 session stays open, its lease held until it expires, for the next start or `aieos end`; a "held" session stays open
 until its unexpired lease expires or end is called with its token; a token mapping out of the store's form is checked
 only by adapter.end, so on the gone path the record is written and the reads removed before adapter.end refuses it;
@@ -126,12 +141,15 @@ _TASK = re.compile(r'TASK-[0-9]+')
 _HEX40 = re.compile(r'[0-9a-f]{40}')
 _ZERO = datetime.timedelta(0)
 _CALLEES = ('read', 'read_log', 'expire', 'start', 'end', 'check', 'append', 'grant', 'release', 'held',
-            'start_session', 'end_session', 'release_lease_token')
+            'start_session', 'end_session', 'release_lease_token', 'read_sessions', 'session_leases', 'stored_reads',
+            'remove_reads', 'observe_gone')
+_GONE_FOR = ' at the next start, for session '
 
 
 def _result(result, reason=None, findings=(), session_id=None, head_commit=None, decision=None, fencing_token=None,
-            environment=None, started=None, ended=None):
-    return {'result': result, 'reason': reason, 'findings': [f for f in findings if isinstance(f, str)],
+            environment=None, started=None, ended=None, gone=()):
+    return {'result': result, 'reason': reason, 'findings': [f for f in tuple(gone) + tuple(findings)
+                                                             if isinstance(f, str)],
             'session_id': session_id, 'head_commit': head_commit, 'decision': decision, 'fencing_token': fencing_token,
             'environment': environment, 'start': started, 'end': ended}
 
@@ -214,12 +232,68 @@ def _inputs(repo, head, task_id, log, read, adapter_name, max_risk, view):
     return inputs, hashlib.sha256(code['text'].encode('utf-8')).hexdigest(), None
 
 
+def _gone_session(root, task_id, session_id, now, recorder, session_leases, stored_reads, remove_reads,
+                  observe_gone):
+    """Step 1a for one listed session (TASK-090 AC4 to AC6): its "gone_records: <session_id>: " lines. _path,
+    _present, _conflict and _store_findings are end's; the stored_reads check and the removal are a small stated
+    parallel of end's."""
+    head = 'gone_records: %s: ' % session_id
+    path, found = _path(session_leases(root, session_id, now), task_id, None, now)
+    if found:
+        return [head + f for f in found]
+    if path != 'gone':
+        return [head + 'skipped, a lease row is unexpired']
+    got = stored_reads(root, session_id, task_id)
+    reads = getattr(got, 'value', None)
+    if getattr(got, 'result', None) != 'done' or not isinstance(reads, list):
+        return [head + f for f in _store_findings('stored_reads', got)]
+    record = observe_gone(root, task_id, session_id, list(reads), read_set_record.GONE_WHY[1], now,
+                          recorder + _GONE_FOR + session_id)
+    if not _present(record):
+        given = record.get('findings') if isinstance(record, dict) else None
+        more = [f for f in given if isinstance(f, str)] if isinstance(given, list) else []
+        return [head + f for f in ['record: the record was not found present'] + more]
+    lines = []
+    if _conflict(record):
+        lines.append(head + 'record: a record is already present under its event id (conflict)')
+    removed = remove_reads(root, session_id, task_id)
+    if getattr(removed, 'result', None) != 'done':
+        return lines + [head + f for f in _store_findings('remove_reads', removed)]
+    return lines + [head + 'record %s, %r reads removed' % (record['result'], getattr(removed, 'value', None))]
+
+
+def _gone_records(root, task_id, now, recorder, read_sessions, session_leases, stored_reads, remove_reads,
+                  observe_gone):
+    """Step 1a (TASK-090 AC4 to AC6): the gone sessions' records before the expiry, as "gone_records: " lines; a
+    failure ends its session only; never raises."""
+    head = 'gone_records: %s: ' % task_id
+    try:
+        listing = read_sessions(root, task_id)
+        if getattr(listing, 'result', None) != 'done':
+            return [head + f for f in _store_findings('read_sessions', listing)]
+        ids = getattr(listing, 'value', None)
+        if not (isinstance(ids, list) and all(_text(i) for i in ids)):
+            return [head + 'read_sessions gave a value that is not a list of non-empty strings']
+    except Exception as exc:  # AC5: a failing listing ends the step only
+        return [head + 'read_sessions raised %s' % type(exc).__name__]
+    lines = []
+    for session_id in ids:
+        try:
+            lines.extend(_gone_session(root, task_id, session_id, now, recorder, session_leases, stored_reads,
+                                       remove_reads, observe_gone))
+        except Exception as exc:  # AC5: a failing session ends that session only
+            lines.append('gone_records: %s: a step raised %s' % (session_id, type(exc).__name__))
+    return lines
+
+
 def start(root, repo, task_id, adapter_name, max_risk, holder, recorder, now, expires_at, read=None, read_log=None,
           expire=None, start=None, end=None, check=None, append=None, grant=None, release=None, held=None,
-          start_session=None, end_session=None, release_lease_token=None):
-    """Start one session (TASK-086 AC1 to AC7): a mapping with exactly START_KEYS; never raises."""
+          start_session=None, end_session=None, release_lease_token=None, read_sessions=None, session_leases=None,
+          stored_reads=None, remove_reads=None, observe_gone=None):
+    """Start one session (TASK-086 AC1 to AC7; TASK-090 AC3 to AC6): a mapping with exactly START_KEYS; never
+    raises."""
     callees = (read, read_log, expire, start, end, check, append, grant, release, held, start_session, end_session,
-               release_lease_token)
+               release_lease_token, read_sessions, session_leases, stored_reads, remove_reads, observe_gone)
     try:
         found = _argument_findings(root, repo, task_id, adapter_name, max_risk, holder, recorder, now, expires_at,
                                    callees)
@@ -232,68 +306,83 @@ def start(root, repo, task_id, adapter_name, max_risk, holder, recorder, now, ex
     expire = writer.expire_leases if expire is None else expire
     start = adapter.start if start is None else start
     end = adapter.end if end is None else end
+    read_sessions = writer.read_sessions if read_sessions is None else read_sessions
+    session_leases = writer.session_leases if session_leases is None else session_leases
+    stored_reads = writer.stored_reads if stored_reads is None else stored_reads
+    remove_reads = writer.remove_reads if remove_reads is None else remove_reads
+    observe_gone = read_set_record.observe_gone if observe_gone is None else observe_gone
+    try:
+        gone = _gone_records(root, task_id, now, recorder, read_sessions, session_leases, stored_reads, remove_reads,
+                             observe_gone)
+    except Exception as exc:  # AC5: the step never stops start
+        gone = ['gone_records: %s: the step raised %s' % (task_id, type(exc).__name__)]
     step = 'expire'
     head = session_id = None
     try:
         expired = expire(root, now)
         if not isinstance(expired, list):
-            return _result('refused', 'expire', ['expire: expire_leases gave %s, not a list' % type(expired).__name__])
+            return _result('refused', 'expire', ['expire: expire_leases gave %s, not a list' % type(expired).__name__],
+                           gone=gone)
         step = 'head'
         head, found = _head(read, repo)
         if found:
-            return _result('refused', 'head', found)
+            return _result('refused', 'head', found, gone=gone)
         step = 'log'
         log = read_log(root)
         if not isinstance(log, bytes):
             return _result('refused', 'log', ['log: read_log gave %s, not bytes' % type(log).__name__],
-                           head_commit=head)
+                           head_commit=head, gone=gone)
         step = 'view'
         view, found = execution.task_view(log, root, task_id, now, held=held)
         if found is not None:
-            return _result('refused', 'view', found, head_commit=head)
+            return _result('refused', 'view', found, head_commit=head, gone=gone)
         if view['task_state'] == 'IN_PROGRESS':
             return _result('not granted', 'held', ['held: a lease is held on %s after the expiry' % task_id],
-                           head_commit=head)
+                           head_commit=head, gone=gone)
         if view['task_state'] not in GRANT_STATES:
             return _result('not granted', 'state', ['state: %s is in %s' % (task_id, view['task_state'])],
-                           head_commit=head)
+                           head_commit=head, gone=gone)
         session_id = session_id_of(task_id, now, head)
         step = 'inputs'
         inputs, code_sha256, found = _inputs(repo, head, task_id, log, read, adapter_name, max_risk, view)
         if found:
-            return _result('refused', 'inputs', found, session_id, head)
+            return _result('refused', 'inputs', found, session_id, head, gone=gone)
         step = 'start'
         started = start(root, task_id, session_id, holder, inputs, code_sha256, expires_at, recorder, now,
                         start_session=start_session, read_log=read_log, append=append, grant=grant, release=release,
                         held=held, check=check)
     except Exception as exc:  # AC7: no exception escapes; a raising step opens no row this module knows of
-        return _result('refused', step, ['%s: a step raised %s' % (step, type(exc).__name__)], session_id, head)
+        return _result('refused', step, ['%s: a step raised %s' % (step, type(exc).__name__)], session_id, head,
+                       gone=gone)
     if not isinstance(started, dict):
         return _result('refused', 'start', ['start: adapter.start gave %s, not a mapping' % type(started).__name__],
-                       session_id, head)
+                       session_id, head, gone=gone)
     decision = started.get('decision')
     token = started.get('fencing_token')
     if started.get('result') == 'done' and token is not None:
         environment = {'AIEOS_SESSION_ID': session_id, 'AIEOS_ROOT': root, 'AIEOS_BASE': head}
-        return _result('granted', None, [], session_id, head, decision, token, environment, started)
+        return _result('granted', None, [], session_id, head, decision, token, environment, started, gone=gone)
     reason = started.get('reason')
-    findings = list(started.get('findings') or [])
+    given = started.get('findings')
+    findings = [f for f in given if isinstance(f, str)] if isinstance(given, (list, tuple)) else []
     if started.get('result') != 'done' and reason in OPENED_REFUSALS:
-        return _result('refused', reason, findings, session_id, head, decision, started=started)
+        return _result('refused', reason, findings, session_id, head, decision, started=started, gone=gone)
     try:
         ended = end(root, task_id, session_id, None, now, release_lease_token=release_lease_token,
                     end_session=end_session)
     except Exception as exc:  # AC7
         return _result('refused', 'end', findings + ['end: adapter.end raised %s' % type(exc).__name__], session_id,
-                       head, decision, started=started)
+                       head, decision, started=started, gone=gone)
     if not (isinstance(ended, dict) and ended.get('result') == 'done'):
-        more = list(ended.get('findings') or []) if isinstance(ended, dict) else []
+        given = ended.get('findings') if isinstance(ended, dict) else None
+        more = [f for f in given if isinstance(f, str)] if isinstance(given, (list, tuple)) else []
         return _result('refused', 'end', findings + ['end: adapter.end did not end the session'] + more, session_id,
-                       head, decision, started=started, ended=ended)
+                       head, decision, started=started, ended=ended, gone=gone)
     if started.get('result') != 'done':
-        return _result('refused', reason, findings, session_id, head, decision, started=started, ended=ended)
+        return _result('refused', reason, findings, session_id, head, decision, started=started, ended=ended,
+                       gone=gone)
     return _result('not granted', 'decision', ['decision: %r granted no lease' % (decision,)], session_id, head,
-                   decision, started=started, ended=ended)
+                   decision, started=started, ended=ended, gone=gone)
 
 
 # ---- end (task TASK-089) ----
@@ -330,7 +419,8 @@ def _end_argument_findings(root, task_id, session_id, fencing_token, now, violat
 
 
 def _store_findings(name, answer):
-    more = [f for f in (getattr(answer, 'findings', None) or []) if isinstance(f, str)]
+    given = getattr(answer, 'findings', None)
+    more = [f for f in given if isinstance(f, str)] if isinstance(given, (list, tuple)) else []
     head = '%s: %s gave %r (%r)' % (name, name, getattr(answer, 'result', None), getattr(answer, 'reason', None))
     return [head] + more
 

@@ -216,18 +216,27 @@ def calls_for(repo, log, **answers):
 
 def launch(c, max_risk='critical', stub=(), **over):
     """launcher.start with every store function and the read a recording stand-in; the names in stub also replace
-    adapter.start ('start') and adapter.end ('end')."""
+    adapter.start ('start') and adapter.end ('end'). TASK-090's step is given a read_sessions stand-in that records
+    nothing and lists no session, unless the test gives its own, and per-session stand-ins that record any call into a
+    list; that list must stay empty, so launch raises AssertionError after start returns otherwise (TASK-090 AC7)."""
     kw = {name: c.make(name, real) for name, real in STORE}
     kw['read'] = c.make('read', gitread.run)
     if 'start' in stub:
         kw['start'] = c.make('start', adapter.start)
     if 'end' in stub:
         kw['end'] = c.make('end', adapter.end)
+    stray = []
+    kw['read_sessions'] = lambda root, task_id: store(value=[])
+    for name in ('session_leases', 'stored_reads', 'remove_reads', 'observe_gone'):
+        kw[name] = lambda *a, name=name, **k: stray.append(name)
     args = dict(root=ROOT, repo=REPO, task_id=TASK, adapter_name='unit', max_risk=max_risk, holder='agent-1',
                 recorder=REC, now=NOW, expires_at=LATER)
     args.update(kw)
     args.update(over)
-    return launcher.start(**args)
+    r = launcher.start(**args)
+    if stray:
+        raise AssertionError('a per-session callee was called with no session listed: %r' % (stray,))
+    return r
 
 
 def tree_of(name):
@@ -268,7 +277,7 @@ class Base(unittest.TestCase):
 class TASK086AC1Arguments(Base):
     def test_each_wrong_argument_is_refused_before_any_call(self):
         """TASK-086 AC1: each argument out of form, a relative root such as "x/y" among them, gives "refused" with
-        reason "argument" and zero callee calls."""
+        reason "argument" and zero callee calls; TASK-090 AC7: the five new callees out of form among them."""
         repo = world()
         later = NOW + datetime.timedelta(seconds=1)
         for over in ({'root': 'x/y'}, {'root': ''}, {'root': 1}, {'repo': 'x/y'}, {'repo': REPO + '/no-such-dir'},
@@ -276,7 +285,8 @@ class TASK086AC1Arguments(Base):
                      {'max_risk': 1}, {'holder': ''}, {'recorder': None}, {'now': NOW.replace(tzinfo=None)},
                      {'now': NOW.replace(microsecond=5)}, {'expires_at': NOW}, {'expires_at': later.replace(
                          tzinfo=datetime.timezone(datetime.timedelta(hours=1)))}, {'read': 'x'}, {'start': 1},
-                     {'end_session': 'y'}):
+                     {'end_session': 'y'}, {'read_sessions': 'x'}, {'session_leases': 1}, {'stored_reads': 'x'},
+                     {'remove_reads': 2}, {'observe_gone': []}):
             c = calls_for(repo, approved_log(repo))
             r = launch(c, **over)
             self.closed(r)
@@ -350,7 +360,8 @@ class TASK086AC2Order(Base):
     def test_the_order(self):
         """TASK-086 AC2: expire, then read (HEAD), then read_log, then held (the one held call before adapter.start),
         then the readers' reads, then adapter.start, then adapter.end when no token was granted and the row was
-        opened; execute's own second read_log and held calls come inside adapter.start."""
+        opened; execute's own second read_log and held calls come inside adapter.start. TASK-090 AC7: with a recording
+        read_sessions, it is called first, before expire."""
         repo = world()
         c = calls_for(repo, approved_log(repo), start=ended(), end=ended())
         r = launch(c, stub=('start', 'end'))
@@ -367,6 +378,11 @@ class TASK086AC2Order(Base):
         first = names.index('start_session')
         self.assertEqual(names[first:first + 3], ['start_session', 'read_log', 'held'])
         self.assertEqual(names[-1], 'end_session')
+        self.assertEqual(r['result'], 'not granted')
+        c = calls_for(repo, approved_log(repo), read_sessions=store(value=[]))
+        r = launch(c, max_risk=None, read_sessions=c.make('read_sessions', writer.read_sessions))
+        self.assertEqual(c.names()[:5], ['read_sessions', 'expire', 'read', 'read_log', 'held'])
+        self.assertEqual(c.of('read_sessions')[0][1], (ROOT, TASK))
         self.assertEqual(r['result'], 'not granted')
 
     def test_nothing_after_a_refusal_before_the_start(self):
@@ -705,11 +721,12 @@ class TASK086AC10Modules(Base):
 
 class TASK086AC12Docstrings(Base):
     def test_the_new_module(self):
-        """TASK-086 AC12, as TASK-089 AC11 changes it: launcher.py's docstring holds seven of its nine phrases, "not
-        before TASK-090 lands" in place of "not before TASK-089 lands", and TASK-089's three, and no longer "writes no
-        observed read-set record", whitespace read as single spaces."""
+        """TASK-086 AC12, as TASK-089 AC11 and TASK-090 AC10 change it: launcher.py's docstring holds seven of its nine
+        phrases, "not before DEF-0101's open points are closed" in place of "not before TASK-089 lands", and TASK-089's
+        three, and no longer "writes no observed read-set record", whitespace read as single spaces."""
         text = doc('launcher.py')
-        for words in ('starts no runtime', 'never raises', 'not before TASK-090 lands', 'the store is the caller\'s',
+        for words in ('starts no runtime', 'never raises', 'not before DEF-0101\'s open points are closed',
+                      'the store is the caller\'s',
                       'max_risk null never grants', 'AIEOS_BASE is the head_commit', 'the log is read twice',
                       'this task\'s choice', 'the record before the release', 'no fencing token', 'TASK-090'):
             self.assertIn(words, text)
