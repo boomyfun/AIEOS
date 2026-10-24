@@ -65,6 +65,12 @@ count of the task's decision.acceptance events with next_task_state REWORK after
 is none. Both give (a value, None) or (None, findings) and never raise; they append, grant and release nothing, and
 execute itself still gathers no Resume Check input.
 
+``task_view(log, root, task_id, now, held=None)`` (task TASK-086; specification 3 section 1) gives the launcher, before
+any session row is opened, the three inputs execute compares with the log (step 3): task_state, log_seq and
+approved_contract_hash, by execute's own _log, _project and _state over the log given as bytes and the store's held
+lease read once; a state such as DONE is returned as it is, for the caller to stop on. It gives (a value, None) or
+(None, findings), never raises, and appends, grants and releases nothing.
+
 Readings (the implementer's, not the contract's own words):
 - The task's events are those whose task_id is the task, ignored duplicate lines left out; the seq compared with the
   inputs' log_seq is that of the log's last line, duplicate or not.
@@ -553,3 +559,24 @@ def rework_count(log, task_id):
         return None, list(stop.findings)
     except Exception as exc:  # TASK-088 AC3: no exception escapes
         return None, ['rework_count: a step raised %s' % type(exc).__name__]
+
+
+# ---- task_view (task TASK-086) ----
+
+def task_view(log, root, task_id, now, held=None):
+    """The three inputs execute compares with the log (TASK-086 AC9; execute's step 3): ({task_state, log_seq,
+    approved_contract_hash}, None), or (None, findings). Over the log given as bytes, by execute's own _log, _project
+    and _state with the store's held lease read once through held (defaulting, at call time, to writer.held_lease):
+    task_state READY, REWORK, IN_PROGRESS under an unexpired held lease, or another state such as DONE as it is;
+    log_seq the seq of the log's last line; approved_contract_hash the contract_hash of the task's last task.approved.
+    It never raises and appends, grants and releases nothing."""
+    held = writer.held_lease if held is None else held
+    try:
+        lines = _given_log(log)
+        log_state, contract_hash = _project(lines, task_id)
+        state, _ = _state(held, root, task_id, log_state, now)
+        return {'task_state': state, 'log_seq': lines[-1].event['seq'], 'approved_contract_hash': contract_hash}, None
+    except _Stop as stop:
+        return None, list(stop.findings)
+    except Exception as exc:  # TASK-086 AC9: no exception escapes
+        return None, ['task_view: a step raised %s' % type(exc).__name__]
