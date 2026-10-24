@@ -37,6 +37,9 @@ One occurrence in session 2026-10-23-1555 (../History/2026-10/2026-10-23-1555-th
 One occurrence in session 2026-10-23-1555, later part 6 (../History/2026-10/2026-10-23-1555-the-later-part-6-task-080-the-context-compiler-v1-as-a-pure-module.md):
 - **2026-10-24 (D-2198).** The review folder rs80z and review t80s-S2 were started before the CI read of the fix commit was brought to the decision agent, against the order D-2197 set; accepted after the fact.
 
+One occurrence in session 3797498a (../History/2026-10/2026-10-24-0319-the-later-part-tasks-081-to-089-and-task-090s-preparation.md):
+- **2026-10-25 (D-2815).** After TASK-089's clone was made, a turn ended with nothing to wait on, so the owner had to write "tiếp tục đi, tại sao lại dừng" to resume it. D-2815 set the rule: a turn ends only at a wait on the decision agent or a background run, a stop the decision agent rules, an owner-only act, or the owner's word.
+
 ## Why it happens
 - Claude treats a step as mechanical (a display, a change of order, a turn end) and does not see it as a decision.
 - The request checklist of the decision agent's definition was not applied before sending.

@@ -13,6 +13,7 @@ The main session (claude-opus-5-5) was refused in the category reasoning_extract
 - **2026-10-12 (session 556c5dd4, :315-316).** During the Write of a decision request.
 - **2026-10-17 (session 2375f48d, :1746, :1772, :1777-1778).** After a guard refusal and an owner message; after two Greps of the session's own transcript in content mode; during the Writes of a decision request.
 - **2026-10-19 (session aa923cac, :452, :926).** During the Write of the guard's listing note, after a guard refusal; and the request after the Write of the review entries (D-1503, D-1504).
+- **2026-10-25 (session 3797498a, D-2889 (d)).** Not a refusal but a breach of the rule: after a compaction, a Read of the decision agent's task output file (…\tasks\<agent id>.output, lines 1 to 5) opened that agent's transcript, since the file is its .jsonl record. Nothing was acted on; the five lines held no thinking records; no refusal followed. Treat every task output file as a transcript.
 
 ## Why it happens
 The official refusal documentation says that this category comes from a prompt that asks the model to put its thinking or reasoning in the output, verbatim or in a fixed format, and that such wording can sit anywhere in the context (a system prompt, a skill, a tool description). Our work brings much text of that shape into the main session's context: raw transcript lines (which can hold thinking records), many fixed-format messages to and from agents, and requests for texts "verbatim" and "in full". Which of these acted is not known; only Anthropic can tell, from the request ids.

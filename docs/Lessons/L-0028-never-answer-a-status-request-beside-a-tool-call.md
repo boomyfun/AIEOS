@@ -15,6 +15,10 @@ Five, in session 3797498a (2026-10-24):
 - **:1717 (D-2250).** A label beside an Edit of revision 2, after D-2244 had set the remedy; the owner added the line to the listing file.
 - One status answer given alone mid-task ended the turn; the owner had to write to resume it.
 
+One, in session 3797498a (2026-10-25, D-2889 (c)):
+- After a compaction and two status requests by the app, two Reads went out in one message (the 44th multi-call slip of the session). No text was written beside any call; the status was given only after the wait on the decision agent began.
+- A second, the 45th multi-call slip (D-2891): two Edits of lessons in one message during the session's end steps; the second failed on an old_string quoted from memory, so nothing wrong was written.
+
 ## Why it happens
 The app's request reads as asking for words now, and the worker adds them to the call it is about to send.
 
