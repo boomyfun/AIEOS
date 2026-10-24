@@ -43,6 +43,10 @@ function is caught and becomes a result; none escapes.
 ``read``, ``read_log`` and ``append`` default, at call time, to gitread.run, writer.read_log and writer.append_event;
 tests pass stand-ins.
 
+``policy_block(text)`` (task TASK-088) gives the policy's section 3 yaml block's lines as rules_from_policy finds them,
+or None when there is no such block or the text is not a str, for resume_log_inputs' policy_version; it reads nothing
+else and parses no rule.
+
 Reading B1 (proposed; decision D-713 P1): "the base" at which the policy and the evaluator list are read, for one base
 commit, is that commit's first parent.
 Departure D1 (decision D-713 C2): the contract version used is the one the task's last task.approved event in the log
@@ -287,6 +291,14 @@ def rules_from_policy(text):
         rules.append({'match': match, 'class': cls} if match is not None and cls in RISKS else dict(REFUSED_RULE))
         k += 2
     return rules
+
+
+def policy_block(text):
+    """The lines of the policy's section 3 yaml block as _block gives them, or None, also for a text that is not a
+    str (task TASK-088; resume_log_inputs reads policy_version and nothing else from them)."""
+    if not isinstance(text, str):
+        return None
+    return _block(text)
 
 
 def evaluator_from_workflow(text):
