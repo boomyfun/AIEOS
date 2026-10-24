@@ -1,0 +1,438 @@
+# TASK-084: list_tasks, the tasks that may be taken, as a core function in execution.py (specification 6 revision 7,
+# section 1; specification 7 revision 2, section 3; specification 1, section 5; M7's fourth task). Plan: decisions
+# D-2475 to D-2477 (session 3797498a): the scope note (MYSP/t84/scope84.md) and the ten rulings of D-2475, the pin
+# scan (MYSP/t84/pinscan84-out.txt at 80934ee5 and its reading MYSP/t84/pinscan84-reading.md, D-2476, D-2477), the
+# risk run (MYSP/t84/risk/risk_class84.py, D-2477), the forbidden list (MYSP/t84/forbid84.txt, D-2477, the one
+# write-set file under src/ left out), DEF-0099's draft (MYSP/t84/def0099.md); r1: reviews rv84a (claude-sonnet-5-5)
+# and rv84b (claude-opus-5-5) of r0, read tools only, and their dispositions (MYSP/t84/disp84.md, D-2479).
+#
+# Scope:
+# - In src/aieos_bootstrap/execution.py, one new public function, list_tasks(root, now, read_log=None,
+#   held_leases=None), returning (a list, None) or (None, findings), findings a non-empty list of strs, never a partial
+#   list; read_log and held_leases default, at call time, to writer.read_log and writer.held_leases (D-2477 C2), as
+#   execute's defaults are bound (execution.py :294-295, the signature, and :298-303, the binding;
+#   tests/unit/test_execution.py :202-212).
+# - It reuses _project (execution.py :190-208) unchanged for each task's state; _project, _state, execute and every
+#   other existing name of the module are unchanged (D-2475 ruling 5: no copy of the projection, INV-003).
+# - Spec 6 :14: listing the tasks that may be taken is a core function, not an MCP tool; mcp_server.py is not in the
+#   write set, and its tests that refuse "list_tasks" as an unlisted tool name stay true
+#   (tests/unit/test_mcp_server.py :100; tests/unit/test_mcp_server_work_order.py :162).
+# - What it does not do: no CLI command (the command `aieos tasks` is a later task's, with the CLI frame and its entry
+#   point, D-2475 ruling 1; specification 7 :26 leaves the entry point open); no write, no append, no grant, no
+#   release, no expiry (writer.expire_leases stays the launcher's, specification 7 :45); no Git read; no contract read.
+#
+# The rulings (D-2475), each this task's choice (proposed; specification 7 section 10 item 10 stays open for its next
+# revision):
+# - Which tasks (ruling 2; specification 1 :60, :78; specification 7 :32): only the tasks that may be taken: those
+#   the log has in READY or REWORK with no unexpired lease in the store. No other state is listed.
+# - Where the ids come from (ruling 3): the log alone: every task with a task.approved, its state projected after its
+#   last task.approved by _project. No contract is read: a task without an approval cannot be taken.
+# - Dependencies (ruling 4): not re-checked; READY already requires every dependency DONE at task.approved
+#   (specification 1 :65). A stated limit, carried by DEF-0099 (MYSP/t84/def0099.md) for the launcher's grant path
+#   (TASK-086, where the contract is read anyway), written to docs/Deferred at TASK-084's records commit as a second
+#   path, as DEF-0097 and DEF-0098 were.
+# - The lease read (ruling 6): one held_leases(root) call, at the clock given as now. A lease whose expires_at is
+#   after now: its task is not listed. A lease whose expires_at is at or before now (a row that the launcher's expiry
+#   has not yet removed): its task is listed, its "lease" field "expired" (it may be taken once the launcher's expiry
+#   has run, which runs before every grant, specification 7 :45). A lease out of eventlog.LEASE_KEYS' form (as
+#   execution's _lease_form reads it, :211-217), or whose task_id is not a str in the _TASK form (execution.py :114):
+#   fail closed. An in-form lease on a task the log has in a state other than READY or REWORK, expired or not: that
+#   task is left out, with no finding (it could not be listed anyway; a stated limit, its cause a stop between
+#   task.submitted and the lease's release, submit.py :41-42, and the leftover rows of specification 7 :48; D-2479
+#   row 1). A lease on a task with no task.approved, or two leases on one task: fail closed (no crash path leaves
+#   either, a grant coming only on an approved task in READY or REWORK; the store and the log then disagree; D-2479
+#   row 1, proposed). _state itself is not called and not changed.
+# - The output (ruling 7): (a list, None), each element {task, state, contract_hash, lease}, state "READY" or
+#   "REWORK", contract_hash that of the task's last task.approved (as _project returns it), lease "none" or
+#   "expired"; sorted by the task number, by the key (the length of the digits after "TASK-" with leading zeros
+#   stripped, those digits, the whole id), with no int() (so TASK-9 before TASK-10 and TASK-07 and TASK-7 in a fixed
+#   order; records.check_log holds task_id to the TASK- form, records.py :667-681; D-2479 row 2; proposed). No text
+#   form (no CLI).
+# - The errors (ruling 8): fail closed, (None, findings), no partial list, never raises: root or now out of form
+#   (checked before any read: root a non-empty str; now a timezone-aware UTC datetime with whole seconds, as execute's
+#   now, execution.py :132-134, :171-172); read_log's answer not bytes; records.check_log's findings; an unnamed task.*
+#   event (as _project refuses it); a log giving a task the state IN_PROGRESS (a decision.acceptance with that
+#   next_task_state, as _state refuses it, :222-225); held_leases raising, or answering other than a list; a lease out
+#   of form or with a task_id not in the _TASK form; a lease on a task with no task.approved; two leases on one task;
+#   any other exception.
+# - The self-build's own log (ruling 9): the tests alone exercise it: logs built in the test by eventlog.append, and
+#   held_leases a stand-in; no tempfile, no sqlite3, no file (the deterministic rule, aieos-checks.yml :1490-1491,
+#   :1503-1510; D-2433). No integration test: list_tasks reads no Git and no file but through its two readers.
+#
+# Owner-act boundary: none reached. The function reads only; it grants nothing and launches nothing; no hook,
+# setting, policy or measurement (DM A51 item (4)).
+#
+# Stated limits (ruling 10):
+# - No transition check against specification 1's state machine (DEF-0055 P6; execution.py :81), as _project.
+# - Dependencies not re-checked (DEF-0099).
+# - A leftover in-form lease on a task the log has in another state (a stop between task.submitted and the release,
+#   submit.py :41-42) is not reported: the task is only left out (D-2479 row 1).
+# - The store is read at one moment: a lease may be granted, released or expire after the list is made; the list is a
+#   reading, not a reservation.
+# - The clock is an argument; the function reads no clock.
+# - The listing grants nothing and changes nothing.
+# - The log and the store are read once each, in that order, with no lock across the two reads (execution.py :85-86's
+#   limit).
+#
+# The pins (L-0026; MYSP/t84/pinscan84-out.txt at 80934ee5; D-2476, D-2477): tests/unit/test_execution.py :704-727
+# (R10Purity: execution.py imports exactly datetime, re and aieos_bootstrap's records, resume_check and writer; no
+# ast.Assert; no ast.Name open, exec, eval, compile, __import__, importlib, subprocess, os, sys or time; no attribute
+# now, utcnow, today, environ, getenv, system, Popen, write, open_store, start_session, end_session, expire_leases,
+# release_lease or evaluate; no ".aieos" string), kept: list_tasks adds no import and calls none of them; :729-736 (the
+# docstring's phrases "What it does not do", "DEF-0030", "Point (i)", "DEF-0055 P6", "decision D-687 M4", "it gathers
+# no Resume Check input", "no task.unblocked", "expires no lease" and "One run at a time"), kept; :738-744 (__init__.py
+# names execution), unchanged; :202-227 (execute's defaults and the stand-ins' signatures), unchanged; :275-283
+# (execution.STATE_OF), unchanged; no test enumerates execution.py's public names; the package-wide scans
+# tests/unit/test_autonomy.py :241-246, tests/unit/test_gitread.py :374-380 and tests/unit/test_bench_isolation.py
+# :35-52 hold unchanged (D-2479 row 9). The deterministic rule
+# (.github/workflows/aieos-checks.yml :1489-1520, :1612-1631), checked for each write-set path:
+# src/aieos_bootstrap/execution.py and tests/unit/test_execution_list_tasks.py have no allowance (:1501), so they
+# import only the standard library and aieos_bootstrap, no DENY_MODULES module (tempfile, sqlite3 and shutil among
+# them, :1490-1493), no DENY_NAMES name (:1494), no DENY_OS call (:1495-1496) and no DENY_ATTR_CALLS call
+# (:1499-1500). GOV-003's EVALUATOR list (src/aieos_bootstrap/**, aieos-checks.yml :423, :490), unchanged. bandit (no
+# B101, B110, B112). tests/unit/test_execution.py is not changed. No change under .github/ is needed.
+#
+# Risk: high, computed over the base by MYSP/t84/risk/risk_class84.py (R2 medium and R3 high, not evaluable, for each
+# path). GOV-003: src/aieos_bootstrap/** is an evaluator path; change class ruled at acceptance. Reviews on Sonnet 5.5
+# or Opus 5.5 (never Fable), read tools only; the acceptance review on Sonnet 5.5, the implementer being Opus 5.5
+# (governor.py :270-275; D-2456, D-2475 C2). Naming (D-544 Q3): every new test function names "TASK-084 ACn" in its
+# own docstring. Not applicable: OPS-001; INV-005 to INV-011; GOV-001, GOV-004 to GOV-006, SEC-003. INV-004 is not
+# reached (the function writes nothing); it stays listed for the evaluator path's profile.
+# Owner-kept acts: none in this task.
+# Shadow (D-2042 C3 as amended by D-2068): the governor's evaluate at acceptance, any difference named.
+# Local runs: the unit group in three parts.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-084.yaml, has one parent equal to base_commit, and goes
+# to main under its own decision; the task's commits carry "AIEOS-Task: TASK-084" and go to task/TASK-084; main
+# receives them only at acceptance.
+task: TASK-084
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add list_tasks(root, now, read_log=None, held_leases=None) to src/aieos_bootstrap/execution.py: the tasks the log
+  has in READY or REWORK, each with no unexpired lease in the store, from the log's task.approved events through the
+  module's own _project, as (a list, None) of {task, state, contract_hash, lease} sorted by task number, or (None,
+  findings); reads only, never raises; _project, _state and execute unchanged; tests in
+  tests/unit/test_execution_list_tasks.py, each new test naming "TASK-084 ACn".
+traces_to:
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#1
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#3
+  - docs/specs/spec-01-state-and-event-model.md#5
+input_state:
+  base_commit: 80934ee51e923a7a0a9785948d46da5c332ab332
+  depends_on: [TASK-032]
+  intent_versions:
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 613cbd72dca411586ca03d790cd01bb044d0eb8e9a2885d9c3f8bb25cc9f5efb
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: d2fa59ae3f203b3a2108e55d23ddfb875e64ab57d27372c9d413bf30d7c2cbdd
+    docs/specs/spec-05-adapter-contract.md: ae7b99419d303db40b7200e39a22d93b9301b29900f3b1f5a5720b72d8eb9c2b
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 8e744daa31928621137db59a8a9d91ecf163879420e1f8e148232b149cafcdb7
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/execution.py
+    - tests/unit/test_execution_list_tasks.py
+read_set:
+  paths:
+    - docs/specs/spec-06-mcp-protocol-and-work-orders.md
+    - docs/specs/spec-07-cli-and-zero-friction-path.md
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.writer.read_log, aieos_bootstrap.writer.held_leases, aieos_bootstrap.records.check_log,
+    aieos_bootstrap.eventlog.append]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_base_files_repo.py
+  - tests/integration/test_base_inputs_repo.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_mcp_server_work_order_repo.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_base_files_properties.py
+  - tests/property/test_base_inputs_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_context_compiler_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_mcp_server_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_base_files.py
+  - tests/unit/test_base_inputs.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_mcp_server_work_order.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The arguments and the readers: list_tasks(root, now, read_log=None, held_leases=None); root not a non-empty str,
+      or now not a timezone-aware UTC datetime with whole seconds, each give (None, findings) with zero reader calls
+      (stand-ins count them); read_log and held_leases default, at call time, to writer.read_log and
+      writer.held_leases (a patch of either after import is the one called); every stand-in call binds to the real
+      function's signature; one call reads the log once and the store once, the log first. The test file calls
+      datetime's replace by keywords only (the deterministic rule refuses a one-argument .replace(, aieos-checks.yml
+      :1622-1625; D-2479 row 12).
+  - AC2: >-
+      Which tasks: from a log built by eventlog.append, a task whose last task.approved is followed by nothing, by
+      task.blocked then task.unblocked, or by a decision.acceptance with next_task_state REWORK is listed with that
+      state (READY, READY, REWORK); a task in DRAFT, BLOCKED, VERIFYING, IN_REVIEW, ACCEPTED, DONE, STALE, REJECTED or
+      ESCALATED (by its own events after the last task.approved) is not listed; a task with no task.approved is not
+      listed; a duplicate line, built by hand since eventlog.append makes none (eventlog.py :180-182; a copy of an
+      appended line with its seq set to the next number, by json; records.py :693-697), is not counted: a duplicated
+      task.approved lists its task once, and a duplicated task.blocked after its task.unblocked leaves the task
+      READY; each element is exactly {task, state, contract_hash, lease},
+      contract_hash the last task.approved's (a task approved twice gives the second hash); the list is sorted by task
+      number (TASK-9 before TASK-10); an empty log (b"") gives ([], None).
+  - AC3: >-
+      The leases: a held lease on a listed task with expires_at after now removes it from the list; with expires_at at
+      or before now lists it with lease "expired"; with no lease, lease "none"; an in-form lease, unexpired or expired,
+      on a task the log has in VERIFYING (task.submitted then no release, as a stop at submit.py :41-42 leaves it) or
+      in another state other than READY and REWORK leaves that task out with no finding, the other tasks listed as
+      without it; a lease out of eventlog.LEASE_KEYS' form (a missing key, an extra key, a counter not an int, a naive
+      expires_at), a lease whose task_id is not a str in the _TASK form, a lease on a task with no task.approved, two
+      leases on one task, held_leases raising, or held_leases answering a non-list, each gives findings.
+  - AC4: >-
+      Fail closed: read_log answering a non-bytes value, or a log records.check_log refuses, gives findings with no
+      held_leases call; a task.* event _project does not name gives findings (made, as records.EVENT_TYPES leaves no
+      such type, by mock.patch.object(execution, 'STATE_OF', …) as tests/unit/test_execution.py :275-283 does), the
+      event of any approved task, a DONE one too, failing the whole list; a decision.acceptance giving a task the
+      next_task_state IN_PROGRESS gives findings; a stand-in that raises at any step (a RecursionError and a
+      MemoryError among them) gives findings; no call returns a partial list or raises; findings are a non-empty list
+      of strs.
+  - AC5: >-
+      Reads only: by ast over pathlib's read_bytes, list_tasks and every function the task adds use of writer at most
+      read_log and held_leases, and none names expire_leases, grant_lease, release_lease_token, append_event,
+      open_store, start_session or end_session; a call through stand-ins records exactly one read_log and one
+      held_leases call and nothing else; the new code names no local or attribute R10Purity refuses (no Name time,
+      open, os, sys, compile or exec; no attribute now, write, expire_leases or release_lease) and its docstring and
+      comments hold no ".aieos" substring (tests/unit/test_execution.py :722-727); execution.py's import set, the
+      names R10Purity refuses and its docstring
+      phrases are unchanged (tests/unit/test_execution.py :704-736 pass unchanged).
+  - AC6: >-
+      The projection is shared: by ast, list_tasks calls _project; _project, _state and execute are the base's, byte
+      for byte (checked at review from the change C..X, not by a test); a seeded loop of 300 random logs (each task's
+      events drawn from task.approved, task.blocked, task.unblocked, task.submitted, decision.acceptance with a drawn
+      next_task_state other than IN_PROGRESS, task.done and task.stale) with drawn held leases, at most one per task,
+      each in form and on an approved task of any state: every listed task is one _project gives READY or REWORK with
+      no unexpired lease, every other approved task is not listed, no call gives findings and no call raises; and a
+      further seeded draw adding a lease out of form, on an unapproved task or a second one on a task gives findings
+      each time (D-2479 row 10).
+  - AC7: >-
+      Every existing test passes, the pins of the header among them; tests/unit/test_execution.py is unchanged; the
+      full suite runs locally in three unit parts, integration and property before the first code commit; the
+      deterministic rule's local run gives no finding. The module docstring holds, whitespace read as single spaces,
+      the nine phrases of tests/unit/test_execution.py :733-735 and the phrases "list_tasks", "the tasks that may be
+      taken", "DEF-0099" and "reads only", read by a test by ast; every new test names "TASK-084 ACn".
+  - AC8: >-
+      Broken copies, each failing the tests of its AC: (1) lists a task with an unexpired lease (AC3); (2) lists a
+      task in BLOCKED (AC2); (3) leaves out a task whose lease has expired (AC3); (4) takes the first task.approved's
+      hash (AC2); (5) returns the list found so far on a refused log line (AC4); (6) calls writer.expire_leases (AC5);
+      (7) sorts the ids as strings (AC2); (8) accepts a naive now (AC1); (9) counts a duplicate line (AC2); (10) binds
+      the defaults at import time (AC1); (11) skips a lease out of form (AC3); (12) copies the projection instead of
+      calling _project (AC6); (13) fails the whole list on an in-form lease of a VERIFYING task (AC3); each copy made
+      in a scratchpad script at G3 (brk84, as brk83: the module copied, one exact replacement, the named tests run),
+      not committed, since the test file may not exec or compile source (aieos-checks.yml :1494); AC5's ast check is a
+      function over a source text, so copy (6)'s text is shown failing it; the governor's evaluate at acceptance
+      (the shadow) with any difference named; the stated
+      choices in the records (not tests).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7]}
+  - {gate: G3, check: constitution, args: [AC8, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
