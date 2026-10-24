@@ -1,13 +1,14 @@
-"""The MCP server's frame, its status tool and its four claim tools (tasks TASK-078 and TASK-079; specification 6
-revision 7, sections 3, 4, 7 and 8; M6's first and second slices).
+"""The MCP server's frame, its status tool, its four claim tools (tasks TASK-078 and TASK-079; specification 6
+revision 7, sections 3, 4, 7 and 8; M6's first and second slices) and get_work_order and query (task TASK-083;
+specification 6 sections 4, 5 and 8; specification 7 section 6).
 
 What it does:
 - MCP over stdio, one JSON-RPC 2.0 message per line, in the Python 3 standard library only (specification 6 section 3,
   the bootstrap limit). ``main(stdin, stdout, environ, clock)`` reads lines until the end of the input and writes each
   answer as one line of JSON; it returns 0 and never raises.
 - The methods are initialize, notifications/initialized, tools/list and tools/call, and no other. initialize answers
-  the protocol version "2025-06-18", a stated choice; nothing else is negotiated. tools/list lists five tools, status,
-  acknowledge, ask, report and handoff; the two other tools of section 4 are added by the slices that build them.
+  the protocol version "2025-06-18", a stated choice; nothing else is negotiated. tools/list lists seven tools, status,
+  acknowledge, ask, report, handoff, get_work_order and query, in that order.
 - Each line is taken in this order: an empty or whitespace-only line gets no answer; a line that is not JSON, or whose
   JSON nests too deep to read, answers -32700 with id null; a JSON value that is not an object answers -32600 with id
   null; an object whose "jsonrpc" is not "2.0", whose "method" is not a str, or whose "id" is present but not a str, an
@@ -16,7 +17,9 @@ What it does:
   or not a str, or which names no listed tool answers -32602; any other method answers -32601. An error inside the
   frame itself, which no case above reaches, answers -32603 with id null rather than ending the loop.
 - The identity comes from the environment: AIEOS_SESSION_ID of the form [A-Za-z0-9._-]{1,128} and AIEOS_ROOT, an
-  absolute path (the names of claude_code_pretool_hook.py). AIEOS_BASE is not read in this slice.
+  absolute path (the names of claude_code_pretool_hook.py). AIEOS_BASE is read only by _base, for get_work_order and
+  query: exactly 40 lowercase hexadecimal characters (specification 7 :45), else no_session; status and the claim
+  tools neither need nor read it.
 - status reads the store only through writer.session_leases (INV-004; specification 6 section 2) and writes nothing.
   Its answers: {"task": null, "lease": "none"} for an ended session, a session with no lease row, or a session id the
   store never saw; {"task", "lease": "live", "expires_at"} for exactly one unexpired row; {"task", "lease": "expired"}
@@ -52,6 +55,19 @@ What it does:
   one unexpired row answering core_error; the writer's refusal record is the writer's, and the claims appended before
   it stay. Any other append answer, "conflict" among them, any answer of another form and any exception answer
   core_error.
+- get_work_order {} and query {ref} (task TASK-083) are taken in this order: the identity and the base (no_session);
+  the input's shape (invalid_input: get_work_order's arguments absent, null or {}; query's exactly {ref, a non-empty
+  str}); the lease, as the claim tools read it, its task the task (never a value of the input); the log through
+  writer.read_log (bytes, else core_error); base_inputs.work_order_inputs(root, base, task, session id, log, read);
+  context_compiler.build_work_order. Findings of either give the error {"error": "core_error", "detail": [the
+  findings]}. The Work Order is compiled at each call: nothing is cached across calls and nothing is stored, so "the
+  same object for the whole session" holds only while the task's last approval and last resume record stay.
+  get_work_order answers the Work Order. query answers only the refs the Work Order holds: an item held in full is
+  answered as it is, {ref, hash, content}; an item held as a reference is answered from a second build of the same
+  inputs with every budget UNBUDGETED, whose item must carry the same hash; every item of a ref in more than one layer
+  must carry the same hash; a ref the Work Order does not hold gives out_of_scope, and a ref whose full item cannot be
+  produced not_found. Both write nothing; their reads are not in the observed read-set. The departures from
+  specification 6 are carried by DEF-0098.
 
 Limits, stated: "expired" exists only between a lease's expiry and the next expire_leases, which removes the row; a
 session's state is what the store holds at the read. The store's read is writer.session_leases', a hand-kept copy of
@@ -71,7 +87,7 @@ import os
 import re
 import sys
 
-from aieos_bootstrap import writer
+from aieos_bootstrap import base_inputs, context_compiler, writer
 
 PROTOCOL_VERSION = '2025-06-18'
 SERVER_INFO = {'name': 'aieos', 'version': '0.1'}
@@ -101,7 +117,17 @@ CLAIM_TOOLS = [
      'inputSchema': {'type': 'object', 'properties': {k: _TEXTS for k in HANDOFF_LISTS},
                      'required': list(HANDOFF_LISTS)}},
 ]
-TOOL_NAMES = ('status',) + tuple(t['name'] for t in CLAIM_TOOLS)
+WORK_ORDER_TOOLS = [
+    {'name': 'get_work_order',
+     'description': "The session's Work Order, compiled at the session's base at each call; writes nothing.",
+     'inputSchema': {'type': 'object', 'properties': {}}},
+    {'name': 'query',
+     'description': 'One item the Work Order holds, by its ref, read at the base; writes nothing.',
+     'inputSchema': {'type': 'object', 'properties': {'ref': {'type': 'string'}}, 'required': ['ref']}},
+]
+TOOL_NAMES = ('status',) + tuple(t['name'] for t in CLAIM_TOOLS + WORK_ORDER_TOOLS)
+# Every layer's budget for query's second build, above any layer's possible content bytes (budgets take any int above 0).
+UNBUDGETED = 1 << 62
 RECORDER = 'aieos mcp_server, session %s'
 PARSE_ERROR = -32700
 INVALID_REQUEST = -32600
@@ -110,6 +136,7 @@ INVALID_PARAMS = -32602
 INTERNAL_ERROR = -32603
 _SESSION = re.compile(r'[A-Za-z0-9._-]{1,128}')
 _AC = re.compile(r'AC[0-9]+')
+_BASE_FORM = re.compile(r'[0-9a-f]{40}')
 _NONE = {'task': None, 'lease': 'none'}
 
 
@@ -325,6 +352,100 @@ def claim(tool, arguments, environ, now):
         return None, 'core_error'
 
 
+def _base(environ):
+    """The session's base from the environment: exactly 40 lowercase hexadecimal characters, or None."""
+    value = environ.get('AIEOS_BASE')
+    if not isinstance(value, str) or not _BASE_FORM.fullmatch(value):
+        return None
+    return value
+
+
+def _detail(findings):
+    return {'error': 'core_error', 'detail': list(findings)}
+
+
+def _inputs_at_base(session_id, root, base, now, read):
+    """build_work_order's inputs at the base for the live lease's task, and None; or None and an error."""
+    lease, word = _live_lease(writer.session_leases(root, session_id, now), now)
+    if word is not None:
+        return None, word
+    log = writer.read_log(root)
+    if not isinstance(log, bytes):
+        return None, 'core_error'
+    inputs, findings = base_inputs.work_order_inputs(root, base, lease['task_id'], session_id, log, read)
+    if findings is not None:
+        return None, _detail(findings)
+    return inputs, None
+
+
+def _compiled(inputs):
+    work_order, findings = context_compiler.build_work_order(inputs)
+    if findings is not None:
+        return None, _detail(findings)
+    return work_order, None
+
+
+def get_work_order(arguments, environ, now, read=None):
+    """The get_work_order tool: (the Work Order, None) or (None, an error word or a core_error with its detail)."""
+    try:
+        identity = _identity(environ)
+        if identity is None:
+            return None, 'no_session'
+        base = _base(environ)
+        if base is None:
+            return None, 'no_session'
+        if not (arguments is None or (type(arguments) is dict and not arguments)):
+            return None, 'invalid_input'
+        inputs, error = _inputs_at_base(identity[0], identity[1], base, now, read)
+        if error is not None:
+            return None, error
+        return _compiled(inputs)
+    except Exception:
+        return None, 'core_error'
+
+
+def _items_of(work_order, ref):
+    return [item for layer in work_order['layers'] for item in layer['items'] if item['ref'] == ref]
+
+
+def query(arguments, environ, now, read=None):
+    """The query tool: ({ref, hash, content}, None) or (None, an error word or a core_error with its detail)."""
+    try:
+        identity = _identity(environ)
+        if identity is None:
+            return None, 'no_session'
+        base = _base(environ)
+        if base is None:
+            return None, 'no_session'
+        if not (type(arguments) is dict and set(arguments) == {'ref'} and _text(arguments['ref'])):
+            return None, 'invalid_input'
+        ref = arguments['ref']
+        inputs, error = _inputs_at_base(identity[0], identity[1], base, now, read)
+        if error is not None:
+            return None, error
+        work_order, error = _compiled(inputs)
+        if error is not None:
+            return None, error
+        held = _items_of(work_order, ref)
+        if not held:
+            return None, 'out_of_scope'
+        if len({item['hash'] for item in held}) != 1:
+            return None, 'not_found'
+        for item in held:
+            if 'content' in item:
+                return {'ref': item['ref'], 'hash': item['hash'], 'content': item['content']}, None
+        full = dict(inputs, budgets={name: UNBUDGETED for name in context_compiler.LAYERS})
+        whole, error = _compiled(full)
+        if error is not None:
+            return None, error
+        found = [item for item in _items_of(whole, ref) if 'content' in item]
+        if not found or found[0]['hash'] != held[0]['hash']:
+            return None, 'not_found'
+        return {'ref': found[0]['ref'], 'hash': found[0]['hash'], 'content': found[0]['content']}, None
+    except Exception:
+        return None, 'core_error'
+
+
 def _tool_result(obj, is_error):
     return {'content': [{'type': 'text', 'text': json.dumps(obj, sort_keys=True)}], 'isError': is_error}
 
@@ -367,15 +488,21 @@ def handle(line, environ, clock):
         return _result(id_, {'protocolVersion': PROTOCOL_VERSION, 'serverInfo': dict(SERVER_INFO),
                              'capabilities': {'tools': {}}})
     if method == 'tools/list':
-        return _result(id_, {'tools': json.loads(json.dumps([STATUS_TOOL] + CLAIM_TOOLS))})
+        return _result(id_, {'tools': json.loads(json.dumps([STATUS_TOOL] + CLAIM_TOOLS + WORK_ORDER_TOOLS))})
     if method == 'tools/call':
         params = msg.get('params')
         if not isinstance(params, dict) or not isinstance(params.get('name'), str) or params['name'] not in TOOL_NAMES:
             return _error(id_, INVALID_PARAMS, 'Invalid params')
         if params['name'] == 'status':
             obj, word = status(environ, clock())
+        elif params['name'] == 'get_work_order':
+            obj, word = get_work_order(params.get('arguments'), environ, clock())
+        elif params['name'] == 'query':
+            obj, word = query(params.get('arguments'), environ, clock())
         else:
             obj, word = claim(params['name'], params.get('arguments'), environ, clock())
+        if isinstance(word, dict):
+            return _result(id_, _tool_result(word, True))
         if word is not None:
             return _result(id_, _tool_result({'error': word}, True))
         return _result(id_, _tool_result(obj, False))
