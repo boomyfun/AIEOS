@@ -1,0 +1,535 @@
+# TASK-086: the launcher's core path, a new module launcher.py over adapter.start and adapter.end, callable by tests
+# and starting no runtime (specification 7 revision 2, section 5; specification 5 revision 5, section 11 point 7;
+# specification 3 revision 5, sections 1 and 2; DEF-0097; DEF-0099; M7's sixth task, split by decision D-2673: the gone
+# sessions' records, specification 5 point 10, are TASK-089's). Plan: decisions D-2672 to D-2692 (session 3797498a;
+# disp86c row 9):
+# the scope note (MYSP/t86/scope86.md) with the eight rulings of D-2673 and the shape of D-2675, the pin scan
+# (MYSP/t86/pinscan86-out.txt at f216376e and its reading MYSP/t86/pinscan86-reading.md, D-2674, D-2675), the risk run
+# (MYSP/t86/risk/risk_class86.py: high), the forbidden list (MYSP/t86/forbid86.txt, execution.py left out).
+#
+# Scope:
+# - A new module src/aieos_bootstrap/launcher.py with two public functions:
+#   - start(root, repo, task_id, adapter_name, max_risk, holder, recorder, now, expires_at, read=None, read_log=None,
+#     expire=None, start=None, end=None, check=None, append=None, grant=None, release=None, held=None,
+#     start_session=None, end_session=None, release_lease_token=None): returns a mapping with exactly START_KEYS,
+#     never raises. In order (specification 7 :47's order without its first step, D-2673 ruling 1; renumbered,
+#     disp86 row 8):
+#     (2) the core's expiry, expire(root, now) (writer.expire_leases; specification 5 :112 "the core's expiry runs
+#         before a grant", adapter.py :50-51 leaving it to the caller);
+#     (3) HEAD, read once through read by gitread's fixed form "rev-parse --verify --end-of-options HEAD" (gitread.py
+#         :91-92); an answer that is not exactly 40 lowercase hex characters gives "refused" (the form the hooks
+#         require of AIEOS_BASE, claude_code_pretool_hook.py :26; disp86 row 11);
+#     (4) the log, read once by read_log(root) (writer.read_log), then execution.task_view over those bytes; task_view
+#         findings (an expired or malformed lease, a log check_log refuses, no task.approved; execution.py :217-218,
+#         :234-260) give "refused" with those findings; then, in this order, a task IN_PROGRESS (a lease still held
+#         after the expiry) gives "not granted" with reason "held", and any other state outside READY and REWORK gives
+#         "not granted" with reason "state" and the state in the result's findings; all three before adapter.start,
+#         with no session row opened and no end (D-2681 Q2; disp86 rows 2, 17; disp86c rows 3, 4); a lease taken
+#         between task_view and execute is refused by execute's "inputs" check (execution.py :264-271), so the start
+#         fails closed and keeps or releases no other session's lease (disp86c row 6);
+#     (5) the session id, "launch-" followed by the first 32 hex characters of the SHA-256 of
+#         "<task_id> <now.isoformat()> <head_commit>" (D-2673 ruling 8), so of the form [A-Za-z0-9._-]{1,128} with
+#         no "/" (mcp_server.py :19; read_set_record.py :28-29);
+#     (6) the 22 inputs at HEAD: resume_inputs.git_inputs (ten), resume_log_inputs.log_inputs (seven), and the five
+#         the launcher gives: task_id (the argument), runtime {adapter: adapter_name, max_risk: max_risk} (both the
+#         caller's, D-2673 ruling 2; D-2681 Q3), and log_seq, task_state and approved_contract_hash from task_view;
+#         code_sha256 the SHA-256 of src/aieos_bootstrap/resume_check.py's text at HEAD encoded as UTF-8, read by
+#         base_files.read_file (D-2673 ruling 4; the quantity the CI pins, aieos-checks.yml :127, :135);
+#     (7) adapter.start(root, task_id, session_id, holder, inputs, code_sha256, expires_at, recorder, now, …), which
+#         opens the session row and runs execution.execute: the Resume Check, its record and state effect, and the
+#         grant on CONTINUE or CONTINUE_WITH (adapter.py :132-165);
+#     (8) when adapter.start's result holds no fencing token, adapter.end(root, task_id, session_id, None, now) at once
+#         (specification 5 :112 "a start without a grant is ended at once"), when the session row was opened: by
+#         adapter.start's result form, the row was opened unless its reason is "argument" or "session"
+#         (adapter.py :146-153, against :155-165) (reading, D-2677 C2); a raising start_session also gives "session"
+#         (adapter.py :150-151), the row then possibly present and not ended, which fails closed (disp86 row 16).
+#     The result: result ("granted", "not granted" or "refused"), reason, findings, session_id, head_commit, decision,
+#     fencing_token, environment ({AIEOS_SESSION_ID, AIEOS_ROOT, AIEOS_BASE} on a grant only, AIEOS_BASE the
+#     head_commit, the names the hooks and the MCP server read, claude_code_pretool_hook.py :130-132, mcp_server.py
+#     :94-95, :357), the adapter.start result and the adapter.end result. root must be an absolute path (a drive
+#     letter followed by ":/" or ":\", or a leading "/", matched by a pattern; mcp_server.py :19) and repo an
+#     existing absolute directory as gitread.form_error requires (gitread.py :80-83) (disp86 rows 11, 19); repo is
+#     checked by gitread.form_error(repo, ["rev-parse", "--verify", "--end-of-options", "HEAD"], timeout), timeout
+#     TIMEOUT = 30, a module constant as resume_inputs.py :56, also used for the HEAD read (D-2694 C1, D-2695),
+#     before any callee call (gitread.py :77-83); a refusal by it or by the root pattern gives
+#     "refused" with reason "argument" and zero callee calls; the module imports no os (AC10; disp86c row 7).
+#   - end(root, task_id, session_id, fencing_token, now, release_lease_token=None, end_session=None): adapter.end's
+#     result, passed through. adapter.end returns before end_session when the release raises or is refused with a
+#     reason other than "none" or "token" (adapter.py :250-262), so the session row then stays open for `aieos end`
+#     (a stated limit against specification 5 :112's "ended in every case"; disp86 row 6).
+#   Every callee is a keyword argument whose default is taken at call time, in adapter.py's form (:25-29).
+# - In src/aieos_bootstrap/execution.py, by added lines only, one public function task_view(log, root, task_id, now,
+#   held=None): ({task_state, log_seq, approved_contract_hash}, None) or (None, findings), over the log bytes given
+#   (as task_states takes them, execution.py :59-66), by execution's own _log, _project and _state and the last line's
+#   seq, as execute compares them (execution.py :335-345, _agree :264-271; _log :201, _project :213, _state :243)
+#   (D-2673 ruling 3; disp86 rows 9, 10); a state such as DONE is returned, and the launcher stops on it (row 17); it
+#   adds no import and names nothing tests/unit/test_execution.py :704-727 refuses.
+# - What it does not do: it starts no runtime, places no hook, changes no setting, opens no store (open_store is the
+#   caller's, adapter.py :50), writes no observed read-set record in any case, and runs no CLI; adapter.py, writer.py,
+#   resume_check.py and the readers are not changed. The observed read-set record before every lease release
+#   (specification 7 :45, specification 5 :112; read_set_record.py :19-24) is TASK-089's at all three call places:
+#   the normal end (read_set_record.observe before adapter.end), the gone session's record at the end after a
+#   violation or an expiry, and the gone session's record at the next start (specification 5 :125), with the stored
+#   reads' removal (D-2681 Q1; disp86 rows 1, 3).
+#
+# The rulings (D-2673, D-2675, D-2681), each this task's choice (proposed):
+# - With max_risk null the Resume Check's check 7 fires with "the runtime has no declaration" (resume_check.py
+#   :632-635), so no lease is granted; the decision is the highest fired one by ORDER (:53-54), which may be "STOP:
+#   scope invalid" (check 2, :572-574) or, for inputs out of form, an error record with decision null (:521-530)
+#   (disp86 row 5). max_risk is the caller's: passing a non-null max_risk declares the runtime's tier, which only the
+#   owner's measurement can back (C6, P-LOC); the self-build passes null until then, so no lease is granted; tests
+#   pass a tier only to exercise the path (D-2673 ruling 2; D-2681 Q3).
+# - DEF-0099 closes here: on the grant path a dependency not DONE makes check 5 fire BLOCKED (resume_check.py
+#   :596-606), so no grant. A dependency's stale_evidence does not prevent a grant: check 5 reads only its state
+#   (:601-604), stale_evidence is checked for form only (:245-250); stated, as DEF-0100 carries it.
+# - AIEOS_BASE is the head_commit read once; that HEAD is the base branch's tip is not checked, and the root and its
+#   Git state being untouched by the change and check 0 of the contract stay stated, for a later task (specification
+#   7 :49, specification 5 :121; D-2673 ruling 5).
+# - The log is read twice: once by the launcher, whose bytes go to task_view and log_inputs, and once by execute; a
+#   change between the reads gives execute's "inputs" refusal (execution.py :342-345), which fails closed (D-2677 C4;
+#   disp86 row 9).
+#
+# Stated limits: the observed read-set record at its three call places (the normal end, the gone session's record at
+# the end after a violation or an expiry, and at the next start, step (1) of specification 7 :47) and the stored
+# reads' removal are TASK-089's (D-2673 ruling 1; D-2681 Q1), so launching with a runtime, the owner's act, is not to
+# happen before TASK-089 lands; this is a statement, not a lock, carried in the repository by DEF-0101 (below); the
+# store is the caller's (open_store); the base's limits above; the log read twice; adapter.end's early return leaves
+# the session row open (above); code_sha256 is the hash of HEAD's resume_check.py, not of the imported module that
+# runs, so the record's engine identity may differ from the executing code (disp86 row 13); two starts of one task in
+# the same second at the same HEAD make the same session id, and the second is refused "started" (writer.py
+# :368-369), failing closed (row 14); one run at a time (the writer's limit); the expiry's result is not checked
+# against the task (any lease expired is removed, writer.py :487-502); every limit of git_inputs, log_inputs,
+# adapter.start and execute holds here.
+#
+# DEF-0097: closes at this task's records: every input of resume_check.py :44-48 is read by TASK-085, TASK-088 or
+# this task, or stated and moved to DEF-0100 (DEF-0097 :21); its reference to DEF-0035's R5 F4 (DEF-0097 :15) is
+# already met, R5 F4 having been closed as documentation only by TASK-085's records (decision D-2573), so nothing is
+# carried (D-2682). DEF-0099 closes at this task's records (above). DEF-0101, "the launcher's open requirements before
+# a runtime is launched", opens with them: the three record call places and the stored reads, the base-tip check and
+# check 0 (specification 5 :121), "no launch with a runtime before TASK-089 lands", and the max_risk point (D-2673
+# ruling 2); its resume point is TASK-089, not yet contracted (planned by decisions D-2673 and D-2681) (D-2681 Q1,
+# Q3; disp86c row 8). The records commit holds five paths:
+# docs/records/TASK-086.jsonl (new), the DEF-0101 file (new), DEF-0097 (its status closed and one Log line), DEF-0099
+# (its status closed and one Log line) and DEF-0035 (one Log line, a correction of the file to agree with TASK-085's
+# records) (D-2682, amended by D-2692 (a); disp86c row 1). DEF-0099 stays in the code commit's forbidden list below.
+#
+# Owner-act boundary: none reached. The module starts no process but through gitread, opens no file, reads no clock
+# and no environment; running `aieos launch` with a runtime, connecting the MCP server, hooks and settings stay the
+# owner's (DM A51 item (4); specification 7 :50).
+#
+# The pins (L-0026; MYSP/t86/pinscan86-out.txt at f216376e; D-2674, D-2675): tests/unit/test_execution.py :704-744
+# (R10Purity: execution.py's imports, no banned name or attribute, among them start_session, end_session,
+# expire_leases and release_lease; no ".aieos" string; the docstring's nine phrases), kept;
+# tests/unit/test_execution_list_tasks.py and tests/unit/test_resume_log_inputs.py (TASK-088 AC8), unchanged and
+# passing. tests/unit/test_writer.py :397-412 (only writer.py opens files or names the project-state directory),
+# test_gitread.py :370-380, test_autonomy.py :238-246 and test_conformance_rc_set.py :155 hold for the new module.
+# __init__.py is not changed. The deterministic rule (.github/workflows/aieos-checks.yml :1489-1517): no allowance
+# for any write-set path, so no DENY_MODULES module, no DENY_NAMES name, no DENY_OS call, no DENY_ATTR_CALLS call, no
+# one-argument .replace(. GOV-003's EVALUATOR list (src/aieos_bootstrap/**, aieos-checks.yml :423), unchanged. No
+# change under .github/.
+#
+# Risk: high, computed over the base by MYSP/t86/risk/risk_class86.py (R2 medium and R3 high, not evaluable, for each
+# path). GOV-003: an evaluator path; change class ruled at acceptance. Reviews on Sonnet 5.5 and Opus 5.5 (never
+# Fable), read tools only; the acceptance review on Sonnet 5.5, by the two-models rule for a way-2 review (governor.py
+# :270-275). Naming (D-544 Q3): every new test function names "TASK-086 ACn" in its own docstring. Not applicable:
+# OPS-001; INV-005 to INV-011; GOV-001, GOV-004 to GOV-006, SEC-003. INV-004 is reached only through the writer's own
+# calls (adapter.start, adapter.end, expire_leases, read_log), never by this module's own write.
+# Owner-kept acts: none in this task.
+# Shadow (D-2042 C3 as amended by D-2068): the governor's evaluate at acceptance, any difference named.
+# Local runs: the unit group in three parts.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-086.yaml, has one parent equal to base_commit, and goes
+# to main under its own decision; the task's commits carry "AIEOS-Task: TASK-086" and go to task/TASK-086; main
+# receives them only at acceptance.
+task: TASK-086
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add src/aieos_bootstrap/launcher.py with start and end: start runs the core's expiry, makes the session id, reads
+  HEAD and the log once, joins the Resume Check's 22 inputs (resume_inputs.git_inputs, resume_log_inputs.log_inputs
+  and the five it gives, through a new execution.task_view added by added lines only), calls adapter.start and, with
+  no grant, adapter.end at once, and returns the environment's three values on a grant; end passes to adapter.end; it
+  never raises and starts no runtime; tests in tests/unit/test_launcher.py and tests/integration/test_launcher_repo.py,
+  each new test naming "TASK-086 ACn".
+traces_to:
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#5
+  - docs/specs/spec-05-adapter-contract.md#11
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#1
+input_state:
+  base_commit: f216376e75a25945d9056d195e7282b589457a0b
+  depends_on: [TASK-008, TASK-032, TASK-051, TASK-084, TASK-085, TASK-088]
+  intent_versions:
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 613cbd72dca411586ca03d790cd01bb044d0eb8e9a2885d9c3f8bb25cc9f5efb
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: d2fa59ae3f203b3a2108e55d23ddfb875e64ab57d27372c9d413bf30d7c2cbdd
+    docs/specs/spec-05-adapter-contract.md: ae7b99419d303db40b7200e39a22d93b9301b29900f3b1f5a5720b72d8eb9c2b
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 8e744daa31928621137db59a8a9d91ecf163879420e1f8e148232b149cafcdb7
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/launcher.py
+    - src/aieos_bootstrap/execution.py
+    - tests/unit/test_launcher.py
+    - tests/integration/test_launcher_repo.py
+read_set:
+  paths:
+    - docs/specs/spec-07-cli-and-zero-friction-path.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/specs/conformance-files.md
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/Deferred/DEF-0097-the-readers-of-the-resume-checks-inputs.md
+    - docs/Deferred/DEF-0099-list-tasks-does-not-re-check-a-tasks-dependencies.md
+    - docs/Deferred/DEF-0100-the-resume-check-inputs-with-no-full-source.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.adapter.start, aieos_bootstrap.adapter.end, aieos_bootstrap.writer.expire_leases,
+    aieos_bootstrap.writer.read_log, aieos_bootstrap.resume_inputs.git_inputs,
+    aieos_bootstrap.resume_log_inputs.log_inputs, aieos_bootstrap.base_files.read_file,
+    aieos_bootstrap.execution.execute, aieos_bootstrap.resume_check.check]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/resume_log_inputs.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_base_files_repo.py
+  - tests/integration/test_base_inputs_repo.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_mcp_server_work_order_repo.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_resume_inputs_repo.py
+  - tests/integration/test_resume_log_inputs_repo.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_base_files_properties.py
+  - tests/property/test_base_inputs_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_context_compiler_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_mcp_server_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_base_files.py
+  - tests/unit/test_base_inputs.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_execution_list_tasks.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_mcp_server_work_order.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_resume_inputs.py
+  - tests/unit/test_resume_log_inputs.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The arguments and the callees: start's root (an absolute path by the pattern of the header), repo (an
+      existing absolute directory, as gitread.form_error requires; the unit stand-ins use the repository's own root),
+      task_id (TASK-<digits>), adapter_name, max_risk (null or one of low, medium, high, critical), holder, recorder,
+      now and expires_at (timezone-aware UTC whole seconds, expires_at after now) and every callee (None or callable)
+      out of form (a relative root such as "x/y" among them) give a result "refused" with reason "argument" and zero
+      callee calls; launcher.TIMEOUT equals 30, and repo is checked, before any callee call, by
+      gitread.form_error(repo, ["rev-parse", "--verify", "--end-of-options", "HEAD"], launcher.TIMEOUT), a repo it
+      refuses giving "refused" with reason "argument" and zero callee calls, and the HEAD read is made with that form
+      and launcher.TIMEOUT (disp86c row 7; D-2695 C1); a HEAD answer that is not exactly 40 lowercase hex characters
+      gives "refused" with no later
+      callee call; every callee defaults, at call time, to its named function (a patch after import is the one
+      called); every read is one of gitread's fixed forms (gitread.form_error gives None for each
+      recorded call with its repo, args and timeout).
+  - AC2: >-
+      The order, by recording stand-ins: expire, then read (HEAD), then read_log, then held (task_view's lease check,
+      the one held call before adapter.start), then the readers' reads, then adapter.start, then adapter.end when no
+      token was granted and the row was opened; execute's own second read_log and held calls, made inside
+      adapter.start, are allowed after adapter.start begins (disp86c row 5); after any refusal or "not granted" before
+      adapter.start, no later callee is called; expire runs before
+      adapter.start in every run that reaches it.
+  - AC3: >-
+      The session id: exactly "launch-" followed by 32 lowercase hex characters, the first 32 of the SHA-256 of
+      "<task_id> <now.isoformat()> <head_commit>"; of the form [A-Za-z0-9._-]{1,128}, holding no "/"; the same
+      arguments give the same id; a start_session refusal ("started") gives a result "refused" with adapter.end not
+      called.
+  - AC4: >-
+      The inputs given to adapter.start: their keys equal resume_check.INPUT_KEYS; the ten and the seven are
+      git_inputs' and log_inputs' at HEAD; task_id is the argument; runtime is {adapter: adapter_name, max_risk:
+      max_risk}; log_seq, task_state and approved_contract_hash equal execution.task_view's; code_sha256 is the
+      SHA-256 of the stand-in resume_check.py text at HEAD encoded as UTF-8, the stand-in text holding non-ASCII
+      characters, and differs from the hash of that text in latin-1 (with replacement) and in UTF-16 (disp86 row 7); a
+      reader's findings give a result "refused" with no adapter.start call.
+  - AC5: >-
+      The grant path, with the real resume_check, a Repo-style stand-in read (in tests/unit/test_resume_log_inputs.py's
+      form) and writer stand-ins (disp86 row 12): a declared max_risk covering the task risk, a READY task with every
+      dependency DONE and inputs where no check fires but CONTINUE or CONTINUE_WITH (resume_check.py :53-54) give a
+      result "granted" with the fencing token and environment exactly {AIEOS_SESSION_ID: the session id,
+      AIEOS_ROOT: root, AIEOS_BASE: head_commit}; adapter.end is not called.
+  - AC5b: >-
+      The held and state refusals (D-2681 Q2): with a held lease that is unexpired after the expiry, so task_view
+      gives IN_PROGRESS, start gives "not granted" with reason "held"; with a log giving DONE (or another state
+      outside READY and REWORK), start gives "not granted" with reason "state" and the state in its findings; in both,
+      by recording stand-ins, adapter.start, start_session, release and end are called zero times and no environment
+      is given. Each case asserts its reason word ("held" or "state") (disp86c row 3; D-2693 C2).
+  - AC6: >-
+      No grant: max_risk null with inputs where checks 1 to 6 do not fire (the Repo-style stand-in of AC5) gives check
+      7 fired with "the runtime has no declaration" and decision "STOP: runtime insufficient" (resume_check.py
+      :632-635), a result "not granted", no environment, and adapter.end called once with no token; a dependency
+      whose state is not DONE, with a max_risk covering the task risk, gives check 5's BLOCKED (resume_check.py
+      :596-606) and no grant, so DEF-0099's re-check holds on the grant path (disp86 row 5).
+  - AC7: >-
+      Failing closed: a raising expire, read, read_log or reader, an expiry answer out of form, task_view's findings
+      (an expired or malformed lease, a log check_log refuses, no task.approved), which give "refused" with those
+      findings, no adapter.start call and no adapter.end call (disp86c row 4), a HEAD answer that is not exactly 40
+      lowercase hex characters, adapter.start refused before the session row (reason "argument" or
+      "session", a raising start_session among them) or after it ("core"), and adapter.end refused give a result
+      "refused" or "not granted" with findings and no environment; adapter.end is called exactly when the row was
+      opened (reason neither "argument" nor "session") and no token was granted, so a raising start_session's row is
+      not ended (disp86 row 16); no call raises.
+  - AC8: >-
+      end: adapter.end's result passed through for a token and for none; its callees default at call time; when the
+      release raises or is refused with a reason other than "none" or "token", the result is refused and
+      end_session is not called, so the session row stays open (adapter.py :250-262; disp86 row 6).
+  - AC9: >-
+      execution.task_view over the log bytes given: READY after task.approved, IN_PROGRESS under an unexpired held
+      lease, a state such as DONE returned as it is (execute refuses such a state with reason "state", execution.py
+      :346-348), a lease out of form or expired gives findings, a log check_log refuses gives findings, no
+      task.approved gives findings, log_seq the seq of the log's last line, approved_contract_hash the last
+      task.approved's contract_hash; it equals what execute compares (an execute run with those inputs is not refused
+      with reason "inputs") (disp86 rows 9, 17).
+  - AC10: >-
+      The modules: by ast over pathlib's read_bytes, execution.py's import set is exactly the one its tests pin
+      (tests/unit/test_execution.py :704-727 unchanged and passing), and the existing lines are unchanged (checked at
+      review from C..X); launcher.py imports only datetime, hashlib and re of the standard library (datetime for
+      AC1's time checks, as adapter.py :56, :82-84; disp86 row 4) and aieos_bootstrap's
+      adapter, base_files, execution, gitread, resume_check, resume_inputs, resume_log_inputs and writer, and names no
+      open, exec, eval, compile, __import__, subprocess, os, sys or time, no attribute environ, getenv, now, write or
+      open_store, and no ".aieos" string; tests/unit/test_writer.py :397-412 passes.
+  - AC11: >-
+      Over this repository (an integration test through gitread.run, the repository found by pathlib; it needs the
+      full history): start for TASK-088 with a stand-in read that answers only the exact args ["rev-parse",
+      "--verify", "--end-of-options", "HEAD"] with f216376e75a25945d9056d195e7282b589457a0b and forwards every other
+      call to gitread.run(repo, args, timeout) unchanged, the test asserting that rev-list, diff-tree and cat-file
+      calls were made and forwarded (disp86c row 2; D-2699 C1), with a log stand-in holding TASK-088's task.approved
+      bearing docs/tasks/TASK-088.yaml's contract hash at that commit, writer stand-ins and max_risk null: code_sha256
+      equals e1578939404da0b61d56d9187521b92c923e7cb841acdf15d0afb7155605a135 (the CI's pinned Resume Check,
+      aieos-checks.yml :135); the inputs' keys equal resume_check.INPUT_KEYS; the decision record's checks hold check
+      7 fired with "the runtime has no declaration"; its decision equals "STOP: scope
+      invalid" (check 2, resume_check.py :572-574: TASK-088's commits since its base are not submitted in the
+      stand-in log); no lease is granted and adapter.end's stand-in is called once (disp86 row 5).
+  - AC12: >-
+      Every existing test passes, the pins of the header among them; adapter.py, writer.py, resume_check.py and the
+      readers are unchanged; the full suite runs locally in three unit parts, integration and property before the
+      first code commit; the deterministic rule's local run gives no finding. launcher.py's docstring holds,
+      whitespace read as single spaces, "starts no runtime", "never raises", "writes no observed read-set record",
+      "not before TASK-089 lands", "the store is the caller's", "max_risk null never grants", "AIEOS_BASE is the
+      head_commit", "the log is read twice" and "this task's choice"; execution.py gains a docstring paragraph naming
+      task_view and "TASK-086", its kept phrases unchanged: "it gathers no Resume Check input", and, as
+      tests/unit/test_resume_log_inputs.py :517-518 pins them, "execute itself still gathers no Resume Check input",
+      "task_states", "rework_count" and "TASK-088" (disp86 row 18); every new test names "TASK-086 ACn".
+  - AC13: >-
+      Broken copies, each naming its file and failing the tests of its AC: (1) launcher.py binds a callee at import
+      time (AC1); (2) launcher.py runs expire after adapter.start (AC2); (3) launcher.py makes the session id with a
+      "/" (AC3); (4) launcher.py gives runtime max_risk "critical" whatever the argument (AC4, AC6); (5) launcher.py
+      gives the environment on a refusal (AC6, AC7); (6) launcher.py does not call adapter.end on no grant (AC6);
+      (7) launcher.py calls adapter.end after a "session" refusal (AC7); (8) launcher.py raises on a raising read
+      (AC7); (9) launcher.py hashes the decoded resume_check text with another encoding (AC4; disp86 row 7); (10)
+      execution.py's task_view gives READY under a held lease (AC9); (11) execution.py gains an import (AC10); (12)
+      launcher.py's end drops adapter.end's findings (AC8); (13) launcher.py drops both the "held" refusal and the
+      state refusal for a task IN_PROGRESS, so adapter.start is called on it (AC5b's held case); (14) launcher.py drops
+      the refusal of a state outside READY and
+      REWORK (AC5b); each copy made in a scratchpad script at G3 (brk86, as
+      brk85b), not committed; copy (11)'s text is shown failing AC10's ast check; the governor's evaluate at
+      acceptance (the shadow) with any difference named; the stated choices in the records (not tests).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1200k, wall_time: 6h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC5b, AC6, AC7, AC8, AC9, AC10, AC11, AC12]}
+  - {gate: G3, check: constitution, args: [AC13, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
