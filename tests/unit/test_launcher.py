@@ -20,6 +20,7 @@ from aieos_bootstrap import resume_log_inputs, writer
 HERE = pathlib.Path(__file__).resolve()
 REPO = str(HERE.parents[2])
 ROOT = str(HERE.parents[2] / 'no-such-launcher-root')
+END_ROOT = 'C:/launcher-end-root-89'
 PKG = HERE.parents[2] / 'src' / 'aieos_bootstrap'
 TASK = 'TASK-100'
 NOW = datetime.datetime(2026, 10, 24, 12, 0, 0, tzinfo=datetime.timezone.utc)
@@ -588,31 +589,47 @@ class TASK086AC7FailingClosed(Base):
         self.assertEqual(c.of('end'), [])
 
 
+def end_with(c, token, **over):
+    """launcher.end over TASK-089's signature (TASK-089 AC1), the record and the reads given by stand-ins: a row of
+    the task holding the token when one is given (the fenced path), none otherwise (the gone path)."""
+    rows = [dict(LEASE)] if token is not None else []
+    record = {'result': 'written', 'reason': None, 'findings': [], 'record': None, 'core': None}
+    kw = dict(release_lease_token=c.make('release_lease_token', writer.release_lease_token),
+              end_session=c.make('end_session', writer.end_session),
+              session_leases=lambda root, session_id, now: store(value={'ended': False, 'leases': rows}),
+              stored_reads=lambda root, session_id, task_id: store(value=[]),
+              remove_reads=lambda root, session_id, task_id: store(value=0),
+              observe=lambda context, reads, now: record,
+              observe_gone=lambda root, task_id, session_id, reads, reason, now, recorder: record)
+    kw.update(over)
+    return launcher.end(END_ROOT, TASK, 'session-1', token, NOW, ['src/aieos_bootstrap/mod.py'], [],
+                        REC + ' session-1', **kw)
+
+
 class TASK086AC8End(Base):
     def test_end_passes_the_result_through(self):
-        """TASK-086 AC8: end gives adapter.end's result for a token and for none, its findings kept; its callees
-        default at call time; a release refused with a reason other than "none" or "token" gives "refused" and
-        end_session is not called."""
+        """TASK-086 AC8, as TASK-089 AC1 and AC2 change it: end gives adapter.end's result in "end" for a token and
+        for none, its findings kept; its callees default at call time; a release refused with a reason other than
+        "none" or "token" gives "refused" and end_session is not called."""
         for token in (TOKEN, None):
             c = Calls({'release_lease_token': store(), 'end_session': store(value=[])})
-            r = launcher.end(ROOT, TASK, 'session-1', token, NOW,
-                             release_lease_token=c.make('release_lease_token', writer.release_lease_token),
-                             end_session=c.make('end_session', writer.end_session))
+            r = end_with(c, token)
             self.assertEqual(r['result'], 'done')
+            self.assertEqual(r['end']['result'], 'done')
             self.assertEqual(len(c.of('release_lease_token')), 1 if token else 0)
         c = Calls({'release_lease_token': store('refused', 'other'), 'end_session': store(value=[])})
-        r = launcher.end(ROOT, TASK, 'session-1', TOKEN, NOW,
-                         release_lease_token=c.make('release_lease_token', writer.release_lease_token),
-                         end_session=c.make('end_session', writer.end_session))
+        r = end_with(c, TOKEN)
         self.assertEqual(r['result'], 'refused')
         self.assertTrue(r['findings'])
         self.assertEqual(c.of('end_session'), [])
         answer = dict(ended('refused'), findings=['kept'])
         with mock.patch.object(adapter, 'end', lambda *a, **k: answer):
-            self.assertEqual(launcher.end(ROOT, TASK, 'session-1', None, NOW), answer)
+            r = end_with(Calls(), None)
+        self.assertEqual((r['result'], r['end']), ('refused', answer))
+        self.assertIn('kept', r['findings'])
         with mock.patch.object(adapter, 'end', mock.Mock(side_effect=RuntimeError('x'))):
-            r = launcher.end(ROOT, TASK, 'session-1', None, NOW)
-        self.assertEqual((r['result'], set(r)), ('refused', set(adapter.RESULT_KEYS)))
+            r = end_with(Calls(), None)
+        self.assertEqual((r['result'], tuple(r)), ('refused', launcher.END_KEYS))
 
 
 class TASK086AC9TaskView(Base):
@@ -660,16 +677,16 @@ class TASK086AC9TaskView(Base):
 
 class TASK086AC10Modules(Base):
     def test_the_import_sets(self):
-        """TASK-086 AC10: by ast, execution.py's import set is the one its tests pin; launcher.py imports only
-        datetime, hashlib and re and aieos_bootstrap's adapter, base_files, execution, gitread, resume_check,
-        resume_inputs, resume_log_inputs and writer."""
+        """TASK-086 AC10, as TASK-089 AC10 changes it: by ast, execution.py's import set is the one its tests pin;
+        launcher.py imports only datetime, hashlib and re and aieos_bootstrap's adapter, base_files, execution,
+        gitread, read_set_record, resume_check, resume_inputs, resume_log_inputs and writer."""
         self.assertEqual(imports(tree_of('execution.py')),
                          {'datetime', 're', 'aieos_bootstrap.records', 'aieos_bootstrap.resume_check',
                           'aieos_bootstrap.writer'})
         self.assertEqual(imports(tree_of('launcher.py')),
                          {'datetime', 'hashlib', 're'} | {'aieos_bootstrap.' + m for m in (
-                             'adapter', 'base_files', 'execution', 'gitread', 'resume_check', 'resume_inputs',
-                             'resume_log_inputs', 'writer')})
+                             'adapter', 'base_files', 'execution', 'gitread', 'read_set_record', 'resume_check',
+                             'resume_inputs', 'resume_log_inputs', 'writer')})
 
     def test_what_the_new_module_names(self):
         """TASK-086 AC10: launcher.py names no open, exec, eval, compile, __import__, subprocess, os, sys or time, no
@@ -688,12 +705,15 @@ class TASK086AC10Modules(Base):
 
 class TASK086AC12Docstrings(Base):
     def test_the_new_module(self):
-        """TASK-086 AC12: launcher.py's docstring holds its nine phrases, whitespace read as single spaces."""
+        """TASK-086 AC12, as TASK-089 AC11 changes it: launcher.py's docstring holds seven of its nine phrases, "not
+        before TASK-090 lands" in place of "not before TASK-089 lands", and TASK-089's three, and no longer "writes no
+        observed read-set record", whitespace read as single spaces."""
         text = doc('launcher.py')
-        for words in ('starts no runtime', 'never raises', 'writes no observed read-set record',
-                      'not before TASK-089 lands', 'the store is the caller\'s', 'max_risk null never grants',
-                      'AIEOS_BASE is the head_commit', 'the log is read twice', 'this task\'s choice'):
+        for words in ('starts no runtime', 'never raises', 'not before TASK-090 lands', 'the store is the caller\'s',
+                      'max_risk null never grants', 'AIEOS_BASE is the head_commit', 'the log is read twice',
+                      'this task\'s choice', 'the record before the release', 'no fencing token', 'TASK-090'):
             self.assertIn(words, text)
+        self.assertNotIn('writes no observed read-set record', text)
 
     def test_the_paragraph(self):
         """TASK-086 AC12: execution.py's docstring names task_view and TASK-086, its kept phrases unchanged."""

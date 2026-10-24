@@ -31,8 +31,36 @@ exactly START_KEYS and never raises. In order (specification 7 :47's order witho
    "session"), adapter.end at once with no token: a start without a grant is ended at once (specification 5 :112).
 
 On a grant the result's environment is {AIEOS_SESSION_ID, AIEOS_ROOT, AIEOS_BASE}, the names the hooks and the MCP
-server read; on anything else it is None. ``end(root, task_id, session_id, fencing_token, now, ...)`` passes
-adapter.end's result through. Every callee is a keyword argument whose default is taken at call time.
+server read; on anything else it is None. Every callee is a keyword argument whose default is taken at call time.
+
+``end(root, task_id, session_id, fencing_token, now, write_set, allowlist, recorder, violation=False, ...)`` (task
+TASK-089; specification 5 section 11 points 7 and 10; specification 7 section 5) returns a mapping with exactly
+END_KEYS and never raises. It writes the session's observed read-set record and removes the stored reads before
+adapter.end, the record before the release, and passes adapter.end's result in "end". In order:
+
+1. The arguments: root an absolute Windows path (claude_code_channel.context_findings' form), task_id TASK-<digits>,
+   session_id a non-empty string, fencing_token None or a mapping (its form is adapter.end's to check), now UTC whole
+   seconds, violation a bool, every callee None or callable; a wrong one gives "refused" with reason "argument".
+2. The path, by the session's own lease rows, read once by session_leases(root, session_id, now), every row of the
+   session counting, whatever its task: "fenced" when the session has at least one row unexpired at now and every
+   such row is the task's and holds a fencing_token equal to the given one; "held" when the session has any other row
+   unexpired at now, which is refused with nothing written, nothing removed and no adapter.end; otherwise "gone". A
+   refused or malformed answer gives "refused" with reason "lease_rows" and nothing done. violation only picks the
+   gone path's reason: "violation", else "no fencing token given" when the token is None, else "lease gone (released
+   or expired)".
+3. The stored reads, read once by stored_reads(root, session_id, task_id).
+4. The record: on "fenced", read_set_record.observe with the context {root, task_id, session_id, fencing_token,
+   write_set, allowlist, recorder}; on "gone", read_set_record.observe_gone, as the core's own observation with no
+   fencing token. The record is written even when no read is stored.
+5. Once the record is found present ("written", "duplicate", or "refused" with core reason "conflict", its event id
+   already holding a record), remove_reads(root, session_id, task_id); a refused or raising removal is named in the
+   findings.
+6. adapter.end(root, task_id, session_id, fencing_token, now, ...), its result passed in "end"; the result is "done"
+   when it gave "done".
+
+Failing closed: a refusal or a raise before the record, a "held" path, or a fenced record not found present gives
+"refused" with no removal and no adapter.end, so no lease is released before its record; a gone record not found
+present gives no removal, and adapter.end is still called, since no row of the session is unexpired.
 
 The rulings, each this task's choice (decisions D-2673, D-2675, D-2681):
 - max_risk null never grants: the Resume Check's check 7 fires with "the runtime has no declaration", and the
@@ -45,10 +73,17 @@ The rulings, each this task's choice (decisions D-2673, D-2675, D-2681):
   change between the reads gives execute's "inputs" refusal, which fails closed, as does a lease taken between
   task_view and execute.
 
-Stated limits: it writes no observed read-set record. The observed read-set record before every lease release, at
-its three call places (the normal end, the gone session's record at the end after a violation or an expiry, and at
-the next start) and the stored reads' removal are TASK-089's, so launching with a runtime is not before TASK-089 lands
-(a statement, not a lock; DEF-0101). As in adapter.py, the store is the caller's (writer.open_store). adapter.end
+Stated limits: start leaves the observed read-set record to end. end writes it at two of its three call places, the
+normal end and the gone session's record at the end after a violation or an expiry, with the stored reads' removal (task
+TASK-089); the third, the next start's record of a session gone without an end, is TASK-090's, so launching with a
+runtime is not before TASK-090 lands (a statement, not a lock; DEF-0101). end's limits: on the fail-closed paths the
+session stays open, its lease held until it expires, for the next start or `aieos end`; a "held" session stays open
+until its unexpired lease expires or end is called with its token; a token mapping out of the store's form is checked
+only by adapter.end, so on the gone path the record is written and the reads removed before adapter.end refuses it;
+the lease rows are read at one moment, so a lease expiring before observe makes its fenced append refused; a record
+found present as a conflict is the earlier record, so reads added after it are in no record and are removed with the
+rest; write_set, allowlist and recorder are the caller's, checked only by observe's context check. As in adapter.py,
+the store is the caller's (writer.open_store). adapter.end
 returns before the session row is closed when the release raises or is refused otherwise, so the row then stays open
 for `aieos end`; a raising start_session gives "session" with the row possibly present and not ended. code_sha256 is
 the hash of HEAD's resume_check.py, not of the imported module that runs. Two starts of one task in the same second
@@ -68,6 +103,7 @@ from aieos_bootstrap import adapter
 from aieos_bootstrap import base_files
 from aieos_bootstrap import execution
 from aieos_bootstrap import gitread
+from aieos_bootstrap import read_set_record
 from aieos_bootstrap import resume_check
 from aieos_bootstrap import resume_inputs
 from aieos_bootstrap import resume_log_inputs
@@ -82,6 +118,9 @@ HEAD_ARGS = ('rev-parse', '--verify', '--end-of-options', 'HEAD')
 RESUME_CHECK = 'src/aieos_bootstrap/resume_check.py'
 SESSION_PREFIX = 'launch-'
 OPENED_REFUSALS = ('argument', 'session')
+END_KEYS = ('result', 'reason', 'findings', 'path', 'record', 'removed', 'end')
+END_REASONS = ('argument', 'lease_rows', 'held', 'stored_reads', 'record', 'end')
+FOUND_PRESENT = ('written', 'duplicate')
 _ROOT = re.compile(r'[A-Za-z]:[/\\].*|/.*', re.DOTALL)
 _TASK = re.compile(r'TASK-[0-9]+')
 _HEX40 = re.compile(r'[0-9a-f]{40}')
@@ -257,13 +296,160 @@ def start(root, repo, task_id, adapter_name, max_risk, holder, recorder, now, ex
                    decision, started=started, ended=ended)
 
 
-def end(root, task_id, session_id, fencing_token, now, release_lease_token=None, end_session=None):
-    """End one session (TASK-086 AC8): adapter.end's result, passed through; never raises."""
+# ---- end (task TASK-089) ----
+
+_WINDOWS_ROOT = re.compile(r'[A-Za-z]:[/\\].*', re.DOTALL)
+_ROW_KEYS = frozenset({'task_id', 'fencing_token', 'expires_at'})
+_END_CALLEES = ('release_lease_token', 'end_session', 'session_leases', 'stored_reads', 'remove_reads', 'observe',
+                'observe_gone')
+
+
+def _end_result(result, reason=None, findings=(), path=None, record=None, removed=None, ended=None):
+    return {'result': result, 'reason': reason, 'findings': [f for f in findings if isinstance(f, str)], 'path': path,
+            'record': record, 'removed': removed, 'end': ended}
+
+
+def _end_argument_findings(root, task_id, session_id, fencing_token, now, violation, callees):
+    found = []
+    if not (isinstance(root, str) and _WINDOWS_ROOT.fullmatch(root) is not None):
+        found.append('argument: root is not an absolute Windows path')
+    if not (isinstance(task_id, str) and _TASK.fullmatch(task_id) is not None):
+        found.append('argument: task_id is not TASK- followed by digits')
+    if not _text(session_id):
+        found.append('argument: session_id is not a non-empty string')
+    if not (fencing_token is None or isinstance(fencing_token, dict)):
+        found.append('argument: fencing_token is neither None nor a mapping')
+    if not _utc_whole(now):
+        found.append('argument: now is not a timezone-aware datetime in UTC with whole seconds')
+    if type(violation) is not bool:
+        found.append('argument: violation is not a bool')
+    for name, value in zip(_END_CALLEES, callees):
+        if value is not None and not callable(value):
+            found.append('argument: %s is neither None nor callable' % name)
+    return found
+
+
+def _store_findings(name, answer):
+    more = [f for f in (getattr(answer, 'findings', None) or []) if isinstance(f, str)]
+    head = '%s: %s gave %r (%r)' % (name, name, getattr(answer, 'result', None), getattr(answer, 'reason', None))
+    return [head] + more
+
+
+def _aware(value):
+    return isinstance(value, datetime.datetime) and value.tzinfo is not None and value.utcoffset() == _ZERO
+
+
+def _path(answer, task_id, fencing_token, now):
+    """Step 2: ("fenced" | "held" | "gone", None), or (None, findings) for a refused or malformed answer."""
+    if getattr(answer, 'result', None) != 'done':
+        return None, _store_findings('session_leases', answer)
+    value = getattr(answer, 'value', None)
+    if not (isinstance(value, dict) and set(value) == {'ended', 'leases'} and type(value['ended']) is bool
+            and isinstance(value['leases'], list)):
+        return None, ['lease_rows: session_leases gave a value that is not {ended: a bool, leases: a list}']
+    for row in value['leases']:
+        if not (isinstance(row, dict) and set(row) == _ROW_KEYS and _aware(row['expires_at'])):
+            return None, ['lease_rows: a lease row is not a mapping of task_id, fencing_token and a UTC expires_at']
+    unexpired = [row for row in value['leases'] if row['expires_at'] > now]
+    if not unexpired:
+        return 'gone', None
+    if fencing_token is not None and all(row['task_id'] == task_id and row['fencing_token'] == fencing_token
+                                         for row in unexpired):
+        return 'fenced', None
+    return 'held', None
+
+
+def _gone_reason(violation, fencing_token):
+    if violation:
+        return read_set_record.GONE_WHY[0]
+    if fencing_token is None:
+        return read_set_record.GONE_WHY[2]
+    return read_set_record.GONE_WHY[1]
+
+
+def _conflict(record):
+    core = record.get('core')
+    return (record.get('result') == 'refused' and record.get('reason') == 'core' and isinstance(core, dict)
+            and core.get('result') == 'refused' and core.get('reason') == 'conflict')
+
+
+def _present(record):
+    """Step 5's test: the record is found present when written, a duplicate, or a core "conflict"."""
+    return isinstance(record, dict) and (record.get('result') in FOUND_PRESENT or _conflict(record))
+
+
+def end(root, task_id, session_id, fencing_token, now, write_set, allowlist, recorder, violation=False,
+        release_lease_token=None, end_session=None, session_leases=None, stored_reads=None, remove_reads=None,
+        observe=None, observe_gone=None):
+    """End one session (TASK-089 AC1 to AC7; TASK-086 AC8): the record before the release, then the stored reads'
+    removal, then adapter.end; a mapping with exactly END_KEYS; never raises."""
+    callees = (release_lease_token, end_session, session_leases, stored_reads, remove_reads, observe, observe_gone)
     try:
-        return adapter.end(root, task_id, session_id, fencing_token, now, release_lease_token=release_lease_token,
-                           end_session=end_session)
+        found = _end_argument_findings(root, task_id, session_id, fencing_token, now, violation, callees)
+    except Exception as exc:  # AC1: an argument whose own methods raise
+        found = ['argument: checking the arguments raised %s' % type(exc).__name__]
+    if found:
+        return _end_result('refused', 'argument', found)
+    session_leases = writer.session_leases if session_leases is None else session_leases
+    stored_reads = writer.stored_reads if stored_reads is None else stored_reads
+    remove_reads = writer.remove_reads if remove_reads is None else remove_reads
+    observe = read_set_record.observe if observe is None else observe
+    observe_gone = read_set_record.observe_gone if observe_gone is None else observe_gone
+    step = 'lease_rows'
+    path = None
+    try:
+        path, found = _path(session_leases(root, session_id, now), task_id, fencing_token, now)
+        if found:
+            return _end_result('refused', 'lease_rows', found)
+        if path == 'held':
+            return _end_result('refused', 'held', ['held: the session has an unexpired lease row that is not the '
+                                                   "task's own with the given token"])
+        step = 'stored_reads'
+        got = stored_reads(root, session_id, task_id)
+        reads = getattr(got, 'value', None)
+        if getattr(got, 'result', None) != 'done' or not isinstance(reads, list):
+            return _end_result('refused', 'stored_reads', _store_findings('stored_reads', got), path)
+        step = 'record'
+        if path == 'fenced':
+            context = {'root': root, 'task_id': task_id, 'session_id': session_id, 'fencing_token': fencing_token,
+                       'write_set': write_set, 'allowlist': allowlist, 'recorder': recorder}
+            record = observe(context, list(reads), now)
+        else:
+            record = observe_gone(root, task_id, session_id, list(reads), _gone_reason(violation, fencing_token), now,
+                                  recorder)
+    except Exception as exc:  # AC7: a raise before the record writes nothing more and releases nothing
+        if not (step == 'record' and path == 'gone'):
+            return _end_result('refused', step, ['%s: a step raised %s' % (step, type(exc).__name__)], path)
+        # AC7: on the gone path no unexpired row of the session is held, so adapter.end still follows
+        record = None
+        findings = ['record: observe_gone raised %s' % type(exc).__name__]
+    else:
+        findings = []
+    removed = None
+    if _present(record):
+        if _conflict(record):
+            findings.append('record: a record is already present under its event id (conflict)')
+        try:
+            r = remove_reads(root, session_id, task_id)
+            if getattr(r, 'result', None) == 'done':
+                removed = getattr(r, 'value', None)
+            else:
+                findings.extend(_store_findings('remove_reads', r))
+        except Exception as exc:  # AC7: the record is present, so adapter.end still follows
+            findings.append('remove_reads: remove_reads raised %s' % type(exc).__name__)
+    else:
+        more = list(record.get('findings') or []) if isinstance(record, dict) else []
+        findings = findings + ['record: the record was not found present'] + more
+        if path == 'fenced':
+            return _end_result('refused', 'record', findings, path, record)
+    try:
+        ended = adapter.end(root, task_id, session_id, fencing_token, now, release_lease_token=release_lease_token,
+                            end_session=end_session)
     except Exception as exc:  # adapter.end catches its own, so this is a last guard
-        result = dict.fromkeys(adapter.RESULT_KEYS)
-        result.update({'result': 'refused', 'reason': 'end', 'findings': ['end: adapter.end raised %s'
-                                                                         % type(exc).__name__]})
-        return result
+        return _end_result('refused', 'end', findings + ['end: adapter.end raised %s' % type(exc).__name__], path,
+                           record, removed)
+    if isinstance(ended, dict) and ended.get('result') == 'done':
+        return _end_result('done', None, findings, path, record, removed, ended)
+    more = list(ended.get('findings') or []) if isinstance(ended, dict) else []
+    return _end_result('refused', 'end', findings + ['end: adapter.end did not end the session'] + more, path, record,
+                       removed, ended)
