@@ -12,7 +12,7 @@ import pathlib
 import unittest
 from unittest import mock
 
-from aieos_bootstrap import base_inputs, conformance, context_compiler, eventlog, gitread
+from aieos_bootstrap import base_files, base_inputs, conformance, context_compiler, eventlog, gitread
 
 HERE = pathlib.Path(__file__).resolve()
 ROOT = str(HERE.parents[2])
@@ -265,6 +265,42 @@ class TASK082AC2Contract(Base):
         with mock.patch.object(base_inputs, 'MAX_DEPTH', 3):
             self.parse_refused('a: [[[[[b]]]]]\n')
 
+    def test_depth_forms(self):
+        """TASK-082 AC2: block-map and block-sequence nesting over MAX_DEPTH give findings, and at the real MAX_DEPTH
+        a flow and a block nesting 250 deep give findings, not a RecursionError."""
+        with mock.patch.object(base_inputs, 'MAX_DEPTH', 3):
+            for text in ('a:\n  b:\n    c:\n      d:\n        e: f\n', 'a:\n- k:\n  - k:\n    - x\n'):
+                self.assertIn('MAX_DEPTH', ' '.join(self.parse_refused(text)))
+        deep_block = ''.join(' ' * (2 * k) + 'k:\n' for k in range(250)) + ' ' * 500 + 'k: v\n'
+        for text in ('a: ' + '[' * 250 + 'b' + ']' * 250 + '\n', deep_block):
+            self.assertIn('MAX_DEPTH', ' '.join(self.parse_refused(text)))
+
+    def test_fold_breaks(self):
+        """TASK-082 AC2: ">-" folds as YAML does: " " between two lines, k line breaks for k empty lines, and one more
+        line break next to a more-indented line."""
+        cases = [('  l1\n  l2\n', 'l1 l2'), ('  l1\n\n  l2\n', 'l1\nl2'), ('  l1\n\n\n  l2\n', 'l1\n\nl2'),
+                 ('  l3\n\n    deeper\n', 'l3\n\n  deeper'), ('  l1\n    b\n\n  c\n', 'l1\n  b\n\nc'),
+                 ('  l1\n    l2\n', 'l1\n  l2'), ('  a\n    b\n    c\n  d\n', 'a\n  b\n  c\nd')]
+        for body, value in cases:
+            self.assertEqual(base_inputs._parse_contract_text('d: >-\n' + body)['d'], value, body)
+
+    def test_characters_and_indicators(self):
+        """TASK-082 AC2: each refused character inside a value, and each leading indicator at the start of a plain
+        scalar (a map value, a sequence item, a flow item), give their own findings; so do "-" and "- " at a plain
+        scalar's start and a sequence item with a second key."""
+        for ch in '\ufeff\r\x00\x01\x08\t\x0b\x0c\x1f\x7f\x80\x9f\u2028\u2029':
+            self.assertIn('control character', ' '.join(self.parse_refused('a: b%sc\n' % ch)), repr(ch))
+        for ch in base_inputs._LEADING:
+            for text in ('a: %sb\n' % ch, 'a:\n  - %sb\n' % ch):
+                found = ' '.join(self.parse_refused(text))
+                if ch not in '[{':
+                    self.assertIn('indicator', found, text)
+            if ch not in '[]{},':
+                self.assertIn('indicator', ' '.join(self.parse_refused('a: [%sb]\n' % ch)), ch)
+        for text in ('a: -\n', 'a: - b\n', 'a:\n  - - b\n', 'a:\n  - -\n'):
+            self.assertIn('indicator', ' '.join(self.parse_refused(text)), text)
+        self.assertIn('more than one key', ' '.join(self.parse_refused('a:\n  - k: v\n    m: n\n')))
+
     def test_missing_key(self):
         """TASK-082 AC2: a contract without a key context_compiler needs gives findings."""
         text = CONTRACT.replace('traces_to:\n  - docs/specs/s.md#1\n  - docs/specs/s.md#2\n', '')
@@ -398,9 +434,19 @@ class TASK082AC6Files(Base):
         self.assertEqual(value['derived_read_set'], ['docs/specs/derived.md'])
 
     def test_read_set_form(self):
-        """TASK-082 AC6: a record read_set that is not an object with entries in its form gives findings."""
+        """TASK-082 AC6: a record read_set that is not an object with entries in its form gives findings: a bare list
+        through the public call (the log's own check refuses it, the line being written by hand), and through a direct
+        call of _derived (the module's own check)."""
         for rs in ({'entries': [{'entry': 'a'}]}, {'entries': [{'entry': 5, 'kind': 'path', 'sources': []}]}):
             self.refused(call(log=good_log(resume_record(read_set=rs)))[0])
+        log = Log()
+        log.add('task.approved', {'contract_version': 'v1', 'contract_hash': contract_hash(),
+                                  'approval_record': 'appr-1'}, 'approved-1')
+        obj = json.loads(eventlog.append(log.data, 'decision.execution', resume_record(), 'exec-1', NOW,
+                                         task_id=TASK).line)
+        obj['payload']['read_set'] = [{'entry': 'a', 'kind': 'path', 'sources': ['derived']}]
+        log.data += json.dumps(obj, sort_keys=True, separators=(',', ':')).encode('utf-8') + b'\n'
+        self.assertIn('read_set', ' '.join(self.refused(call(log=log)[0])))
         git = Git(FILES)
         state = {'repo': ROOT, 'commit': git.head, 'read': git, 'listings': {}}
         bare = resume_record(read_set=[{'entry': 'a', 'kind': 'path', 'sources': ['derived']}])
@@ -413,7 +459,24 @@ class TASK082AC6Files(Base):
         link = gid('blob', b'target')
         git = Git(FILES, {'docs/specs/': [('120000', 'blob', link, 'link')]})
         git.objects[link] = ('blob', b'target')
-        self.refused(call(git=git)[0])
+        self.assertIn('symbolic link', ' '.join(self.refused(call(git=git)[0])))
+
+    def test_file_refusals(self):
+        """TASK-082 AC6: a matched file and a derived file that base_files refuses (not UTF-8) give findings naming the
+        path; a text over base_files.MAX_BYTES gives findings naming the path (reached with base_files.read_file
+        patched, since read_file refuses such a blob itself: the module's own check)."""
+        for path in ('src/aieos_bootstrap/mod.py', 'docs/specs/derived.md'):
+            files = dict(FILES, **{path: b'\xff\xfe'})
+            self.assertIn(path, ' '.join(self.refused(call(files)[0])))
+        real = base_files.read_file
+
+        def big(repo, commit, path, read):
+            if path == 'src/aieos_bootstrap/mod.py':
+                return {'text': 'x' * (base_files.MAX_BYTES + 1)}, None
+            return real(repo, commit, path, read)
+        with mock.patch.object(base_files, 'read_file', big):
+            found = ' '.join(self.refused(call()[0]))
+        self.assertIn('src/aieos_bootstrap/mod.py is over base_files.MAX_BYTES', found)
 
     def test_bounds(self):
         """TASK-082 AC6: MAX_FILES, MAX_FILE_BYTES and MAX_PATTERNS each give findings when crossed."""
@@ -454,6 +517,8 @@ class TASK082AC7Handoff(Base):
         self.refused(call(two)[0])
         other = dict(FILES, **{'docs/handoffs/TASK-1000-s0.md': 'x\n'})
         self.assertIsNone(call(other)[0][0]['last_handoff'])
+        with mock.patch.object(base_inputs, 'BUDGETS', {'constitution': 1}):
+            self.assertEqual(call()[0][0]['budgets'], {'constitution': 1})
 
 
 class TASK082AC8Purity(Base):
