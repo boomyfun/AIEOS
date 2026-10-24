@@ -1,0 +1,517 @@
+# TASK-083: get_work_order and query in the MCP server (specification 6 revision 7, sections 3, 4, 5 and 8;
+# specification 7 revision 2, section 6; M7's third task). Plan: decisions D-2402 to D-2406 (session 3797498a): the
+# scope note (MYSP/t83/scope83.md, D-2403), the nine rulings of D-2403, the pin scan (MYSP/t83/pinscan83-out.txt at
+# 35e4a00c and its reading MYSP/t83/pinscan83-reading.md, D-2405), the risk run (MYSP/t83/risk/risk_class83.py,
+# D-2405), the rulings (a) and (b) of D-2405 and its conditions C1 and C2, the forbidden list (MYSP/t83/forbid83.txt,
+# D-2406, the two write-set files left out); r1: reviews rv83a (claude-sonnet-5-5) and rv83b (claude-opus-5-5) of r0,
+# read tools only, and their dispositions (MYSP/t83/disp83.md, D-2409), DEF-0098's draft (MYSP/t83/def0098.md).
+#
+# Scope:
+# - In src/aieos_bootstrap/mcp_server.py, two new tools of specification 6 section 4 (:37-38), get_work_order and
+#   query, listed by tools/list after the five existing ones (seven tools, specification 6 :33), and answered by
+#   tools/call; each is a function of the module, get_work_order(arguments, environ, now, read=None) and
+#   query(arguments, environ, now, read=None) (D-2409 row 2), returning (an object, None), (None, an error word) as
+#   status and claim do (mcp_server.py :174-183, :277-325), or, for a core_error with findings, (None, {"error":
+#   "core_error", "detail": [the findings]}) (D-2409 row 1); read is passed through to base_inputs (None for
+#   gitread.run).
+# - The listing (D-2414 row 1): TOOL_NAMES (mcp_server.py :104) gains get_work_order and query; tools/list (:370)
+#   answers STATUS_TOOL, CLAIM_TOOLS and a new list WORK_ORDER_TOOLS holding the two tools' definitions, in that order.
+# - handle's change (D-2409 row 1, C1), every changed line of mcp_server.py :371-381: the tools/call branch dispatches
+#   get_work_order and query, each given params.get('arguments'), the environ and clock(); an error that is a dict is
+#   answered as is, _tool_result(the dict, True); an error that is a word is answered as now, _tool_result({"error":
+#   word}, True). status's and claim's paths through handle are unchanged, their answers byte-identical (AC1 checks
+#   them in the form of tests/unit/test_mcp_server.py :244-253).
+# - One task (D-2403 ruling 1; proposed): both tools are thin layers over base_inputs.work_order_inputs (TASK-082) and
+#   context_compiler.build_work_order (TASK-080); no new reader of any input.
+# - The order of each call: the identity (AIEOS_SESSION_ID and AIEOS_ROOT, by _identity, mcp_server.py :116-124); the
+#   base; the input's shape; the lease (_live_lease over writer.session_leases, mcp_server.py :186-205), its task the
+#   task; the log (writer.read_log(root), bytes, else core_error); base_inputs.work_order_inputs(root, base, task,
+#   session id, log, read); context_compiler.build_work_order(inputs). An error found at a step makes no later call.
+# - What it does not do: no change to status or the four claim tools (their code and answers unchanged); no write, no
+#   append and no event (specification 6 :37-38: both write nothing); nothing stored (specification 6 :55); no new
+#   reader; no connection to a runtime (the owner's act).
+#
+# The rulings (D-2403), each this task's choice (proposed; specification 6 section 11 stays open for its next
+# revision):
+# - The base (ruling 2): AIEOS_BASE, read by environ.get in one new function, _base(environ), used only by
+#   get_work_order and query (D-2405 C1); it must be exactly 40 lowercase hexadecimal characters, as specification 7
+#   :45 and specification 5 :112 say the launcher passes it and as the hook reads it
+#   (src/aieos_bootstrap/claude_code_pretool_hook.py :26, :132, :315); absent or out of form (64 characters, upper
+#   case, any other value among them) gives no_session, the base being part of the session's identity as
+#   AIEOS_SESSION_ID and AIEOS_ROOT are. status, _status_of, _identity and the claim tools' functions read no
+#   AIEOS_BASE. DEF-0093 stays open for its G-8 limit (the core cannot show the base is main's tip).
+# - Compiled at each call (ruling 3): each call builds the Work Order from the base and the log as they are at that
+#   call; nothing is cached across calls and nothing is stored (specification 6 :55). Specification 6 :54's "the same
+#   object for the whole session" holds while the log's last task.approved and last decision.execution of the task
+#   stay the same (a stated limit); a change of either, a new grant among them, can give another object.
+# - The error words (ruling 4; specification 6 :74): the identity or the base missing or out of form, no_session; the
+#   input out of form, invalid_input; the lease words as _live_lease gives them (no_lease, lease_expired, no_session,
+#   core_error), unchanged; findings of work_order_inputs or of build_work_order, or a log read that is not bytes,
+#   core_error, the findings carried in the answer (the text {"error": "core_error", "detail": [the findings]}, a
+#   proposed answer form beside the existing {"error": <word>}, for these two tools only; a log read that is not
+#   bytes gives {"error": "core_error"} with no detail); for query, a ref outside the Work Order out_of_scope,
+#   and a ref the Work Order names whose full item cannot be produced not_found; any exception core_error.
+# - query's scope (ruling 5): only the refs the Work Order holds, as items in full or as {ref, hash} references
+#   (context_compiler.py :27-33); any other ref, an article not applicable, a path not matched or a made-up text among
+#   them, gives out_of_scope. This fails closed and does not yet serve specification 6 :38's wider "an intent entity,
+#   constitution article or component that the contract's traces reach", for which no rule is written (specification
+#   6 :62 names the graph's edges and gives no rule for "reach"); a departure listed for specification 6's next
+#   revision.
+# - query's answer (ruling 6): the item in its own form, {ref, hash, content}, the content in full.
+# - How query finds the ref (ruling 7): by the same path as get_work_order, so one rule decides what is in scope; a
+#   ref the Work Order gives in full is answered with that item; a ref given as a reference is answered from a second
+#   build_work_order of the same inputs with every budget set to UNBUDGETED, a module constant 1 << 62 (D-2409 row 5;
+#   build_work_order's budgets take any int above 0, context_compiler.py :176, :283), whose item of that ref must carry
+#   the Work Order's reference hash, else not_found (a fail-closed guard, not expected to be reached; D-2409 C2). A ref
+#   in more than one layer (D-2409 row 6; context_compiler.py :350 refuses a repeat only within one layer): every item
+#   of it in the Work Order must carry the same hash, else not_found; the answer is its first item held in full by
+#   layer order, or else the unbudgeted build's first item of it by layer order. Findings of the unbudgeted build
+#   give core_error with detail, as ruling 4 says (D-2414 row 10).
+# - AIEOS_BASE against the lease or the record (ruling 8): not compared; the base and the Resume Check's HEAD may
+#   differ (specification 6 :54), a stated limit; DEF-0093 keeps the gap.
+# - Seven tools (ruling 9): the module docstring, tools/list and TOOL_NAMES change; the docstring keeps the phrase
+#   "tasks TASK-078 and TASK-079" (tests/unit/test_mcp_server.py :723) and names TASK-083.
+# - The tools' input schemas: get_work_order {type object, properties {}}, as status; query {type object, properties
+#   {ref: {type string}}, required [ref]}. get_work_order's arguments are absent, null or {}; anything else gives
+#   invalid_input. query's arguments are exactly {ref: a non-empty str UTF-8 can encode}, else invalid_input.
+# - Two stricter choices, stated (D-2414 row 5): get_work_order refuses arguments other than absent, null or {}, while
+#   specification 6 :37 gives it no input and status takes none; the base is exactly 40 characters, while
+#   base_inputs.work_order_inputs takes a commit of 40 or 64 (base_inputs.py :598).
+#
+# The changes to the existing test file (D-2403 ruling 9; D-2405 (a), (b), C2), each line listed with its reason; no
+# other line of tests/unit/test_mcp_server.py changes, and every changed test keeps its "TASK-078 ACn" or "TASK-079 ACn"
+# naming (:315-331 refuse any other task's AC in that file), so every TASK-083 AC is tested in the new files only:
+# - :86, the list ['status', 'acknowledge', 'ask', 'report', 'handoff'] becomes the seven names in order, with
+#   get_work_order and query last; :87 stays (status's schema). Reason: tools/list lists seven tools.
+# - :99, {'name': 'get_work_order'} becomes {'name': 'list_tasks'}, a name still unlisted (listing tasks is a core
+#   function, not an MCP tool, specification 6 :14); the other cases stay. Reason: get_work_order is listed now; the
+#   case keeps testing an unlisted name.
+# - :197-199, the check that 'AIEOS_BASE' is no str constant of the whole module becomes an AST check that no
+#   ast.Constant equal to 'AIEOS_BASE' lies outside the function _base (D-2409 row 9; the module docstring contains
+#   the word but is not equal to it); :193-196 stay (status with an out-of-form AIEOS_BASE answers as before and
+#   passes the identity to session_leases). Reason: the new tools read AIEOS_BASE in _base only; status still needs
+#   and reads none (D-2405 (a)).
+# - :82-83, the docstring "tools/list answers status, acknowledge, ask, report and handoff" becomes "tools/list
+#   answers the seven tools, status first", its TASK-078 AC3 and TASK-079 AC1 names kept (D-2407 C3; D-2409 row 10).
+#   Reason: it is no longer true.
+# - :261-262, the docstring "the module imports only datetime, hashlib, json, os, re, sys and aieos_bootstrap.writer"
+#   gains "base_inputs and context_compiler", its TASK-078 AC6 and TASK-079 AC8 names kept (D-2409 row 10). Reason:
+#   it is no longer true.
+# - :270-271, the exact import set gains ('aieos_bootstrap', 'base_inputs') and ('aieos_bootstrap',
+#   'context_compiler'). Reason: the two tools call them.
+# - :304, the phrases 'lists five tools' and 'AIEOS_BASE is not read in this slice' become 'lists seven tools' and
+#   'AIEOS_BASE is read only by _base'. Reason: the docstring states the new scope.
+# - Kept and binding: :286 (the writer attributes used are exactly session_leases, append_event, read_log, StoreResult
+#   and WriteResult: the two tools use only session_leases and read_log); :436-447 (('get_work_order', {}) given to
+#   claim(), which answers invalid_input for a name it does not know); :718-731 (the TASK-079 phrases, "tasks TASK-078
+#   and TASK-079" among them).
+#
+# Departures for specification 6's next revision (D-2409 row 7), carried by DEF-0098 (MYSP/t83/def0098.md), written
+# to docs/Deferred at TASK-083's records commit as a second path, as DEF-0097 was at TASK-082's:
+# - (a) query also answers the items the Work Order holds in full, wider than specification 6 :38's "names only by
+#   reference";
+# - (b) query answers only the refs the Work Order holds, narrower than :38's "the contract's traces reach" (no rule
+#   for "reach" is written: :62 names the graph's edges only);
+# - (c) the "detail" answer form of a core_error with findings, beside :74's vocabulary and the {"error": <word>} form;
+# - (d) AIEOS_BASE missing or out of form gives no_session, which :39 and :74 do not name for the base (the server takes
+#   the base from the environment with the session id and the root, :27; specification 7 :45);
+# - (e) compiled at each call, so :54's "the same object for the whole session" (repeated by specification 7 :55)
+#   holds only while the task's last
+#   approval and last record stay; a new grant, or a later lease on another task in the same session
+#   (tests/unit/test_writer.py :2235-2246), gives another object.
+# - A stale line left by this task: src/aieos_bootstrap/context_compiler.py :38 ("No reader of the inputs and no MCP
+#   tool are here … Nothing calls build_work_order but its tests"), in a forbidden file, carried in DEF-0098 for a
+#   later task (D-2409, option (2) lost).
+#
+# Owner-act boundary: none reached. Nothing is launched or connected; no hook, setting, policy or measurement
+# (specification 6 :88; specification 7 :50; DM A51 item (4)). Nothing runs the server but its tests.
+#
+# Stated limits.
+# - The Work Order's truth is what the base and the log hold; that AIEOS_BASE is the base branch's tip at the grant is
+#   the launcher's (TASK-086; DEF-0093).
+# - "The same object for the whole session" only while the task's last approval and last record stay (ruling 3).
+# - Each call reads the base afresh (no cache across calls; base_inputs' cache lives within one call); the number of
+#   reads per call for TASK-081's Work Order is measured before the code commit and stated in the records (D-2409 row
+#   4, C3).
+# - query answers only the Work Order's refs (ruling 5); its reads are not in the observed read-set (specification 6
+#   :81, :102).
+# - The resume record is the task's last decision.execution, not one bound to the session (TASK-082's limit).
+# - base_inputs' and context_compiler's limits hold.
+# - MCP alone is at most tier T2, as a target and unmeasured (mcp_server.py :61).
+#
+# No property test file (D-2404): the tools' only free input is query's ref and the arguments' shape; AC6 runs a
+# seeded loop of random refs through query in the unit file, each answer an item of the Work Order or out_of_scope;
+# the inputs' and the Work Order's properties are TASK-082's and TASK-080's (proposed).
+#
+# The pins (L-0026; MYSP/t83/pinscan83-out.txt at 35e4a00c; D-2405): the changes to tests/unit/test_mcp_server.py
+# above; tests/property/test_mcp_server_properties.py :152 (every word in mcp_server.ERRORS: not_found and out_of_scope
+# are already there, mcp_server.py :80); the deterministic rule (.github/workflows/aieos-checks.yml :1489-1520,
+# :1612-1620: own imports allowed, no DENY_MODULES reached); tests/unit/test_gitread.py :374 (only gitread imports
+# subprocess: mcp_server imports none); tests/unit/test_writer.py :399-412 (R8: no src module but writer.py and
+# claude_code_shell_allow.py holds a ".aieos" string or an open; the new docstring names no ".aieos" path, D-2409 row
+# 12); tests/unit/test_claude_code_read_hook.py :35, :38, :492 (HOOK_SIDE, eight
+# modules: mcp_server.py is not hook side); GOV-003's EVALUATOR list (src/aieos_bootstrap/**, aieos-checks.yml :423,
+# :490), the list unchanged; bandit (no B101, B110, B112). No change under .github/ is needed.
+#
+# Risk: high, computed over the base by MYSP/t83/risk/risk_class83.py (R2 medium and R3 high, not evaluable, for each
+# path). GOV-003: src/aieos_bootstrap/** is an evaluator path; change class ruled at acceptance. Reviews on Sonnet 5.5
+# or Opus 5.5 (never Fable), read tools only. Naming (D-544 Q3): every new test function names "TASK-083 ACn" in its
+# own docstring. Not applicable: OPS-001; INV-005 to INV-011; GOV-001, GOV-004 to GOV-006, SEC-003. INV-004 is not
+# reached (the two tools write nothing); it stays listed for the evaluator path's profile.
+# Owner-kept acts: none in this task.
+# Shadow (D-2042 C3 as amended by D-2068): the governor's evaluate at acceptance, any difference named.
+# Local runs: the unit group in three parts.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-083.yaml, has one parent equal to base_commit, and goes
+# to main under its own decision; the task's commits carry "AIEOS-Task: TASK-083" and go to task/TASK-083; main
+# receives them only at acceptance.
+task: TASK-083
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add the MCP tools get_work_order and query to src/aieos_bootstrap/mcp_server.py, each over
+  base_inputs.work_order_inputs and context_compiler.build_work_order at the session's AIEOS_BASE, tied to the
+  session's live lease, compiled at each call, writing nothing, query answering only the Work Order's refs; seven
+  tools listed; tests in tests/unit/test_mcp_server_work_order.py and
+  tests/integration/test_mcp_server_work_order_repo.py, each new test naming "TASK-083 ACn", and the listed changes
+  to tests/unit/test_mcp_server.py.
+traces_to:
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#4
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#5
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#8
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#6
+input_state:
+  base_commit: 35e4a00c8d6650231dc89ecbd55814cc276e787d
+  depends_on: [TASK-078, TASK-079, TASK-080, TASK-082]
+  intent_versions:
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 613cbd72dca411586ca03d790cd01bb044d0eb8e9a2885d9c3f8bb25cc9f5efb
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: d2fa59ae3f203b3a2108e55d23ddfb875e64ab57d27372c9d413bf30d7c2cbdd
+    docs/specs/spec-05-adapter-contract.md: ae7b99419d303db40b7200e39a22d93b9301b29900f3b1f5a5720b72d8eb9c2b
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 8e744daa31928621137db59a8a9d91ecf163879420e1f8e148232b149cafcdb7
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/mcp_server.py
+    - tests/integration/test_mcp_server_work_order_repo.py
+    - tests/unit/test_mcp_server.py
+    - tests/unit/test_mcp_server_work_order.py
+read_set:
+  paths:
+    - docs/specs/spec-06-mcp-protocol-and-work-orders.md
+    - docs/specs/spec-07-cli-and-zero-friction-path.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.base_inputs.work_order_inputs, aieos_bootstrap.context_compiler.build_work_order,
+    aieos_bootstrap.writer.session_leases, aieos_bootstrap.writer.read_log, aieos_bootstrap.gitread.run]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_base_files_repo.py
+  - tests/integration/test_base_inputs_repo.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_base_files_properties.py
+  - tests/property/test_base_inputs_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_context_compiler_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_mcp_server_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_base_files.py
+  - tests/unit/test_base_inputs.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      tools/list lists exactly seven tools in the order status, acknowledge, ask, report, handoff, get_work_order,
+      query, get_work_order's input schema {type object, properties {}} and query's {type object, properties {ref
+      {type string}}, required [ref]}; tools/call with each of the two names runs its tool and answers in the
+      existing result form, a dict error answered as is and a word error as {"error": <word>}; an unlisted name still
+      answers -32602; status's and ask's answers through handle equal fixed expected texts written in the test (a
+      status success and a no_session error, an ask success and an invalid_input error), in the form of
+      tests/unit/test_mcp_server.py :244-253 (a result with isError and one text item). Tests in
+      tests/unit/test_mcp_server_work_order.py.
+  - AC2: >-
+      The identity and the base: AIEOS_SESSION_ID or AIEOS_ROOT missing or out of form, and AIEOS_BASE missing, of 64
+      characters, in upper case, of 39 or 41 characters, or not a str, each give no_session with zero writer and zero
+      read calls (stand-ins count them); with the identity missing or out of form, an environ stand-in that records
+      its key reads shows AIEOS_BASE never read (the identity before the base); by ast over pathlib's read_bytes, no
+      ast.Constant equal to "AIEOS_BASE" lies outside the function _base, and get_work_order and query are the only
+      functions that call _base.
+  - AC3: >-
+      The input's shape: get_work_order with arguments absent, null or {} goes on, and with any other value (a key, a
+      list, a str) gives invalid_input; query with exactly {ref, a non-empty str} goes on, and with ref missing, empty,
+      not a str or not encodable as UTF-8, or another key, gives invalid_input; each refusal before any writer or read
+      call.
+  - AC4: >-
+      The lease: a session never seen, ended or with no row gives no_lease; rows none unexpired give lease_expired;
+      two unexpired rows give core_error; root and no_store give no_session; the task given to work_order_inputs is the
+      live lease's task_id, never a value of the input (a query ref "TASK-1" under a lease of TASK-100 calls
+      work_order_inputs with TASK-100); no log read and no read call before a live lease.
+  - AC5: >-
+      The Work Order: work_order_inputs is called once with (root, base, the lease's task, the session id, the bytes
+      read_log returned, the read given), and get_work_order answers build_work_order's value unchanged; findings of
+      work_order_inputs or of build_work_order give the error value {"error": "core_error", "detail": [the findings]},
+      answered by handle as that text; a read_log answer that is not bytes gives core_error with no detail and no
+      work_order_inputs call; two calls over the same stand-ins give equal objects, and a call after a changed log
+      gives the object of the new log (compiled at each call; no cache across calls).
+  - AC6: >-
+      query: a ref of an item the Work Order holds in full answers that item {ref, hash, content}; a ref the Work Order
+      holds as a reference answers {ref, hash, content} with the same hash and the content of the unbudgeted build;
+      a ref the Work Order does not hold (an article not applicable, a path not matched, an AC id not in the contract,
+      a made-up text) gives out_of_scope; a ref held as a reference whose unbudgeted item is missing or has another
+      hash (a stand-in build_work_order) gives not_found; a ref in two layers answers its first full item by
+      layer order when every item of it carries the same hash, and not_found when they differ; findings of the
+      unbudgeted build (a stand-in) give core_error with detail; a seeded loop of 500 random refs, built from the Work
+      Order's own refs changed by one character and from random texts, gives only items of the Work Order or
+      out_of_scope, and never raises.
+  - AC7: >-
+      Writes nothing: by ast, every function mcp_server.py gains in this task (get_work_order, query, _base and any
+      helper they call) uses of writer at most session_leases and read_log, and none calls append_event; a call
+      through stand-in writers holding only session_leases, read_log and StoreResult answers; no event, no file and
+      no store change after any call (the stand-ins record every call).
+  - AC8: >-
+      Purity and touch: mcp_server.py imports exactly datetime, hashlib, json, os, re, sys and aieos_bootstrap's
+      writer, base_inputs and context_compiler; no ast.Name open, exec, eval, compile, __import__, input, sqlite3 or
+      subprocess; no .open, .makedirs, .remove, .unlink, .write_text, .write_bytes or .connect; no ".aieos" string;
+      never raises (stand-ins of work_order_inputs, build_work_order, read_log and session_leases that raise, a
+      RecursionError among them, give core_error); no except clause whose body is only pass or continue (bandit B110,
+      B112). Tests by ast over pathlib's read_bytes.
+  - AC9: >-
+      This repository: with a store under a temporary root built by writer's own functions (as
+      tests/unit/test_writer.py :2098-2259 builds stores for mcp_server), a log holding one task.approved of TASK-081
+      with the SHA-256 of docs/tasks/TASK-081.yaml at 4c496d7e406523e495498dd377f3a40587a14ac9 and one
+      decision.execution CONTINUE after it, in TASK-082's AC9 payload form, each appended by writer.append_event with
+      no fencing token before the lease is granted (eventlog.py :112-114 asks a lease only of a token or a
+      task.submitted), then a live lease of TASK-081 for session "s1", and read given as a wrapper that runs
+      gitread.run at this repository's root (the store's root is a temporary folder, not a repository; D-2409 row 4):
+      one get_work_order call with AIEOS_BASE 4c496d7e… answers a Work Order of TASK-081 whose base is that commit
+      and whose work_order_hash is the SHA-256 of its canonical form without that key, and one query call of
+      docs/specs/spec-07-cli-and-zero-friction-path.md answers its item with the SHA-256 613cbd72… of the file's
+      text; the two calls together within the runner's 110 seconds, measured before the code commit; the
+      integration group may run as its own part, or split into parts of the allowed scratchpad script, each part
+      within 110 seconds (D-2414 row 11). Tests in
+      tests/integration/test_mcp_server_work_order_repo.py.
+  - AC10: >-
+      Every existing test passes, the pins of the header among them; tests/unit/test_mcp_server.py changes exactly at
+      the lines the header lists, each for its stated reason, and no other test of it is weakened; the full suite runs
+      locally in three unit parts, integration and property before the first code commit; the deterministic rule's
+      local run gives no finding. The module docstring holds, whitespace read as single spaces, the phrases "tasks
+      TASK-078 and TASK-079", "task TASK-083", "lists seven tools", "AIEOS_BASE is read only by _base", "compiled at
+      each call", "only the refs the Work Order holds" and "writes nothing", read by a test by ast; every new test
+      names "TASK-083 ACn".
+  - AC11: >-
+      Broken copies, each failing the tests of its AC: (1) accepts a 64-character base (AC2); (2) reads AIEOS_BASE in
+      status (AC2's checks: no constant equal to "AIEOS_BASE" outside _base, and only get_work_order and query
+      calling _base; the narrowed test of test_mcp_server.py too, for a copy using the literal); (3) takes the task
+      from query's ref (AC4's "TASK-1" case); (4) skips the lease check (AC4); (5) answers findings as a success
+      (AC5); (6) answers a ref outside the Work Order (AC6); (7)
+      answers a reference without its content, or with another hash (AC6); (8) appends an event (AC7); (9) accepts an
+      extra key in query's arguments (AC3); (10) leaves query out of tools/list (AC1); (11) keeps the Work Order
+      across calls (AC5); (12) uses read_log's answer unchecked (AC5); (13) reads the base before the identity (AC2);
+      the governor's evaluate at acceptance (the shadow) with any difference named; the stated choices in the records
+      (not tests).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9, AC10]}
+  - {gate: G3, check: constitution, args: [AC11, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
