@@ -2293,8 +2293,11 @@ class R26ReadSessions(ReadsCase):
     """writer.read_sessions over real stores (task TASK-090 AC1)."""
 
     def put(self, *rows):
-        self.sql(*["INSERT INTO reads (session_id, task_id, seq, path) VALUES ('%s', '%s', %d, '%s')" % r
-                   for r in rows])
+        con = sqlite3.connect(writer.store_path(self.root), isolation_level=None)
+        try:
+            con.executemany('INSERT INTO reads (session_id, task_id, seq, path) VALUES (?, ?, ?, ?)', rows)
+        finally:
+            con.close()
 
     def listed(self, task='TASK-090', timeout=5.0, root=None):
         """read_sessions' answer, with the store's bytes and the folder's files checked unchanged by the call."""
