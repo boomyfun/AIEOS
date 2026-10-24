@@ -31,6 +31,13 @@ The readers, each this task's choice where TASK-082's contract says so:
 Limits, stated: the commit and the log are the caller's; the resume record is the task's last decision.execution, not
 one bound to the session; the task's later state events are not projected; a listing fails whole on a symbolic link, a
 submodule or an out-of-form name under its prefix (base_files' rules); a line's corrects field is not read.
+
+TASK-085 adds four public wrappers over these helpers, by added lines only, for its module resume_inputs: contract_at
+(the contract at a commit through _read and _parse_contract_text, CONTRACT_NEEDS and its task checked, with the
+SHA-256 of the file's bytes; no log, approval or resume record is read), components_of (_components), paths_under
+(_listing, an absent prefix giving []) and submitted_commits (the commit of each task.submitted of a task that
+_log_events gives). Each gives (value, None) or (None, findings) and never raises. Where the second paragraph says that
+TASK-085 is to pass HEAD, read: TASK-085 takes the commit as an argument, which the launcher reads and passes.
 """
 
 import hashlib
@@ -644,3 +651,99 @@ def work_order_inputs(repo, commit, task_id, session_id, log, read=None):
         return None, s.findings
     except Exception as e:
         return None, ['work_order_inputs: an unexpected %s' % type(e).__name__]
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# The wrappers of TASK-085
+
+def _plain_state(repo, commit, read):
+    """The state _inputs builds, after the checks of repo, commit and read only."""
+    found = []
+    if type(repo) is not str:
+        found.append('argument: repo is not a str')
+    if type(commit) is not str or _COMMIT.fullmatch(commit) is None:
+        found.append('argument: commit is not 40 or 64 lowercase hexadecimal characters')
+    if read is not None and not callable(read):
+        found.append('argument: read is not callable')
+    if found:
+        raise _Stop(found)
+    return {'repo': repo, 'commit': commit, 'read': _cached(gitread.run if read is None else read), 'listings': {}}
+
+
+def _contract_at(repo, commit, task_id, read):
+    if type(task_id) is not str or _TASK.fullmatch(task_id) is None:
+        raise _Stop(['argument: task_id is not TASK-<digits>'])
+    state = _plain_state(repo, commit, read)
+    text = _read(state, 'docs/tasks/%s.yaml' % task_id)
+    contract = _parse_contract_text(text)
+    found = ['contract: no key %s' % key for key in CONTRACT_NEEDS if key not in contract]
+    if found:
+        raise _Stop(found)
+    if contract.get('task') != task_id:
+        raise _Stop(['contract: its task differs from %s' % task_id])
+    return contract, hashlib.sha256(text.encode('utf-8')).hexdigest()
+
+
+def contract_at(repo, commit, task_id, read=None):
+    """The contract of task_id at commit and the SHA-256 of its file: ((contract, sha256), None), or (None, findings)."""
+    try:
+        return _contract_at(repo, commit, task_id, read), None
+    except _Stop as s:
+        return None, s.findings
+    except Exception as e:
+        return None, ['contract_at: an unexpected %s' % type(e).__name__]
+
+
+def components_of(contract):
+    """The components and interfaces of a contract's read_set: ((components, interfaces), None), or (None, findings)."""
+    try:
+        if not isinstance(contract, dict):
+            raise _Stop(['contract: not a map'])
+        return _components(contract), None
+    except _Stop as s:
+        return None, s.findings
+    except Exception as e:
+        return None, ['components_of: an unexpected %s' % type(e).__name__]
+
+
+def _paths_under(repo, commit, prefix, read):
+    if type(prefix) is not str:
+        raise _Stop(['argument: prefix is not a str'])
+    return _listing(_plain_state(repo, commit, read), prefix)
+
+
+def paths_under(repo, commit, prefix, read=None):
+    """The blob paths under prefix at commit, [] when it is absent: (paths, None), or (None, findings)."""
+    try:
+        return _paths_under(repo, commit, prefix, read), None
+    except _Stop as s:
+        return None, s.findings
+    except Exception as e:
+        return None, ['paths_under: an unexpected %s' % type(e).__name__]
+
+
+def _submitted_commits(log, task_id):
+    if type(log) is not bytes:
+        raise _Stop(['argument: log is not bytes'])
+    if type(task_id) is not str or _TASK.fullmatch(task_id) is None:
+        raise _Stop(['argument: task_id is not TASK-<digits>'])
+    out = []
+    for e in _log_events(log, task_id):
+        if e.get('type') != 'task.submitted':
+            continue
+        payload = e.get('payload')
+        commit = payload.get('commit') if isinstance(payload, dict) else None
+        if type(commit) is not str or _COMMIT.fullmatch(commit) is None:
+            raise _Stop(['log: a task.submitted of %s names no commit id' % task_id])
+        out.append(commit)
+    return out
+
+
+def submitted_commits(log, task_id):
+    """The commit of every task.submitted of task_id in the log: (a list, None), or (None, findings)."""
+    try:
+        return _submitted_commits(log, task_id), None
+    except _Stop as s:
+        return None, s.findings
+    except Exception as e:
+        return None, ['submitted_commits: an unexpected %s' % type(e).__name__]
