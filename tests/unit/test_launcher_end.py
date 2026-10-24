@@ -112,7 +112,8 @@ class TASK089AC1Arguments(Base):
         cases = [dict(root='/x/y'), dict(root='x/y'), dict(root=None), dict(task_id='T-1'), dict(session_id=''),
                  dict(fencing_token=7), dict(fencing_token=[1]), dict(now=NOW.replace(tzinfo=None)),
                  dict(now=NOW.replace(microsecond=5)), dict(violation=1), dict(violation=None),
-                 dict(observe=5), dict(session_leases='x'), dict(end_session=3)]
+                 dict(observe=5), dict(session_leases='x'), dict(end_session=3), dict(release_lease_token=1),
+                 dict(stored_reads='x'), dict(remove_reads=2), dict(observe_gone=[])]
         for over in cases:
             c = Calls({})
             kw = {name: c.make(name, real) for name, real in REAL}
@@ -141,6 +142,25 @@ class TASK089AC1Arguments(Base):
         self.assertEqual(r['result'], 'done')
         self.assertEqual(c.names(), ['session_leases', 'stored_reads', 'observe_gone', 'remove_reads', 'end_session'])
 
+    def test_the_fenced_callees_default_at_call_time(self):
+        """TASK-089 AC1: on the fenced path too, every callee defaults at call time: read_set_record.observe and
+        writer.release_lease_token patched after import are the ones called."""
+        c = Calls({'session_leases': leases([row()]), 'stored_reads': store(value=[]), 'remove_reads': store(value=0),
+                   'observe': recorded(), 'release_lease_token': store(), 'end_session': store(value=[])})
+        seen = c.make('observe', read_set_record.observe)
+        release = c.make('release_lease_token', writer.release_lease_token)
+        with mock.patch.object(writer, 'session_leases', c.make('session_leases', writer.session_leases)), \
+                mock.patch.object(writer, 'stored_reads', c.make('stored_reads', writer.stored_reads)), \
+                mock.patch.object(writer, 'remove_reads', c.make('remove_reads', writer.remove_reads)), \
+                mock.patch.object(read_set_record, 'observe', seen), \
+                mock.patch.object(writer, 'release_lease_token', release), \
+                mock.patch.object(writer, 'end_session', c.make('end_session', writer.end_session)):
+            r = launcher.end(ROOT, TASK, SESSION, MINE, NOW, WRITE, [], REC)
+        self.assert_form(r)
+        self.assertEqual((r['result'], r['path']), ('done', 'fenced'))
+        self.assertEqual(c.names(), ['session_leases', 'stored_reads', 'observe', 'remove_reads', 'release_lease_token',
+                                     'end_session'])
+
 
 class TASK089AC2Fenced(Base):
     def test_the_order_and_the_context(self):
@@ -159,6 +179,8 @@ class TASK089AC2Fenced(Base):
                                        'write_set': WRITE, 'allowlist': [], 'recorder': REC})
             self.assertEqual((reads, now), (READS, NOW))
             self.assertEqual(c.of('release_lease_token')[0][1], (ROOT, TASK, MINE))
+            self.assertEqual(c.of('stored_reads')[0][1], (ROOT, SESSION, TASK))
+            self.assertEqual(c.of('remove_reads')[0][1], (ROOT, SESSION, TASK))
 
     def test_an_expired_row_of_another_task_does_not_count(self):
         """TASK-089 AC2: an expired row of another task beside the task's matching row does not count; a row
@@ -203,6 +225,8 @@ class TASK089AC3HeldAndGone(Base):
                                  + released + ['end_session'])
                 if held_by is not None:
                     self.assertEqual(c.of('release_lease_token')[0][1], (ROOT, TASK, held_by))
+                self.assertEqual(c.of('stored_reads')[0][1], (ROOT, SESSION, TASK))
+                self.assertEqual(c.of('remove_reads')[0][1], (ROOT, SESSION, TASK))
 
     def test_an_ended_session_refused_by_end_session_is_passed_through(self):
         """TASK-089 AC3: on the gone path with "ended" true, end_session's refusal of the ended session is adapter.end's
@@ -283,6 +307,24 @@ class TASK089AC7FailingClosed(Base):
             self.assertEqual((r['result'], r['path'], r['removed']), ('done', 'gone', None))
             self.assertEqual(c.names(), ['session_leases', 'stored_reads', 'observe_gone', 'end_session'])
 
+    def test_findings_that_are_not_a_list(self):
+        """TASK-089 AC7: a record result or an adapter.end result whose findings are not a list raises nothing: the
+        gone record not found present still goes to adapter.end, and a refused adapter.end gives "refused"."""
+        odd = {'result': 'refused', 'reason': 'core', 'findings': 5, 'record': None, 'core': None}
+        r, c = run(held_by=None, rows=[], observe_gone=odd)
+        self.assert_form(r)
+        self.assertEqual((r['result'], r['path'], r['removed']), ('done', 'gone', None))
+        self.assertEqual(c.names(), ['session_leases', 'stored_reads', 'observe_gone', 'end_session'])
+        answer = {'result': 'refused', 'reason': 'session', 'findings': 5}
+        with mock.patch.object(adapter, 'end', lambda *a, **k: answer):
+            r, c = run()
+        self.assert_form(r)
+        self.assertEqual((r['result'], r['reason'], r['end']), ('refused', 'end', answer))
+        r, c = run(held_by=None, rows=[], observe_gone=dict(odd, findings='ab'))
+        self.assertIn('record: the record was not found present', r['findings'])
+        self.assertNotIn('a', r['findings'])
+        self.assertNotIn('b', r['findings'])
+
     def test_after_the_record(self):
         """TASK-089 AC7: a remove_reads refusal or raise is named in the findings and adapter.end is still called;
         adapter.end refused gives result "refused" with its result in "end"; no call raises."""
@@ -310,7 +352,6 @@ class TASK089AC10LeaseRows(unittest.TestCase):
         eventlog.LEASE_KEYS, so a drift between the two fails here."""
         self.assertEqual(set(launcher._ROW_KEYS), set(eventlog.LEASE_KEYS))
         self.assertEqual(launcher.END_KEYS, ('result', 'reason', 'findings', 'path', 'record', 'removed', 'end'))
-        self.assertTrue(set(adapter.RESULT_KEYS))
 
 
 class TASK089Naming(unittest.TestCase):

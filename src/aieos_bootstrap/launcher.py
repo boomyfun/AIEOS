@@ -438,7 +438,8 @@ def end(root, task_id, session_id, fencing_token, now, write_set, allowlist, rec
         except Exception as exc:  # AC7: the record is present, so adapter.end still follows
             findings.append('remove_reads: remove_reads raised %s' % type(exc).__name__)
     else:
-        more = list(record.get('findings') or []) if isinstance(record, dict) else []
+        given = record.get('findings') if isinstance(record, dict) else None
+        more = [f for f in given if isinstance(f, str)] if isinstance(given, list) else []
         findings = findings + ['record: the record was not found present'] + more
         if path == 'fenced':
             return _end_result('refused', 'record', findings, path, record)
@@ -450,6 +451,7 @@ def end(root, task_id, session_id, fencing_token, now, write_set, allowlist, rec
                            record, removed)
     if isinstance(ended, dict) and ended.get('result') == 'done':
         return _end_result('done', None, findings, path, record, removed, ended)
-    more = list(ended.get('findings') or []) if isinstance(ended, dict) else []
+    given = ended.get('findings') if isinstance(ended, dict) else None
+    more = [f for f in given if isinstance(f, str)] if isinstance(given, list) else []
     return _end_result('refused', 'end', findings + ['end: adapter.end did not end the session'] + more, path, record,
                        removed, ended)
