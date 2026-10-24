@@ -79,11 +79,12 @@ class AC3Protocol(unittest.TestCase):
         self.assertIsNone(one(json.dumps({'jsonrpc': '2.0', 'method': 'anything', 'params': [1]})))
 
     def test_tools_list_lists_only_status(self):
-        """TASK-078 AC3 and TASK-079 AC1: tools/list answers status, acknowledge, ask, report and handoff, status with
-        an object schema without properties."""
+        """TASK-078 AC3 and TASK-079 AC1: tools/list answers the seven tools, status first, status with an object schema
+        without properties."""
         a = one(json.dumps({'jsonrpc': '2.0', 'id': 'x', 'method': 'tools/list'}))
         tools = a['result']['tools']
-        self.assertEqual([t['name'] for t in tools], ['status', 'acknowledge', 'ask', 'report', 'handoff'])
+        self.assertEqual([t['name'] for t in tools], ['status', 'acknowledge', 'ask', 'report', 'handoff',
+                                                      'get_work_order', 'query'])
         self.assertEqual(tools[0]['inputSchema'], {'type': 'object', 'properties': {}})
 
     def test_tools_call_status(self):
@@ -96,7 +97,7 @@ class AC3Protocol(unittest.TestCase):
     def test_bad_tools_call_params(self):
         """TASK-078 AC3 and TASK-079 AC1: tools/call whose params is not an object, lacks a str name, or names a tool
         not listed answers -32602."""
-        for params in ([], 'status', 3, {}, {'name': 3}, {'name': 'get_work_order'}, {'name': 'Status'},
+        for params in ([], 'status', 3, {}, {'name': 3}, {'name': 'list_tasks'}, {'name': 'Status'},
                        {'name': 'Acknowledge'}):
             with self.subTest(params=params):
                 a = one(call(params=params))
@@ -194,9 +195,12 @@ class AC4Identity(unittest.TestCase):
         got, m = status(done(), env=env)
         self.assertEqual(got, (NONE, None))
         m.assert_called_once_with(ROOT, 'A' * 128, T0)
-        names = {n.value for n in ast.walk(ast.parse((SRC / 'mcp_server.py').read_bytes().decode('utf-8')))
-                 if isinstance(n, ast.Constant) and isinstance(n.value, str)}
-        self.assertNotIn('AIEOS_BASE', names)
+        tree = ast.parse((SRC / 'mcp_server.py').read_bytes().decode('utf-8'))
+        inside = {id(n) for f in ast.walk(tree) if isinstance(f, ast.FunctionDef) and f.name == '_base'
+                  for n in ast.walk(f)}
+        outside = [n for n in ast.walk(tree) if isinstance(n, ast.Constant) and n.value == 'AIEOS_BASE'
+                   and id(n) not in inside]
+        self.assertEqual(outside, [])
 
 
 class AC5Mapping(unittest.TestCase):
@@ -259,7 +263,8 @@ class AC6WritesNothing(unittest.TestCase):
 
     def test_imports_opens_and_names(self):
         """TASK-078 AC6 and TASK-079 AC8: the module imports only datetime, hashlib, json, os, re, sys and
-        aieos_bootstrap.writer, calls no open, and names no project-state directory."""
+        aieos_bootstrap.writer, base_inputs and context_compiler, calls no open, and names no project-state
+        directory."""
         tree = self.tree()
         imports = set()
         for n in ast.walk(tree):
@@ -268,7 +273,8 @@ class AC6WritesNothing(unittest.TestCase):
             elif isinstance(n, ast.ImportFrom):
                 imports.update((n.module, a.name) for a in n.names)
         self.assertEqual(imports, {('import', 'datetime'), ('import', 'hashlib'), ('import', 'json'), ('import', 'os'),
-                                   ('import', 're'), ('import', 'sys'), ('aieos_bootstrap', 'writer')})
+                                   ('import', 're'), ('import', 'sys'), ('aieos_bootstrap', 'writer'),
+                                   ('aieos_bootstrap', 'base_inputs'), ('aieos_bootstrap', 'context_compiler')})
         names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
         attrs = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
         self.assertFalse(names & {'open', 'exec', 'eval', 'compile', '__import__', 'input', 'sqlite3', 'subprocess'})
@@ -301,7 +307,7 @@ class AC8Statements(unittest.TestCase):
         (whitespace read as single spaces)."""
         doc = ' '.join(ast.get_docstring(ast.parse((SRC / 'mcp_server.py').read_bytes().decode('utf-8'))).split())
         for words in ('"2025-06-18"', 'initialize, notifications/initialized, tools/list and tools/call',
-                      'lists five tools', 'AIEOS_SESSION_ID', 'AIEOS_BASE is not read in this slice',
+                      'lists seven tools', 'AIEOS_SESSION_ID', 'AIEOS_BASE is read only by _base',
                       '"expired" exists only between a lease\'s expiry and the next expire_leases',
                       'core_error for more than one unexpired row', 'hand-kept copy', 'are the owner\'s acts',
                       'at most tier T2, as a target and unmeasured', 'writes nothing'):
