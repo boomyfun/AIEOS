@@ -4,7 +4,9 @@
 # 35e4a00c and its reading MYSP/t83/pinscan83-reading.md, D-2405), the risk run (MYSP/t83/risk/risk_class83.py,
 # D-2405), the rulings (a) and (b) of D-2405 and its conditions C1 and C2, the forbidden list (MYSP/t83/forbid83.txt,
 # D-2406, the two write-set files left out); r1: reviews rv83a (claude-sonnet-5-5) and rv83b (claude-opus-5-5) of r0,
-# read tools only, and their dispositions (MYSP/t83/disp83.md, D-2409), DEF-0098's draft (MYSP/t83/def0098.md).
+# read tools only, and their dispositions (MYSP/t83/disp83.md, D-2409), DEF-0098's draft (MYSP/t83/def0098.md);
+# v2: the local run of the deterministic rule found the v1 AC9 file importing tempfile; D-2433 chose a stand-in store
+# for AC9, the base moved to cef6b886 (v1's commit C).
 #
 # Scope:
 # - In src/aieos_bootstrap/mcp_server.py, two new tools of specification 6 section 4 (:37-38), get_work_order and
@@ -131,8 +133,12 @@
 #   the launcher's (TASK-086; DEF-0093).
 # - "The same object for the whole session" only while the task's last approval and last record stay (ruling 3).
 # - Each call reads the base afresh (no cache across calls; base_inputs' cache lives within one call); the number of
-#   reads per call for TASK-081's Work Order is measured before the code commit and stated in the records (D-2409 row
-#   4, C3).
+#   reads per call for TASK-081's Work Order at 4c496d7e, measured before the code commit (MYSP/t83/count/count83.py),
+#   is 248 (cat-file -p 246, cat-file -t 1, rev-parse 1), about 3 seconds (D-2409 row 4, C3).
+# - get_work_order's join to a real store is not tested here (D-2433 (A)): AC9 gives the store as stand-ins, since the
+#   deterministic rule allows tempfile and sqlite3 only in the writer's own tests; writer.session_leases over real
+#   stores is tested through status (tests/unit/test_writer.py :2097-2117, R24), and _live_lease and writer.read_log
+#   through the claim tools (:2120-2286, R25).
 # - query answers only the Work Order's refs (ruling 5); its reads are not in the observed read-set (specification 6
 #   :81, :102).
 # - The resume record is the task's last decision.execution, not one bound to the session (TASK-082's limit).
@@ -146,7 +152,13 @@
 # The pins (L-0026; MYSP/t83/pinscan83-out.txt at 35e4a00c; D-2405): the changes to tests/unit/test_mcp_server.py
 # above; tests/property/test_mcp_server_properties.py :152 (every word in mcp_server.ERRORS: not_found and out_of_scope
 # are already there, mcp_server.py :80); the deterministic rule (.github/workflows/aieos-checks.yml :1489-1520,
-# :1612-1620: own imports allowed, no DENY_MODULES reached); tests/unit/test_gitread.py :374 (only gitread imports
+# :1612-1620; D-2433), checked for each of the four write-set paths: src/aieos_bootstrap/mcp_server.py,
+# tests/unit/test_mcp_server.py, tests/unit/test_mcp_server_work_order.py and
+# tests/integration/test_mcp_server_work_order_repo.py import only the standard library and aieos_bootstrap, no
+# DENY_MODULES module (tempfile, sqlite3 and shutil among them, :1490-1491; the allowance of :1503-1510 is the three
+# writer test files only), no DENY_NAMES name, no DENY_OS call and no DENY_ATTR_CALLS call (:1494-1500); the first
+# draft's AC9 imported tempfile, found by the local run of the rule (det83) and settled by D-2433 (v2);
+# tests/unit/test_gitread.py :374 (only gitread imports
 # subprocess: mcp_server imports none); tests/unit/test_writer.py :399-412 (R8: no src module but writer.py and
 # claude_code_shell_allow.py holds a ".aieos" string or an open; the new docstring names no ".aieos" path, D-2409 row
 # 12); tests/unit/test_claude_code_read_hook.py :35, :38, :492 (HOOK_SIDE, eight
@@ -165,7 +177,7 @@
 # to main under its own decision; the task's commits carry "AIEOS-Task: TASK-083" and go to task/TASK-083; main
 # receives them only at acceptance.
 task: TASK-083
-contract_version: v1
+contract_version: v2
 task_type: implementation
 objective: >-
   Add the MCP tools get_work_order and query to src/aieos_bootstrap/mcp_server.py, each over
@@ -180,7 +192,7 @@ traces_to:
   - docs/specs/spec-06-mcp-protocol-and-work-orders.md#8
   - docs/specs/spec-07-cli-and-zero-friction-path.md#6
 input_state:
-  base_commit: 35e4a00c8d6650231dc89ecbd55814cc276e787d
+  base_commit: cef6b88633ea586c913ba9a91f61da306d605c87
   depends_on: [TASK-078, TASK-079, TASK-080, TASK-082]
   intent_versions:
     docs/specs/spec-07-cli-and-zero-friction-path.md: 613cbd72dca411586ca03d790cd01bb044d0eb8e9a2885d9c3f8bb25cc9f5efb
@@ -460,13 +472,15 @@ acceptance_criteria:
       RecursionError among them, give core_error); no except clause whose body is only pass or continue (bandit B110,
       B112). Tests by ast over pathlib's read_bytes.
   - AC9: >-
-      This repository: with a store under a temporary root built by writer's own functions (as
-      tests/unit/test_writer.py :2098-2259 builds stores for mcp_server), a log holding one task.approved of TASK-081
-      with the SHA-256 of docs/tasks/TASK-081.yaml at 4c496d7e406523e495498dd377f3a40587a14ac9 and one
-      decision.execution CONTINUE after it, in TASK-082's AC9 payload form, each appended by writer.append_event with
-      no fencing token before the lease is granted (eventlog.py :112-114 asks a lease only of a token or a
-      task.submitted), then a live lease of TASK-081 for session "s1", and read given as a wrapper that runs
-      gitread.run at this repository's root (the store's root is a temporary folder, not a repository; D-2409 row 4):
+      This repository, with the store given as stand-ins (D-2433 (A); the deterministic rule refuses tempfile and
+      sqlite3 outside the writer's own tests, aieos-checks.yml :1490-1491, :1503-1510): writer.session_leases
+      answering one live lease of TASK-081 for session "s1" (a writer.StoreResult in session_leases' rows form,
+      mcp_server.py :131-148), and writer.read_log answering a log built in the test by
+      eventlog.append, as TASK-082's AC9 builds it (eventlog.py :112-114, :147-149), holding one task.approved of
+      TASK-081 with the SHA-256 of
+      docs/tasks/TASK-081.yaml at 4c496d7e406523e495498dd377f3a40587a14ac9 and one decision.execution CONTINUE after
+      it; AIEOS_ROOT this repository's root (nothing is written there: the stand-ins answer every store and log call,
+      and the test writes no file), the real base_inputs and context_compiler, and read the default gitread.run:
       one get_work_order call with AIEOS_BASE 4c496d7e… answers a Work Order of TASK-081 whose base is that commit
       and whose work_order_hash is the SHA-256 of its canonical form without that key, and one query call of
       docs/specs/spec-07-cli-and-zero-friction-path.md answers its item with the SHA-256 613cbd72… of the file's
