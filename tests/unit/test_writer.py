@@ -2077,16 +2077,19 @@ class R23TheNamesAtTheBase(unittest.TestCase):
         return out
 
     def test_only_the_new_function_and_its_helpers_are_added(self):
-        """TASK-078 AC2: writer.py's top-level names are exactly the base's 94 plus session_leases and names that
-        begin "_session_leases" or "_SESSION_LEASES", all above the TASK-066 marker."""
+        """TASK-078 AC2, as TASK-090 AC2 widens it: writer.py's top-level names are exactly the base's 94 plus
+        session_leases, read_sessions and names that begin "_session_leases", "_SESSION_LEASES", "_read_sessions" or
+        "_READ_SESSIONS", all above the TASK-066 marker."""
         text = read(os.path.join(SRC, 'writer.py')).decode('utf-8')
         names = self.names(ast.parse(text))
         self.assertEqual(len(self.BASE), 94)
         self.assertLessEqual(self.BASE, names)
         added = names - self.BASE
         self.assertIn('session_leases', added)
-        for name in added - {'session_leases'}:
-            self.assertTrue(name.startswith(('_session_leases', '_SESSION_LEASES')), name)
+        self.assertIn('read_sessions', added)
+        for name in added - {'session_leases', 'read_sessions'}:
+            self.assertTrue(name.startswith(('_session_leases', '_SESSION_LEASES', '_read_sessions', '_READ_SESSIONS')),
+                            name)
         head, part = text.split('# ---- the read-only lookup of the store (task TASK-066) ----', 1)
         for name in added:
             with self.subTest(name=name):
@@ -2284,6 +2287,82 @@ class R25ClaimToolsOverRealStores(Case):
             finally:
                 con.close()
             check(root, 'tables')
+
+
+class R26ReadSessions(ReadsCase):
+    """writer.read_sessions over real stores (task TASK-090 AC1)."""
+
+    def put(self, *rows):
+        self.sql(*["INSERT INTO reads (session_id, task_id, seq, path) VALUES ('%s', '%s', %d, '%s')" % r
+                   for r in rows])
+
+    def listed(self, task='TASK-090', timeout=5.0, root=None):
+        """read_sessions' answer, with the store's bytes and the folder's files checked unchanged by the call."""
+        before = (files_under(self.root), read(writer.store_path(self.root))
+                  if os.path.exists(writer.store_path(self.root)) else None)
+        r = writer.read_sessions(self.root if root is None else root, task, timeout)
+        after = (files_under(self.root), read(writer.store_path(self.root))
+                 if os.path.exists(writer.store_path(self.root)) else None)
+        self.assertEqual(before, after)
+        return r
+
+    def test_the_listing(self):
+        """TASK-090 AC1: with no reads, the reads of one session, of several sessions of the task and of another task,
+        read_sessions gives "done" with exactly the task's session ids, sorted, each once; after remove_reads of a
+        session it is not listed; the store's bytes and the folder's files are unchanged by every call."""
+        self.store()
+        self.assertEqual((self.listed().result, self.listed().value), ('done', []))
+        self.put(('s-2', 'TASK-090', 0, 'a'))
+        self.assertEqual(self.listed().value, ['s-2'])
+        self.put(('s-1', 'TASK-090', 0, 'a'), ('s-1', 'TASK-090', 1, 'b'), ('s-3', 'TASK-091', 0, 'a'))
+        self.assertEqual(self.listed().value, ['s-1', 's-2'])
+        self.assertEqual(self.listed('TASK-091').value, ['s-3'])
+        self.assertEqual(writer.remove_reads(self.root, 's-1', 'TASK-090').value, 2)
+        self.assertEqual(self.listed().value, ['s-2'])
+
+    def test_the_refusals(self):
+        """TASK-090 AC1: arguments out of form give "argument", a root that names no existing folder "root", a folder
+        with no store "no_store", a store of another table form "tables", each with one finding and nothing
+        created."""
+        self.store()
+        for task, timeout in (('TASK-x', 5.0), (7, 5.0), ('TASK-090', 0), ('TASK-090', 61)):
+            with self.subTest(task=task, timeout=timeout):
+                self.refused(self.listed(task, timeout), 'argument')
+        self.refused(self.listed(root=os.path.join(self.root, 'missing')), 'root')
+        with tempfile.TemporaryDirectory() as empty:
+            self.refused(writer.read_sessions(empty, 'TASK-090'), 'no_store')
+            self.assertEqual(files_under(empty), [])
+        self.sql('DROP TABLE reads')
+        self.refused(self.listed(), 'tables')
+
+    def test_unreadable(self):
+        """TASK-090 AC1: a stored session id that is not text gives "unreadable"; a lock held by a second connection
+        (BEGIN EXCLUSIVE), with a small timeout and no sleep, gives "unreadable"."""
+        self.store()
+        self.sql("INSERT INTO reads (session_id, task_id, seq, path) VALUES (X'00', 'TASK-090', 0, 'a')")
+        self.refused(self.listed(), 'unreadable')
+        self.sql('DELETE FROM reads')
+        con = sqlite3.connect(writer.store_path(self.root), isolation_level=None)
+        try:
+            con.execute('BEGIN EXCLUSIVE')
+            self.refused(writer.read_sessions(self.root, 'TASK-090', 0.2), 'unreadable')
+        finally:
+            con.close()
+        self.assertEqual(self.listed().value, [])
+
+    def test_no_finding_holds_the_callers_text(self):
+        """TASK-090 AC1: with a made-up hostile root and store path, none of their text appears in the finding (the
+        rule of test_no_finding_holds_the_callers_text for the older functions)."""
+        from unittest import mock
+        hostile = 'zz-HOSTILE-zz'
+        out = [writer.read_sessions(os.path.join(self.root, hostile), 'TASK-090')]
+        self.store()
+        with mock.patch.object(writer, '_store_present', lambda r: (None, '//' + hostile)):
+            out.append(writer.read_sessions(self.root, 'TASK-090'))
+        for r in out:
+            with self.subTest(r=r):
+                self.assertEqual(r.result, 'refused')
+                self.assertNotIn(hostile, ' '.join(r.findings))
 
 
 if __name__ == '__main__':

@@ -938,6 +938,84 @@ def remove_reads(root, session_id, task_id, timeout=5.0):
         return _named('unreadable', e)
 
 
+_READ_SESSIONS = 'SELECT DISTINCT session_id FROM reads WHERE task_id = ? ORDER BY session_id'
+
+
+def _read_sessions_answer(con, task_id):
+    """Inside _read_sessions_read's deferred transaction (task TASK-090): the table check, then the session ids that
+    hold stored reads for the task, sorted, each once."""
+    try:
+        _check_schema(con)
+    except ValueError:
+        return _refused('tables', _TABLES_FINDING)
+    ids = [row[0] for row in con.execute(_READ_SESSIONS, (task_id,))]
+    if any(type(i) is not str for i in ids):
+        return _refused('unreadable', 'unreadable: a stored session id is not text')
+    return StoreResult('done', value=sorted(ids))
+
+
+def _read_sessions_read(real, timeout, task_id):
+    """read_sessions' read (task TASK-090), a hand-kept copy of _read_reads' transaction steps: _store_uri's "?mode=ro"
+    URI for the checked realpath, the timeout, no implicit transaction, BEGIN DEFERRED, the read, then ROLLBACK (only
+    while a transaction is open) and close in finally blocks, whose failure gives "unreadable". It writes and creates
+    nothing."""
+    con = None
+    result = None
+    try:
+        try:
+            con = sqlite3.connect(_store_uri(real, os.sep, os.altsep), uri=True, timeout=timeout,
+                                  isolation_level=None)
+            con.execute('BEGIN DEFERRED')
+            result = _read_sessions_answer(con, task_id)
+        except Exception as e:
+            result = _named('unreadable', e)
+        finally:
+            if con is not None:
+                try:
+                    if con.in_transaction:
+                        con.execute('ROLLBACK')
+                except Exception as e:
+                    result = _named('unreadable', e)
+    finally:
+        if con is not None:
+            try:
+                con.close()
+            except Exception as e:
+                result = _named('unreadable', e)
+    return result
+
+
+def read_sessions(root, task_id, timeout=5.0):
+    """The ids of the sessions that hold stored reads for a task, read only, for the launcher's start, which writes a
+    gone session's observed read-set record before the core's expiry (task TASK-090; specification 5 section 11 point
+    10; specification 7 section 5). Core-only.
+
+    The result is a StoreResult: "done" with value the list of session ids, sorted, each once (empty when none), or
+    "refused" with one finding, in the order "argument" (task_id exactly a str in the writer's form; timeout above 0
+    and at most 60), "root", "no_store", "unreadable" or "link" (_store_present's steps), "unreadable" (the open or a
+    read, a lock past the timeout included), "tables"; a stored session id that is not text gives "unreadable". It
+    connects through SQLite's read-only mode, runs one BEGIN DEFERRED, and ends the transaction and closes the
+    connection on every path; it writes and creates nothing. Its read is a hand-kept copy of _read_reads' transaction
+    steps, kept in step by hand, as session_leases' is (the reads' own helper is tied to their answer). No exception
+    escapes."""
+    try:
+        _check_reads_task(task_id)
+        _check_reads_timeout(timeout)
+    except Exception as e:
+        return _named('argument', e)
+    try:
+        _check_lookup_root(root)
+    except Exception as e:
+        return _named('root', e)
+    try:
+        refusal, real = _store_present(root)
+        if refusal is not None:
+            return refusal
+        return _read_sessions_read(real, timeout, task_id)
+    except Exception as e:
+        return _named('unreadable', e)
+
+
 def _migrate_work(con):
     """migrate_store's work inside its one BEGIN IMMEDIATE transaction (AC5's table): P1 the unchanged table check
     ("current" when it passes); P2 the tables compared with the pre-task form ("tables" when they differ); P3 the
