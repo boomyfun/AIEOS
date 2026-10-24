@@ -1,0 +1,539 @@
+# TASK-082: the readers of the Work Order's inputs at a commit (specification 6 revision 7, sections 5 and 6;
+# specification 7 revision 2, section 6; M7's second task). Plan: decisions D-2336 to D-2342 (session 3797498a): the
+# scope note (MYSP/t82/scope82.md, D-2337), the split of the former TASK-082 into these readers and TASK-083's
+# get_work_order and query (D-2337), the pin scan (MYSP/t82/pinscan82-out.txt at 4c496d7e, D-2339), the risk run
+# (MYSP/t82/risk/risk_class82.py, D-2341), the Resume Check inputs' listing and DEF-0097's draft (D-2340, D-2341);
+# r1: reviews rv82a (claude-sonnet-5-5) and rv82b (claude-opus-5-5) of r0 and their dispositions (MYSP/t82/disp82.md,
+# D-2344); r1b: the partial round-2 reviews rv82c and rv82d of r1, the corpus scan scan82 and their dispositions
+# (MYSP/t82/disp82r2.md, D-2347 to D-2349); r2: reviews rv82e (claude-sonnet-5-5) and rv82f (claude-opus-5-5) of r1b,
+# read tools only, and their dispositions (MYSP/t82/disp82r3.md, D-2352).
+#
+# Scope:
+# - A new src/aieos_bootstrap/base_inputs.py with one public function,
+#   work_order_inputs(repo, commit, task_id, session_id, log, read=None), which returns (inputs, None), where inputs
+#   is the dict that context_compiler.build_work_order takes (src/aieos_bootstrap/context_compiler.py :10-14; the
+#   forms of TASK-080.yaml :18-41), or (None, findings: a non-empty list of strs) and no partial value. Every file is
+#   read at a commit given as an argument through base_files.read_file and base_files.list_paths (TASK-081), with read
+#   passed through (injectable, default gitread.run at call time); the log is a value given, the bytes
+#   writer.read_log returns (src/aieos_bootstrap/writer.py :201-205), parsed by records.check_log
+#   (src/aieos_bootstrap/records.py :781).
+# - The commit is an argument (D-2340 (c); proposed): TASK-083 passes the session's base, so the Work Order is
+#   compiled at the base (specification 6 :54); TASK-085 (the readers of the Resume Check's inputs, DEF-0097) is to
+#   reuse the same readers at HEAD. AIEOS_BASE is not read here: this module reads no environment; reading AIEOS_BASE
+#   stays with TASK-083 and TASK-086, and no part of DEF-0093 (AIEOS_BASE for specifications 5 and 7) is closed by
+#   this task.
+# - It imports exactly hashlib, re and, of aieos_bootstrap, base_files, gitread, records and resume_check; it uses on
+#   base_files exactly read_file, list_paths and MAX_BYTES, on gitread exactly run (the default read, taken at call
+#   time, D-2352 (3)), on records exactly check_log, on resume_check exactly matches; it starts no process but
+#   through read; it opens, writes and appends no file, reads no clock and no
+#   environment, makes no os call, and never raises: every failure, a RecursionError or MemoryError among them, is
+#   caught at the public function's top and given as findings (D-2344 (11)).
+# - Within one call, the read in use (given, or gitread.run by default) is wrapped by a cache keyed by its
+#   arguments, so a fixed form asked twice for the same commit runs once (D-2344 (7), D-2352 (3); proposed).
+# - What it does not do: no caller yet (TASK-083 calls it from get_work_order); no MCP tool; it does not call
+#   build_work_order (its value is checked against it in the tests only); no change to any existing file.
+#
+# The inputs and their readers (D-2337; specification 6 :52-55, :60-65). Each reader fails closed.
+# - task, session_id: the arguments, in context_compiler's forms (TASK-[0-9]+; [A-Za-z0-9._-]{1,128}); base: commit.
+# - contract (point 2): docs/tasks/<task_id>.yaml read at commit and parsed. Options: (a) a parser of a fixed subset
+#   of YAML in this module, refusing anything outside it; (b) widening task_contract.parse_contract (an accepted
+#   module and its pins, src/aieos_bootstrap/task_contract.py :228-229 keeps seven keys); (c) taking the contract's
+#   content from the log, which holds its hash only. This task's choice (proposed): (a). The text is refused first if
+#   it is over MAX_CONTRACT_BYTES (1048576, as task_contract.py :17) or holds U+FEFF, CR, a C0 control other than LF,
+#   DEL, a C1 control, U+2028 or U+2029 (as task_contract step (3), task_contract.py :17-18). The subset (D-2344 (1),
+#   (2)): comment lines and blank lines; block maps by indentation of two spaces; block sequences ("- " items) whose
+#   item is a scalar, a flow collection, a one-entry map, or a folded scalar "- >-" read as ">-" is read, its content
+#   lines more indented than the "- " (D-2349; sixteen such items in TASK-042 to TASK-045, TASK-048 and TASK-049,
+#   scan82 at 4c496d7e); flow lists [...] and flow maps {...} of plain or double-quoted scalars, nested, and a flow
+#   collection that runs over several lines (as TASK-081.yaml :174-175); a plain scalar that runs over several lines,
+#   its continuation lines more indented than its key (as TASK-081.yaml :463-464) or than its "- " (a block-sequence
+#   item, as TASK-045.yaml :116-117, TASK-048.yaml :119-120, TASK-049.yaml :131-132), or inside a flow collection (as
+#   TASK-069.yaml :251-252, TASK-070.yaml :262-265), and a double-quoted scalar that runs over several lines inside a
+#   flow collection (as TASK-081.yaml :447-448), each line break with the spaces around it folded to one space, as
+#   YAML folds them (D-2352 (2)); folded scalars ">-" folded as YAML folds them (a line break between two lines of the
+#   same indentation becomes one space; a blank line gives "\n"; a more-indented line keeps the line breaks around
+#   it; the rule is YAML's, tested with made-up texts, no contract needing its last part). Refused, each with
+#   findings: a repeated key; a tab; an anchor, an alias or a tag; a literal block "|"; a multi-document marker; a
+#   single-quoted scalar; a "\" inside a double-quoted scalar; " #" or ": " inside a plain scalar; a plain scalar
+#   whose first character is @, `, %, ?, |, >, !, &, *, ', or a flow indicator outside its collection (the rule
+#   reads only a scalar's first character, so a continuation line may start with one, as TASK-049.yaml :132); an
+#   empty value ("key:" with nothing after and no nested block); text after a flow collection closes; nesting deeper
+#   than MAX_DEPTH (200, as context_compiler.py :58); anything else. Values are kept as strs, with no number, boolean
+#   or null typing ("2" and "false" stay strs; proposed; listed for specification 6's next revision). AC9's list of
+#   docs/tasks/*.yaml excused from parsing is closed, with exactly two entries (D-2352 (2)): TASK-028.yaml, whose
+#   :118 holds "{epoch, counter}" inside a plain scalar of a flow list, which YAML reads as a flow map; and
+#   TASK-036.yaml, whose :106 holds ": " inside a plain scalar of a flow list, which YAML reads as a key-value pair;
+#   both are refused by the subset (the fail-closed reading), and every other contract parses. The parsed map must
+#   hold the keys context_compiler checks (TASK-080.yaml :20-24).
+# - contract_hash (point 3, settled by D-2337): the SHA-256 of the contract file's bytes at commit (specification 2
+#   :22); it must equal the contract_hash of the task's last task.approved event in the log (as execution.py
+#   :18-20 reads it), else findings; a log with no task.approved for the task gives findings; the approval's
+#   contract_version must equal the contract's.
+# - The log (D-2344 (5)): records.check_log(log) once; any finding of its report (its text findings and line
+#   findings, as execution.py :183-186 refuses them) gives findings; lines whose duplicate_of is set are skipped (as
+#   execution.py :192); "last" means last in log order among the task's other lines; a line's corrects field is
+#   not read, every non-duplicate line counting in log order (stated; D-2352 (13)).
+# - resume_record (point 4): the payload of the task's last decision.execution event in the log, which must come
+#   after the task's last task.approved, must be CONTINUE or CONTINUE_WITH, and must name the task, contract_hash and
+#   contract_version (context_compiler's ties, each with its own test). Options:
+#   (a) the last decision.execution of the task in log order; (b) the record bound to the session (no field ties a
+#   decision.execution to a session id: specification 3 :112-136); (c) the record of the lease's grant, which the log
+#   does not record by id. This task's choice (proposed): (a), with the binding to the session a stated limit.
+# - articles: for each id of resume_record.constitution.applicable, its text in docs/pre-genesis/constitution.md at
+#   commit: the block from the line that starts with "### " + id + " · " (constitution.md :27), compared as text
+#   with no regular expression built from an id, up to the next line that starts with "### " or "## ", or the end,
+#   its trailing blank lines stripped (D-2344 (9)); an id with no block, or with more than one, gives findings.
+# - components, interfaces (point 5): the architecture entities' front matter (specification 2 :79, :83). Options:
+#   (a) a fixed folder of architecture entities, read at commit; (b) none for the self-build; (c) a reading of the
+#   read_set.interfaces entries themselves. This task's choice (D-2344 (3); proposed; this task's reading for the
+#   self-build, not an approved architecture entity; a departure from specification 6 :65, which takes the registry
+#   only from the interfaces the intent files declare, and from :62's graph of their components; listed for
+#   specification 6 §11 point 10, D-2352 (8)): (c). Each read_set.interfaces entry whose first word has the form
+#   "aieos_bootstrap.<module>.<name>" (<module> [a-z_][a-z0-9_]*, <name> a Python name; D-2352 (9)) gives one
+#   interface {id: the entry as written, component: "aieos_bootstrap.<module>"} and, once per module, one component
+#   {id: "aieos_bootstrap.<module>", paths: ["src/aieos_bootstrap/<module>.py"], tags: []}; any other entry, or an
+#   entry listed twice, gives findings. The derived components carry tags [] only, never feed risk rule R3 or any
+#   governance decision; R3 stays "not evaluable". context_compiler reads a component path with no wildcard as
+#   "<it>/**" (context_compiler.py :290-294), and resume_check.meet lets "**" stand for no name
+#   (src/aieos_bootstrap/resume_check.py :163-172), so the component path matches the module file itself; files are
+#   read only for the write_set.paths and read_set.paths patterns, so a named module outside them gets no layer-4
+#   file (a stated limit; D-2352 (7)). read_set.schemas is unsupported for the self-build: a non-empty list gives
+#   findings (proposed; a stated limit).
+# - adrs, traced (point 6): for each traces_to entry: an ADR id (ADR-[0-9]+) gives findings, since the self-build
+#   has no ADR folder (specification 2 :43; stated limit); any other entry "<path>" or "<path>#<section>" is read as
+#   the file at <path>. Options for "#<section>": (a) the whole file's text; (b) the section only. This task's choice
+#   (proposed): (a), with the entry kept as written as the key; adrs {}.
+# - files (D-2344 (7)): at most MAX_PATTERNS (1000) write_set.paths and read_set.paths patterns; for each, its
+#   literal prefix (its names before the first wildcard, or the pattern itself when it has none) is listed with
+#   base_files.list_paths (a prefix that does not exist gives no file; a pattern with no wildcard whose path does not
+#   exist at commit, a write_set path the task will create among them, gives no file, D-2352 (4); a pattern naming
+#   one file reads that file), and every listed path the pattern matches (resume_check.matches) is read with
+#   base_files.read_file; then every derived path present at commit; a matched path that cannot be read (not UTF-8,
+#   over base_files.MAX_BYTES, or any other refusal) gives findings for the call; every read counts toward MAX_FILES
+#   and MAX_FILE_BYTES. "Does not exist" is told only by base_files' finding that is exactly "<p> is missing"
+#   (src/aieos_bootstrap/base_files.py :191, :223) for the path or prefix, or one of its ancestors; every other
+#   finding fails the call (D-2352 (5)).
+# - derived_read_set (point 7; D-2344 (8)): options: (a) recomputed from the write-set's Python files at the
+#   contract's input_state.base_commit by resume_check.direct_imports (specification 3 :63); (b) left to TASK-085 and
+#   given as []; (c) the path entries of the resume record's read_set whose sources include "derived"
+#   (src/aieos_bootstrap/resume_check.py :307-319), not recomputed, as layer 1 is taken from the record
+#   (specification 6 :60). This task's choice (proposed): (c). The record's read_set must be an object whose entries
+#   is a list of objects with exactly entry (a str), kind and sources (a list of strs), as resume_check.py :684-685
+#   and :316-318 build it and records.py :548 checks it, else findings (D-2352 (1)); the entries of kind "path" whose
+#   sources include "derived" are taken; each is absent when it is not among the listing of its parent folder at
+#   commit (a missing parent folder meaning absent too), and is then left out (context_compiler.py :24-25 uses only
+#   the derived paths present in files); a listed one that cannot be read gives findings (D-2348 C7).
+#   input_state.base_commit is not read.
+# - last_handoff (point 8, settled by D-2337; D-2344 (4)): the paths "docs/handoffs/<task_id>-*.md" among the listing
+#   of the prefix "docs" at commit (proposed: the self-build keeps project files under docs/, as docs/tasks and
+#   docs/records, while specification 2 :35's .aieos/ layout is open (specification 2 :46), and this module may name no
+#   ".aieos" string, tests/unit/test_writer.py :402); none gives None (TASK-087 writes the file; DEF-0095); exactly one
+#   gives {ref: its path, text: its text}; two or more give findings, since which one is "the last" is open
+#   (specification 6 :97).
+# - budgets (point 9, settled by D-2337): the module constant BUDGETS, read at call time: constitution 65536,
+#   components 32768, traced 262144, files 524288, handoff 32768 bytes (proposed; specification 6 §11 point 9 leaves
+#   the numbers open, listed for its next revision).
+# - Points 10 and 11 (query's ref forms; AIEOS_BASE against the lease or the record) are TASK-083's, named and left
+#   open here.
+#
+# Stated choices (this task's; specification 6 section 11 stays open for its next revision): the points above marked
+# "This task's choice"; the public name and value shape; MAX_FILES 2000, MAX_FILE_BYTES 16777216 (the sum of the
+# texts read), MAX_PATTERNS 1000, MAX_CONTRACT_BYTES 1048576 and MAX_DEPTH 200, read at call time; BUDGETS; the read
+# cache within a call; values kept as strs; each listed for specification 6's next revision (proposed).
+#
+# Owner-act boundary: none reached. Nothing is launched or connected; no hook, setting, policy or measurement.
+#
+# Stated limits.
+# - The value's truth is what the commit and the log hold; that the commit is the session's base is the caller's
+#   (TASK-083, TASK-086; DEF-0093); that the log is the project's is the caller's.
+# - The resume record is the task's last decision.execution, not one bound to the session (point 4).
+# - The task's later state events (task.done, task.stale, task.blocked, task.replanned, task.drafted,
+#   decision.acceptance) are not projected here; a value is given for a task the log may have left since its last
+#   decision.execution; closed by TASK-083's live-lease check and TASK-086's Resume Check before the grant (proposed).
+# - Components and interfaces only by the reading of point 5; no ADRs and no schemas for the self-build (points 5, 6).
+# - Two or more handoffs of a task, once TASK-087 writes them, give findings (point 8; DEF-0095).
+# - A listing fails whole on any symbolic link, submodule or out-of-form name under its prefix (base_files'
+#   rules); the handoff listing covers docs/, and a derived path at the root lists the whole tree (D-2352 (5)).
+# - base_files' limits hold (src/aieos_bootstrap/base_files.py :28-32).
+#
+# The pins (L-0026; MYSP/t82/pinscan82-out.txt at 4c496d7e; D-2339): the deterministic rule
+# (.github/workflows/aieos-checks.yml :1489-1520, :1612-1620: NONE for the new files); the INV-002 file rule (:1659);
+# OPS-003's pattern rule (:1677-1721); tests/unit/test_gitread.py :374 (only gitread imports subprocess);
+# tests/unit/test_writer.py :402 (R8); tests/unit/test_autonomy.py :241; tests/unit/test_claude_code_read_hook.py :35,
+# :38, :492 (HOOK_SIDE, eight modules: base_inputs.py is not hook side); the conformance set tests
+# (tests/integration/test_conformance_cb_set.py :23, :75, :83; test_conformance_rc_set.py :37, :80, :155;
+# test_conformance_risk_set.py :24, :87, :95: no fixture folder named);
+# tests/unit/test_bench_isolation.py :38, :67; tests/integration/test_ac_tests_tree.py :63; GOV-003's EVALUATOR list
+# (src/aieos_bootstrap/**, aieos-checks.yml :423, :490), the list unchanged; bandit (no B101, B110, B112, B324).
+#
+# Risk: high, computed over the base by MYSP/t82/risk/risk_class82.py (R2 medium and R3 high, not evaluable, for each
+# path). GOV-003: src/aieos_bootstrap/** is an evaluator path; change class ruled at acceptance. Reviews on Sonnet 5.5
+# or Opus 5.5 (never Fable). Naming (D-544 Q3): every new test function names "TASK-082 ACn" in its own docstring.
+# Not applicable: OPS-001; INV-005 to INV-011; GOV-001, GOV-004 to GOV-006, SEC-003. INV-004 is not reached (the
+# module writes nothing); it stays listed for the evaluator path's profile.
+# Owner-kept acts: none in this task.
+# Shadow (D-2042 C3 as amended by D-2068): the governor's evaluate at acceptance, any difference named.
+# Local runs: the unit group in three parts.
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-082.yaml, has one parent equal to base_commit, and goes
+# to main under its own decision; the task's commits carry "AIEOS-Task: TASK-082" and go to task/TASK-082; main
+# receives them only at acceptance.
+task: TASK-082
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add src/aieos_bootstrap/base_inputs.py with work_order_inputs, which reads at a given commit, through base_files
+  only, every input context_compiler.build_work_order takes, the contract's hash checked against its approval in a
+  log given as a value, with read injectable, bounded, findings never an exception, and nothing written; tests in
+  tests/unit/test_base_inputs.py, tests/integration/test_base_inputs_repo.py and
+  tests/property/test_base_inputs_properties.py, each new test naming "TASK-082 ACn".
+traces_to:
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#5
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#6
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#6
+  - docs/specs/spec-02-aieos-file-format.md#5
+input_state:
+  base_commit: 4c496d7e406523e495498dd377f3a40587a14ac9
+  depends_on: [TASK-080, TASK-081]
+  intent_versions:
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 613cbd72dca411586ca03d790cd01bb044d0eb8e9a2885d9c3f8bb25cc9f5efb
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: d2fa59ae3f203b3a2108e55d23ddfb875e64ab57d27372c9d413bf30d7c2cbdd
+    docs/specs/spec-05-adapter-contract.md: ae7b99419d303db40b7200e39a22d93b9301b29900f3b1f5a5720b72d8eb9c2b
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 8e744daa31928621137db59a8a9d91ecf163879420e1f8e148232b149cafcdb7
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/base_inputs.py
+    - tests/integration/test_base_inputs_repo.py
+    - tests/property/test_base_inputs_properties.py
+    - tests/unit/test_base_inputs.py
+read_set:
+  paths:
+    - docs/specs/spec-06-mcp-protocol-and-work-orders.md
+    - docs/specs/spec-07-cli-and-zero-friction-path.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.base_files.read_file, aieos_bootstrap.base_files.list_paths,
+    aieos_bootstrap.base_files.MAX_BYTES, aieos_bootstrap.gitread.run, aieos_bootstrap.records.check_log,
+    aieos_bootstrap.resume_check.matches, "aieos_bootstrap.context_compiler.build_work_order (a test-only check)"]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_base_files_repo.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_base_files_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_context_compiler_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_mcp_server_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_base_files.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The arguments: repo, commit (40 or 64 lowercase hex characters), task_id (TASK-[0-9]+), session_id
+      ([A-Za-z0-9._-]{1,128}), log (bytes) and read (None or callable) are checked before any read call; any other
+      value, a str subclass among them, gives findings with zero read calls (the stand-in counts its calls). Tests in
+      tests/unit/test_base_inputs.py.
+  - AC2: >-
+      The contract reader: the subset of the header parses every form it names into strs, lists and dicts (block
+      maps, block sequences, one-entry maps, nested and multi-line flow collections, multi-line plain scalars,
+      multi-line plain scalars as a block-sequence item and inside a flow collection, multi-line double-quoted scalars
+      in a flow collection, ">-" folded as YAML folds it with a blank line and a more-indented line, a folded scalar
+      "- >-" as a block-sequence item as in the sixteen lines scan82 found, a continuation line starting with "`",
+      double-quoted scalars, comments), "2" and "false" staying strs; each refused form of the header (the size,
+      U+FEFF, CR, the controls, U+2028, U+2029, a tab, a repeated key, an anchor, an alias, a tag, a literal block, a
+      multi-document marker, a single-quoted scalar, a "\" in a double-quoted scalar, " #" or ": "
+      in a plain scalar, each listed leading indicator, an empty value, text after a flow collection closes, nesting
+      over MAX_DEPTH, an indentation that is not two spaces, an unclosed flow collection) and a missing key
+      context_compiler needs each give findings. Tests with stand-in files.
+  - AC3: >-
+      contract_hash and the log: the SHA-256 of the contract file's bytes; equal to the last task.approved
+      contract_hash of the task in the log, else findings; the approval's contract_version equal to the contract's,
+      else findings; no task.approved, an approval of another task only, and a log with any check_log finding each
+      give findings; a line whose duplicate_of is set, placed after a newer line, does not change which is last.
+  - AC4: >-
+      resume_record: the task's last decision.execution payload in log order, coming after the last task.approved
+      (one before it gives findings); a later decision.execution supersedes an earlier one; a last one whose
+      decision is not CONTINUE or CONTINUE_WITH, or none, gives findings; a record whose task, contract_hash or
+      contract_version differs from the contract's gives findings, one test each.
+  - AC5: >-
+      articles, components, interfaces, adrs, traced: each applicable article's block (start and end lines as the
+      header says, trailing blank lines stripped, an id holding regular-expression characters read as text; a
+      missing or doubled id gives findings); components and interfaces by point 5's reading (one component per
+      module, tags []; an entry out of the form, or listed twice, gives findings); a non-empty read_set.schemas
+      gives findings; adrs {}; an ADR id in traces_to gives findings; each other traces_to entry's file read whole,
+      the entry as written the key; a missing file gives findings.
+  - AC6: >-
+      files and derived_read_set: exactly the paths a write_set.paths or read_set.paths pattern matches at commit,
+      found by listing each pattern's literal prefix (a missing prefix giving none, and a write_set path with no
+      wildcard that does not exist at commit giving no file), and the derived paths, each with its text; the derived
+      read-set as the resume record's read_set.entries of kind "path" whose sources include "derived", one absent
+      from its parent folder's listing left out; a read_set that is not an object with entries in its form (a bare
+      list among them) gives findings; only base_files' exact "<p> is missing" counts as absent, any other finding
+      failing the call; MAX_FILES, MAX_FILE_BYTES and MAX_PATTERNS each give findings when crossed (the constants
+      lowered by the test); a file base_files refuses gives findings naming its path; the read cache asks each fixed
+      form once per call, with a given read and with the default (the stand-in counts the calls; gitread.run patched
+      for the default).
+  - AC7: >-
+      last_handoff and budgets: no docs/handoffs/<task>-*.md at commit gives None; exactly one gives {ref, text}; two
+      or more give findings; budgets equals BUDGETS, read at call time.
+  - AC8: >-
+      Purity and touch: base_inputs.py imports exactly hashlib, re and aieos_bootstrap's base_files, gitread, records
+      and resume_check, and uses exactly the names the header lists; no open (patched by the string
+      "builtins.open"), no clock, no environment, no os call, no subprocess, no ast.Name compile, open, exec or eval,
+      no call of .open, .connect, .read_text, .read_bytes, .listdir, .scandir, .stat or .walk; no ".aieos" string, no
+      "bench/", no conformance fixture folder name, no src string constant exactly valid, accepted or approved, no
+      except clause whose body is only pass or continue (bandit B110, B112); never raises (a stand-in that raises,
+      and a stand-in that raises RecursionError, give findings; MAX_DEPTH refuses deep nesting before Python's own
+      limit). The tests build the literals ".aieos", "bench/" and the fixture folder names by concatenation or from
+      computed values, so the test files hold none of them (tests/unit/test_bench_isolation.py,
+      tests/integration/test_conformance_cb_set.py). Tests by ast over pathlib's read_bytes.
+  - AC9: >-
+      This repository, in its own test class of three test methods (the Work Order of TASK-081, the older-commit case,
+      the corpus parse), each expected to run within the runner's 110 seconds through the read cache (proposed; about
+      220 blob reads and their trees for TASK-081, and only the 80 contract files for the corpus parse): at
+      base_commit, with a log built in the test (one task.approved of TASK-081 with the SHA-256 of
+      docs/tasks/TASK-081.yaml at that commit and its contract_version, and one decision.execution CONTINUE of
+      TASK-081 after it, in records.check_log's form, whose read_set is an object whose entries hold the derived path
+      entry docs/specs/spec-03-resume-check-and-decision-engine.md, outside TASK-081's patterns),
+      work_order_inputs(<the repository root>, base_commit, "TASK-081", "s1", log, gitread.run) gives inputs that
+      context_compiler.build_work_order accepts (no findings), whose contract equals the file's keys, whose files hold
+      docs/specs/spec-07-cli-and-zero-friction-path.md with the SHA-256 that TASK-081's intent_versions names, and
+      whose files and derived_read_set both hold the spec-03 path; at af834d5d4e1e85657bb6c08c823fd16c1b106682, where
+      docs/tasks/TASK-081.yaml is absent, the same call gives findings; and every docs/tasks/*.yaml at base_commit
+      parses with the subset reader except exactly the two of the closed excused list (TASK-028.yaml :118 and
+      TASK-036.yaml :106, each with its reason in the header), both asserted refused. Tests in
+      tests/integration/test_base_inputs_repo.py.
+  - AC10: >-
+      Properties: over seeded random contracts written in the subset, the reader gives back the value written; over
+      seeded random byte changes of a contract text, it never raises and gives either findings or a value; over
+      seeded random logs, the resume record and the approval are the last non-duplicate ones of the task in log
+      order. Tests in tests/property/test_base_inputs_properties.py.
+  - AC11: >-
+      Every existing test passes, the pins of the header among them; the full suite runs locally in three unit parts,
+      integration and property before the first code commit; the deterministic rule's local run gives no finding.
+      The docstring of base_inputs.py holds, whitespace read as single spaces, the phrases "reads through base_files
+      only", "read is injectable", "the commit is an argument", "never raises", "writes nothing", "the log is a value",
+      "fails closed" and "this task's choice", read by a test by ast over pathlib's read_bytes; every new test names
+      "TASK-082 ACn".
+  - AC12: >-
+      Broken copies, each failing the tests of its AC: (1) skips an argument check (AC1); (2) accepts a tab or a
+      repeated key (AC2); (3) types a number or a boolean (AC2, AC10); (4) skips the approval check (AC3); (5) takes
+      the first approval or the first decision.execution (AC3, AC4, AC10); (6) accepts a decision other than CONTINUE
+      or CONTINUE_WITH (AC4); (7) cuts an article at the wrong line (AC5); (8) reads a "#section" only (AC5); (9)
+      misses a derived path or a matched path (AC6, AC9); (10) drops MAX_FILES, MAX_FILE_BYTES or MAX_PATTERNS, each
+      its own copy (AC6); (11) gives no handoff when exactly one exists, or one when two exist (AC7); (12) reads the
+      working tree (AC8; also AC9's older-commit case); (13) imports subprocess or os (AC8); (14) reads a bound at
+      import time (AC6); (15) accepts an approval of another task (AC3); (16) accepts an ADR id (AC5); (17) accepts a
+      CR in the contract (AC2); (18) takes a duplicate line as the last (AC3, AC10); (19) accepts a decision.execution
+      before the last approval (AC4); (20) drops the read cache (AC6); the governor's evaluate at acceptance (the
+      shadow) with any difference named; the stated choices in the records (not tests).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9, AC10, AC11]}
+  - {gate: G3, check: constitution, args: [AC12, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
