@@ -1,0 +1,559 @@
+# TASK-089: the launcher's end writes the session's observed read-set record before the lease is released, as the
+# lease holder (fenced) or, when the lease is gone, as the core's own observation with no fencing token, then removes
+# the session's stored reads (specification 7 revision 2, section 5 :45 and :47; specification 5 revision 5, section
+# 11 points 7 (:112) and 10 (:125); DEF-0101; M7's sixth task's second part, split by decisions D-2673 and D-2771: the
+# next start's record is TASK-090's). Plan: decisions D-2770 to D-2783 (session 3797498a): the scope note
+# (MYSP/t89/scope89.md) with D-2771's rulings S and Q1 to Q7, the pin scan (MYSP/t89/pinscan89-out.txt at b31ed09d and
+# its reading MYSP/t89/pinscan89-reading.md, D-2774), the risk run (MYSP/t89/risk/risk_class89a.py: high), the
+# forbidden list (MYSP/t89/forbid89a.txt; launcher.py, read_set_record.py and test_launcher.py left out; the new
+# tests/unit/test_launcher_end.py and tests/unit/test_read_set_gone.py are not in it, so it needs no change, D-2782
+# C1). r0 was reviewed by rv89a (claude-sonnet-5-5) and rv89b (claude-opus-5-5); the dispositions are
+# MYSP/t89/disp89.md, with the rulings Q-A to Q-D (D-2782) and the lease rows' two gaps (D-2783). The task's records
+# commit amends DEF-0101 under its own decision so that it names TASK-090 for the next start's record and the launch
+# (docs/** is forbidden to this task's commits; disp89 row 5).
+#
+# Scope:
+# - In src/aieos_bootstrap/read_set_record.py, by added lines only, one public function and two constants (disp89
+#   row 8; D-2782 Q-D):
+#   - GONE_WHY = ('violation', 'lease gone (released or expired)', 'no fencing token given'), the reasons for
+#     writing without a held lease;
+#   - GONE_RESULT_REASONS = ('argument', 'read_paths', 'core', 'observe'), observe_gone's own result reasons;
+#     REASONS (:74) is unchanged;
+#   - observe_gone(root, task_id, session_id, read_paths, reason, now, recorder, append=None): the core's own
+#     observation of a session whose lease is gone (specification 5 :125): it builds the record with build(task_id,
+#     session_id, read_paths, recorder_text) (:137-143), where recorder_text is recorder + "; written by the core
+#     without a held lease: " + reason, so the recorder holds the session id and says that it was written without a
+#     held lease, and why; it appends it through append (default writer.append_event at call time) as record.added
+#     with the event id of record_ids (:97-108), task_id the task, no fencing_token (eventlog.py :112-114: an event
+#     with no token needs no lease) and the append's own recorder argument recorder_text, the same words the record
+#     carries (disp89 row 13); it returns a mapping with exactly RESULT_KEYS (:73), result "written", "duplicate" or
+#     "refused" with a reason in GONE_RESULT_REASONS; it never raises. Its arguments: root a non-empty str, task_id
+#     and session_id as record_ids takes them, read_paths a list of non-empty strs (empty allowed, :33-34), reason
+#     one of GONE_WHY, now timezone-aware UTC whole seconds, recorder a non-empty str holding session_id; checked in
+#     that order before build: a bad root, task_id, session_id (record_ids giving None), reason, now or recorder
+#     gives reason "argument", read_paths not a list of non-empty strs gives "read_paths" (disp89c row 5). Only the
+#     launcher calls it; no hook-side module imports read_set_record (pinned over the real hook-side modules by
+#     tests/unit/test_claude_code_read_hook.py :489-495 with OWN_IMPORTS :38-44; disp89 row 15).
+#   - the module's docstring gains one paragraph naming observe_gone, TASK-089 and specification 5 point 10; its 22
+#     pinned phrases and its import set stay (tests/unit/test_read_set_record.py :186-218); since the diff is added
+#     lines only, the paragraph says that two older statements no longer hold: "three functions, called only by their
+#     tests" (:5), since observe_gone is a fourth and the launcher calls observe and observe_gone, and the abnormal
+#     ends listed as not covered (:58-59), since end's gone path now covers a session that ends without its lease
+#     (disp89 row 12).
+# - In src/aieos_bootstrap/launcher.py, end changes; start and its order are unchanged (TASK-086 AC2 kept):
+#   - end(root, task_id, session_id, fencing_token, now, write_set, allowlist, recorder, violation=False,
+#     release_lease_token=None, end_session=None, session_leases=None, stored_reads=None, remove_reads=None,
+#     observe=None, observe_gone=None): every callee a keyword argument whose default is taken at call time
+#     (writer.session_leases, writer.stored_reads, writer.remove_reads, read_set_record.observe,
+#     read_set_record.observe_gone; adapter.end's two passed through). r0's callee held (writer.held_lease) is dropped:
+#     the path is chosen by the session's own lease rows (D-2782 Q-A and C1), and writer.held_lease is not called.
+#     write_set, allowlist and recorder come from end's caller (D-2771 Q3 as read at D-2774: no
+#     function builds a session's channel context, pinscan89-reading (b)); they are checked by
+#     claude_code_channel.context_findings inside observe on the fenced path, never by copied logic.
+#   - In order: (1) the arguments (root an absolute Windows path, the form claude_code_channel.context_findings
+#     checks (claude_code_channel.py :133; disp89 row 10); task_id, session_id; fencing_token None or a mapping, its
+#     own form left to adapter.end's argument check (adapter.py :215, :228-230; D-2782 Q-A, disp89 row 2); now;
+#     violation a bool; every callee None or callable); a wrong one by end's own argument checks gives "refused" with
+#     reason "argument" and no callee call (a token mapping out of the store's form is not one of them: on P1 it
+#     equals no row's token and gives "held", and on P2 it reaches adapter.end, whose "argument" refusal is passed
+#     through after the record and the removal, a stated limit; D-2797 Q-E, disp89c row 1); (2) the path, by the
+#     session's own lease rows read once through session_leases(root, session_id,
+#     now) (writer.py :873-907; each row in eventlog.LEASE_KEYS' form {task_id, fencing_token, expires_at},
+#     eventlog.py :39, expires_at a timezone-aware UTC datetime, :140; D-2782 Q-A, D-2783 C3), every row of the
+#     session counting, whatever its task (D-2797 Q-F): the fenced path P1 when the session has at least one row
+#     unexpired at now (expires_at > now) and every such row is the task's and holds a fencing_token equal to the given
+#     one (D-2797 Q-G; writer.py :886-887); "held" when the session has any other row unexpired at now (a row of
+#     another task, or a row of the task with the token None or another token): "refused" with reason "held", no
+#     record, no removal and no adapter.end ("a session whose lease row is still unexpired is not processed",
+#     specification 5 :125), so end_session never drops another task's unexpired row without its record; otherwise
+#     (no row of the session unexpired at now) the gone path P2, also when "ended" is true or a row is present but
+#     expired (D-2783 Gap 2). A "done" result whose value is malformed (not a mapping with exactly "ended" a bool and
+#     "leases" a list, a row not a mapping with exactly LEASE_KEYS, or an expires_at not a timezone-aware UTC datetime)
+#     gives "refused" with reason "lease_rows", the finding named (disp89c row 4). violation only picks P2's reason:
+#     "violation" when
+#     violation is true, else "no fencing token given" when fencing_token is None (D-2782 Q-D), else "lease gone
+#     (released or expired)" (never guessed as "expired"); violation never forces P2 over an unexpired row (disp89
+#     row 1). Any refused session_leases result, "session" (no session with this id) included, gives "refused" with
+#     reason "lease_rows", the finding named, no record, no removal and no adapter.end (D-2783 Gap 1); (3) the stored
+#     reads, read once through stored_reads(root, session_id, task_id) (writer.py :795); (4) the record: P1 by
+#     observe(context, reads, now) with the context {root, task_id, session_id, fencing_token, write_set, allowlist,
+#     recorder}, P2 by observe_gone(root, task_id, session_id, reads, reason, now, recorder); the record is written
+#     even when reads is empty (D-2771 Q6); (5) only after a record found present (specification 5 :125: "Whether a
+#     record exists is told by its event id"): "written", "duplicate", or "refused" with core reason "conflict" (the
+#     event id already holds a record; the conflict is named in the findings; D-2782 Q-B, disp89 row 3),
+#     remove_reads(root, session_id, task_id) (writer.py :910); (6) adapter.end(root, task_id, session_id,
+#     fencing_token, now, release_lease_token=…, end_session=…). On P2 with "ended" true, adapter.end's end_session
+#     may refuse the already-ended session; that is adapter.end's own result, passed through in "end" (D-2783 C1).
+#   - The conflict check (D-2785 (ii), case (c)): observe's result keeps the core's WriteResult as the mapping in its
+#     "core" field, {result, reason, seq, findings} (read_set_record.py :73, :84-85, :146-149, :168-174), and
+#     writer.append_event returns eventlog's result with its reason (writer.py :251-264; WriteResult copies .result,
+#     .reason, .seq, .line and .findings from eventlog's answer, writer.py :120-125; eventlog.py :38, :183); so
+#     a record result counts as found present when result is "written" or "duplicate", or when result is "refused",
+#     reason is "core" and record["core"] is a mapping whose "result" is "refused" and whose "reason" is exactly
+#     "conflict"; observe_gone, being new, keeps its core mapping in the same "core" field the same way.
+#   - Failing closed: a session_leases or stored_reads refusal, a "held" outcome, or a raising call before the record
+#     gives "refused" with no record, no removal and no adapter.end, so no lease is released before its record
+#     (specification 5 :112); on P1 a record not found present gives "refused" with no removal and no adapter.end; on
+#     P2 such a record gives no removal, and adapter.end is still called (no row of the session is unexpired at now
+#     (D-2797 Q-F); the reads stay for TASK-090's next start); a remove_reads refusal or raise is named in the findings
+#     and adapter.end is still called (the record is present; a later end or next start finds it present, as a
+#     duplicate or a conflict, and removes them). end never raises.
+#   - The result: a mapping with exactly END_KEYS ('result', 'reason', 'findings', 'path', 'record', 'removed',
+#     'end'): result "done" when adapter.end gave "done", else "refused"; reason among end's reasons, which add "held"
+#     and "lease_rows" (D-2785 (i)) to r0's; path "fenced", "gone", or None when no path was chosen (an argument,
+#     lease_rows or held refusal); record the observe or observe_gone result; removed remove_reads' count or None;
+#     end adapter.end's result or None.
+#   - The docstring: launcher.py :34-35's "end(...) passes adapter.end's result through" is rewritten: end writes
+#     the record and removes the reads before adapter.end, and passes adapter.end's result in "end" (disp89c row 6);
+#     the whole sentence of launcher.py :48-51 that gives the three call places and the removal to
+#     TASK-089 is rewritten: end's two paths and the removal are here, the next start's record is TASK-090's
+#     (disp89 row 17); "writes no observed read-set record" is replaced by the end's record and its two paths; of
+#     TASK-086's nine AC12 phrases seven stay, one is removed ("writes no observed read-set record") and one replaced
+#     ("not before TASK-089 lands" by "not before TASK-090 lands") (disp89 row 7); new phrases "the record before the
+#     release", "no fencing token" and "TASK-090".
+# - What it does not do: the next start's record (P3), start's new order and any listing of gone sessions are
+#   TASK-090's (D-2771 S, Q2, Q4); DEF-0101 stays open until TASK-090's records (D-2771 S), and this task's records
+#   commit amends it, under its own decision, so that its resume point and its launch line name TASK-090, not this
+#   task: no runtime is launched before TASK-090 lands (disp89 row 5); the base-tip check, check 0 and max_risk stay
+#   with DEF-0101 (Q7); no writer change; no change to start, execution.py, adapter.py, writer.py, records.py,
+#   eventlog.py or claude_code_channel.py.
+#
+# Stated limits: a session that never reaches end (a crash) leaves its reads for TASK-090; the reads read and the
+# record appended are not one transaction, so an add_reads between them is not in the record and is removed with the
+# rest (the hook side stops at the session's end; a stated limit); the lease rows are read at one moment, so a lease
+# that expires between the read and observe makes observe's fenced append refused (P1 then fails closed, the lease
+# expires, and TASK-090's next start writes the record); write_set, allowlist and recorder are the caller's and are
+# checked only by observe's context check; one run at a time (the writer's limit). "The session is ended in every
+# case" (specification 5 :112, specification 7 :45) is not met on the fail-closed paths: on an argument,
+# lease_rows or stored_reads refusal, a raising call before the record, or a fenced record not found present, the
+# session stays open and its lease is held until it expires, and TASK-090's next start or `aieos end` then closes
+# it (disp89 row 6; D-2783 Gap 1); the "held" outcome likewise leaves the session open until its unexpired lease
+# expires or end is called with its token (D-2782 Q-A). A record found present as a conflict (D-2782 Q-B) is the
+# earlier record: reads added after it went into no record, and they are removed with the rest, named in the
+# findings. On the gone path with "ended" true (end_session already ran), the record and the removal are still
+# made, and adapter.end's end_session may refuse the ended session, its result passed through (D-2783 Gap 2, C1).
+# A token mapping out of the store's form is checked only by adapter.end (no form check is copied, D-2782 Q-A): on
+# the gone path the record is written and the reads are removed, and adapter.end then refuses "argument", its result
+# passed through, so the session stays open as on the fail-closed paths (D-2797 Q-E, disp89c row 1). The "held"
+# outcome also covers an unexpired row of the session on another task, so end_session never drops it without its
+# record (D-2797 Q-F).
+#
+# Owner-act boundary: none reached. No hook is placed, no setting changed, no runtime started (DM A51 item (4);
+# specification 7 :50). INV-004: every write goes through the core's writer: the record by writer.append_event
+# (through observe or observe_gone), the reads' removal by writer.remove_reads; no module but writer.py opens the
+# store or the log (tests/unit/test_writer.py :397-412).
+#
+# The pins (L-0026; MYSP/t89/pinscan89-out.txt at b31ed09d; D-2774): tests/unit/test_read_set_record.py :186-218 (the
+# 22 docstring phrases; the import set exactly datetime, re, claude_code, claude_code_channel, records and writer; no
+# assert, open, exec, eval, compile, __import__, importlib, print, sys, os, subprocess or input; no ".aieos"), kept;
+# tests/unit/test_claude_code_read_hook.py :35-42 and :489-495 with OWN_IMPORTS :38-44 (no hook-side import of
+# read_set_record; :499 and :508 are only a hostile sample; disp89 row 15), kept; tests/unit/test_launcher.py
+# (TASK-086): only TASK086AC8End (end's new signature), TASK086AC10Modules.test_the_import_sets (:662-672; launcher's
+# import set gains aieos_bootstrap.read_set_record) and TASK086AC12Docstrings.test_the_new_module (:690-696; its
+# phrases) change by this contract, their docstrings still naming "TASK-086 AC8", "TASK-086 AC10" or "TASK-086 AC12"
+# beside "TASK-089 ACn", so
+# TASK086Naming (:706-713), which requires "TASK-086 AC" in every test docstring of that module, holds unchanged;
+# AC1 to AC7 (AC5b included) and AC9 and the rest kept; end's new tests go to the new file
+# tests/unit/test_launcher_end.py and observe_gone's to tests/unit/test_read_set_gone.py (D-2782 Q-C, disp89 row 4);
+# tests/unit/test_writer.py :397-412 holds. The deterministic rule
+# (.github/workflows/aieos-checks.yml :1489-1517): no allowance for any write-set path. GOV-003's EVALUATOR list
+# (src/aieos_bootstrap/**), unchanged. No change under .github/.
+#
+# Risk: high, computed over the base by MYSP/t89/risk/risk_class89a.py (R2 medium and R3 high, not evaluable, for each
+# path). GOV-003: an evaluator path; change class ruled at acceptance. Reviews on Sonnet 5.5 and Opus 5.5 (never
+# Fable), read tools only; the acceptance review on Sonnet 5.5. Naming (D-544 Q3): every new test function, in
+# tests/unit/test_launcher_end.py and tests/unit/test_read_set_gone.py, names "TASK-089 ACn" in its own docstring
+# (in this contract's final form, after the id replacement of D-2778, "TASK-089 ACn"; D-2787 C1); the three changed
+# tests of tests/unit/test_launcher.py keep "TASK-086 AC" beside it (D-2782 Q-C). Not applicable: OPS-001; INV-005
+# to INV-011; GOV-001, GOV-004 to GOV-006,
+# SEC-003. Owner-kept acts: none in this task. Shadow (D-2042 C3 as amended by D-2068): the governor's evaluate at
+# acceptance, any difference named. Local runs: the unit group in three parts; before commit X, a Grep of the new and
+# changed test files for the B105 pattern (D-2735 C6).
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-089.yaml, has one parent equal to base_commit, and goes
+# to main under its own decision; the task's commits carry "AIEOS-Task: TASK-089" and go to task/TASK-089; main
+# receives them only at acceptance.
+task: TASK-089
+contract_version: v1
+task_type: implementation
+objective: >-
+  Make launcher.end write the session's observed read-set record before the lease is released, the path chosen by
+  the session's own lease rows, every row of the session counting, whatever its task: as the lease holder through
+  read_set_record.observe when the session has at least one row unexpired at now and every such row is the task's
+  and holds a fencing_token equal to the given one; refused ("held") when the session has any other row unexpired
+  at now; otherwise (no row of the session unexpired at now) as the core's own observation with no fencing token
+  through a new read_set_record.observe_gone added by added lines only; then remove the session's stored reads
+  once the record is
+  found present (written, duplicate or conflict), then call adapter.end; end never raises and starts no runtime;
+  new tests in tests/unit/test_launcher_end.py and tests/unit/test_read_set_gone.py, each naming "TASK-089 ACn",
+  and three tests of tests/unit/test_launcher.py changed.
+traces_to:
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#5
+  - docs/specs/spec-05-adapter-contract.md#11
+input_state:
+  base_commit: b31ed09d79da83bca95980afe74280d8253df487
+  depends_on: [TASK-051, TASK-064, TASK-067, TASK-086]
+  intent_versions:
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 613cbd72dca411586ca03d790cd01bb044d0eb8e9a2885d9c3f8bb25cc9f5efb
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: d2fa59ae3f203b3a2108e55d23ddfb875e64ab57d27372c9d413bf30d7c2cbdd
+    docs/specs/spec-05-adapter-contract.md: ae7b99419d303db40b7200e39a22d93b9301b29900f3b1f5a5720b72d8eb9c2b
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 8e744daa31928621137db59a8a9d91ecf163879420e1f8e148232b149cafcdb7
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/launcher.py
+    - src/aieos_bootstrap/read_set_record.py
+    - tests/unit/test_launcher.py
+    - tests/unit/test_launcher_end.py
+    - tests/unit/test_read_set_gone.py
+read_set:
+  paths:
+    - docs/specs/spec-07-cli-and-zero-friction-path.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/Deferred/DEF-0101-the-launchers-open-requirements-before-a-runtime-is-launched.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.adapter.end, aieos_bootstrap.writer.session_leases, aieos_bootstrap.writer.stored_reads,
+    aieos_bootstrap.writer.remove_reads, aieos_bootstrap.writer.append_event, aieos_bootstrap.read_set_record.observe,
+    aieos_bootstrap.read_set_record.build, aieos_bootstrap.read_set_record.record_ids,
+    aieos_bootstrap.claude_code_channel.context_findings]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/resume_log_inputs.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_base_files_repo.py
+  - tests/integration/test_base_inputs_repo.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_launcher_repo.py
+  - tests/integration/test_mcp_server_work_order_repo.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_resume_inputs_repo.py
+  - tests/integration/test_resume_log_inputs_repo.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_base_files_properties.py
+  - tests/property/test_base_inputs_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_context_compiler_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_mcp_server_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_base_files.py
+  - tests/unit/test_base_inputs.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_execution_list_tasks.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_mcp_server_work_order.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_resume_inputs.py
+  - tests/unit/test_resume_log_inputs.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      end's arguments: root (an absolute Windows path, the form claude_code_channel.context_findings checks; a root
+      starting with "/" is refused), task_id, session_id, fencing_token (None or a mapping; its own form is left to
+      adapter.end), now (timezone-aware UTC whole seconds), violation (exactly a bool) and every callee (None or
+      callable: session_leases, stored_reads, remove_reads, observe, observe_gone, release_lease_token, end_session)
+      out of form give "refused" with reason "argument", path None and zero callee calls; every callee defaults, at
+      call time, to its named function (a patch after import is the one called); the result has exactly END_KEYS.
+  - AC2: >-
+      The fenced path, by recording stand-ins: with a token given and session_leases giving "done" with a row of the
+      task unexpired at now (expires_at > now) whose fencing_token equals the given one, with violation false and
+      also with violation true, the calls are session_leases (once, with root, session_id and now), stored_reads,
+      observe, remove_reads, adapter.end in that order; observe's context is exactly {root, task_id, session_id,
+      fencing_token, write_set, allowlist, recorder} as given; path is "fenced"; adapter.end gets the token; an
+      expired row of another task beside the task's matching row does not count (D-2797 Q-F, Q-G).
+  - AC3: >-
+      Held and gone, by recording stand-ins: (a) held: a row of the task unexpired at now with the token None or
+      another token, an unexpired row of another task alone, or an unexpired row of the task holding the given token
+      beside any other unexpired row of the session (D-2797 Q-F, Q-G), each gives "refused" with reason "held", path
+      None, and no stored_reads, record, remove_reads or adapter.end call, with violation false and true; (b) gone:
+      no row, only rows expired at now (expires_at <= now) of the task or of other tasks, or "ended" true with no
+      rows, observe is not called and observe_gone is,
+      with reason "violation" exactly when violation is true, else "no fencing token given" exactly when the token is
+      None, else "lease gone (released or expired)"; path is "gone"; remove_reads and adapter.end follow as in AC2,
+      adapter.end with the given token, and adapter.end's result is passed through in "end", including an
+      end_session refusal of an already-ended session (D-2783 C1).
+  - AC4: >-
+      observe_gone, with a recording append stand-in: one append of record.added, task_id the task, no fencing_token
+      argument (or None), event id record_ids(task_id, session_id)[0], the record build gives for the recorder
+      "<recorder>; written by the core without a held lease: <reason>" (record_id the derived one, read_paths
+      distinct in first order, evidence_type records.READ_SET_TYPE); the append's own recorder argument is that same
+      recorder_text; records.check_record finds nothing; "appended" gives "written" and "duplicate" gives
+      "duplicate"; any other answer gives "refused" with reason "core" and the core mapping {result, reason, seq,
+      findings} in the "core" field, as observe's (a "conflict" stand-in gives core reason "conflict"); an argument
+      out of form gives "refused" with no append: a bad root, task_id, session_id (record_ids giving None), a reason
+      outside GONE_WHY, now out of form or a recorder without the session id gives reason "argument", and read_paths
+      not a list of non-empty strs gives reason "read_paths", each case tested (disp89c row 5); a raising append
+      gives "refused" with reason "observe";
+      every result reason is in GONE_RESULT_REASONS, and GONE_WHY and GONE_RESULT_REASONS are exactly the tuples the
+      scope names; it never raises.
+  - AC5: >-
+      Found present: on either path, an observe or observe_gone result "duplicate", or "refused" with reason "core"
+      and core result "refused" with core reason "conflict", is followed by remove_reads, as "written" is, the
+      conflict named in end's findings; any other record result (a "core" refusal with another core reason, such as
+      "fence" or "log", or a refusal for any other reason) is followed by no remove_reads.
+  - AC6: >-
+      No reads: stored_reads giving an empty list still gives a record call with read_paths [] on either path.
+  - AC7: >-
+      Failing closed: a session_leases or stored_reads refusal, a "held" outcome, or a raising call before the record
+      gives "refused" with no record, no removal and no adapter.end: any refused session_leases result gives reason
+      "lease_rows" with its finding named, tested with "session", "no_store" and "tables" stand-ins (D-2783 Gap 1,
+      C2); a stored_reads refusal "tables" and a raising session_leases or stored_reads are tested; on the fenced path
+      a record not found present (or a raising observe) gives "refused" with no removal and no adapter.end; on the
+      gone path such a record (or a raising observe_gone) gives no removal, and adapter.end is still called once; a
+      remove_reads refusal or raise is named in the findings and adapter.end is still called; adapter.end refused
+      gives result "refused" with its result in "end"; a "done" session_leases result with a malformed value (not
+      a mapping, "ended" not a bool, "leases" not a list, a row without exactly LEASE_KEYS, an expires_at not a
+      timezone-aware UTC datetime) gives reason "lease_rows" with nothing written, no removal and no adapter.end
+      (disp89c row 4); on P2 with a token mapping out of the store's form, the record is written, the reads are
+      removed, then adapter.end's "argument" refusal is passed through in "end" with result "refused", in that order
+      (D-2797 Q-E, D-2801 C1); no call raises.
+  - AC8: >-
+      A real append over the event log's own form: observe_gone's record line, appended with eventlog.append to an
+      in-memory log (no file), is "appended" with no fencing_token and no lease, and a second append of the same
+      event gives "duplicate".
+  - AC9: >-
+      start and its order are unchanged: TASK-086's AC1 to AC7 (AC5b included) and AC9 tests, start's parts, and
+      tests/integration/test_launcher_repo.py pass unchanged; of tests/unit/test_launcher.py only TASK086AC8End,
+      TASK086AC10Modules.test_the_import_sets and TASK086AC12Docstrings.test_the_new_module change, and TASK086Naming
+      passes unchanged.
+  - AC10: >-
+      The modules: by ast, read_set_record.py's import set is exactly the one tests/unit/test_read_set_record.py
+      :212-213 pins and its 22 pinned phrases stay; the diff of read_set_record.py from the base is added lines only;
+      launcher.py imports only datetime, hashlib and re and aieos_bootstrap's adapter, base_files, execution, gitread,
+      read_set_record, resume_check, resume_inputs, resume_log_inputs and writer, and names no open, exec, eval,
+      compile, __import__, subprocess, os, sys or time, no attribute environ, getenv, now, write or open_store, no
+      ".aieos" string, and no assert (TASK086AC10Modules, test_launcher.py :661-686, its test_the_import_sets changed
+      to add read_set_record; end reads its argument now as a name, never an attribute named now);
+      tests/unit/test_writer.py :397-412 and tests/unit/test_claude_code_read_hook.py :35-42 and :489-495 (OWN_IMPORTS
+      :38-44) pass.
+  - AC11: >-
+      Docstrings: launcher.py's holds "starts no runtime", "never raises", "not before TASK-089 lands" replaced by
+      "not before TASK-090 lands", "the store is the caller's", "max_risk null never grants", "AIEOS_BASE is the
+      head_commit", "the log is read twice", "this task's choice", "the record before the release", "no fencing
+      token" and "TASK-090", and no longer "writes no observed read-set record" (of TASK-086's nine phrases seven
+      stay, one is removed and one replaced); read_set_record.py's new paragraph names observe_gone, TASK-089 and
+      point 10 and says that "three functions, called only by their tests" (:5) and the abnormal ends listed as not
+      covered (:58-59) no longer hold; every new test in tests/unit/test_launcher_end.py and
+      tests/unit/test_read_set_gone.py names "TASK-089 ACn", and the three changed tests of
+      tests/unit/test_launcher.py name "TASK-086 AC" and "TASK-089 ACn".
+  - AC12: >-
+      Broken copies, each naming its file and failing the tests of its AC: (1) end calls adapter.end before the
+      record (AC2); (2) end calls observe when the lease is gone (AC3); (3) end calls observe_gone with "expired"
+      for a lease it did not see expire (AC3); (4) observe_gone passes a fencing_token (AC4); (5) observe_gone's
+      recorder drops "without a held lease" (AC4); (6) end removes the reads after a refused record (AC5, AC7); (7)
+      end skips the record when reads is empty (AC6); (8) end calls adapter.end after a fenced record refusal (AC7);
+      (9) end raises on a raising stored_reads (AC7); (10) read_set_record.py gains an import (AC10); (11) end binds a
+      callee at import time (AC1); (12) violation forces the gone path over an unexpired row holding the token (AC2;
+      disp89 row 1); (13) a found-present conflict taken as refused, so the reads are not removed (AC5; row 3); (14)
+      end removes the reads before the record (AC2; row 11); (15) the fenced path chosen without the expiry or the
+      token check (AC3; row 11); (16) a duplicate taken as refused (AC5; row 11); (17) a "held" outcome written as
+      gone, observe_gone called over an unexpired row with another token (AC3; D-2782 Q-A); (18) a refused
+      session_leases result ("session") taken as gone (AC7; D-2783 Gap 1, disp89c row 7); (19) the gone path skips
+      adapter.end after a record not found present (AC7; disp89c row 7); (20) end counts only the task's rows, so
+      that another task's unexpired row of the session is ignored and the gone path taken (AC3; D-2797 Q-F, D-2802
+      C1); twenty copies in all; each copy made in a scratchpad script at G3, not committed; the governor's evaluate
+      at acceptance (the shadow) with any difference named.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1000k, wall_time: 5h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9, AC10, AC11]}
+  - {gate: G3, check: constitution, args: [AC12, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
