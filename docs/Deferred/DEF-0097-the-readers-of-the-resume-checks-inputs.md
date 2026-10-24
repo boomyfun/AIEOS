@@ -1,6 +1,6 @@
 # DEF-0097: the readers of the Resume Check's inputs
 
-- Status: open
+- Status: done
 - Opened: 2026-10-24 (session 3797498a; the owner's question on the Resume Check's inputs, decision D-2340)
 - Deferred by: decision agent (A41, A51), D-2340 (a new M7 task, TASK-085, takes these readers).
 - Decision group: A (an M7 task of specification 7's launcher, which runs the Resume Check before every grant).
@@ -25,3 +25,4 @@ TASK-081 (base_files), TASK-082 (the readers at a commit), TASK-008 (resume_chec
 
 ## Log
 - 2026-10-24: opened (session 3797498a; decision D-2340).
+- 2026-10-24: done with TASK-086's records (decision D-2758): every input of resume_check.py :44-48 is read by TASK-085, TASK-088 or TASK-086, or stated and moved to DEF-0100; R5 F4 was closed as documentation only by TASK-085's records (decision D-2573), so nothing is carried (decision D-2682).

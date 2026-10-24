@@ -1,6 +1,6 @@
 # DEF-0099: list_tasks does not re-check a task's dependencies
 
-- Status: open
+- Status: done
 - Opened: 2026-10-24 (session 3797498a; TASK-084's contract, decision D-2475)
 - Deferred by: decision agent (A41, A51), D-2475 ruling 4 (list_tasks reads the log and the store only; the dependency check belongs to the launcher's grant path).
 - Decision group: A (a later task's scope; nothing here changes a specification).
@@ -19,3 +19,4 @@ TASK-084 (list_tasks), TASK-032 (execution's projection); specification 1 sectio
 
 ## Log
 - 2026-10-24: opened (session 3797498a; decision D-2475).
+- 2026-10-24: done with TASK-086's records (decision D-2758): on the launcher's grant path a dependency not DONE makes the Resume Check's check 5 fire BLOCKED, so no lease is granted (TASK-086 AC6).

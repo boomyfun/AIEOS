@@ -31,3 +31,4 @@ TASK-008 accepted (done, D-363).
 
 ## Log
 - 2026-10-10: opened (decision files D-361 and D-363).
+- 2026-10-24: R5 F4 closed as documentation only by TASK-085's records (decision D-2573); the item stays open for its other points (decision D-2682).
