@@ -315,10 +315,14 @@ class TASK084AC6SharedProjection(unittest.TestCase):
         self.assertIn('_project', calls)
 
     def test_random_logs(self):
-        """TASK-084 AC6: 300 seeded random logs with drawn in-form leases: every listed task is READY or REWORK by
-        _project with no unexpired lease, every other approved task is not listed, no findings, no raise; a bad lease
-        added gives findings each time."""
+        """TASK-084 AC6: 300 seeded random logs (task.approved, task.blocked, task.unblocked, task.submitted,
+        decision.acceptance with any drawn next state but IN_PROGRESS, task.done and task.stale) with drawn in-form
+        leases: every listed task is READY or REWORK by _project with no unexpired lease, its element exactly
+        {task, state, contract_hash, lease}, none listed twice; every other approved task, VERIFYING ones among them,
+        is not listed; no findings, no raise; a bad lease added (out of form in one of three ways, on an unapproved
+        task, or a second one on a task) gives findings each time."""
         rng = random.Random(84)
+        verifying = 0
         for round_ in range(300):
             log = Log()
             tasks = ['TASK-%d' % n for n in range(1, rng.randint(2, 6))]
@@ -327,12 +331,15 @@ class TASK084AC6SharedProjection(unittest.TestCase):
                 for k in range(rng.randint(0, 3)):
                     eid = '%s-%d' % (task, k)
                     pick = rng.random()
-                    if pick < 0.25:
+                    if pick < 0.2:
                         log.block(task, eid + 'b')
-                    elif pick < 0.45:
+                    elif pick < 0.35:
                         log.unblock(task, eid + 'u')
+                    elif pick < 0.55:
+                        log.accept(task, rng.choice(STATES), eid + 'a')
                     elif pick < 0.7:
-                        log.accept(task, rng.choice(STATES[:5]), eid + 'a')
+                        log.add('task.submitted', {'commit': '1' * 40, 'compensating': False}, eid + 'v', task,
+                                fencing_token=TOKEN, held=lease(task))
                     elif pick < 0.8:
                         log.add('task.done', {'decision_record': 'd'}, eid + 'd', task)
                     elif pick < 0.9:
@@ -343,16 +350,28 @@ class TASK084AC6SharedProjection(unittest.TestCase):
                       for i, t in enumerate(tasks) if rng.random() < 0.5]
             value, found = Stand(log, leases).run()
             self.assertIsNone(found, round_)
+            self.assertEqual(len(tasks_of(value)), len(set(tasks_of(value))), round_)
             lines = execution._log(lambda root: log.data, ROOT)
             by_task = {lz['task_id']: lz for lz in leases}
+            listed = {t['task']: t for t in value}
             for task in tasks:
-                state = execution._project(lines, task)[0]
+                state, contract_hash = execution._project(lines, task)
+                verifying += state == 'VERIFYING'
                 live = task in by_task and by_task[task]['expires_at'] > NOW
-                self.assertEqual(task in tasks_of(value), state in ('READY', 'REWORK') and not live, (round_, task))
-            bad = rng.choice(([{'task_id': tasks[0]}], [lease('TASK-99')], [lease(tasks[0]), lease(tasks[0], counter=9)]))
-            value, found = Stand(log, leases + bad).run()
+                takeable = state in ('READY', 'REWORK') and not live
+                self.assertEqual(task in listed, takeable, (round_, task))
+                if takeable:
+                    mark = 'expired' if task in by_task else 'none'
+                    self.assertEqual(listed[task], {'task': task, 'state': state, 'contract_hash': contract_hash,
+                                                    'lease': mark}, (round_, task))
+            good = lease(tasks[0], counter=99)
+            bad = rng.choice(([{'task_id': tasks[0], 'fencing_token': TOKEN}], [dict(good, extra=1)],
+                              [dict(good, expires_at=datetime.datetime(2026, 10, 24, 13, 0, 0))],
+                              [lease('TASK-99')], [lease(tasks[0]), lease(tasks[0], counter=9)]))
+            value, found = Stand(log, [lz for lz in leases if lz['task_id'] != tasks[0]] + bad).run()
             self.assertIsNone(value, round_)
             self.assertTrue(found)
+        self.assertGreater(verifying, 0)
 
 
 PHRASES = ['What it does not do', 'DEF-0030', 'Point (i)', 'DEF-0055 P6', 'decision D-687 M4',
