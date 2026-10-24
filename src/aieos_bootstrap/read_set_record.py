@@ -60,6 +60,22 @@ What is not covered (AC6):
 - A record that the hook process never delivers is lost. Every limit of aieos_bootstrap.claude_code,
   aieos_bootstrap.claude_code_hook and aieos_bootstrap.claude_code_channel holds here too. Nothing is installed or
   measured, and no test asserts anything about a running Claude Code.
+
+observe_gone (task TASK-089; specification 5 revision 5, section 11 point 10), added after the text above, which is
+kept unchanged, so two of its statements no longer hold as written: "Three functions, called only by their tests" (a
+fourth, observe_gone, is added, and the launcher's end calls observe and observe_gone), and the abnormal session ends
+listed as not covered (the launcher's end now writes the record of a session whose lease is gone; a crash before the
+end still leaves no record until the next start's record, task TASK-090).
+- ``observe_gone(root, task_id, session_id, read_paths, reason, now, recorder, append=None)``: the core's own
+  observation of a session whose lease is gone. The record is build's, for the recorder recorder + "; written by the
+  core without a held lease: " + reason, so the record says that it was written without a held lease, and why; reason
+  is one of GONE_WHY. It is appended by one record.added event with task_id the task and no fencing_token (an event
+  with no token needs no lease), the same derived ids as observe, and the append's own recorder that same text.
+- The order: root, task_id and session_id (record_ids), reason, now and recorder, each a refusal with reason
+  "argument"; then read_paths, a refusal with reason "read_paths"; then one call of append. "appended" gives
+  "written", "duplicate" gives "duplicate", any other answer gives "refused" with reason "core" and the append's result
+  in "core", as observe does, so a "conflict" there is seen by its core reason. Its reasons are GONE_RESULT_REASONS;
+  REASONS is observe's. It never raises; only the launcher calls it.
 """
 
 import datetime
@@ -183,3 +199,58 @@ def observe(context, read_paths, now, append=None):
     except Exception as e:  # noqa: BLE001 - any exception becomes a result, its type only
         # AC5: the record passed, when append was already called with it, else None
         return _result('refused', 'observe', ['%s raised inside observe' % type(e).__name__], state.get('passed'))
+
+
+# ---- observe_gone (task TASK-089) ----
+
+GONE_WHY = ('violation', 'lease gone (released or expired)', 'no fencing token given')
+GONE_RESULT_REASONS = ('argument', 'read_paths', 'core', 'observe')
+GONE_JOIN = '; written by the core without a held lease: '
+
+
+def _gone_findings(root, task_id, session_id, reason, now, recorder):
+    found = []
+    if not _text(root):
+        found.append('argument: root is not a non-empty string')
+    if record_ids(task_id, session_id) is None:
+        found.append('argument: task_id or session_id is out of form, so the ids cannot be derived')
+    if not (isinstance(reason, str) and reason in GONE_WHY):
+        found.append('argument: reason is not one of GONE_WHY')
+    if not _utc_whole(now):
+        found.append('argument: now is not a timezone-aware datetime in UTC with whole seconds')
+    if not (_text(recorder) and isinstance(session_id, str) and session_id in recorder):
+        found.append('argument: recorder is not a non-empty string holding session_id')
+    return found
+
+
+def _observe_gone(root, task_id, session_id, read_paths, reason, now, recorder, append, state):
+    found = _gone_findings(root, task_id, session_id, reason, now, recorder)
+    if found:
+        return _result('refused', 'argument', found)
+    ids = record_ids(task_id, session_id)
+    text = recorder + GONE_JOIN + reason
+    record = build(task_id, session_id, read_paths, text)
+    if record is None:
+        return _result('refused', 'read_paths', ['read_paths is not a list of non-empty strings'])
+    append = writer.append_event if append is None else append
+    state['passed'] = record
+    w = append(root, EVENT_TYPE, record, ids[0], now, text, task_id=task_id)
+    core = _core(w)
+    if core['result'] == 'appended':
+        return _result('written', None, [], record, core)
+    if core['result'] == 'duplicate':
+        return _result('duplicate', None, [], record, core)
+    return _result('refused', 'core', ['append did not give "appended" or "duplicate"'] + core['findings'], record,
+                   core)
+
+
+def observe_gone(root, task_id, session_id, read_paths, reason, now, recorder, append=None):
+    """Add the observed read-set record of a session whose lease is gone, as the core's own observation with no
+    fencing token (task TASK-089 AC4): a mapping with exactly RESULT_KEYS, its reason one of GONE_RESULT_REASONS. No
+    exception escapes."""
+    state = {}
+    try:
+        return _observe_gone(root, task_id, session_id, read_paths, reason, now, recorder, append, state)
+    except Exception as e:  # noqa: BLE001 - any exception becomes a result, its type only
+        return _result('refused', 'observe', ['%s raised inside observe_gone' % type(e).__name__],
+                       state.get('passed'))
