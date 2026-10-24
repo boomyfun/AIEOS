@@ -8,9 +8,9 @@ The module reads through base_files only: every file is read at the commit with 
 base_files.list_paths, and the commit is an argument: TASK-083 passes the session's base, and TASK-085 is to pass HEAD;
 nothing here reads AIEOS_BASE. read is injectable: it is passed through to base_files, gitread.run being the default,
 taken at call time, and within one call the read in use is wrapped by a cache keyed by its arguments. As for the log,
-the log is a value: the bytes writer.read_log returns, checked by records.check_log. The module never raises: every failure, a
-RecursionError or MemoryError among them, is given as findings. It writes nothing, opens no file, reads no clock and no
-environment, and starts no process but through read. Each reader fails closed.
+the log is a value: the bytes writer.read_log returns, checked by records.check_log. The module never raises: every
+failure, a RecursionError or MemoryError among them, is given as findings. It writes nothing, opens no file, reads no
+clock and no environment, and starts no process but through read. Each reader fails closed.
 
 The readers, each this task's choice where TASK-082's contract says so:
 - contract: docs/tasks/<task>.yaml parsed by a fixed subset of YAML (the contract's header lists its forms and its
@@ -84,7 +84,7 @@ def _skip(line):
 
 def _check_plain(text, where):
     """A plain scalar's text after its line breaks are folded, or a _Stop."""
-    if text == '' or text[0] in _LEADING:
+    if text == '' or text[0] in _LEADING or text == '-' or text.startswith('- '):
         raise _Stop(['contract: %s: a plain scalar is empty or starts with an indicator' % where])
     if ' #' in text or ': ' in text or text.endswith(':'):
         raise _Stop(['contract: %s: a plain scalar holds " #" or ": " or ends with ":"' % where])
@@ -92,18 +92,21 @@ def _check_plain(text, where):
 
 
 def _fold(lines):
-    """The value of a ">-" folded scalar's lines, its block indentation removed, as YAML folds them."""
-    out = lines[0]
-    for k in range(1, len(lines)):
-        line, prev = lines[k], lines[k - 1]
+    """The value of a ">-" folded scalar's lines, its block indentation removed, as YAML folds them: between two
+    non-empty lines with k empty lines between, " " (k = 0) or k line breaks, and one more line break when either line
+    is more indented."""
+    out, prev, empty = lines[0], lines[0], 0
+    for line in lines[1:]:
         if line == '':
-            out += '\n'
-        elif prev == '':
-            out += line
-        elif line.startswith(' ') or prev.startswith(' '):
-            out += '\n' + line
+            empty += 1
+            continue
+        kept = line.startswith(' ') or prev.startswith(' ')
+        if empty:
+            out += '\n' * (empty + kept)
         else:
-            out += ' ' + line
+            out += '\n' if kept else ' '
+        out += line
+        prev, empty = line, 0
     return out
 
 

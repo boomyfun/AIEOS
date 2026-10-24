@@ -5,6 +5,7 @@ history, as tests/integration/test_gitread_repo.py needs. Each test names its cr
 import datetime
 import hashlib
 import pathlib
+import re
 import unittest
 
 from aieos_bootstrap import base_files, base_inputs, context_compiler, eventlog, gitread
@@ -48,12 +49,16 @@ def log_for(text):
 
 class TASK082AC9Repository(unittest.TestCase):
     def test_work_order_of_task_081(self):
-        """TASK-082 AC9: at base_commit, TASK-081's inputs are read and build_work_order accepts them; spec 7 has its
+        """TASK-082 AC9: at base_commit, TASK-081's inputs are read and build_work_order accepts them; the contract's
+        keys equal the file's top-level keys (found by a column-0 match, not by the subset reader); spec 7 has its
         intent hash; the derived path outside TASK-081's patterns is in files and derived_read_set."""
         text = contract_text(BASE)
         value, findings = base_inputs.work_order_inputs(ROOT, BASE, TASK, 's1', log_for(text), gitread.run)
         self.assertIsNone(findings, findings)
         self.assertEqual(value['contract']['task'], TASK)
+        keys = re.findall(r'^([A-Za-z0-9_][A-Za-z0-9_./-]*):', text, re.M)
+        self.assertTrue(keys)
+        self.assertEqual(sorted(value['contract']), sorted(keys))
         self.assertEqual(hashlib.sha256(value['files'][SPEC7].encode('utf-8')).hexdigest(), SPEC7_SHA)
         self.assertIn(DERIVED, value['files'])
         self.assertEqual(value['derived_read_set'], [DERIVED])
