@@ -268,8 +268,9 @@ class TASK095AC4Command(unittest.TestCase):
         self.assertEqual((rc, out), (1, 'finding: cli: a step raised ValueError\n'))
 
     def test_the_other_commands_still_parse(self):
-        """TASK-095 AC4: COMMANDS keeps tasks, end and status before init, and init takes no session."""
-        self.assertEqual(cli.COMMANDS, ('tasks', 'end', 'status', 'init'))
+        """TASK-095 AC4, as TASK-094 AC6 widens it: COMMANDS keeps tasks, end and status before init, then launch,
+        and init takes no session."""
+        self.assertEqual(cli.COMMANDS, ('tasks', 'end', 'status', 'init', 'launch'))
         rc, out, stand, _ = run(['init', 'S', '--root', ROOT])
         self.assertEqual((rc, out, stand.calls), (2, cli.USAGE, []))
 
@@ -325,13 +326,15 @@ def doc(file_name):
 
 class TASK095AC6Docs(unittest.TestCase):
     def test_the_cli_docstring_and_usage(self):
-        """TASK-095 AC6: cli.py's docstring holds "aieos init", "TASK-095", "COMMANDS, tasks, end, status or init"
-        and "end and init call it after the parse", and not "COMMANDS, tasks, end or status"; USAGE names init."""
+        """TASK-095 AC6, as TASK-094 AC6 widens it: cli.py's docstring holds "aieos init", "TASK-095", "COMMANDS,
+        tasks, end, status, init or launch" and "end and init call it after the parse", and not "COMMANDS, tasks, end
+        or status" nor "COMMANDS, tasks, end, status or init"; USAGE names init."""
         text = doc('cli.py')
-        for phrase in ('aieos init', 'TASK-095', 'COMMANDS, tasks, end, status or init',
+        for phrase in ('aieos init', 'TASK-095', 'COMMANDS, tasks, end, status, init or launch',
                        'end and init call it after the parse'):
             self.assertIn(phrase, text)
-        self.assertNotIn('COMMANDS, tasks, end or status', text)
+        for phrase in ('COMMANDS, tasks, end or status', 'COMMANDS, tasks, end, status or init'):
+            self.assertNotIn(phrase, text)
         self.assertIn('init --root <path> [--json]', cli.USAGE)
 
     def test_the_launcher_docstring(self):
