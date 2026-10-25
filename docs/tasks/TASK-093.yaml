@@ -1,0 +1,459 @@
+# TASK-093: `aieos status`. A new core function execution.status_report, added to execution.py by added lines only,
+# reads the log once and gives the project's status: progress (each approved task with its state and stale_evidence,
+# from execution.task_states) and three items "not available" (drift, tasks waiting for approval, requirements lacking
+# assurance), since no reader of them exists (specification 7 revision 2, section 3 :31, section 10 point 5; concept
+# :800-801; M7's remaining part, its third task). A new command status in cli.py calls it and prints the answer; it
+# writes nothing and does not refuse inside a runtime. Plan: decisions D-3085 to D-3088 (session ea6ea0a3): the scope
+# note (MYSP/t93/scope93.md) with D-3086's rulings Q1 to Q6 and its forms C1 to C4; the pin scan (pinscan93-out.txt at
+# 0b37a1aa) and its reading (pinscan93-reading.md, D-3088); the risk run (MYSP/t93/risk_class93.py at 0b37a1aa: high)
+# and the forbidden list (MYSP/t93/forbid93.txt at 0b37a1aa; cli.py and execution.py left out; the new
+# tests/unit/test_execution_status.py is not in it) (D-3088); the reviews rv93a (claude-sonnet-5-5) and rv93b
+# (claude-opus-5-5) of r0 and their dispositions (MYSP/t93/disp93.md, D-3090, twelve rows); the round-2 review
+# rv93c (claude-opus-5-5) of r1 and its dispositions (MYSP/t93/disp93r2.md, D-3093, eight rows); the decision
+# agent's read of r2 in place of a third round, with this one provenance fix (D-3096).
+#
+# Scope:
+# - In src/aieos_bootstrap/execution.py, by added lines only (D-3086 Q3): a paragraph added to the module docstring
+#   after :122 (before the closing quotes at :123), and after the last function, task_view:
+#   - STATUS_KEYS = ('progress', 'drift', 'waiting_for_approval', 'requirements_lacking_assurance') and
+#     NOT_AVAILABLE = 'not available';
+#   - status_report(root, now, read_log=None) -> (a mapping with exactly STATUS_KEYS, None) or (None, findings); it
+#     never raises an Exception. In order:
+#     1. The arguments: root a non-empty str, now a timezone-aware UTC datetime with whole seconds, read_log None or
+#        callable; a wrong one gives (None, ['argument: ...']) with read_log not called; a check that raises gives
+#        (None, ['argument: checking the arguments raised <type>']). read_log defaults at call time to
+#        writer.read_log. now is checked and not otherwise used (no lease is read; D-3086 Q4).
+#     2. The log, read once: read_log(root) is called exactly once; a value that is not bytes gives (None, ['log:
+#        read_log gave <type>, not bytes']); the bytes are checked by records.check_log through _given_log, its
+#        findings given as "log: line <n>: <finding>".
+#     3. The approved ids: the task ids of the log's task.approved events, ignored duplicate lines left out, in the
+#        TASK- form, sorted by task number (_task_key), as list_tasks gathers them (execution.py :464-466).
+#     4. Progress: execution.task_states(the same bytes, the approved ids) once; its findings are given as they are;
+#        else progress is the list, in the approved ids' order, of {task, state, stale_evidence} with the state and
+#        stale_evidence task_states gives.
+#     5. The answer: {progress, drift: NOT_AVAILABLE, waiting_for_approval: NOT_AVAILABLE,
+#        requirements_lacking_assurance: NOT_AVAILABLE} (D-3086 Q1, Q2; spec 7 :31 "not available" where no reader
+#        exists yet).
+#     A raise in steps 2 to 4 gives (None, ['status_report: a step raised <type>']). No partial answer is given.
+#   - It calls no held_leases and reads no store (D-3086 Q4), appends, grants, releases and expires nothing; its added
+#     lines name no attribute now or write and no project-state directory text (test_execution.py :724, :727).
+# - In src/aieos_bootstrap/cli.py (D-3090 rows 2, 6, 8):
+#   - COMMANDS becomes ('tasks', 'end', 'status'); USAGE gains the line for status; _parse takes `status --root
+#     <path> [--json]` as it takes tasks (no session; its "end" branch untouched); _run gets an explicit status branch
+#     after end's, so tasks' fall-through is not reached for status.
+#   - The command status, in two new functions: _status(root, as_json, clock) calls clock() once, then
+#     execution.status_report(root, now) once, looked up at call time; it does not call in_runtime (spec 7 :34 names
+#     only end and launch; D-3086 C1). A raise in the clock or status_report gives exit 1 and the one finding "status:
+#     a step raised <type>". The answer's form uses exact types (type(x) is), as tasks' _item_in_form (cli.py
+#     :135-137), except the findings branch: a tuple of two whose first is None gives findings, the second and its
+#     items taken by isinstance as tasks takes them (cli.py :150-152): the str items of a list or a tuple second, or
+#     "status: status_report gave no finding" when the second is not a list or tuple or holds no str; a tuple of two
+#     whose first is a dict with exactly STATUS_KEYS, progress a list of dicts each with
+#     exactly task (a str), state (a str) and stale_evidence (a bool), the other three each the str "not available",
+#     and whose second is None, is an answer; anything else gives exit 1 and the one finding "status: status_report
+#     gave an answer out of form". Findings give exit 1 through _findings. _render_status(answer, as_json) makes an
+#     answer's output, exit 0: in text, "progress: <task> <state>" per task, with " stale" added when stale_evidence is
+#     true, or the one line "progress: no approved task", then "drift: not available", "waiting for approval: not
+#     available" and "requirements lacking assurance: not available"; under --json the one line
+#     json.dumps({"drift": ..., "progress": the items passed through unchanged, "requirements_lacking_assurance": ...,
+#     "waiting_for_approval": ...}, sort_keys=True). A raise in _render_status gives exit 1 and "cli: a step raised
+#     <type>" (the frame's rule). The frame's rules (one write, flush, a raising write giving 1, never raising) are
+#     TASK-091's, unchanged.
+#   - cli.py's docstring gains status's paragraph and rewords the sentences status makes incomplete: :9 ("a command of
+#     COMMANDS, tasks or end", to name status), :35-36 ("tasks does not call it; end calls it after the parse", to name
+#     status with tasks) and main's docstring :216-217 ("tasks does not read it", to name tasks and status); every
+#     phrase of tests/unit/test_cli.py :405-411 and of tests/unit/test_launcher_outside.py's cli docstring test stays,
+#     and "whose only entry is tasks" and "come with later tasks" are not written; cli.py's imports stay {datetime,
+#     json, os, re, sys, execution, launcher}.
+# - New tests/unit/test_execution_status.py: status_report by stand-ins (a read_log stand-in giving built log bytes and
+#   counting its calls), and the command status by stand-ins (mock.patch.object of execution.status_report), a literal
+#   root 'C:/status-root-93' (L-0032); no tempfile, sqlite3, shutil or open; its naming test requires "TASK-093 AC" in
+#   every test.
+# - What it does not do: no change to tests/unit/test_cli.py (pinscan93-reading.md (6)), writer.py, launcher.py,
+#   mcp_server.py or __init__.py; no change to execute, list_tasks, task_states, rework_count or task_view; no
+#   process; no runtime, hook or setting.
+#
+# Stated limits: drift and tasks waiting for approval are "not available" (no reader of what is open exists: drift.py
+# and scope_drift.py compute new events from a commit's inputs; D-3086 Q1, Q2); requirements lacking assurance is "not
+# available" since specification 4 section 6's checks exist (ac_coverage.check, ac_tests.listing) but no reader of
+# contract and test files feeds them (ac_coverage.py :1-2, :19-20; ac_tests.py :1-2, :27-28). An approved task that
+# was replanned or drafted again shows DRAFT in progress while waiting for approval says "not available", and a task
+# drafted and never approved is not shown. A task under a live lease shows its log state (READY or REWORK), not
+# IN_PROGRESS, since no lease is read; a log that gives a task IN_PROGRESS (which list_tasks refuses, execution.py
+# :470-472) is shown as task_states gives it. A root that is not an existing folder gives only "status_report: a step
+# raised ValueError" (as tasks, cli.py :39); a folder with no event log gives b'' (writer.py :222-224) and "progress:
+# no approved task".
+# Every approved task is listed, DONE ones included. Specification 7 :31's "from the same core reads" is a stated
+# departure: the MCP tool status reads writer.session_leases and the command reads writer.read_log and task_states, so
+# no read is shared (D-3086 Q3; spec 7 section 10 point 5 leaves it open); the MCP tool is not changed. The log is read
+# at one moment, so a task approved after the read is not shown; a log that check_log refuses gives findings only, no
+# partial status; one run at a time (the writer's limit); __init__.py's stale module list stays.
+#
+# Owner-act boundary: none reached. A read-only command; no process, no runtime, no hook, no setting (DM A51 item
+# (4)); CR-002 part 4 limit 5 (CR-002-concept-errata.md :61) is not reached.
+#
+# The pins (L-0026; pinscan93-out.txt at 0b37a1aa; pinscan93-reading.md; D-3088): execution.py's import set
+# (tests/unit/test_execution.py :718-719, tests/unit/test_launcher.py :699-701, tests/unit/test_resume_log_inputs.py
+# :463-465), kept; its refused names and attributes (test_execution.py :720-727), kept; list_tasks' writer uses
+# (tests/unit/test_execution_list_tasks.py :264-303) and task_states' (test_resume_log_inputs.py :474-485), kept;
+# execution.py's docstring phrases (test_execution.py :733-735, test_launcher.py :738-739, test_resume_log_inputs.py
+# :517-518, test_execution_list_tasks.py :386-388), kept by an added paragraph; cli.py's tests (tests/unit/test_cli.py,
+# its refused names :345-356 and docstring test :405-411, and tests/unit/test_launcher_outside.py), all passing
+# unchanged; the deterministic rule (aieos-checks.yml :1489-1521,
+# :1605-1635): execution.py and cli.py keep NONE; GOV-003's EVALUATOR list (src/aieos_bootstrap/**), unchanged; no
+# change under .github/.
+#
+# Risk: high, computed over the base by MYSP/t93/risk_class93.py (R2 medium and R3 high, not evaluable, for each of
+# the three paths; D-3088). GOV-003: an evaluator path; change class ruled at acceptance. Reviews on Sonnet 5.5 and
+# Opus 5.5 (never Fable), read tools only; the acceptance review on Sonnet 5.5. Naming (D-544 Q3): every new test
+# function names "TASK-093 ACn" in its own docstring. Not applicable: OPS-001; INV-005 to INV-011; GOV-001, GOV-004 to
+# GOV-006, SEC-003. Owner-kept acts: none in this task. Shadow (D-2042 C3 as amended by D-2068): the governor's
+# evaluate at acceptance, any difference named. Local runs: the unit group in three parts, integration and property;
+# before commit X, a check of the new and changed files for the B105 pattern (D-2735 C6), for bandit's B608 form
+# (L-0018), for platform-dependent roots (L-0032), for any byte outside printable ASCII and LF (L-0011, D-2981), for
+# the project-state directory text in the added lines and the attributes now and write in execution.py's added block
+# (test_execution.py :724, :727; D-3093 row 7) and for the OPS-003 pattern rule (aieos-checks.yml :1672-1681).
+# Evaluation path (A61): commit C changes only
+# docs/tasks/TASK-093.yaml, has one parent equal to base_commit, and goes to main under its own decision; the task's
+# commits carry "AIEOS-Task: TASK-093" and go to task/TASK-093; main receives them only at acceptance.
+task: TASK-093
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add execution.status_report, by added lines only, which reads the log once and gives the project's status: each
+  approved task with its state and stale_evidence from task_states, and drift, tasks waiting for approval and
+  requirements lacking assurance as "not available"; and a command status in cli.py that prints it as text lines or
+  one JSON line and writes nothing; new tests in tests/unit/test_execution_status.py, each naming "TASK-093 ACn".
+traces_to:
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#3
+  - docs/specs/spec-01-state-and-event-model.md#5
+input_state:
+  base_commit: 0b37a1aa2aa794b740216dd123b14327e207e849
+  depends_on: [TASK-084, TASK-088, TASK-091, TASK-092]
+  intent_versions:
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 613cbd72dca411586ca03d790cd01bb044d0eb8e9a2885d9c3f8bb25cc9f5efb
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: d2fa59ae3f203b3a2108e55d23ddfb875e64ab57d27372c9d413bf30d7c2cbdd
+    docs/specs/spec-05-adapter-contract.md: ae7b99419d303db40b7200e39a22d93b9301b29900f3b1f5a5720b72d8eb9c2b
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 8e744daa31928621137db59a8a9d91ecf163879420e1f8e148232b149cafcdb7
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/cli.py
+    - src/aieos_bootstrap/execution.py
+    - tests/unit/test_execution_status.py
+read_set:
+  paths:
+    - docs/specs/spec-07-cli-and-zero-friction-path.md
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.writer.read_log, aieos_bootstrap.records.check_log,
+    aieos_bootstrap.execution.task_states, aieos_bootstrap.execution.list_tasks, aieos_bootstrap.cli.main]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - pyproject.toml
+  - setup.py
+  - setup.cfg
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/handoff_file.py
+  - src/aieos_bootstrap/launcher.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/resume_log_inputs.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_base_files_repo.py
+  - tests/integration/test_base_inputs_repo.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_launcher_repo.py
+  - tests/integration/test_mcp_server_work_order_repo.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_resume_inputs_repo.py
+  - tests/integration/test_resume_log_inputs_repo.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_base_files_properties.py
+  - tests/property/test_base_inputs_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_context_compiler_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_mcp_server_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_base_files.py
+  - tests/unit/test_base_inputs.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_cli.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_execution_list_tasks.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_handoff_file.py
+  - tests/unit/test_launcher.py
+  - tests/unit/test_launcher_end.py
+  - tests/unit/test_launcher_gone.py
+  - tests/unit/test_launcher_outside.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_mcp_server_work_order.py
+  - tests/unit/test_read_set_gone.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_resume_inputs.py
+  - tests/unit/test_resume_log_inputs.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      status_report's arguments by stand-ins: a root that is empty or not a str, a now that is naive, not UTC or with
+      microseconds, a now whose checks raise, and a read_log neither None nor callable each give (None, findings
+      beginning "argument: ") with read_log not called; read_log defaults at call time (mock.patch.object of
+      writer.read_log made after import is the one called); no call raises.
+  - AC2: >-
+      status_report's answer by stand-ins over built log bytes: read_log is called exactly once with the root; the
+      answer has exactly STATUS_KEYS; progress lists the tasks with a task.approved, three of them given in the log in
+      the order TASK-10, TASK-2, TASK-9, in task-number order (TASK-2, TASK-9, TASK-10), each {task, state,
+      stale_evidence} equal to task_states' over the same bytes (READY; REWORK after task.submitted and a
+      decision.acceptance with next_task_state REWORK; DONE with stale_evidence true after an evidence.stale); a log
+      with no task.approved, and an
+      empty log (b''), give progress []; drift, waiting_for_approval and requirements_lacking_assurance are each "not
+      available"; by ast, status_report names no held_leases and uses no writer attribute but read_log.
+  - AC3: >-
+      status_report's findings by stand-ins: read_log giving a str or None ("log: read_log gave ..."), bytes that
+      check_log refuses ("log: line ..."), a log whose task events the projection refuses (task_states' findings, as
+      given), and a raise in read_log or task_states ("status_report: a step raised <type>") each give (None,
+      findings) with no partial answer; no call raises.
+  - AC4: >-
+      The command status by stand-ins (mock.patch.object of execution.status_report, restored after each test; a
+      counting clock): "status --root R" and "status --root R --json" call the clock once and status_report once with
+      (R, the clock's value); "status", "status --root", "status --root R extra", "status R --root R" and "status
+      --root R --json --json" give exit 2 and USAGE with nothing called; an answer gives exit 0 and the progress lines
+      in order (a stale task with " stale"), or "progress: no approved task", then the three "not available" lines;
+      under --json the output equals an exact expected string, the stand-in's progress items carrying their keys in
+      the order task, state, stale_evidence; findings give exit 1 and their str items, and (None, None), (None, 'x')
+      and (None, [3]) give the no-finding line; each out-of-form answer (not a tuple of two, a list in place of the
+      tuple, an OrderedDict answer, other keys, a list subclass for progress, a progress item with a non-str state or
+      a stale_evidence of 1, an item other than "not available") gives the out-of-form finding; a raising clock or
+      status_report gives "status: a step raised <type>"; a raising _render_status (patched) gives "cli: a step
+      raised <type>"; an environ holding the three RUNTIME_VARS gives the same output as {}; tasks' and end's tests
+      all still pass.
+  - AC5: >-
+      The modules: execution.py's import set unchanged (tests/unit/test_execution.py :718-719 passes) and its refused
+      names and attributes unchanged (:720-727 passes); execution.py's diff from the base is added lines only (the
+      docstring paragraph before :123 and the block after task_view), checked at G3 by a scratchpad git-diff script;
+      cli.py's imports unchanged (tests/unit/test_cli.py :333-343 passes); by ast, cli.py's _status and _render_status
+      name no writer, held_leases or in_runtime; tests/unit/test_writer.py :397-412 passes; the new test file uses no
+      tempfile, sqlite3, shutil or open, roots only the literal 'C:/status-root-93', and uses no one-argument
+      .replace() and no .replace(target=...).
+  - AC6: >-
+      Docstrings: execution.py's module docstring gains a paragraph holding "status_report", "TASK-093", "not
+      available", "reads the log once" and "no held_leases", and keeps every phrase of tests/unit/test_execution.py
+      :733-735, tests/unit/test_launcher.py :738-739, tests/unit/test_resume_log_inputs.py :517-518 and
+      tests/unit/test_execution_list_tasks.py :386-388; cli.py's docstring gains "aieos status" and "TASK-093", does
+      not hold "COMMANDS, tasks or end" and names status in that sentence's list of COMMANDS, and keeps every phrase
+      of tests/unit/test_cli.py :405-411; USAGE names status;
+      every test of tests/unit/test_execution_status.py names "TASK-093 AC", checked by its own naming test, more than
+      20 tests in all.
+  - AC7: >-
+      Broken copies, each naming its file and failing the tests of its AC: (1) read_log called twice (AC2); (2) a
+      held_leases call added (AC2); (3) the approved ids sorted by str in place of _task_key (AC2); (4)
+      stale_evidence dropped (AC2); (5) drift given as a count (AC2); (6) a log check_log refuses giving a partial
+      answer (AC3); (7) read_log bound at import time (AC1); (8) a raise in task_states escaping (AC3); (9) status
+      refusing inside a runtime (AC4); (10) findings giving exit 0 (AC4); (11) the --json line without sort_keys
+      (AC4); (12) "progress: no approved task" left out (AC4); (13) cli.py importing writer (AC5); (14) the clock
+      called twice (AC4); (15) an out-of-form answer printed (AC4); (16) a line of execution.py's list_tasks changed
+      (AC5, the G3 diff script); (17) the answer's form checked by isinstance, an OrderedDict answer printed (AC4);
+      (18) (None, None) given as out of form in place of the no-finding line (AC4);
+      eighteen copies in all; each copy made in a scratchpad script at G3, not committed; the governor's evaluate at
+      acceptance (the shadow) with any difference named.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1000k, wall_time: 5h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6]}
+  - {gate: G3, check: constitution, args: [AC7, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
