@@ -120,6 +120,14 @@ Limits (AC10):
   log, which is append-only (review R4).
 - It starts no process, opens no file except through read_log, append, grant, release and held, reads no clock and no
   environment, and builds no event-log line itself (INV-001 to INV-004).
+
+``status_report(root, now, read_log=None)`` (task TASK-093; specification 7 section 3 :31) gives the project's status
+for ``aieos status``: it reads the log once through read_log (defaulting, at call time, to writer.read_log), checks it
+by records.check_log, gathers the approved ids as list_tasks does, and gives progress, each approved task's state and
+stale_evidence from task_states, with drift, waiting_for_approval and requirements_lacking_assurance "not available",
+since no reader of them exists (specification 7 :31). It makes no held_leases call, reads no store, and appends,
+grants, releases and expires nothing; it gives (a mapping with exactly STATUS_KEYS, None) or (None, findings) and
+never raises; now is checked and not otherwise used.
 """
 
 import datetime
@@ -580,3 +588,48 @@ def task_view(log, root, task_id, now, held=None):
         return None, list(stop.findings)
     except Exception as exc:  # TASK-086 AC9: no exception escapes
         return None, ['task_view: a step raised %s' % type(exc).__name__]
+
+
+# ---- status_report, `aieos status` (task TASK-093) ----
+
+STATUS_KEYS = ('progress', 'drift', 'waiting_for_approval', 'requirements_lacking_assurance')
+NOT_AVAILABLE = 'not available'
+
+
+def status_report(root, now, read_log=None):
+    """The project's status for `aieos status` (TASK-093 AC1 to AC3; specification 7 :31): (a mapping with exactly
+    STATUS_KEYS, None) or (None, findings). It reads the log once through read_log (defaulting, at call time, to
+    writer.read_log), gives each approved task's state and stale_evidence from task_states, and the three other items
+    as NOT_AVAILABLE; it makes no held_leases call, reads no store and never raises."""
+    try:
+        found = []
+        if not _text(root):
+            found.append('argument: root is not a non-empty string')
+        if not _utc_whole(now):
+            found.append('argument: now is not a timezone-aware datetime in UTC with whole seconds')
+        if not (read_log is None or callable(read_log)):
+            found.append('argument: read_log is neither None nor callable')
+    except Exception as exc:  # AC1: an argument whose own methods raise
+        found = ['argument: checking the arguments raised %s' % type(exc).__name__]
+    if found:
+        return None, found
+    try:
+        read_log = writer.read_log if read_log is None else read_log
+        data = read_log(root)
+        if not isinstance(data, bytes):
+            return None, ['log: read_log gave %s, not bytes' % type(data).__name__]
+        lines = _given_log(data)
+        ids = {line.event.get('task_id') for line in lines
+               if line.duplicate_of is None and line.event.get('type') == 'task.approved'}
+        approved = sorted((t for t in ids if isinstance(t, str) and _TASK.fullmatch(t) is not None), key=_task_key)
+        states, found = task_states(data, approved)
+        if found:
+            return None, list(found)
+        progress = [{'task': task_id, 'state': states[task_id]['state'],
+                     'stale_evidence': states[task_id]['stale_evidence']} for task_id in approved]
+        return {'progress': progress, 'drift': NOT_AVAILABLE, 'waiting_for_approval': NOT_AVAILABLE,
+                'requirements_lacking_assurance': NOT_AVAILABLE}, None
+    except _Stop as stop:
+        return None, list(stop.findings)
+    except Exception as exc:  # AC3: no exception escapes
+        return None, ['status_report: a step raised %s' % type(exc).__name__]
