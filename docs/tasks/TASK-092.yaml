@@ -1,0 +1,521 @@
+# TASK-092: `aieos end <session>`. A new core function launcher.end_outside, added to launcher.py after end with a
+# docstring paragraph and two reworded docstring sentences, ends a crashed session from outside any runtime session:
+# for each task among the session's lease rows it writes the session's observed read-set record as the core's own
+# observation with no fencing token and removes the stored reads once the record is present, then ends the session
+# by writer.end_session, which releases every lease of the session; a new command end in cli.py calls it, refusing
+# inside a runtime (specification 7 revision 2, section 3 :33-34, section 5 :45, :48, section 10 point 11;
+# specification 5 revision 5 :112, :119, :125; M7's remaining part, its second task). Plan: decisions D-3046 to
+# D-3051 (session ea6ea0a3): the scope note (MYSP/t92/scope92.md) with D-3047's rulings (a3), (b), (c1), (d), (e)
+# with E1 and E2, and (f); the pin scan (pinscan92-out.txt at 0ebd0dfc) and its reading (pinscan92-reading.md,
+# D-3049); the risk run (MYSP/t92/risk_class92.py at 0ebd0dfc: high) and the forbidden list (MYSP/t92/forbid92.txt at
+# 0ebd0dfc; launcher.py, cli.py and test_cli.py left out; the new tests/unit/test_launcher_outside.py is not in it)
+# (D-3049); the reviews rv92a (claude-sonnet-5-5) and rv92b (claude-opus-5-5) of r0 and their dispositions
+# (MYSP/t92/disp92.md, D-3051, fifteen rows, with R5a); the round-2 review rv92c (claude-opus-5-5) of r1 and its
+# dispositions (MYSP/t92/disp92r2.md, D-3053, seven rows); the decision agent's read of r2 in place of a third
+# round, with three text fixes (D-3056).
+#
+# Scope:
+# - In src/aieos_bootstrap/launcher.py (D-3047 (a3); D-3051 row 1; D-3053 C1): lines added after end, and in the
+#   module docstring an added paragraph (AC6) and two reworded sentences: :86-90 ("its three call places" becomes
+#   "its four call places", the fourth being end_outside, keeping "at the next start" and "before the expiry") and
+#   :95-96 (a "held" session stays open "until its unexpired lease expires or end is called with its token, or
+#   `aieos end` ends it"), each keeping every phrase tests/unit/test_launcher.py :722-733 needs; start, end and
+#   every existing helper and constant unchanged; the clauses at :94-95 ("for the next start or `aieos end`") and
+#   :102-103 name `aieos end` as a remedy and stay true. Checked at G3 by a scratchpad script over git diff from
+#   base_commit (D-3051 Q3): every removed or changed base line lies in :86-90 or :95-96; every other changed line
+#   is an added line, in the docstring's added paragraph or after end:
+#   - OUTSIDE_KEYS = ('result', 'reason', 'findings', 'records', 'released') and
+#     end_outside(root, session_id, now, recorder, session_leases=None, stored_reads=None, remove_reads=None,
+#     observe_gone=None, end_session=None) -> a mapping with exactly OUTSIDE_KEYS; it never raises an Exception: its
+#     whole body, the result's building included, is inside one try. findings and records are lists of str; released
+#     is a list of str, [] on every refusal; reason is None on "done" and a str on "refused".
+#   - In order (each step's name is the reason a refusal or a raise at it takes, and each finding end_outside makes
+#     itself begins "<step>: ", or "<task_id>: <step>: " at a step of one task; end_outside's own findings never
+#     name the root; callees' findings are kept as given, after its own):
+#     1. "argument": root an absolute path (_ROOT's form, launcher.py :139), session_id a non-empty str, now a
+#        timezone-aware UTC datetime with whole seconds, recorder a non-empty str, each callee None or callable; a
+#        wrong one, or a check that raises, gives "refused" with reason "argument" and no callee called. Each callee
+#        defaults at call time to writer.session_leases, writer.stored_reads, writer.remove_reads,
+#        read_set_record.observe_gone and writer.end_session.
+#     2. "lease_rows": the session's rows, read once by session_leases(root, session_id, now); a refused answer
+#        (writer.py :843-847's "session" refusal of a never-started session included, its findings kept) or a value
+#        out of the form {ended: a bool, leases: a list of rows each with exactly task_id, fencing_token and a UTC
+#        expires_at, task_id a str fully matching launcher._TASK} gives "refused" with reason "lease_rows"; the check
+#        is end_outside's own, in the form of _path's (launcher.py :446-451) with the task_id check added (D-3051
+#        row 4). "ended": ended true gives "refused" with reason "ended" and the one finding "ended: the session is
+#        already ended", nothing written.
+#     3. For each distinct task_id of the rows, expired or not, in str sorted order:
+#        - "stored_reads": stored_reads(root, session_id, task_id); a refusal or a value that is not a list gives
+#          "refused" with reason "stored_reads", its findings kept (as end does, launcher.py :510).
+#        - "record": read_set_record.observe_gone(root, task_id, session_id, the reads as a list,
+#          read_set_record.GONE_WHY[2] ('no fencing token given'), now, recorder + " outside the runtime, for
+#          session " + session_id + ", its lease row possibly unexpired") (D-3047 (c1); D-3051 R5a); a record not
+#          found present (launcher._present, :475-477) gives "refused" with reason "record", its findings kept; a
+#          conflict (launcher._conflict, :469-472) counts as present and adds the finding "<task_id>: record: a
+#          record is already present under its event id (conflict)".
+#        - remove_reads(root, session_id, task_id): a refusal or a raise adds the finding "<task_id>: remove_reads:
+#          " followed by its findings or "a step raised <type>", and does not stop the steps, the record being
+#          present.
+#        - The task's records line, exactly: "<task_id>: record <written|duplicate|conflict (present)>, <n> reads
+#          removed", n written by %r of the removal's value (as launcher.py :268), or "<task_id>: record
+#          <written|duplicate|conflict (present)>, reads not removed" when the removal failed (D-3051 row 9).
+#     4. "end": end_session(root, session_id, now). "done" whose value is a list of mappings each with a str
+#        task_id gives result "done", released those task ids in end_session's order; each released task_id not
+#        among the rows read adds the finding "end: <task_id> released with no record (it was not among the rows
+#        read)"; a "done" with any other value gives "done", released [] and the finding "end: end_session's value
+#        is out of form"; a refusal gives "refused" with reason "end" and its findings (its "session" and "ended"
+#        refusals arise only by a race after step 2); a raise gives "refused", "end" and the finding "end: a step
+#        raised <type>; the session may be ended" (D-3051 row 2).
+#   - Failing closed: a refusal or a raise at steps 2 or 3 (before the record of every task is present) ends
+#     nothing: end_session is not called, so no lease is released before its record (spec 5 :112; spec 7 :45). A
+#     raise names the step ("<step>: a step raised <type name>"); a refusal or a raise keeps the records lines
+#     already made.
+#   - A session whose rows list no lease gives records [] and goes straight to end_session.
+# - In src/aieos_bootstrap/cli.py (D-3047 (d); D-3051 rows 3, 11, 13):
+#   - It imports re. COMMANDS becomes ('tasks', 'end'); USAGE gains the line for end; SESSION =
+#     re.compile(r'[A-Za-z0-9._-]{1,128}'), the text of mcp_server._SESSION's pattern (mcp_server.py :137), used
+#     with fullmatch. The parser takes `end <session> --root <path> [--json]`: argv[1] is the session, which must
+#     fully match SESSION, not be "." or "..", and not begin with "-"; else a usage error, exit 2 and USAGE, nothing
+#     called; the flags after it as for tasks.
+#   - The command end, in order: the parse (a bad argv gives exit 2 and USAGE inside a runtime too); then
+#     in_runtime(environ): true gives exit 1 and the one finding "end: refused inside a runtime (spec 7 :34)"
+#     through _findings in the chosen form, with neither the clock nor end_outside called; then clock() once; then
+#     launcher.end_outside(root, session, now, RECORDER) once, looked up at call time, RECORDER = 'aieos cli end'. A
+#     raise in the clock or end_outside gives exit 1 and the one finding "end: a step raised <type>".
+#   - An answer is in form when it is a dict with exactly OUTSIDE_KEYS, result "done" or "refused" (reason a str
+#     when "refused"), and records, released and findings each a list of str; else exit 1 and the one finding "end:
+#     end_outside gave an answer out of form". "done" gives exit 0 and, in text, "record: <line>" for each records
+#     line, then "released: <task_id>" for each released task, or, when released is empty and no finding "end:
+#     end_session's value is out of form" is present, the one line "ended, no lease released"; then "finding: <f>"
+#     for each finding; under --json the one line json.dumps({"findings": [...], "records": [...], "released":
+#     [...]}, sort_keys=True). "refused" gives exit 1 and the findings "end:
+#     <reason>", then "record: <line>" for each records line, then end_outside's findings, through _findings in the
+#     chosen form. The frame's rules (one write, flush, a raising write giving 1, never raising) are TASK-091's,
+#     unchanged.
+#   - cli.py's docstring gains end's paragraph and rewords the sentences end makes false or incomplete: :9-11
+#     ("whose only entry is tasks"; "neither the clock nor list_tasks called"), :25-26 ("the commands that refuse
+#     inside a runtime (end, launch) come with later tasks"), :31-32 ("Nothing runs this module but its tests") and
+#     main's docstring :147-148 (end reads environ); every phrase tests/unit/test_cli.py :403-409 needs stays,
+#     "writes nothing" said of tasks; the module still reads os.environ only in the entry line.
+# - In tests/unit/test_cli.py, only TASK091AC5Module.test_imports (:333-341): its import set becomes {datetime, json,
+#   os, re, sys, aieos_bootstrap.execution, aieos_bootstrap.launcher}, and its docstring names them. No other test of
+#   the file changes: BAD_ARGVS :101's ['end', '--root', ROOT] stays a usage case (its session slot holds "--root",
+#   which begins with "-"), the USAGE test :129-133 and the docstring test :403-409 still hold their words (D-3047
+#   E1; pinscan92-reading.md (2)).
+# - New tests/unit/test_launcher_outside.py: end_outside by stand-ins (each callee recording its calls), and the CLI
+#   command end by stand-ins (mock.patch.object of launcher.end_outside), a literal root 'C:/outside-root-92'
+#   (L-0032); no tempfile, sqlite3, shutil or open; its naming test requires "TASK-092 AC" in every test.
+# - What it does not do: no change to writer.py, read_set_record.py, adapter.py, mcp_server.py or __init__.py; no
+#   change to start, end or any existing helper or constant of launcher.py; no process; no runtime, hook or setting.
+#
+# Stated limits: a session with no lease row left gets no record from this command (writer has no listing of reads
+# by session; its reads wait for the next start of their task, TASK-090's step 1a). This path departs from spec 5
+# :125's sentence "a session whose lease row is still unexpired is not processed": it processes a live row, because
+# spec 7 :48 and spec 5 :119 give a way to end a crashed session before expiry and spec 5 :112 and spec 7 :45
+# require the record before the release (D-3047 (c1); D-3051 Q1); while the row is live, the record's text "written
+# by the core without a held lease" (read_set_record.py :208) is true of the writer but not of the session, so the
+# recorder names the possibly unexpired row (D-3051 R5a); a spec revision item is opened at the records (R5b). An
+# expired row also gets "no fencing token given", where "lease gone (released or expired)" would be true. The rows,
+# the reads, the records and the end are read and written at separate moments: a lease granted to another session
+# between them is not touched (end_session works by session id), and a lease or read added to the same session
+# between the rows read and end_session is released, or left in the store, without a record (the "released with no
+# record" finding names such a lease). A refusal or a raise at steps 2 or 3 leaves the session open, its leases live
+# until they expire (as end's limit, launcher.py :94-96); a refusal at a later task's record keeps the earlier tasks'
+# records and removals, and a retry is safe (the record is then a duplicate or a conflict, both present); a row out
+# of form or a record that keeps failing refuses the end until the rows expire and a next start of the task
+# processes the session. The command cannot see whether the session's runtime has stopped: run on a live session, it
+# ends it (the owner's own use is the owner's; it is not run on a real project by this task). in_runtime sees only
+# the three names (spec 5 :120): an agent's tool call in a runtime started without them is not refused (spec 5
+# :119). cli.py now imports launcher, which loads gitread and so subprocess transitively; no pin refuses this, both
+# pins being per file and on direct imports (pinscan92-reading.md (3)); cli.py's own source starts no process. One
+# run at a time (the writer's limit). SESSION refuses a session id beginning "-", which mcp_server._SESSION allows,
+# so that a flag is not taken for a session; the launcher's ids begin "launch-" (D-3050 Q1). A refused or raising
+# remove_reads leaves the session's stored reads in the store after the end; the task's next start finds them, finds
+# the record present (a conflict under the same event id, read_set_record.py :121; launcher.py :257-269, :469-477)
+# and removes them (TASK-090's step 1a; D-3050 Q2; D-3051 row 14). __init__.py's stale module list stays.
+#
+# Owner-act boundary: none reached. Ending a crashed session from outside the runtime is a core act (spec 7 :33, :48;
+# spec 5 :119): it changes the core's store and log through the writer, starts no process, launches nothing, places no
+# hook and changes no setting (DM A51 item (4)); CR-002 part 4 limit 5 (CR-002-concept-errata.md :61) is not reached
+# (D-3047 (f)).
+#
+# The pins (L-0026; pinscan92-out.txt at 0ebd0dfc; pinscan92-reading.md; D-3049): tests/unit/test_launcher.py :695-705
+# (launcher.py's import set), kept; :707-719 (no open, exec, eval, compile, __import__, subprocess, os, sys or time; no
+# attribute environ, getenv, now, write or open_store; no assert; no ".aieos"), kept; :722-733 and
+# tests/unit/test_launcher_gone.py :421-429 (launcher.py's docstring phrases), kept, a paragraph added and :86-90 and
+# :95-96 reworded;
+# tests/unit/test_launcher_end.py :354 (END_KEYS), kept; tests/unit/test_cli.py :333-341, changed as above; the
+# deterministic rule (aieos-checks.yml :1489-1521, :1605-1635): launcher.py and cli.py keep NONE; GOV-003's EVALUATOR
+# list (src/aieos_bootstrap/**), unchanged; no change under .github/.
+#
+# Risk: high, computed over the base by MYSP/t92/risk_class92.py (R2 medium and R3 high, not evaluable, for each of
+# the four paths; D-3049). GOV-003: an evaluator path; change class ruled at acceptance. Reviews on Sonnet 5.5 and
+# Opus 5.5 (never Fable), read tools only; the acceptance review on Sonnet 5.5. Naming (D-544 Q3): every new test
+# function names "TASK-092 ACn" in its own docstring; the changed test of tests/unit/test_cli.py keeps its own id.
+# Not applicable: OPS-001; INV-005 to INV-011; GOV-001, GOV-004 to GOV-006, SEC-003. Owner-kept acts: none in this
+# task. Shadow (D-2042 C3 as amended by D-2068): the governor's evaluate at acceptance, any difference named. Local
+# runs: the unit group in three parts, integration and property; before commit X, a Grep of the new and changed files
+# for the B105 pattern (D-2735 C6), for bandit's B608 form (L-0018), for platform-dependent roots (L-0032), for any
+# byte outside printable ASCII and LF (L-0011, D-2981) and for the OPS-003 pattern rule (aieos-checks.yml :1672-1681).
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-092.yaml, has one parent equal to base_commit, and goes
+# to main under its own decision; the task's commits carry "AIEOS-Task: TASK-092" and go to task/TASK-092; main
+# receives them only at acceptance.
+task: TASK-092
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add launcher.end_outside after end, with a docstring paragraph, which ends a crashed session from outside the
+  runtime: for each task among the session's lease rows it writes the session's observed read-set record with no
+  fencing token and removes its stored reads once the record is present, then ends the session through
+  writer.end_session, which releases its leases, failing closed with no release before a record; and a command end
+  in cli.py that refuses inside a runtime and prints the result; new tests in tests/unit/test_launcher_outside.py,
+  each naming "TASK-092 ACn", and one test of tests/unit/test_cli.py changed.
+traces_to:
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#3
+  - docs/specs/spec-05-adapter-contract.md#11
+input_state:
+  base_commit: 0ebd0dfc6024f025af005848d4a5d39c707cc80a
+  depends_on: [TASK-086, TASK-089, TASK-090, TASK-091]
+  intent_versions:
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 613cbd72dca411586ca03d790cd01bb044d0eb8e9a2885d9c3f8bb25cc9f5efb
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: d2fa59ae3f203b3a2108e55d23ddfb875e64ab57d27372c9d413bf30d7c2cbdd
+    docs/specs/spec-05-adapter-contract.md: ae7b99419d303db40b7200e39a22d93b9301b29900f3b1f5a5720b72d8eb9c2b
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 8e744daa31928621137db59a8a9d91ecf163879420e1f8e148232b149cafcdb7
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/cli.py
+    - src/aieos_bootstrap/launcher.py
+    - tests/unit/test_cli.py
+    - tests/unit/test_launcher_outside.py
+read_set:
+  paths:
+    - docs/specs/spec-07-cli-and-zero-friction-path.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.writer.session_leases, aieos_bootstrap.writer.stored_reads,
+    aieos_bootstrap.writer.remove_reads, aieos_bootstrap.writer.end_session,
+    aieos_bootstrap.read_set_record.observe_gone, aieos_bootstrap.read_set_record.GONE_WHY,
+    aieos_bootstrap.mcp_server._SESSION, aieos_bootstrap.cli.in_runtime]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - pyproject.toml
+  - setup.py
+  - setup.cfg
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/handoff_file.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/resume_log_inputs.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_base_files_repo.py
+  - tests/integration/test_base_inputs_repo.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_launcher_repo.py
+  - tests/integration/test_mcp_server_work_order_repo.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_resume_inputs_repo.py
+  - tests/integration/test_resume_log_inputs_repo.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_base_files_properties.py
+  - tests/property/test_base_inputs_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_context_compiler_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_mcp_server_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_base_files.py
+  - tests/unit/test_base_inputs.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_execution_list_tasks.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_handoff_file.py
+  - tests/unit/test_launcher.py
+  - tests/unit/test_launcher_end.py
+  - tests/unit/test_launcher_gone.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_mcp_server_work_order.py
+  - tests/unit/test_read_set_gone.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_resume_inputs.py
+  - tests/unit/test_resume_log_inputs.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      end_outside's arguments and form by stand-ins: a root that is not an absolute path, an empty or non-str
+      session_id, a now that is naive, not UTC or with microseconds, a now whose checks raise, an empty recorder, and
+      a callee neither None nor callable each give "refused" with reason "argument", released [] and no callee
+      called; the result has exactly OUTSIDE_KEYS in every case; each callee defaults at call time
+      (mock.patch.object of writer.session_leases, writer.stored_reads, writer.remove_reads,
+      read_set_record.observe_gone and writer.end_session made after import is the one called); no call raises.
+  - AC2: >-
+      end_outside's order and records by stand-ins: with rows of two tasks given in reverse str order, one task in
+      two rows, one task expired and one unexpired, the calls are session_leases once, then for each distinct task
+      once, in str sorted order, stored_reads, observe_gone and remove_reads, then end_session once, after every
+      record; observe_gone gets the task, the session, the reads as a list, read_set_record.GONE_WHY[2], now and
+      exactly the recorder followed by " outside the runtime, for session ", the session id and ", its lease row
+      possibly unexpired"; records holds each task's line exactly in the stated form for a written, a duplicate and
+      a conflict (present) record and for a failed removal, a conflict adding its finding; "done" from end_session
+      gives "done", reason None and released the released leases' task ids, a released task not among the rows
+      adding its finding, and a "done" value out of form giving released [] and its finding; a session with no lease
+      gives records [] with end_session still called.
+  - AC3: >-
+      Failing closed by stand-ins: a refused session_leases answer (its "session" refusal included, its findings
+      kept), a value out of form (a row without a key, a naive expires_at, a task_id that is not a str, is a list or
+      does not match _TASK) ("lease_rows"), ended true ("ended"), a refused stored_reads ("stored_reads"), a record
+      not found present ("record") and a raise at each of these steps (its step's reason) each give "refused" and
+      released [], with end_session not called, the records lines of earlier tasks kept and no call for a later
+      task; a refused or raising remove_reads is named in the findings and end_session is still called; a refused
+      end_session gives "refused" with reason "end" and its findings; a raise in end_session gives "refused", "end"
+      and the "may be ended" finding; every raise names its step; no finding end_outside makes itself holds the root.
+  - AC4: >-
+      The command end by stand-ins (mock.patch.object of launcher.end_outside, restored after each test; a counting
+      clock): an environ holding any of RUNTIME_VARS gives exit 1 and exactly "finding: end: refused inside a runtime
+      (spec 7 :34)", or its JSON line under --json, with neither the clock nor end_outside called; a bad argv in such
+      an environ gives exit 2 and USAGE; "end S --root R" and "end S --root R --json" are accepted and call
+      end_outside once with (R, S, the clock's value, 'aieos cli end'); "end", "end --root R", "end . --root R",
+      "end .. --root R", "end -x --root R", an empty session, a session of 129 characters, one with "/" or one
+      ending in LF, and "end S" without --root give exit 2 and USAGE with nothing called; a session of 128
+      characters is accepted; SESSION.pattern equals mcp_server._SESSION.pattern; a "done" answer gives exit 0 and
+      the record, released (or "ended, no lease released", not printed after the "end_session's value is out of
+      form" finding) and finding lines in that order, and under --json the one sorted JSON line with findings,
+      records and released; a refused answer gives exit 1 and "end: <reason>", the
+      record lines and its findings, in both forms; each out-of-form answer (not a dict, other keys, an unknown
+      result, a non-list or a non-str item) gives the out-of-form finding; a raising clock or end_outside gives exit
+      1 and "end: a step raised <type>"; tasks' tests of tests/unit/test_cli.py all still pass.
+  - AC5: >-
+      The modules: launcher.py's import set unchanged (tests/unit/test_launcher.py :695-705 passes) and its refused
+      names and attributes unchanged (:707-719 passes; end_outside takes now as a parameter and reads no attribute
+      now); launcher.py's diff from the base changes or removes base lines only in :86-90 and :95-96 and otherwise
+      adds lines only, in the docstring's added paragraph or after end, checked at G3 by a scratchpad git-diff
+      script; cli.py's imports are exactly
+      datetime, json, os, re, sys and execution and launcher (from aieos_bootstrap) (tests/unit/test_cli.py :333-341
+      as changed); cli.py still reads os.environ only in the entry line and names no open, exec, eval, compile,
+      __import__, input, argparse, subprocess, writer, time or getenv; tests/unit/test_writer.py :397-412,
+      tests/unit/test_gitread.py :370-380 and tests/unit/test_autonomy.py :238-246 pass; the new test file uses no
+      tempfile, sqlite3, shutil or open, roots only the literal 'C:/outside-root-92', and uses no one-argument
+      .replace() and no .replace(target=...).
+  - AC6: >-
+      Docstrings: launcher.py's module docstring gains a paragraph holding "end_outside", "aieos end", "the record
+      before the release", "no fencing token given", "no lease is released before its record", "possibly unexpired"
+      and "TASK-092", and not holding "writes no observed read-set record"; the sentence at :86-90 says "four call
+      places" and keeps "at the next start" and "before the expiry", and the one at :95-96 says "or `aieos end` ends
+      it"; it keeps every phrase tests/unit/test_launcher.py :722-733 and tests/unit/test_launcher_gone.py :421-429
+      require; cli.py's docstring gains "end <session>", "refused inside a runtime" and "TASK-092", no longer holds
+      "whose only entry is tasks" or "come with later tasks", and keeps every phrase of tests/unit/test_cli.py
+      :403-409; USAGE names end; every test of tests/unit/test_launcher_outside.py names "TASK-092 AC", checked by
+      its own naming test, more than 30 tests in all.
+  - AC7: >-
+      Broken copies, each naming its file and failing the tests of its AC: (1) end_session called before the
+      records (AC2); (2) end_session called after a record not found present (AC3); (3) the reason GONE_WHY[1] in
+      place of GONE_WHY[2] (AC2); (4) the tasks not sorted (AC2); (5) a refused stored_reads ignored (AC3); (6)
+      ended true not refused (AC3); (7) remove_reads called before the record (AC2); (8) a raising remove_reads
+      stopping the end (AC3); (9) a callee bound at import time (AC1); (10) the in_runtime check skipped for end
+      (AC4); (11) the clock called before the in_runtime check (AC4); (12) a session "." accepted (AC4); (13) a
+      session beginning "-" accepted (AC4); (14) end_outside's refusal giving exit 0 (AC4); (15) cli.py importing
+      writer (AC5); (16) a refused end_session reported "done" (AC3); (17) a raise in end_outside not caught by the
+      command (AC4); (18) the loop stopping after the first task's record (AC2); (19) a line of launcher.py's end
+      changed (AC5, failing the G3 diff script); (20) the in_runtime check before the parse (AC4);
+      twenty copies in all; each copy made in a scratchpad script at G3, not committed; the governor's evaluate at
+      acceptance (the shadow) with any difference named.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1000k, wall_time: 5h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6]}
+  - {gate: G3, check: constitution, args: [AC7, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
