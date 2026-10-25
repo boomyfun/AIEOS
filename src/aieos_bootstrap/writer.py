@@ -56,6 +56,13 @@ Limits of task TASK-067:
   finding names that type, "unreadable: UnicodeEncodeError", under the contract's type rule (D-1421 E1).
 - session_lease's docstring is kept byte-identical, so its sentences on the three tables before K1 are stale by design.
 
+Task TASK-087 (specification 7 section 7; specification 2 sections 3 and 5.2) adds ``write_handoff``: the writer also
+creates ``<root>/.aieos/handoffs/<task>-<session>.md``, create-only, a third kind of file in the project-state
+directory, so the sentence above on "exactly two files" stays, qualified by this paragraph. Create-only is a size check
+after opening in append mode, not an exclusive create (this module may open only "rb" and "ab"): two concurrent
+writers are not excluded and may both append, and a write cut off part-way leaves a non-empty file that every later
+write refuses.
+
 Readings of the specifications that the contract marks "(reading)" are noted where they are applied.
 """
 
@@ -1063,6 +1070,76 @@ def migrate_store(root, timeout=5.0):
         return _write_store(real, timeout, _migrate_work, check=False)
     except Exception as e:
         return _named('unreadable', e)
+
+
+# ---- the handoff file (task TASK-087) ----
+
+_HANDOFF_DIR = 'handoffs'
+_HANDOFF_SESSION = re.compile(r'[A-Za-z0-9._-]{1,128}')
+
+
+def _write_handoff_links(root, path):
+    """True when root, root/.aieos, root/.aieos/handoffs or the path is a link, os.path.islink being called on each
+    of the four whether or not it exists, or when the path's realpath, normcased, differs from the normcased realpath
+    of root joined with the project-state directory, handoffs and the file name (_store_present's form)."""
+    folder = os.path.join(root, STATE_DIR, _HANDOFF_DIR)
+    for p in (root, os.path.join(root, STATE_DIR), folder, path):
+        if os.path.islink(p):
+            return True
+    expected = os.path.join(os.path.realpath(root), STATE_DIR, _HANDOFF_DIR, os.path.basename(path))
+    return os.path.normcase(os.path.realpath(path)) != os.path.normcase(expected)
+
+
+def write_handoff(root, task_id, session_id, text):
+    """Create <root>/.aieos/handoffs/<task_id>-<session_id>.md holding the text's UTF-8 bytes, create-only (task
+    TASK-087; specification 7 section 7; specification 2 sections 3 and 5.2). Core-only; nothing calls it yet but the
+    tests and handoff_file.write.
+
+    In order: task_id TASK-<digits>, session_id [A-Za-z0-9._-]{1,128} with "." and ".." refused, text a str ('' is
+    accepted) that encodes as UTF-8 ("argument"); root an existing folder ("root"); the link check, with os.path.islink
+    called on root, root/.aieos, root/.aieos/handoffs and the path whether or not each exists, and the realpath
+    comparison ("link"), before os.makedirs of root/.aieos/handoffs, after it and before the open; the open in append
+    mode, and a size above 0 at f.tell() refuses ("exists") with nothing written; then the bytes are written, flushed
+    and synced, and read back, which must give the same bytes ("unwritable", the file then staying). Create-only is a
+    size check after opening in append mode, not an exclusive create: two concurrent writers are not excluded. The
+    result is a StoreResult: "done" with value ".aieos/handoffs/<task_id>-<session_id>.md", or "refused" with one
+    finding naming an exception's type, never caller text. No exception escapes."""
+    try:
+        _check_task(task_id)
+        if not (isinstance(session_id, str) and _HANDOFF_SESSION.fullmatch(session_id)
+                and session_id not in ('.', '..')):
+            raise ValueError('session_id is not in the handoff form')
+        if not isinstance(text, str):
+            raise TypeError('text is not a str')
+        data = text.encode('utf-8')
+    except Exception as e:
+        return _named('argument', e)
+    try:
+        _check_root(root)
+    except Exception as e:
+        return _named('root', e)
+    name = '%s-%s.md' % (task_id, session_id)
+    folder = os.path.join(root, STATE_DIR, _HANDOFF_DIR)
+    path = os.path.join(folder, name)
+    try:
+        if _write_handoff_links(root, path):
+            return _refused('link', 'link: a link, or a path that resolves elsewhere')
+        os.makedirs(folder, exist_ok=True)
+        if _write_handoff_links(root, path):
+            return _refused('link', 'link: a link, or a path that resolves elsewhere')
+        with open(path, 'ab') as f:
+            if f.tell() > 0:
+                return _refused('exists', 'exists: the handoff file is not empty')
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        with open(path, 'rb') as f:
+            back = f.read()
+        if back != data:
+            return _refused('unwritable', 'unwritable: the read-back differs')
+    except Exception as e:
+        return _named('unwritable', e)
+    return StoreResult('done', value='%s/%s/%s' % (STATE_DIR, _HANDOFF_DIR, name))
 
 
 # ---- the read-only lookup of the store (task TASK-066) ----
