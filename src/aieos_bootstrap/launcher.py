@@ -236,30 +236,39 @@ def _gone_session(root, task_id, session_id, now, recorder, session_leases, stor
                   observe_gone):
     """Step 1a for one listed session (TASK-090 AC4 to AC6): its "gone_records: <session_id>: " lines. _path,
     _present, _conflict and _store_findings are end's; the stored_reads check and the removal are a small stated
-    parallel of end's."""
+    parallel of end's. A raise names the call in progress and keeps the lines already built (TASK-090 AC5)."""
     head = 'gone_records: %s: ' % session_id
-    path, found = _path(session_leases(root, session_id, now), task_id, None, now)
-    if found:
-        return [head + f for f in found]
-    if path != 'gone':
-        return [head + 'skipped, a lease row is unexpired']
-    got = stored_reads(root, session_id, task_id)
-    reads = getattr(got, 'value', None)
-    if getattr(got, 'result', None) != 'done' or not isinstance(reads, list):
-        return [head + f for f in _store_findings('stored_reads', got)]
-    record = observe_gone(root, task_id, session_id, list(reads), read_set_record.GONE_WHY[1], now,
-                          recorder + _GONE_FOR + session_id)
-    if not _present(record):
-        given = record.get('findings') if isinstance(record, dict) else None
-        more = [f for f in given if isinstance(f, str)] if isinstance(given, list) else []
-        return [head + f for f in ['record: the record was not found present'] + more]
     lines = []
-    if _conflict(record):
-        lines.append(head + 'record: a record is already present under its event id (conflict)')
-    removed = remove_reads(root, session_id, task_id)
-    if getattr(removed, 'result', None) != 'done':
-        return lines + [head + f for f in _store_findings('remove_reads', removed)]
-    return lines + [head + 'record %s, %r reads removed' % (record['result'], getattr(removed, 'value', None))]
+    call = 'session_leases'
+    try:
+        path, found = _path(session_leases(root, session_id, now), task_id, None, now)
+        if found:
+            return [head + f for f in found]
+        if path != 'gone':
+            return [head + 'skipped, a lease row is unexpired']
+        call = 'stored_reads'
+        got = stored_reads(root, session_id, task_id)
+        reads = getattr(got, 'value', None)
+        if getattr(got, 'result', None) != 'done' or not isinstance(reads, list):
+            return [head + f for f in _store_findings('stored_reads', got)]
+        call = 'observe_gone'
+        record = observe_gone(root, task_id, session_id, list(reads), read_set_record.GONE_WHY[1], now,
+                              recorder + _GONE_FOR + session_id)
+        if not _present(record):
+            given = record.get('findings') if isinstance(record, dict) else None
+            more = [f for f in given if isinstance(f, str)] if isinstance(given, list) else []
+            return [head + f for f in ['record: the record was not found present'] + more]
+        if _conflict(record):
+            lines.append(head + 'record: a record is already present under its event id (conflict)')
+        lines.append(head + 'record %s' % record['result'])
+        call = 'remove_reads'
+        removed = remove_reads(root, session_id, task_id)
+        if getattr(removed, 'result', None) != 'done':
+            return lines + [head + f for f in _store_findings('remove_reads', removed)]
+        return lines[:-1] + [head + 'record %s, %r reads removed' % (record['result'],
+                                                                    getattr(removed, 'value', None))]
+    except Exception as exc:  # AC5: the callee in progress named, the lines already built kept
+        return lines + [head + '%s: a step raised %s' % (call, type(exc).__name__)]
 
 
 def _gone_records(root, task_id, now, recorder, read_sessions, session_leases, stored_reads, remove_reads,
