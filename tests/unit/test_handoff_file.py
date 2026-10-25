@@ -128,7 +128,7 @@ class TASK087Compose(unittest.TestCase):
         """TASK-087 AC1: arguments out of form give "refused"; no call raises; the result has exactly the keys."""
         cases = [(full_log(), 'TASK-x', SESSION, None), (full_log(), TASK, '..', None), (full_log(), TASK, 'a/b', None),
                  (full_log(), TASK, SESSION, 'ABC'), ('not bytes', TASK, SESSION, None), (None, TASK, SESSION, None),
-                 (full_log(), 7, None, 8)]
+                 (full_log(), 7, None, 8), (full_log(), TASK, '', None), (full_log(), TASK, 'x' * 129, None)]
         for args in cases:
             with self.subTest(args=args[1:]):
                 r = handoff_file.compose(*args)
@@ -265,7 +265,8 @@ class TASK087Module(unittest.TestCase):
         strings = [n.value for n in ast.walk(t) if isinstance(n, ast.Constant) and isinstance(n.value, str)]
         self.assertFalse([s for s in strings if '.aieos' in s])
         self.assertFalse([n for n in ast.walk(t) if isinstance(n, ast.Assert)])
-        self.assertFalse(hasattr(handoff_file, 'PREFIX'))
+        top = [x.id for n in t.body if isinstance(n, ast.Assign) for x in n.targets if isinstance(x, ast.Name)]
+        self.assertFalse([name for name in top if 'PREFIX' in name], top)
 
     def test_the_lists_equal_mcp_servers(self):
         """TASK-087 AC5: HANDOFF_LISTS equals mcp_server.HANDOFF_LISTS."""
