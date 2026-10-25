@@ -1,14 +1,14 @@
-"""The bootstrap's command-line entry point and its first command, tasks (task TASK-091; specification 7 revision 2,
-section 3 :26, :32, :34; section 10 points 10 and 15).
+"""The bootstrap's command-line entry point and its commands, tasks and end (tasks TASK-091 and TASK-092;
+specification 7 revision 2, section 3 :26, :32, :33-34; section 5 :45, :48; section 10 points 10, 11 and 15).
 
 What it does:
 - It is run as ``python -m aieos_bootstrap.cli <command> [flags]``; the installed name is open (specification 7 :26),
   and "aieos <command>" in texts means that run form. ``main(argv, stdout, environ, clock)`` returns 0, 1 or 2 and
   never raises: every Exception is caught; KeyboardInterrupt and SystemExit are not. os.environ is read only in the
   entry line.
-- Its own parser, not argparse: argv is exactly a list of str; argv[0] is a command of COMMANDS, whose only entry is
-  tasks; the flags are --root <path> (required, once, a non-empty value not beginning "--") and --json (optional,
-  once). Anything else gives exit 2 and USAGE, with neither the clock nor list_tasks called.
+- Its own parser, not argparse: argv is exactly a list of str; argv[0] is a command of COMMANDS, tasks or end; end
+  takes its session as argv[1]; the flags are --root <path> (required, once, a non-empty value not beginning "--") and
+  --json (optional, once). Anything else gives exit 2 and USAGE, with neither the clock nor a command's callee called.
 - tasks calls the clock once, then execution.list_tasks(root, now) once, looked up at each call. A list gives exit 0
   and one line "<task> <state> <contract_hash> lease=<lease>" per item (or "no task may be taken"), or under --json
   one JSON line; findings give exit 1 and one "finding: <text>" line each (or one JSON line), list_tasks' str findings
@@ -19,35 +19,55 @@ What it does:
   stdout.write call, then flush when the sink has one; a write or a flush that raises gives exit 1.
 - tasks writes nothing: it reads the log and the store through list_tasks' readers (whose held_leases takes the
   store's write lock for its read, changing no content).
+- end <session> (task TASK-092) ends a crashed session from outside the runtime through launcher.end_outside: the
+  session must fully match SESSION (mcp_server._SESSION's pattern), not be "." or "..", and not begin with "-". After
+  the parse, it is refused inside a runtime: in_runtime(environ) true gives exit 1 and the one finding "end: refused
+  inside a runtime (spec 7 :34)", with neither the clock nor end_outside called; else the clock once, then
+  launcher.end_outside(root, session, now, RECORDER) once, looked up at each call. "done" gives exit 0 and the lines
+  "record: <line>", then "released: <task>" (or "ended, no lease released"), then "finding: <text>", or under --json
+  one JSON line of findings, records and released; "refused" gives exit 1 and the findings "end: <reason>", the record
+  lines and end_outside's findings; an answer out of form gives "end: end_outside gave an answer out of form"; a raise
+  in the clock or end_outside gives "end: a step raised <type>". end writes the core's store and log through the
+  writer; it starts no process.
 - RUNTIME_VARS and in_runtime(environ): outside any runtime means none of the three names is in the environment.
   in_runtime is true when any of them is present; AIEOS_BASE is counted beside the session id and the root, and a
   name whose value is '' counts as present (two stated choices, both fail-closed); an environment whose membership
-  test raises counts as inside. tasks does not call it; the commands that refuse inside a runtime (end, launch)
-  come with later tasks.
+  test raises counts as inside. tasks does not call it; end calls it after the parse; launch, which also refuses
+  inside a runtime, comes with a later task.
 
 Limits, stated: a determined agent can start a nested runtime with an environment it chooses (spec 5 :120); a root
 value beginning "--" cannot be given; a root that names no folder gives only list_tasks' "a step raised" finding; a
 non-ASCII value in the text form on a stdout in a legacy code page raises at the write (exit 1); a stdout in Windows
 text mode writes CRLF. __init__.py is not changed, and its module list stays as it was. Nothing runs this module but
-its tests.
+its tests and the owner's own use.
 """
 
 import datetime
 import json
 import os
+import re
 import sys
 
 from aieos_bootstrap import execution
+from aieos_bootstrap import launcher
 
 RUNTIME_VARS = ('AIEOS_SESSION_ID', 'AIEOS_ROOT', 'AIEOS_BASE')
-COMMANDS = ('tasks',)
+COMMANDS = ('tasks', 'end')
 USAGE = ('usage: python -m aieos_bootstrap.cli tasks --root <path> [--json]\n'
+         '       python -m aieos_bootstrap.cli end <session> --root <path> [--json]\n'
          '  tasks          the tasks that may be taken\n'
+         '  end <session>  end a crashed session from outside the runtime\n'
          '  --root <path>  the project root (required)\n'
          '  --json         one JSON line in place of text lines\n')
 OUT_OF_FORM = 'tasks: list_tasks gave an answer out of form'
 NO_FINDING = 'tasks: list_tasks gave no finding'
 _ITEM_KEYS = ('task', 'state', 'contract_hash', 'lease')
+SESSION = r'[A-Za-z0-9._-]{1,128}'
+RECORDER = 'aieos cli end'
+RUNTIME_REFUSAL = 'end: refused inside a runtime (spec 7 :34)'
+END_OUT_OF_FORM = 'end: end_outside gave an answer out of form'
+NO_LEASE = 'ended, no lease released'
+_VALUE_OUT_OF_FORM = "end: end_session's value is out of form"
 
 
 def in_runtime(environ):
@@ -58,13 +78,23 @@ def in_runtime(environ):
         return True
 
 
+def _session_in_form(session):
+    return (re.fullmatch(SESSION, session) is not None and session not in ('.', '..')
+            and not session.startswith('-'))
+
+
 def _parse(argv):
-    """(root, as_json) for a well-formed argv, else None (a usage error)."""
+    """(command, session, root, as_json) for a well-formed argv, else None (a usage error)."""
     if type(argv) is not list or not argv or any(type(a) is not str for a in argv):
         return None
     if argv[0] not in COMMANDS:
         return None
-    root, as_json, rest, i = None, False, argv[1:], 0
+    command, session, rest = argv[0], None, argv[1:]
+    if command == 'end':
+        if not rest or not _session_in_form(rest[0]):
+            return None
+        session, rest = rest[0], rest[1:]
+    root, as_json, i = None, False, 0
     while i < len(rest):
         flag = rest[i]
         if flag == '--root':
@@ -82,7 +112,7 @@ def _parse(argv):
             return None
     if root is None:
         return None
-    return root, as_json
+    return command, session, root, as_json
 
 
 def _findings(texts, as_json):
@@ -125,7 +155,41 @@ def _tasks(root, clock):
     return 0, 'tasks', value
 
 
-def _run(argv, clock):
+def _str_list(value):
+    return type(value) is list and all(type(v) is str for v in value)
+
+
+def _end_in_form(answer):
+    return (type(answer) is dict and len(answer) == len(launcher.OUTSIDE_KEYS)
+            and all(k in answer for k in launcher.OUTSIDE_KEYS) and answer['result'] in ('done', 'refused')
+            and (answer['result'] == 'done' or type(answer['reason']) is str)
+            and _str_list(answer['records']) and _str_list(answer['released']) and _str_list(answer['findings']))
+
+
+def _end(session, root, as_json, environ, clock):
+    """(the exit code, the whole output) of end."""
+    if in_runtime(environ):
+        return 1, _findings([RUNTIME_REFUSAL], as_json)
+    try:
+        now = clock()
+        answer = launcher.end_outside(root, session, now, RECORDER)
+    except Exception as exc:
+        return 1, _findings(['end: a step raised %s' % type(exc).__name__], as_json)
+    if not _end_in_form(answer):
+        return 1, _findings([END_OUT_OF_FORM], as_json)
+    records, released, found = answer['records'], answer['released'], answer['findings']
+    if answer['result'] == 'refused':
+        return 1, _findings(['end: %s' % answer['reason']] + ['record: %s' % r for r in records] + found, as_json)
+    if as_json:
+        return 0, json.dumps({'findings': found, 'records': records, 'released': released}, sort_keys=True) + '\n'
+    lines = ['record: %s' % r for r in records] + ['released: %s' % t for t in released]
+    if not released and _VALUE_OUT_OF_FORM not in found:
+        lines.append(NO_LEASE)
+    lines += ['finding: %s' % f for f in found]
+    return 0, ''.join(line + '\n' for line in lines)
+
+
+def _run(argv, environ, clock):
     """(the exit code, the whole output)."""
     try:
         parsed = _parse(argv)
@@ -133,7 +197,12 @@ def _run(argv, clock):
         return 1, _findings(['cli: a step raised %s' % type(exc).__name__], False)
     if parsed is None:
         return 2, USAGE
-    root, as_json = parsed
+    command, session, root, as_json = parsed
+    if command == 'end':
+        try:
+            return _end(session, root, as_json, environ, clock)
+        except Exception as exc:
+            return 1, _findings(['cli: a step raised %s' % type(exc).__name__], as_json)
     code, kind, payload = _tasks(root, clock)
     if kind == 'findings':
         return code, _findings(payload, as_json)
@@ -144,10 +213,10 @@ def _run(argv, clock):
 
 
 def main(argv, stdout, environ, clock):
-    """Run one command; return 0, 1 or 2; never raise an Exception. environ is taken for the commands that refuse
-    inside a runtime; tasks does not read it."""
+    """Run one command; return 0, 1 or 2; never raise an Exception. environ is read by end, after the parse, through
+    in_runtime; tasks does not read it."""
     try:
-        code, text = _run(argv, clock)
+        code, text = _run(argv, environ, clock)
     except Exception:
         return 1
     try:

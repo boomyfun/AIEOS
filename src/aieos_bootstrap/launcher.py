@@ -83,17 +83,17 @@ The rulings, each this task's choice (decisions D-2673, D-2675, D-2681):
   change between the reads gives execute's "inputs" refusal, which fails closed, as does a lease taken between
   task_view and execute.
 
-Stated limits: the observed read-set record is written at its three call places: end writes it at the normal end and
-for the gone session at the end after a violation or an expiry, with the stored reads' removal (task TASK-089), and
-start's step 1a writes it at the next start, before the expiry, for a session gone without an end (task TASK-090);
-launching with a runtime is not before DEF-0101's open points are closed: the base-tip check, check 0 and max_risk (a
-statement, not a lock). Step 1a's limits: with no later start of the task no record is written; a gone session that
+Stated limits: the observed read-set record is written at four call places: end writes it at the normal end and for the
+gone session at the end after a violation or an expiry, with the reads' removal (TASK-089), start's step 1a writes it at
+the next start, before the expiry, for a session gone with no end (TASK-090), and end_outside for `aieos end`; launching
+with a runtime is not before DEF-0101's open points are closed: the base-tip check, check 0 and max_risk (a statement,
+not a lock). Step 1a's limits: with no later start of the task no record is written; a gone session that
 stored no read is never listed; now is the caller's, so a now later than the real time reads a live lease as expired;
 it writes records and removes reads even when start then refuses or does not grant; a session that can never be
 processed keeps its reads and gives its line at every start; a project with no store gives a line at each start; the
 listing, the rows and the reads are read at separate moments. end's limits: on the fail-closed paths the
 session stays open, its lease held until it expires, for the next start or `aieos end`; a "held" session stays open
-until its unexpired lease expires or end is called with its token; a token mapping out of the store's form is checked
+until expiry or end is called with its token, or `aieos end` ends it; a token mapping out of the store's form is checked
 only by adapter.end, so on the gone path the record is written and the reads removed before adapter.end refuses it;
 the lease rows are read at one moment, so a lease expiring before observe makes its fenced append refused; a record
 found present as a conflict is the earlier record, so reads added after it are in no record and are removed with the
@@ -108,6 +108,20 @@ execute holds here.
 
 Purity: it opens no file, reads no clock and no environment, and starts no process but through gitread; __init__.py
 is not changed.
+
+end_outside (task TASK-092; `aieos end <session>`, specification 7 :33, :48; specification 5 :112, :119) ends a
+crashed session from outside the runtime and returns a mapping with exactly OUTSIDE_KEYS; it never raises. Its steps,
+each step's name being the reason of a refusal or a raise at it: argument; lease_rows (the session's rows read once,
+in _path's form with the task_id checked); ended; then for each distinct task of the rows, in str sorted order,
+stored_reads, record (observe_gone with 'no fencing token given' and the recorder followed by " outside the runtime,
+for session ", the session id and ", its lease row possibly unexpired") and the stored reads' removal, whose failure
+is named and does not stop the steps; then end (writer.end_session, which releases every lease of the session). It is
+the record before the release: a refusal or a raise before every task's record is present ends nothing, so no lease
+is released before its record. Its limits: it departs from specification 5 :125's "a session whose lease row is
+still unexpired is not processed" (D-3047 (c1)), the recorder naming the possibly unexpired row; an expired row also
+gets "no fencing token given"; a session with no lease row left gets no record; the rows, the reads, the records and
+the end are read and written at separate moments, so a lease added to the session between them is released with no
+record (a finding names it); a refusal before the end leaves the session open until its leases expire.
 """
 
 import datetime
@@ -554,3 +568,152 @@ def end(root, task_id, session_id, fencing_token, now, write_set, allowlist, rec
     more = [f for f in given if isinstance(f, str)] if isinstance(given, list) else []
     return _end_result('refused', 'end', findings + ['end: adapter.end did not end the session'] + more, path, record,
                        removed, ended)
+
+
+# ---- end_outside, `aieos end` (task TASK-092) ----
+
+OUTSIDE_KEYS = ('result', 'reason', 'findings', 'records', 'released')
+_OUTSIDE_FOR = ' outside the runtime, for session '
+_OUTSIDE_TAIL = ', its lease row possibly unexpired'
+_OUTSIDE_CALLEES = ('session_leases', 'stored_reads', 'remove_reads', 'observe_gone', 'end_session')
+
+
+def _outside_result(result, reason=None, findings=(), records=(), released=()):
+    return {'result': result, 'reason': reason, 'findings': [f for f in findings if isinstance(f, str)],
+            'records': [r for r in records if isinstance(r, str)],
+            'released': [t for t in released if isinstance(t, str)] if result == 'done' else []}
+
+
+def _outside_argument_findings(root, session_id, now, recorder, callees):
+    found = []
+    if not (isinstance(root, str) and _ROOT.fullmatch(root) is not None):
+        found.append('argument: root is not an absolute path')
+    if not _text(session_id):
+        found.append('argument: session_id is not a non-empty string')
+    if not _utc_whole(now):
+        found.append('argument: now is not a timezone-aware datetime in UTC with whole seconds')
+    if not _text(recorder):
+        found.append('argument: recorder is not a non-empty string')
+    for name, value in zip(_OUTSIDE_CALLEES, callees):
+        if value is not None and not callable(value):
+            found.append('argument: %s is neither None nor callable' % name)
+    return found
+
+
+def _outside_store(head, name, answer):
+    """A store refusal's findings: the own line "<head><name> gave <result> (<reason>)", then the callee's own."""
+    given = getattr(answer, 'findings', None)
+    more = [f for f in given if isinstance(f, str)] if isinstance(given, (list, tuple)) else []
+    return ['%s%s gave %r (%r)' % (head, name, getattr(answer, 'result', None), getattr(answer, 'reason', None))] + more
+
+
+def _outside_rows(answer):
+    """Step 2: (the value, None), or (None, findings) for a refused or malformed answer; _path's form check with the
+    task_id check added."""
+    if getattr(answer, 'result', None) != 'done':
+        return None, _outside_store('lease_rows: ', 'session_leases', answer)
+    value = getattr(answer, 'value', None)
+    if not (isinstance(value, dict) and set(value) == {'ended', 'leases'} and type(value['ended']) is bool
+            and isinstance(value['leases'], list)):
+        return None, ['lease_rows: session_leases gave a value that is not {ended: a bool, leases: a list}']
+    for row in value['leases']:
+        if not (isinstance(row, dict) and set(row) == _ROW_KEYS and _aware(row['expires_at'])
+                and isinstance(row['task_id'], str) and _TASK.fullmatch(row['task_id']) is not None):
+            return None, ['lease_rows: a lease row is not a mapping of a task_id (TASK- followed by digits), '
+                          'fencing_token and a UTC expires_at']
+    return value, None
+
+
+def _outside_released(value):
+    """Step 4: the released leases' task ids, or None when the value is out of form."""
+    if not isinstance(value, list):
+        return None
+    ids = []
+    for lease in value:
+        if not (isinstance(lease, dict) and isinstance(lease.get('task_id'), str)):
+            return None
+        ids.append(lease['task_id'])
+    return ids
+
+
+def end_outside(root, session_id, now, recorder, session_leases=None, stored_reads=None, remove_reads=None,
+                observe_gone=None, end_session=None):
+    """End a crashed session from outside the runtime (TASK-092 AC1 to AC3; `aieos end`, specification 7 :33, :48):
+    for each task among the session's lease rows, the record before the release, then the stored reads' removal; then
+    writer.end_session, which releases every lease of the session; no lease is released before its record. A
+    mapping with exactly OUTSIDE_KEYS; never raises."""
+    findings, records = [], []
+    step, head = 'argument', ''
+    try:
+        callees = (session_leases, stored_reads, remove_reads, observe_gone, end_session)
+        try:
+            found = _outside_argument_findings(root, session_id, now, recorder, callees)
+        except Exception as exc:  # AC1: an argument whose own methods raise
+            found = ['argument: checking the arguments raised %s' % type(exc).__name__]
+        if found:
+            return _outside_result('refused', 'argument', found)
+        session_leases = writer.session_leases if session_leases is None else session_leases
+        stored_reads = writer.stored_reads if stored_reads is None else stored_reads
+        remove_reads = writer.remove_reads if remove_reads is None else remove_reads
+        observe_gone = read_set_record.observe_gone if observe_gone is None else observe_gone
+        end_session = writer.end_session if end_session is None else end_session
+        step = 'lease_rows'
+        value, found = _outside_rows(session_leases(root, session_id, now))
+        if found:
+            return _outside_result('refused', 'lease_rows', found)
+        if value['ended']:
+            return _outside_result('refused', 'ended', ['ended: the session is already ended'])
+        tasks = sorted(set(row['task_id'] for row in value['leases']))
+        for task_id in tasks:
+            head = task_id + ': '
+            step = 'stored_reads'
+            got = stored_reads(root, session_id, task_id)
+            reads = getattr(got, 'value', None)
+            if getattr(got, 'result', None) != 'done' or not isinstance(reads, list):
+                return _outside_result('refused', 'stored_reads',
+                                       findings + _outside_store(head + 'stored_reads: ', 'stored_reads', got),
+                                       records)
+            step = 'record'
+            record = observe_gone(root, task_id, session_id, list(reads), read_set_record.GONE_WHY[2], now,
+                                  recorder + _OUTSIDE_FOR + session_id + _OUTSIDE_TAIL)
+            if not _present(record):
+                given = record.get('findings') if isinstance(record, dict) else None
+                more = [f for f in given if isinstance(f, str)] if isinstance(given, list) else []
+                return _outside_result('refused', 'record',
+                                       findings + [head + 'record: the record was not found present'] + more, records)
+            if _conflict(record):
+                kind = 'conflict (present)'
+                findings.append(head + 'record: a record is already present under its event id (conflict)')
+            else:
+                kind = record['result']
+            try:
+                r = remove_reads(root, session_id, task_id)
+                if getattr(r, 'result', None) == 'done':
+                    records.append('%srecord %s, %r reads removed' % (head, kind, getattr(r, 'value', None)))
+                else:
+                    findings.extend(_outside_store(head + 'remove_reads: ', 'remove_reads', r))
+                    records.append('%srecord %s, reads not removed' % (head, kind))
+            except Exception as exc:  # AC3: the record is present, so the steps go on
+                findings.append('%sremove_reads: a step raised %s' % (head, type(exc).__name__))
+                records.append('%srecord %s, reads not removed' % (head, kind))
+        step, head = 'end', ''
+        try:
+            ended = end_session(root, session_id, now)
+        except Exception as exc:  # AC3: the end may have committed before the raise
+            return _outside_result('refused', 'end', findings + ['end: a step raised %s; the session may be ended'
+                                                                 % type(exc).__name__], records)
+        if getattr(ended, 'result', None) != 'done':
+            return _outside_result('refused', 'end', findings + _outside_store('end: ', 'end_session', ended), records)
+        released = _outside_released(getattr(ended, 'value', None))
+        if released is None:
+            return _outside_result('done', None, findings + ["end: end_session's value is out of form"], records)
+        for task_id in released:
+            if task_id not in tasks:
+                findings.append('end: %s released with no record (it was not among the rows read)' % task_id)
+        return _outside_result('done', None, findings, records, released)
+    except Exception as exc:  # AC3: a raise names its step and keeps the records lines already made
+        text = '%s%s: a step raised %s' % (head, step, type(exc).__name__)
+        try:
+            return _outside_result('refused', step, findings + [text], records)
+        except Exception:  # the result's building raised: the step and its line only
+            return {'result': 'refused', 'reason': step, 'findings': [text], 'records': [], 'released': []}
