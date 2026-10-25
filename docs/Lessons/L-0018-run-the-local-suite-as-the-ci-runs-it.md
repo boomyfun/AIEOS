@@ -16,9 +16,13 @@ One in session 2026-10-11-1439 (../History/2026-10/2026-10-11-1439-fixture-contr
 Occurrences in session 2026-10-15-0229 (../History/2026-10/2026-10-15-0229-the-scope-drift-caller-accepted-and-on-main.md):
 - **2026-10-15 (D-717).** The local checks before TASK-034's first push ran the suite on a compiled tree, the naming and text scans and the deterministic_rule and OPS-003 rules, but not bandit; the branch's CI run 233 failed only its bandit step (B324, hashlib.sha1 in the test stand-ins), fixed in a second commit. Proposal, for its own decision (D-717 C4): run bandit locally, or an equivalent scan of the added lines for bandit's high-severity patterns, before a first push.
 
+One occurrence in session ea6ea0a3 (the History of that session):
+- **2026-10-25 (D-2941 to D-2944).** TASK-090's first code commit fa324e53 passed every local run, but its CI run 40144226012 failed only its bandit step: B608 read a test helper's INSERT built with "%" as string-built SQL. Fixed in 0fbde1ed by executemany with "?". The proposal of D-717 C4 was still not in the steps: before commit X, grep the added lines for bandit's patterns (B608: SQL built with % or format or +; B105: password-like constant names), as a proxy (L-0007), the CI's bandit run staying the evidence.
+
 ## Why it happens
 The local run was treated as a proxy for the CI's run without checking what the CI does before its test command.
 
 ## Prevention and detection
 - Compile the clone (SP/t018/compile_tree.py, the G1 step's effect) before the suite whose result goes into a push request.
 - When a test lists a folder, expect build artefacts in it.
+- Before commit X, scan the added lines for bandit's B608 and B105 forms; a hit is fixed or named before the push.

@@ -7,8 +7,10 @@
 - Decision group: A (a later task that changes the launcher's start or these helpers, within the self-build).
 
 ## What
-At the task head of TASK-089, 25aba8fa, these places take a findings value from another function's result without
-checking that it is a list, so a non-list value raises (a number) or is split into its letters (a string):
+At the task head of TASK-089, 25aba8fa, these places took a findings value from another function's result without
+checking that it is a list, so a non-list value raises (a number) or is split into its letters (a string); the three
+launcher.py places are closed by TASK-090 (decision D-2956), which keeps only a list's or a tuple's str items, with a
+test of a string, a number and a mapping at each; read_set_record.py's _core stays open:
 - src/aieos_bootstrap/launcher.py :280, in start (TASK-086): `findings = list(started.get('findings') or [])`;
 - src/aieos_bootstrap/launcher.py :290, in start (TASK-086): `more = list(ended.get('findings') or []) if
   isinstance(ended, dict) else []`;
@@ -26,11 +28,13 @@ D-2858 C3 and D-2871: start belongs to TASK-086's contract, which TASK-089 did n
 were not part of review finding F4; a fix here is a change of its own, with its tests.
 
 ## Resume when
-At the next task that changes launcher.py's start or these helpers, which its scope note names; this item closes when
-each place keeps only a list's (or a tuple's) str items, with a test of a non-list value for each.
+At the next task that changes read_set_record.py's _core, which its scope note names; this item closes when _core
+keeps only a list's (or a tuple's) str items, with a test of a non-list value.
 
 ## Depends on
 TASK-086 (start), TASK-089 (end and _store_findings), TASK-064 (read_set_record's _core).
 
 ## Log
 - 2026-10-25: opened with TASK-089's records (session 3797498a; decisions D-2858, D-2871, D-2872, D-2876).
+- 2026-10-25: TASK-090 accepted (decision D-2956): launcher.py's start (two places) and _store_findings closed;
+  read_set_record.py's _core stays open (session ea6ea0a3; decisions D-2910, D-2956).

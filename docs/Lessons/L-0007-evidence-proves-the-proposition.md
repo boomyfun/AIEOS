@@ -50,6 +50,10 @@ Occurrences in session 2026-10-11-2233 (../History/2026-10/2026-10-11-2233-stale
 Occurrences in session 2026-10-15-2351 (../History/2026-10/2026-10-15-2351-the-hardening-on-main-and-round-2s-export-on-its-branch.md):
 - **2026-10-16.** A local text scan for bandit's patterns was reported as "every bandit pattern 0"; it was a proxy, not bandit, and missed B105 reading a dict literal `'fencing_token': None` as a hard-coded password, so the branch run's bandit step failed (run 298). A local pattern scan is described as a proxy, never as bandit's result; the CI's bandit run is the evidence.
 
+Occurrences in session ea6ea0a3 (the History of that session):
+- **2026-10-25 (D-2933).** TASK-090's draft check chk90, rerun after the drafts were placed in the clone, compared the drafts with the clone's working tree, which already held them, so it could not show a difference from the base; fixed by reading the base from git at the contract commit. A check script reads its base from git, never from a working tree it may have changed.
+- **2026-10-25 (D-2932, D-2940).** chk90 checks only part of the deterministic rule; the deterministic rule's own run (det90) found an os.mkdir in a test that chk90 passed. det90 is the check of record; chk90 is a quick proxy.
+
 ## Why it happens
 - Proxies are cheaper than the real check.
 - The same model picks the evidence and judges it.
