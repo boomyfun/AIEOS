@@ -331,14 +331,16 @@ class TASK091AC5Module(unittest.TestCase):
         return ast.parse((SRC / 'cli.py').read_bytes().decode('utf-8'))
 
     def test_imports(self):
-        """TASK-091 AC5: cli.py imports exactly datetime, json, os, sys and execution from aieos_bootstrap."""
+        """TASK-091 AC5, as changed by TASK-092: cli.py imports exactly datetime, json, os, re, sys, and execution and
+        launcher from aieos_bootstrap."""
         names = set()
         for n in ast.walk(self.tree()):
             if isinstance(n, ast.Import):
                 names.update(a.name for a in n.names)
             elif isinstance(n, ast.ImportFrom):
                 names.update('%s.%s' % (n.module, a.name) for a in n.names)
-        self.assertEqual(names, {'datetime', 'json', 'os', 'sys', 'aieos_bootstrap.execution'})
+        self.assertEqual(names, {'datetime', 'json', 'os', 're', 'sys', 'aieos_bootstrap.execution',
+                                 'aieos_bootstrap.launcher'})
 
     def test_refused_names(self):
         """TASK-091 AC5: cli.py names no open, exec, eval, compile, __import__, input, argparse, subprocess, writer,
