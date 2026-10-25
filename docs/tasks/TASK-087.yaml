@@ -1,0 +1,513 @@
+# TASK-087: the handoff file. A new module handoff_file composes .aieos/handoffs/<task>-<session>.md from the session's
+# handoff claim records in the event log, in specification 2 section 5.2's form, and writes it through a new
+# create-only writer.write_handoff (specification 7 revision 2, section 7 :60-62; specification 6 revision 7, sections 4
+# :43 and 7 :69; specification 2 revision 10, section 5.2 :116-118; DEF-0095; M7's seventh task, the last before M7's
+# exit review). Plan: decisions D-2970 to D-2983 (session ea6ea0a3): the owner's word to finish M7 in this session
+# (D-2970); the scope note (MYSP/t87/scope87.md) with D-2974's rulings (b2), (c), (d2), (e) and R1 to R4, its (a2)
+# (docs/handoffs/) reversed to (a1) (.aieos/handoffs/) by D-2979 under INV-001 (constitution.md :29: "the core writes
+# files only to the project-state directory and its logs"); the pin scan (pinscan87-out.txt at 1a193ff7) and its
+# reading (pinscan87-reading.md) with D-2976's rulings (1) and (6), (5)'s prefix copy dropped under (a1); the risk run
+# (MYSP/t87/risk_class87.py at 1a193ff7: high) and the forbidden list (MYSP/t87/forbid87.txt at 1a193ff7; writer.py
+# and test_writer.py left out; the new handoff_file.py and test_handoff_file.py are not in it) (D-2977); the reviews
+# rv87a (claude-sonnet-5-5) and rv87b (claude-opus-5-5) of r0 and their dispositions (MYSP/t87/disp87.md, D-2979); the
+# round-2 review rv87c (claude-opus-5-5) of r1 and its dispositions (MYSP/t87/disp87r2.md, D-2981), the ASCII fix
+# (fix87.py, D-2982) and the decision agent's read of r2 in place of a third round (D-2983).
+# The task's records commit amends DEF-0095 (D-2974 R1: the file's writing closed by this task; its wiring by the CLI
+# frame, how the file reaches Git, the reader's place and "the last handoff" still open; D-2979 C5), under its own
+# decision (docs/** is forbidden to this task's commits).
+#
+# Scope:
+# - New src/aieos_bootstrap/handoff_file.py (D-2974 (b2), (c); D-2976 (5) as D-2979 narrowed it):
+#   - HANDOFF_LISTS = ('done', 'not_done', 'assumptions', 'discoveries', 'risks', 'proposals'), its own copy, tested
+#     equal to mcp_server.HANDOFF_LISTS (mcp_server.py :100); no prefix constant (the path is the writer's, D-2979 row
+#     1); its imports are exactly json, re and writer (from aieos_bootstrap).
+#   - compose(log, task_id, session_id, commit): pure. task_id TASK-<digits>, session_id in the session form below
+#     and commit None or 40 lowercase hex, else "refused" with an argument finding. From the log's bytes, split at LF,
+#     empty and whitespace-only lines skipped (mcp_server.py :293-295), each other line must decode as UTF-8 and parse
+#     by json.loads (RecursionError included) as a JSON object, else "refused". It takes, in log order, the payloads of
+#     the events of type "record.added" whose payload has session equal to session_id and refers_to a str beginning
+#     "handoffs/" (the test of mcp_server.py :290-301), and, this task's additions, fact_kind "claim" and subject equal
+#     to task_id. Each such refers_to must be exactly "handoffs/<task_id>-<session_id>.md#<list>/<n>", <list> in
+#     HANDOFF_LISTS and <n> a decimal from 1 with no leading zero, and its text a non-empty str that encodes as UTF-8;
+#     within each list the places must be 1 to k with no gap and no repeat. The result is a mapping with exactly the
+#     keys result, path, text and findings: "none" (no such claim; path and text None; spec 6 :69: no handoff call, no
+#     file); "composed" (path writer.STATE_DIR + "/handoffs/<task_id>-<session_id>.md", that is
+#     ".aieos/handoffs/<task_id>-<session_id>.md", text below); or "refused" (findings, path and text None), for a bad
+#     argument, a log line out of form, a refers_to out of that form or naming another file, a bad list or place, an
+#     empty, non-str or unencodable text, a gap or a repeat. It never raises. The path is built from writer.STATE_DIR:
+#     no string of handoff_file.py, its docstring included, names ".aieos" (R8, tests/unit/test_writer.py :388, :412;
+#     the docstring says "the project-state directory"; D-2981 row 2). compose's own argument checks were added in r1
+#     (D-2981 row 9).
+#   - The text (spec 2 section 5.2): the line "---", then "task: <task_id>", "session: <J(session_id)>", "commit:
+#     <J(commit)>"
+#     or "commit: null" (the key always present, null when the caller gives none: a stated choice, spec 2 :118's "if
+#     any"), then each of the six lists in HANDOFF_LISTS order, a list with no item as "<list>: []", a list with items
+#     as "<list>:" followed by one line "  - <J(item)>" per item in place order, then "---" and a final LF; no body
+#     (spec 2 section 5.2's free notes: none, since no claim carries them). LF only. J(x) is json.dumps(x,
+#     ensure_ascii=False), with the characters U+0085, U+2028 and U+2029 then written as JSON's six-character escapes
+#     (a backslash, the letter u and four hex digits)
+#     (a JSON string is a YAML double-quoted
+#     scalar; a stated choice; session and commit quoted so that ids like "123" or "null" stay strings).
+#   - The session form (D-2979 row 3): [A-Za-z0-9._-]{1,128}, mcp_server's (mcp_server.py :137, :147), with "." and
+#     ".." alone refused; the same in compose, write and writer.write_handoff.
+#   - write(root, task_id, session_id, commit, read_log=None, write_handoff=None): checks its arguments (task_id
+#     TASK-<digits>; session_id in the session form; commit None or 40 lowercase hex characters; root a non-empty str,
+#     its form left to the writer; each callee None or callable),
+#     reads the log once by read_log(root) (default writer.read_log at call time), composes, and on "composed" calls
+#     write_handoff(root, task_id, session_id, text) once (default writer.write_handoff at call time). It returns a
+#     mapping with exactly the keys result ("written", "none" or "refused"), reason (None, or "argument", "log",
+#     "claims" or "write"), findings (a list of str) and path; a log that is not bytes or a raising read_log gives
+#     "log"; compose's refusal gives "claims"; a write_handoff answer that is not StoreResult "done", or a raise, gives
+#     "write" with its findings (only the str items of a list or a tuple, as DEF-0102's rule). It never raises and
+#     writes nothing itself. Nothing calls write but its tests (D-2974 R1).
+# - In src/aieos_bootstrap/writer.py, by added lines only, above the marker "# ---- the read-only lookup of the store
+#   (task TASK-066) ----" (tests/unit/test_writer.py :861-877, :1726-1738), one public function and its private
+#   helpers (D-2974 R2; D-2976 (1)):
+#   - write_handoff(root, task_id, session_id, text): checks task_id by _check_task's form (TASK-<digits>),
+#     session_id against [A-Za-z0-9._-]{1,128} with "." and ".." alone refused, and text a str ('' accepted) that
+#     encodes as UTF-8, all before anything else ("argument"); root by _check_root (an existing folder), a refusal
+#     reported by the exception's type only, as _named does (writer.py :777-780; D-2981 row 11); the path is
+#     root/.aieos/handoffs/<task_id>-<session_id>.md, inside the project-state directory (INV-001's tool part,
+#     constitution.md :29; spec 2 section 3 :35; D-2979 row 1). It refuses ("link") when root, root/.aieos,
+#     root/.aieos/handoffs or the path is a link, os.path.islink being called on each of the four whether or not it
+#     exists (D-2981 row 6), or when the path's
+#     os.path.realpath, normcased, is not equal to the normcased realpath of root joined with ".aieos", "handoffs" and
+#     the file name (_store_present's form, writer.py :579-585); the realpath check runs before os.makedirs, after it,
+#     and before the open. It makes root/.aieos/handoffs by os.makedirs(..., exist_ok=True) (the writer's allowance:
+#     makedirs; aieos-checks.yml :1506-1507), opens the path with open(path, 'ab'), and if f.tell() is above 0 refuses
+#     ("exists") with nothing written; otherwise it writes the text's UTF-8 bytes, then flush and os.fsync, then reads
+#     the file back with open(path, 'rb'), whose bytes must equal the text's, else "unwritable" (the file then stays).
+#     The result is a StoreResult: "done" with value the path relative to root, ".aieos/handoffs/<task_id>-
+#     <session_id>.md"; or "refused" with one finding, reason "argument", "root", "link", "exists" or "unwritable" (an
+#     OSError, or a read-back that differs). No finding holds caller text. No exception escapes. The module docstring
+#     gains a paragraph saying the writer also creates .aieos/handoffs/<task>-<session>.md, create-only; its sentence
+#     at writer.py :5 ("exactly two files") stays, qualified by that paragraph, as :57's "stale by design" is (added
+#     lines only; no test pins either phrase: a Grep of tests/ for "exactly two files", "opens no other file" and "only
+#     module of the core that opens" found nothing; D-2976 (6), D-2979 row 12).
+# - In tests/unit/test_writer.py: R23TheNamesAtTheBase.test_only_the_new_function_and_its_helpers_are_added (TASK-078
+#   AC2 as TASK-090 AC2 widened it, :2079-2097) is widened by exactly write_handoff and the names beginning
+#   "_write_handoff" or "_HANDOFF", all above the marker; BASE keeps its 94 names; the TASK-067 AC9 and AC6 tests pass
+#   unchanged; new real-folder tests of write_handoff in one new class, TASK087WriteHandoff (tempfile and open "rb"
+#   are allowed in this file only; no os.mkdir, D-2932; the .aieos/handoffs folder is made by write_handoff itself, and
+#   an existing empty file by a first call with text ''; D-2974 R3), and write_handoff's and writer.py's docstring
+#   tests in it.
+# - New tests/unit/test_handoff_file.py: compose and write by stand-ins only (no tempfile, sqlite3, shutil or open),
+#   with a fixed literal root 'C:/handoff-root-87' (L-0032); log lines built in mcp_server's record form (mcp_server.py
+#   :323-328) by a helper of the test; HANDOFF_LISTS' equality with mcp_server's; the naming test, which also reads
+#   tests/unit/test_writer.py's class TASK087WriteHandoff (D-2979 row 16).
+# - What it does not do: no change to launcher.py (end and END_KEYS unchanged, D-2974 (b2)), mcp_server.py,
+#   base_inputs.py (the last handoff and its place stay open, D-2974 (d2)), gitread.py or __init__.py; no
+#   Git write and no commit of the file; no wiring into `aieos launch` or `aieos end` (the CLI frame's later task); no
+#   runtime launched.
+#
+# Stated limits: nothing calls handoff_file.write but its tests, so no handoff file is written in a real session until
+# the CLI frame wires it after the launcher's end and after a submission (D-2974 R1). The file is written under
+# .aieos/handoffs/ in the working tree and is not committed by the core; how it reaches Git, and how it stays out of
+# a later session's commit, stay open (spec 7 :61); no .gitignore exists at the base, so nothing keeps .aieos/handoffs/
+# or .aieos/local/ out of git status (D-2981 row 10). The next Work Order does not
+# see it: base_inputs reads the last handoff under docs/handoffs/ at the base (base_inputs.py :56, :589-598; TASK-082's
+# reading, TASK-082.yaml :127-132, D-2337, D-2344 (4)), so the reader's place and "the last handoff" stay open, carried
+# in DEF-0095 as amended (D-2979 row 1, C5); two or more files for one task under docs/handoffs/ would be base_inputs'
+# refusal of the Work Order (base_inputs.py :596-597), which this task never writes. Abnormal ends and crashes stay
+# open (spec 6 :69; spec 5 :125); nothing here writes a file for them (D-2981 row 4). commit is the caller's, since the
+# log's task.submitted carries no session (submit.py :13-14); once a file is written (for instance after an end with
+# commit null), a later call for the same session is "exists". A session whose id is "." or ".." (which mcp_server
+# accepts, mcp_server.py :137) can record handoff claims but never gets a file (D-2981 row 5). A handoff cut off at any
+# point (some items appended, the rest lost to a failed append: a fence refusal or any core_error, mcp_server.py :281,
+# :337-352) is composed as a complete one with fewer items, since the records carry no item count; a retry completes
+# it only under the same lease and before write runs (mcp_server.py :75-76); the gap check catches only a log with a
+# missing or forged place (D-2979 row 2; D-2981 row 3).
+# Create-only is a size-0 check after opening in append mode, not an exclusive create (the deterministic rule allows
+# writer.py only open "rb" and "ab" and os.makedirs; aieos-checks.yml :1506-1507): two concurrent writers may both see
+# size 0 and append both texts, a doubled file (beside the writer's one-run-at-a-time limit); a write cut off part-way
+# leaves a non-empty file that every later write refuses; an existing empty file is written. The link and realpath
+# checks run at moments apart from the open; os.path.islink does not see a Windows junction, and a junction that
+# resolves back inside root is not caught by the realpath check either. Session ids that differ only in case name the
+# same file on a case-insensitive file system. A JSON string is read by YAML as a double-quoted scalar; U+0085, U+2028
+# and U+2029 are escaped for YAML 1.1 readers. writer.py :5's "exactly two files" stays, qualified by the added
+# paragraph, and __init__.py's package docstring still says the writer "opens no other file" (__init__.py :23-25; the
+# file is forbidden to this task; D-2976 (6), D-2979 row 12).
+#
+# Owner-act boundary: none reached. No Git write, no hook placed, no setting changed, no runtime started (DM A51 item
+# (4); specification 7 :50). INV-004: the one file write goes through the core's writer (writer.write_handoff), inside
+# the project-state directory, whose committed paths the CI's INV-004 path rule covers (aieos-checks.yml :1477); no
+# module but writer.py opens a file (tests/unit/test_writer.py :397-412). INV-001: no new process, and the core writes
+# files only to the project-state directory (constitution.md :29; D-2979 row 1).
+#
+# The pins (L-0026; pinscan87-out.txt at 1a193ff7; pinscan87-reading.md; D-2975, D-2976): tests/unit/test_writer.py
+# :2079-2097 (TASK-078 AC2), widened by this contract; :861-877 (TASK-066 AC3/AC6: no makedirs after the marker) and
+# :1717-1738 (TASK-067 AC6, AC9), kept unchanged; :397-412 (R8), kept; tests/unit/test_gitread.py :370-380 and
+# tests/unit/test_autonomy.py :238-246, kept; tests/unit/test_mcp_server.py :281 and
+# tests/unit/test_mcp_server_work_order.py :438, kept (mcp_server.py unchanged); tests/integration/test_writer_files.py
+# :98, kept. The deterministic rule (.github/workflows/aieos-
+# checks.yml :1490-1510): writer.py may use only os.makedirs and open "rb"/"ab"; tempfile and sqlite3 only in the
+# writer's own test files; every other path none. GOV-003's EVALUATOR list (src/aieos_bootstrap/**), unchanged. No
+# change under .github/.
+#
+# Risk: high, computed over the base by MYSP/t87/risk_class87.py (R2 medium and R3 high, not evaluable, for each path;
+# D-2977). GOV-003: an evaluator path; change class ruled at acceptance. Reviews on Sonnet 5.5 and Opus 5.5 (never
+# Fable), read tools only; the acceptance review on Sonnet 5.5. Naming (D-544 Q3): every new test function names
+# "TASK-087 ACn" in its own docstring; the changed test of tests/unit/test_writer.py keeps its own id beside it. Not
+# applicable: OPS-001; INV-005 to INV-011; GOV-001, GOV-004 to GOV-006, SEC-003. Owner-kept acts: none in this task.
+# Shadow (D-2042 C3 as amended by D-2068): the governor's evaluate at acceptance, any difference named. Local runs: the
+# unit group in three parts; before commit X, a Grep of the new and changed test files for the B105 pattern (D-2735
+# C6), for bandit's B608 form (L-0018) and for platform-dependent roots (L-0032).
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-087.yaml, has one parent equal to base_commit, and goes
+# to main under its own decision; the task's commits carry "AIEOS-Task: TASK-087" and go to task/TASK-087; main
+# receives them only at acceptance.
+task: TASK-087
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add a new module handoff_file that composes .aieos/handoffs/<task>-<session>.md from the session's handoff claim
+  records in the event log, in specification 2 section 5.2's form with commit given by the caller, giving none when
+  there is no handoff claim and findings for a malformed handoff, and writes it inside the project-state directory
+  through a new create-only writer.write_handoff added to writer.py by added lines only; nothing calls it yet but its
+  tests; new tests in
+  tests/unit/test_handoff_file.py and tests/unit/test_writer.py, each naming "TASK-087 ACn", and one test of
+  tests/unit/test_writer.py widened.
+traces_to:
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#7
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#7
+input_state:
+  base_commit: 1a193ff721bf59d86f2f91494f2301e55972a5fc
+  depends_on: [TASK-016, TASK-078, TASK-079, TASK-082, TASK-090]
+  intent_versions:
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 613cbd72dca411586ca03d790cd01bb044d0eb8e9a2885d9c3f8bb25cc9f5efb
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: d2fa59ae3f203b3a2108e55d23ddfb875e64ab57d27372c9d413bf30d7c2cbdd
+    docs/specs/spec-05-adapter-contract.md: ae7b99419d303db40b7200e39a22d93b9301b29900f3b1f5a5720b72d8eb9c2b
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 8e744daa31928621137db59a8a9d91ecf163879420e1f8e148232b149cafcdb7
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/handoff_file.py
+    - src/aieos_bootstrap/writer.py
+    - tests/unit/test_handoff_file.py
+    - tests/unit/test_writer.py
+read_set:
+  paths:
+    - docs/specs/spec-07-cli-and-zero-friction-path.md
+    - docs/specs/spec-06-mcp-protocol-and-work-orders.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/Deferred/DEF-0095-the-handoff-file-of-the-claim-tools-for-the-launcher.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.writer.read_log, aieos_bootstrap.writer.StoreResult,
+    aieos_bootstrap.mcp_server.HANDOFF_LISTS]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/launcher.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/resume_log_inputs.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_base_files_repo.py
+  - tests/integration/test_base_inputs_repo.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_launcher_repo.py
+  - tests/integration/test_mcp_server_work_order_repo.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_resume_inputs_repo.py
+  - tests/integration/test_resume_log_inputs_repo.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_base_files_properties.py
+  - tests/property/test_base_inputs_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_context_compiler_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_mcp_server_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_base_files.py
+  - tests/unit/test_base_inputs.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_execution_list_tasks.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_launcher.py
+  - tests/unit/test_launcher_end.py
+  - tests/unit/test_launcher_gone.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_mcp_server_work_order.py
+  - tests/unit/test_read_set_gone.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_resume_inputs.py
+  - tests/unit/test_resume_log_inputs.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      compose over logs built in mcp_server's record form: a handoff of all six lists (some empty) gives "composed"
+      with path ".aieos/handoffs/<task>-<session>.md" and exactly the text of the scope (front matter with session and
+      commit JSON-quoted, lists in HANDOFF_LISTS order, "[]" for an empty list, items in place order, each item line's
+      JSON part decoding back to its text, non-ASCII kept, U+0085, U+2028 and U+2029 written escaped, a final LF, no
+      CR), with "commit: <the quoted 40 hex>" and with "commit: null", and with a session id "123"; empty and
+      whitespace-only lines are skipped; claims of another session, of another task, with no refers_to, of another kind
+      than "claim", and other event types are left out; a log with no handoff claim gives "none"; arguments out of form,
+      a log line that is not UTF-8, not JSON or not a JSON object, a refers_to naming another file or out of form, a
+      list not in HANDOFF_LISTS, a place 0, with a leading zero or not a number, an empty, non-str or unencodable (a
+      lone surrogate) text, a gap (1, 3) and a repeated place each give "refused" with findings and no text; no call
+      raises, and the result has exactly the keys result, path, text and findings.
+  - AC2: >-
+      write by stand-ins: arguments out of form (task_id not TASK-<digits>, a session_id with "/" or "\\", "." or ".."
+      alone, empty or over 128 characters, a commit not 40 lowercase hex, an empty root, a callee neither None nor
+      callable) give "refused" with reason "argument" and no callee called; read_log is called once with root, then
+      write_handoff once with (root, task_id, session_id, the composed text) on "composed", and not at all on "none"
+      ("none", path None) or on a claims refusal ("claims"); a log that is not bytes or a raising read_log gives
+      "log"; a write_handoff refusal, an answer that is not a StoreResult, an answer whose findings are a string, and
+      a raise each give "write", the string giving no finding item; "done" gives "written" with the path; with no
+      callee given, each defaults at call time (mock.patch.object of writer.read_log and writer.write_handoff,
+      restored after the test, seen called); the result has exactly the keys result, reason, findings and path; no
+      call raises.
+  - AC3: >-
+      writer.write_handoff over real folders (tests/unit/test_writer.py, class TASK087WriteHandoff,
+      tempfile.TemporaryDirectory): it creates .aieos/handoffs and the file with exactly the text's UTF-8 bytes and
+      gives "done" with value ".aieos/handoffs/<task>-<session>.md", nothing else created under the root; a second call
+      with any text gives "refused" with reason "exists" and the file's bytes unchanged; an existing empty file (made by
+      a first call with '') is written; arguments out of form (the forms of AC2, a non-str text, a text with a lone
+      surrogate) give "argument" and a root that names no existing folder "root", each creating nothing (the folder's
+      file list unchanged); a link at each of root, root/.aieos, root/.aieos/handoffs and the path, given by
+      mock.patch.object of writer.os.path.islink true for that one path (islink being called on each whether or not it
+      exists; the path's case also run after a first call with '', when the file exists), and a realpath that differs
+      from the expected one, given by mock.patch.object of writer.os.path.realpath, each give "link" with nothing
+      written; an OSError raised by the open, by mock.patch('aieos_bootstrap.writer.open', create=True,
+      side_effect=OSError), gives "unwritable"; a read-back that differs, by
+      mock.patch('aieos_bootstrap.writer.open', create=True, side_effect=...) handing back, for the 'rb' call only, a
+      stand-in whose read gives other bytes, gives "unwritable"; no finding holds caller text (no root, session id or
+      task id); no call raises.
+  - AC4: >-
+      writer.py's names and form: its top-level names are exactly BASE's 94 plus session_leases, read_sessions,
+      write_handoff and names beginning "_session_leases", "_SESSION_LEASES", "_read_sessions", "_READ_SESSIONS",
+      "_write_handoff" or "_HANDOFF", all above the TASK-066 marker (R23's test widened); the TASK-066 AC3/AC6 test
+      (:861-877, no makedirs after the marker) and the TASK-067 AC6 and AC9 tests pass unchanged; writer.py uses open
+      only with "rb" or "ab" and os only with makedirs among the deterministic rule's refused calls; the diff of
+      writer.py from the base is added lines only (checked at G3 by the scratchpad script and by the review, not by a
+      unit test).
+  - AC5: >-
+      The module: handoff_file.py's imports are exactly json, re and writer (from aieos_bootstrap); it names no open,
+      exec, eval, compile, __import__, subprocess, os, sys, time or datetime, no attribute environ, getenv, now,
+      write_text or open_store, no ".aieos" string anywhere (its docstring included; the path built from
+      writer.STATE_DIR), and no assert; HANDOFF_LISTS equals mcp_server.HANDOFF_LISTS and the module holds no prefix
+      constant; tests/unit/test_writer.py :397-412, tests/unit/test_gitread.py
+      :370-380 and tests/unit/test_autonomy.py :238-246 pass; the new test file uses no tempfile, sqlite3, shutil or
+      open, roots only the literal 'C:/handoff-root-87', and uses no one-argument .replace() and no
+      .replace(target=...) (aieos-checks.yml :1622-1625).
+  - AC6: >-
+      Docstrings: handoff_file.py's holds "the handoff file", "specification 2 section 5.2", "nothing calls write but
+      its tests", "not committed", "the last handoff", "the caller's commit", "create-only", "never raises" and
+      "TASK-087"; write_handoff's says create-only by a size check after opening in append mode, and that two
+      concurrent writers are not excluded; writer.py's module docstring says the writer also creates
+      .aieos/handoffs/<task>-<session>.md (both tested in tests/unit/test_writer.py's TASK087WriteHandoff); every new
+      test names "TASK-087 ACn", checked by a naming test in tests/unit/test_handoff_file.py
+      (tests/unit/test_launcher_end.py :359-364's form) over its own tests and those of TASK087WriteHandoff in
+      tests/unit/test_writer.py.
+  - AC7: >-
+      Broken copies, each naming its file and failing the tests of its AC: (1) the lists in another order (AC1); (2)
+      an empty list written as "<list>:" with no item (AC1); (3) a gap not refused (AC1); (4) another session's claim
+      taken (AC1); (5) items written without JSON quoting (AC1); (6) "commit: null" written as "commit:" (AC1); (7)
+      write_handoff called on "none" (AC2); (8) a callee bound at import time (AC2); (9) a raising read_log escaping
+      (AC2); (10) write_handoff writing over a non-empty file (AC3); (11) write_handoff skipping the path's link check
+      (AC3); (12) write_handoff placed after the TASK-066 marker (AC4); (13) handoff_file importing os (AC5); (14)
+      HANDOFF_LISTS missing "risks" (AC5); (15) write_handoff called after a "claims" refusal (AC2); (16) the tell()
+      check replaced by an os.path.exists check (AC3); (17) a place with a leading zero accepted (AC1); (18) another
+      task's claim taken (AC1); (19) a commit out of form accepted (AC2); (20) write_handoff skipping the realpath check
+      (AC3); (21) a text with a lone surrogate not refused by write_handoff (AC3); (22) a place 0 accepted (AC1); (23)
+      write_handoff skipping the read-back (AC3); twenty-three copies in all; each copy
+      made in a scratchpad script at G3, not committed; the governor's evaluate at acceptance (the shadow) with any
+      difference named.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1000k, wall_time: 5h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6]}
+  - {gate: G3, check: constitution, args: [AC7, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
