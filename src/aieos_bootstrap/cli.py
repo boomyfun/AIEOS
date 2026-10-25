@@ -1,16 +1,16 @@
-"""The bootstrap's command-line entry point and its commands, tasks, end and status (tasks TASK-091, TASK-092 and
-TASK-093; specification 7 revision 2, section 3 :26, :31, :32, :33-34; section 5 :45, :48; section 10 points 5, 10, 11
-and 15).
+"""The bootstrap's command-line entry point and its commands, tasks, end, status and init (tasks TASK-091, TASK-092,
+TASK-093 and TASK-095; specification 7 revision 2, section 3 :26, :28, :31, :32, :33-34; section 5 :45, :48; section
+10 points 4, 5, 10, 11 and 15).
 
 What it does:
 - It is run as ``python -m aieos_bootstrap.cli <command> [flags]``; the installed name is open (specification 7 :26),
   and "aieos <command>" in texts means that run form. ``main(argv, stdout, environ, clock)`` returns 0, 1 or 2 and
   never raises: every Exception is caught; KeyboardInterrupt and SystemExit are not. os.environ is read only in the
   entry line.
-- Its own parser, not argparse: argv is exactly a list of str; argv[0] is a command of COMMANDS, tasks, end or
-  status; end takes its session as argv[1]; the flags are --root <path> (required, once, a non-empty value not
-  beginning "--") and --json (optional, once). Anything else gives exit 2 and USAGE, with neither the clock nor a
-  command's callee called.
+- Its own parser, not argparse: argv is exactly a list of str; argv[0] is a command of COMMANDS, tasks, end,
+  status or init; end takes its session as argv[1]; the flags are --root <path> (required, once, a non-empty value
+  not beginning "--") and --json (optional, once). Anything else gives exit 2 and USAGE, with neither the clock nor
+  a command's callee called.
 - tasks calls the clock once, then execution.list_tasks(root, now) once, looked up at each call. A list gives exit 0
   and one line "<task> <state> <contract_hash> lease=<lease>" per item (or "no task may be taken"), or under --json
   one JSON line; findings give exit 1 and one "finding: <text>" line each (or one JSON line), list_tasks' str findings
@@ -41,11 +41,20 @@ What it does:
   its types checked exactly, gives "status: status_report gave an answer out of form"; a raise in the clock or
   status_report gives "status: a step raised <type>", and a raise in _render_status "cli: a step raised <type>".
   status writes nothing: status_report reads the log once and reads no store.
+- init (task TASK-095; specification 7 :28), ``aieos init``, creates the folders of the project-state layout the
+  owner settled, through launcher.init_project, which calls the writer. After the parse it is refused inside a
+  runtime: in_runtime(environ) true gives exit 1 and the one finding INIT_RUNTIME_REFUSAL, with init_project not
+  called (stricter than spec 7 :34, since init writes); else launcher.init_project(root) once, looked up at each call;
+  it calls no clock. "done" gives exit 0 and one line "created: <path>" per folder, or under --json one JSON line of
+  created and findings; "refused" gives exit 1 and the findings "init: <reason>" then init_project's findings; an
+  answer out of form, its types checked exactly, gives "init: init_project gave an answer out of form"; a raise in
+  init_project gives "init: a step raised <type>", and a raise in _render_init "cli: a step raised <type>". init
+  creates folders only, through the writer, and is refused where a project-state directory exists.
 - RUNTIME_VARS and in_runtime(environ): outside any runtime means none of the three names is in the environment.
   in_runtime is true when any of them is present; AIEOS_BASE is counted beside the session id and the root, and a
   name whose value is '' counts as present (two stated choices, both fail-closed); an environment whose membership
-  test raises counts as inside. tasks and status do not call it; end calls it after the parse; launch, which also
-  refuses inside a runtime, comes with a later task.
+  test raises counts as inside. tasks and status do not call it; end and init call it after the parse; launch, which
+  also refuses inside a runtime, comes with a later task.
 
 Limits, stated: a determined agent can start a nested runtime with an environment it chooses (spec 5 :120); a root
 value beginning "--" cannot be given; a root that names no folder gives only list_tasks' "a step raised" finding; a
@@ -64,13 +73,15 @@ from aieos_bootstrap import execution
 from aieos_bootstrap import launcher
 
 RUNTIME_VARS = ('AIEOS_SESSION_ID', 'AIEOS_ROOT', 'AIEOS_BASE')
-COMMANDS = ('tasks', 'end', 'status')
+COMMANDS = ('tasks', 'end', 'status', 'init')
 USAGE = ('usage: python -m aieos_bootstrap.cli tasks --root <path> [--json]\n'
          '       python -m aieos_bootstrap.cli end <session> --root <path> [--json]\n'
          '       python -m aieos_bootstrap.cli status --root <path> [--json]\n'
+         '       python -m aieos_bootstrap.cli init --root <path> [--json]\n'
          '  tasks          the tasks that may be taken\n'
          '  end <session>  end a crashed session from outside the runtime\n'
          '  status         the status of the project\n'
+         '  init           create the project-state layout in a folder that has none\n'
          '  --root <path>  the project root (required)\n'
          '  --json         one JSON line in place of text lines\n')
 OUT_OF_FORM = 'tasks: list_tasks gave an answer out of form'
@@ -85,6 +96,9 @@ _VALUE_OUT_OF_FORM = "end: end_session's value is out of form"
 STATUS_OUT_OF_FORM = 'status: status_report gave an answer out of form'
 STATUS_NO_FINDING = 'status: status_report gave no finding'
 _PROGRESS_KEYS = ('task', 'state', 'stale_evidence')
+INIT_RUNTIME_REFUSAL = ('init: refused inside a runtime (it writes; specification 7 :34 names end and launch, and init '
+                        'is refused for the same reason)')
+INIT_OUT_OF_FORM = 'init: init_project gave an answer out of form'
 
 
 def in_runtime(environ):
@@ -250,6 +264,50 @@ def _status(root, as_json, clock):
     return 0, _render_status(value, as_json)
 
 
+def _init_in_form(answer):
+    """True for init_project's mapping in form: exactly launcher.INIT_KEYS, "done" with reason None, findings [] and a
+    non-empty list of str created, or "refused" with a str reason, a list of str findings and created []."""
+    if type(answer) is not dict or len(answer) != len(launcher.INIT_KEYS):
+        return False
+    if not all(k in answer for k in launcher.INIT_KEYS):
+        return False
+    if type(answer['result']) is not str:
+        return False
+    if answer['result'] == 'done':
+        return (answer['reason'] is None and type(answer['findings']) is list and answer['findings'] == []
+                and _str_list(answer['created']) and len(answer['created']) > 0)
+    if answer['result'] == 'refused':
+        return (type(answer['reason']) is str and _str_list(answer['findings'])
+                and type(answer['created']) is list and answer['created'] == [])
+    return False
+
+
+def _render_init(created, as_json):
+    """The output of init's "done": one "created: <path>" line per folder, or one JSON line."""
+    if as_json:
+        return json.dumps({'findings': [], 'created': created}, sort_keys=True) + '\n'
+    return ''.join('created: %s\n' % path for path in created)
+
+
+def _init(root, as_json, environ):
+    """(the exit code, the whole output) of init."""
+    if in_runtime(environ):
+        return 1, _findings([INIT_RUNTIME_REFUSAL], as_json)
+    try:
+        answer = launcher.init_project(root)
+    except Exception as exc:
+        return 1, _findings(['init: a step raised %s' % type(exc).__name__], as_json)
+    try:
+        in_form = _init_in_form(answer)
+    except Exception:
+        in_form = False
+    if not in_form:
+        return 1, _findings([INIT_OUT_OF_FORM], as_json)
+    if answer['result'] == 'refused':
+        return 1, _findings(['init: %s' % answer['reason']] + answer['findings'], as_json)
+    return 0, _render_init(answer['created'], as_json)
+
+
 def _run(argv, environ, clock):
     """(the exit code, the whole output)."""
     try:
@@ -269,6 +327,11 @@ def _run(argv, environ, clock):
             return _status(root, as_json, clock)
         except Exception as exc:
             return 1, _findings(['cli: a step raised %s' % type(exc).__name__], as_json)
+    if command == 'init':
+        try:
+            return _init(root, as_json, environ)
+        except Exception as exc:
+            return 1, _findings(['cli: a step raised %s' % type(exc).__name__], as_json)
     code, kind, payload = _tasks(root, clock)
     if kind == 'findings':
         return code, _findings(payload, as_json)
@@ -279,8 +342,8 @@ def _run(argv, environ, clock):
 
 
 def main(argv, stdout, environ, clock):
-    """Run one command; return 0, 1 or 2; never raise an Exception. environ is read by end, after the parse, through
-    in_runtime; tasks and status do not read it."""
+    """Run one command; return 0, 1 or 2; never raise an Exception. environ is read by end and init, after the parse,
+    through in_runtime; tasks and status do not read it."""
     try:
         code, text = _run(argv, environ, clock)
     except Exception:

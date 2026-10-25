@@ -63,6 +63,13 @@ after opening in append mode, not an exclusive create (this module may open only
 writers are not excluded and may both append, and a write cut off part-way leaves a non-empty file that every later
 write refuses.
 
+Task TASK-095 (specification 7 section 3 :28; specification 2 section 3; DM B7 note) adds ``init_layout(root)``: the
+writer also creates the twelve folders of the project-state layout the owner settled, under a root that has no
+project-state directory. It refuses ("exists") when the directory exists in any form, refuses ("link") a link or a
+path resolving elsewhere before and after the folders are made, and creates no file (no event log, store, policy,
+constitution or ignore file); it opens no file. A refusal or a raise after the folders are made leaves those made so
+far, which every later call refuses ("exists").
+
 Readings of the specifications that the contract marks "(reading)" are noted where they are applied.
 """
 
@@ -1140,6 +1147,67 @@ def write_handoff(root, task_id, session_id, text):
     except Exception as e:
         return _named('unwritable', e)
     return StoreResult('done', value='%s/%s/%s' % (STATE_DIR, _HANDOFF_DIR, name))
+
+
+# ---- init_layout (task TASK-095) ----
+
+# Specification 2 section 3's folders under the project-state directory, as the owner settled them (DM B7 note).
+_INIT_LAYOUT_DIRS = ('intent/requirements', 'intent/specs', 'intent/architecture', 'intent/decisions',
+                     'intent/conventions', 'changes', 'tasks', 'handoffs', 'genesis', 'conformance', 'plan', 'local')
+_INIT_LAYOUT_EXISTS = 'exists: the project-state directory is present'
+_INIT_LAYOUT_LINK = 'link: a link, or a path that resolves elsewhere'
+
+
+def _init_layout_links(root):
+    """True when root, root/.aieos or a folder of the layout is a link (os.path.islink called on each whether or not
+    it exists), or when a folder's realpath, normcased, differs from the normcased realpath of root joined with the
+    project-state directory and the folder (write_handoff's form)."""
+    base = os.path.join(root, STATE_DIR)
+    for p in (root, base):
+        if os.path.islink(p):
+            return True
+    real = os.path.realpath(root)
+    for folder in _INIT_LAYOUT_DIRS:
+        parts = folder.split('/')
+        path = os.path.join(base, *parts)
+        if os.path.islink(path):
+            return True
+        expected = os.path.join(real, STATE_DIR, *parts)
+        if os.path.normcase(os.path.realpath(path)) != os.path.normcase(expected):
+            return True
+    return False
+
+
+def init_layout(root):
+    """Create the twelve folders of the project-state layout under root, which must have no project-state directory
+    (task TASK-095; specification 7 section 3 :28; specification 2 section 3). Core-only; launcher.init_project calls
+    it.
+
+    In order: root an existing folder ("root"); the project-state directory present in any form, os.path.lexists,
+    refuses ("exists") with nothing created; the link check (_init_layout_links) refuses ("link") with nothing
+    created; os.makedirs of each folder of _INIT_LAYOUT_DIRS in that order, exist_ok False; the link check again
+    ("link"). Any raise after the root check gives "unwritable". The result is a StoreResult: "done" with value the
+    tuple of the twelve '.aieos/<folder>' paths in _INIT_LAYOUT_DIRS' order, or "refused" with one finding, an
+    exception's type for "root" and "unwritable", never caller text. It opens and creates no file. A refusal or a
+    raise after the folders are made leaves those made so far, which every later call refuses ("exists"). No
+    exception escapes."""
+    try:
+        _check_root(root)
+    except Exception as e:
+        return _named('root', e)
+    try:
+        base = os.path.join(root, STATE_DIR)
+        if os.path.lexists(base):
+            return _refused('exists', _INIT_LAYOUT_EXISTS)
+        if _init_layout_links(root):
+            return _refused('link', _INIT_LAYOUT_LINK)
+        for folder in _INIT_LAYOUT_DIRS:
+            os.makedirs(os.path.join(base, *folder.split('/')), exist_ok=False)
+        if _init_layout_links(root):
+            return _refused('link', _INIT_LAYOUT_LINK)
+    except Exception as e:
+        return _named('unwritable', e)
+    return StoreResult('done', value=tuple('%s/%s' % (STATE_DIR, folder) for folder in _INIT_LAYOUT_DIRS))
 
 
 # ---- the read-only lookup of the store (task TASK-066) ----
