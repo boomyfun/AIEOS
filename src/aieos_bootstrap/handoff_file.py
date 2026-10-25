@@ -15,8 +15,9 @@ then the six lists in HANDOFF_LISTS order, each item a JSON string, with no body
 ("written", "none" or "refused"), reason, findings and path. Each callee defaults at call time.
 
 Stated limits (the contract's):
-- nothing calls write but its tests, so the handoff file is not written in a real session until the command-line
-  frame calls it after the launcher's end and after a submission;
+- launcher.launch_outside (task TASK-094) calls write after the launcher's end with commit None, so nothing calls
+  write after a submission, and the shipped command, which has no runtime starter, does not write the handoff file
+  in a real session;
 - the file is not committed by the core; how it reaches Git and how it stays out of a later session's commit stay
   open;
 - the Work Order's reader reads the last handoff elsewhere at the base, so the reader's place and the last handoff

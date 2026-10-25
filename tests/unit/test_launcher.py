@@ -693,28 +693,34 @@ class TASK086AC9TaskView(Base):
 
 class TASK086AC10Modules(Base):
     def test_the_import_sets(self):
-        """TASK-086 AC10, as TASK-089 AC10 changes it: by ast, execution.py's import set is the one its tests pin;
-        launcher.py imports only datetime, hashlib and re and aieos_bootstrap's adapter, base_files, execution,
-        gitread, read_set_record, resume_check, resume_inputs, resume_log_inputs and writer."""
+        """TASK-086 AC10, as TASK-089 AC10 and TASK-094 AC5 change it: by ast, execution.py's import set is the one its
+        tests pin; launcher.py imports only datetime, hashlib and re and aieos_bootstrap's adapter, base_files,
+        base_inputs, execution, gitread, handoff_file, read_set_record, resume_check, resume_inputs, resume_log_inputs
+        and writer."""
         self.assertEqual(imports(tree_of('execution.py')),
                          {'datetime', 're', 'aieos_bootstrap.records', 'aieos_bootstrap.resume_check',
                           'aieos_bootstrap.writer'})
         self.assertEqual(imports(tree_of('launcher.py')),
                          {'datetime', 'hashlib', 're'} | {'aieos_bootstrap.' + m for m in (
-                             'adapter', 'base_files', 'execution', 'gitread', 'read_set_record', 'resume_check',
-                             'resume_inputs', 'resume_log_inputs', 'writer')})
+                             'adapter', 'base_files', 'base_inputs', 'execution', 'gitread', 'handoff_file',
+                             'read_set_record', 'resume_check', 'resume_inputs', 'resume_log_inputs', 'writer')})
 
     def test_what_the_new_module_names(self):
-        """TASK-086 AC10: launcher.py names no open, exec, eval, compile, __import__, subprocess, os, sys or time, no
-        attribute environ, getenv, now, write or open_store, no assert and no ".aieos" string."""
+        """TASK-086 AC10, as TASK-094 AC5 changes it: launcher.py names no open, exec, eval, compile, __import__,
+        subprocess, os, sys or time, no attribute environ, getenv, now or open_store, no attribute write but
+        handoff_file.write (TASK-094's one exception; writer.write and any other write attribute still fail), no
+        assert and no ".aieos" string."""
         source = (PKG / 'launcher.py').read_bytes().decode('utf-8')
         tree = ast.parse(source)
         names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
         attrs = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
         for bad in ('open', 'exec', 'eval', 'compile', '__import__', 'subprocess', 'os', 'sys', 'time'):
             self.assertNotIn(bad, names)
-        for bad in ('environ', 'getenv', 'now', 'write', 'open_store'):
+        for bad in ('environ', 'getenv', 'now', 'open_store'):
             self.assertNotIn(bad, attrs)
+        writes = [n for n in ast.walk(tree) if isinstance(n, ast.Attribute) and n.attr == 'write'
+                  and not (isinstance(n.value, ast.Name) and n.value.id == 'handoff_file')]
+        self.assertEqual(writes, [])
         self.assertNotIn('.' + 'aieos', source)
         self.assertFalse([n for n in ast.walk(tree) if isinstance(n, ast.Assert)])
 

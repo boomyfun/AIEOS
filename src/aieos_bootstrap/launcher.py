@@ -128,6 +128,17 @@ time, and returns a mapping with exactly INIT_KEYS; it never raises. An answer i
 that is "done" with reason None, no findings and a non-empty tuple of str, or "refused" with a str reason and a tuple
 of str findings; any other answer, or a raise, gives reason "init_layout". It creates nothing itself; the folders are
 the writer's.
+
+launch_outside (task TASK-094; `aieos launch`, specification 7 :34-35, sections 5 and 7) composes one launch from
+outside the runtime and returns a mapping with exactly LAUNCH_KEYS; it never raises an Exception. It calls start with
+max_risk None, so it grants nothing until a measured tier backs a declaration; on a grant it reads the contract's write
+set by base_inputs.contract_at at the grant's head, calls the caller's starter with a copy of the environment, ends the
+session in every case after a grant (end, or end_outside where end cannot take the session: launch_outside is a second
+caller of end_outside beside `aieos end`), and writes the handoff file by handoff_file.write, with commit None, after
+an end that gave "done". The shipped command passes no starter, so it starts no runtime. launch_outside reads the
+caller's clock twice and calls the caller's starter, the two exceptions to "reads no clock" and "starts no process but
+through gitread" above: the starter does whatever the caller's code does; the core's own code starts no process. A
+BaseException from the starter is re-raised after the end and the handoff.
 """
 
 import datetime
@@ -136,8 +147,10 @@ import re
 
 from aieos_bootstrap import adapter
 from aieos_bootstrap import base_files
+from aieos_bootstrap import base_inputs
 from aieos_bootstrap import execution
 from aieos_bootstrap import gitread
+from aieos_bootstrap import handoff_file
 from aieos_bootstrap import read_set_record
 from aieos_bootstrap import resume_check
 from aieos_bootstrap import resume_inputs
@@ -763,3 +776,216 @@ def init_project(root, init_layout=None):
         return _init_project_result('refused', 'init_layout', [_INIT_PROJECT_OUT_OF_FORM])
     except Exception as exc:
         return _init_project_result('refused', 'init_layout', ['init_layout: a step raised %s' % type(exc).__name__])
+
+
+# ---- launch_outside, `aieos launch` (task TASK-094) ----
+
+LAUNCH_KEYS = ('result', 'reason', 'findings', 'session_id', 'start', 'run', 'end', 'handoff')
+LAUNCH_REASONS = ('argument', 'clock', 'start', 'contract', 'run', 'end', 'handoff')
+LAUNCH_LEASE = datetime.timedelta(hours=2)
+LAUNCH_ADAPTER = 'claude_code'
+LAUNCH_RECORDER = 'aieos cli launch'
+LAUNCH_HOLDER = 'aieos cli launch'
+_LAUNCH_PATH = re.compile(r'[A-Za-z0-9._*/-]+')
+_LAUNCH_FOR = ' for session '
+_LAUNCH_ENVIRONMENT = frozenset({'AIEOS_SESSION_ID', 'AIEOS_ROOT', 'AIEOS_BASE'})
+_LAUNCH_CALLEES = ('begin', 'contract_at', 'finish', 'finish_outside', 'write_handoff')
+_LAUNCH_AFTER = ('argument', 'record')
+_LAUNCH_NOT_WRITTEN = "handoff: not written, the session's end was not done"
+_LAUNCH_BAD_CLOCK = 'clock: the clock gave no timezone-aware UTC time with whole seconds'
+
+
+def _launch_result(result, reason=None, findings=(), session_id=None, started=None, run=None, ended=None,
+                   handoff=None):
+    return {'result': result, 'reason': reason, 'findings': [f for f in findings if isinstance(f, str)],
+            'session_id': session_id, 'start': started, 'run': run, 'end': ended, 'handoff': handoff}
+
+
+def _launch_strs(value):
+    """Only the str items of a list or a tuple; any other value gives none."""
+    return [f for f in value if isinstance(f, str)] if isinstance(value, (list, tuple)) else []
+
+
+def _launch_argument_findings(root, task_id, clock, starter, callees):
+    found = []
+    if not (isinstance(root, str) and _WINDOWS_ROOT.fullmatch(root) is not None):
+        found.append('argument: root is not an absolute Windows path')
+    if not (isinstance(task_id, str) and _TASK.fullmatch(task_id) is not None):
+        found.append('argument: task_id is not TASK- followed by digits')
+    if not callable(clock):
+        found.append('argument: clock is not callable')
+    if not callable(starter):
+        found.append('argument: starter is not callable')
+    for name, value in zip(_LAUNCH_CALLEES, callees):
+        if value is not None and not callable(value):
+            found.append('argument: %s is neither None nor callable' % name)
+    return found
+
+
+def _launch_grant_in_form(session_id, token, head, environment):
+    """Step 4: the granted answer's values, each checked by its exact type."""
+    try:
+        return (type(session_id) is str and type(token) is dict and type(head) is str
+                and _HEX40.fullmatch(head) is not None and type(environment) is dict
+                and set(environment) == _LAUNCH_ENVIRONMENT
+                and all(type(k) is str and type(v) is str for k, v in environment.items()))
+    except Exception:  # an answer whose own methods raise is out of form
+        return False
+
+
+def _launch_write_set(answer):
+    """Step 5: (the write set, None), or (None, findings) for a contract read that does not pass."""
+    if not (type(answer) is tuple and len(answer) == 2):
+        return None, ['contract: contract_at gave an answer out of form']
+    value, found = answer
+    if value is None:
+        return None, ['contract: %s' % f for f in _launch_strs(found)] or ['contract: contract_at gave no value']
+    if not (type(value) is tuple and len(value) == 2 and type(value[0]) is dict):
+        return None, ['contract: contract_at gave an answer out of form']
+    write_set = value[0].get('write_set')
+    paths = write_set.get('paths') if type(write_set) is dict else None
+    if not (type(paths) is list and paths and all(type(p) is str for p in paths)):
+        return None, ['contract: the write set is not a non-empty list of str']
+    for p in paths:
+        if _LAUNCH_PATH.fullmatch(p) is None or '' in p.split('/'):
+            return None, ['contract: a write-set path is outside the pattern rule']
+    return list(paths), None
+
+
+def _launch_end_call(callee, args, findings):
+    """One end call of step 6: (the answer when it is a dict, else None; True when it gave "done"); never raises."""
+    try:
+        answer = callee(*args)
+    except Exception as exc:
+        findings.append('end: a step raised %s' % type(exc).__name__)
+        return None, False
+    if type(answer) is not dict:
+        findings.append('end: the end gave an answer that is not a mapping')
+        return None, False
+    if answer.get('result') == 'done':
+        findings.extend(_launch_strs(answer.get('findings')))
+        return answer, True
+    findings.append('end: %s %s' % (answer.get('result'), answer.get('reason')))
+    findings.extend(_launch_strs(answer.get('findings')))
+    return answer, False
+
+
+def _launch_finish(state, clock, finish, finish_outside, write_handoff):
+    """Steps 6 to 8: the session's end in every case after a grant, the handoff after a done end, the result."""
+    findings, reason = state['findings'], state['reason']
+    try:
+        now2 = clock()
+        if not _utc_whole(now2):
+            findings.append(_LAUNCH_BAD_CLOCK)
+            now2 = state['now']
+    except Exception as exc:
+        findings.append('clock: the clock raised %s' % type(exc).__name__)
+        now2 = state['now']
+    root, task_id, session_id, recorder = state['root'], state['task_id'], state['session_id'], state['recorder']
+    if state['write_set'] is not None:
+        ended, done = _launch_end_call(finish, (root, task_id, session_id, state['token'], now2, state['write_set'], [],
+                                                recorder), findings)
+        if not done:
+            reason = reason or 'end'
+            if ended is not None and ended.get('result') == 'refused' and ended.get('reason') in _LAUNCH_AFTER:
+                ended, done = _launch_end_call(finish_outside, (root, session_id, now2, recorder), findings)
+    else:
+        ended, done = _launch_end_call(finish_outside, (root, session_id, now2, recorder), findings)
+    handoff = None
+    if not done:
+        reason = reason or 'end'
+        findings.append(_LAUNCH_NOT_WRITTEN)
+    else:
+        try:
+            got = write_handoff(root, task_id, session_id, None)
+        except Exception as exc:
+            got = None
+            findings.append('handoff: a step raised %s' % type(exc).__name__)
+        else:
+            if type(got) is dict:
+                handoff = got
+            else:
+                findings.append('handoff: the handoff gave an answer that is not a mapping')
+        if not (handoff is not None and handoff.get('result') in ('written', 'none')):
+            reason = reason or 'handoff'
+            if handoff is not None:
+                findings.append('handoff: %s %s' % (handoff.get('result'), handoff.get('reason')))
+                findings.extend(_launch_strs(handoff.get('findings')))
+    return _launch_result('done' if reason is None else 'refused', reason, findings, session_id, state['started'],
+                          state['run'], ended, handoff)
+
+
+def launch_outside(root, task_id, clock, starter, begin=None, contract_at=None, finish=None, finish_outside=None,
+                   write_handoff=None):
+    """Launch one session from outside the runtime (task TASK-094; `aieos launch`, specification 7 :34-35, sections 5
+    and 7): start with max_risk None, on a grant the contract's write set at the grant's head, the caller's starter, the
+    session's end in every case after a grant, then the handoff file after a done end. A mapping with exactly
+    LAUNCH_KEYS; it never raises an Exception; a BaseException from the starter is re-raised after the end and the
+    handoff."""
+    callees = (begin, contract_at, finish, finish_outside, write_handoff)
+    try:
+        found = _launch_argument_findings(root, task_id, clock, starter, callees)
+    except Exception as exc:  # an argument whose own methods raise
+        found = ['argument: checking the arguments raised %s' % type(exc).__name__]
+    if found:
+        return _launch_result('refused', 'argument', found)
+    begin = start if begin is None else begin
+    contract_at = base_inputs.contract_at if contract_at is None else contract_at
+    finish = end if finish is None else finish
+    finish_outside = end_outside if finish_outside is None else finish_outside
+    write_handoff = handoff_file.write if write_handoff is None else write_handoff
+    try:
+        now = clock()
+    except Exception as exc:
+        return _launch_result('refused', 'clock', ['clock: the clock raised %s' % type(exc).__name__])
+    if not _utc_whole(now):
+        return _launch_result('refused', 'clock', [_LAUNCH_BAD_CLOCK])
+    try:
+        started = begin(root, root, task_id, LAUNCH_ADAPTER, None, LAUNCH_HOLDER, LAUNCH_RECORDER, now,
+                        now + LAUNCH_LEASE)
+    except Exception as exc:
+        return _launch_result('refused', 'start', ['start: a step raised %s' % type(exc).__name__])
+    if type(started) is not dict:
+        return _launch_result('refused', 'start', ['start: start gave an answer that is not a mapping'])
+    try:
+        findings = ['start: %s %s' % (started.get('result'), started.get('reason'))]
+        findings.extend(_launch_strs(started.get('findings')))
+        granted = started.get('result') == 'granted'
+    except Exception as exc:  # an answer whose own values raise
+        return _launch_result('refused', 'start', ['start: reading the answer raised %s' % type(exc).__name__],
+                              started=started)
+    if not granted:
+        result = 'not granted' if started.get('result') == 'not granted' else 'refused'
+        return _launch_result(result, 'start', findings, started=started)
+    findings = findings[1:]
+    session_id, token = started.get('session_id'), started.get('fencing_token')
+    head, environment = started.get('head_commit'), started.get('environment')
+    state = {'root': root, 'task_id': task_id, 'now': now, 'started': started, 'findings': findings, 'reason': None,
+             'run': None, 'write_set': None, 'session_id': session_id, 'token': token, 'recorder': None}
+    if not _launch_grant_in_form(session_id, token, head, environment):
+        findings.append('start: the granted answer is out of form')
+        if type(session_id) is not str:
+            return _launch_result('refused', 'start', findings, None, started)
+        state['reason'] = 'start'
+    else:
+        try:
+            state['write_set'], found = _launch_write_set(contract_at(root, head, task_id))
+        except Exception as exc:
+            found = ['contract: a step raised %s' % type(exc).__name__]
+        if state['write_set'] is None:
+            findings.extend(found)
+            state['reason'] = 'contract'
+    state['recorder'] = LAUNCH_RECORDER + _LAUNCH_FOR + session_id
+    if state['write_set'] is None:
+        return _launch_finish(state, clock, finish, finish_outside, write_handoff)
+    try:
+        try:
+            starter(dict(environment))
+            state['run'] = 'returned'
+        except Exception as exc:
+            state['run'] = 'raised %s' % type(exc).__name__
+            findings.append('run: the starter raised %s' % type(exc).__name__)
+            state['reason'] = 'run'
+    finally:
+        out = _launch_finish(state, clock, finish, finish_outside, write_handoff)
+    return out

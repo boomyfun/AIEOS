@@ -296,13 +296,15 @@ class TASK087Module(unittest.TestCase):
 class TASK087Docs(unittest.TestCase):
 
     def test_the_module_docstring(self):
-        """TASK-087 AC6: handoff_file's docstring holds its phrases."""
+        """TASK-087 AC6, as TASK-094 AC3 changes it: handoff_file's docstring holds its phrases, "calls write after
+        the launcher" in place of "nothing calls write but its tests", which is gone."""
         doc = ' '.join(handoff_file.__doc__.split())
-        for phrase in ('the handoff file', 'specification 2 section 5.2', 'nothing calls write but its tests',
+        for phrase in ('the handoff file', 'specification 2 section 5.2', 'calls write after the launcher',
                        'not committed', 'the last handoff', "the caller's commit", 'create-only', 'never raises',
                        'TASK-087'):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, doc)
+        self.assertNotIn('nothing calls write but its tests', doc)
 
     def test_every_new_test_names_its_ac(self):
         """TASK-087 AC6: every test of this file, and every test of TASK087WriteHandoff in tests/unit/test_writer.py,
