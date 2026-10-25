@@ -30,6 +30,12 @@ Two, in session ea6ea0a3 (2026-10-25, during TASK-092):
   goes only in a turn's closing reply or in a message with no tool call; a message that holds a tool call holds
   nothing else.
 
+Two, in session ea6ea0a3 (2026-10-25, during TASK-095):
+- **D-3118.** A short label ("Read (a): spec 7.") went out beside a Read during TASK-095's scope reads; the
+  textblock guard refused the call before it ran; the Read was sent alone under the decision agent's ruling.
+- **D-3127.** Two further text slips beside calls, not refused by the guard; reported in the next request and ruled
+  in D-3127. D-3064 C1's rule stood: a message that holds a tool call holds nothing else.
+
 ## Why it happens
 The app's request reads as asking for words now, and the worker adds them to the call it is about to send.
 
