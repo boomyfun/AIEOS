@@ -48,3 +48,11 @@ TASK-051 (adapter); specification 5 section 11 points 7 and 10, specification 7 
 - 2026-10-25: TASK-090 accepted (decision D-2956): start writes the gone sessions' records at the next start and
   removes their stored reads; start's findings handling closed; the launch line now names the base-tip check, check 0
   and max_risk (session ea6ea0a3; decisions D-2910, D-2953, D-2956).
+- 2026-10-25: TASK-094 accepted (decision D-3178): launcher.launch_outside composes one launch from outside the runtime
+  (start with max_risk None and a lease of two hours, the contract's write set at the grant's head, the caller's
+  starter, the end in every case after a grant, the handoff after a done end), and the shipped command `aieos launch`
+  passes no starter and refuses "no runtime starter"; open for the task that adds a real starter, which stays the
+  owner's and is asked separately: gitread's pinned list or another wrapper, the workflow's pattern rule, INV-001's
+  question whether an allowed executable runs a model, the lease length and its renewal, and a finish refused
+  "stored_reads", which launch_outside leaves to `aieos end` or the lease's expiry with no end_outside call (session
+  ea6ea0a3; decisions D-3154, D-3164, D-3172, D-3178).

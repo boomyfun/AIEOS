@@ -20,3 +20,7 @@ TASK-079 (the handoff's claim records); specification 6 section 7 and section 11
 ## Log
 - 2026-10-24: opened (session 308d8b07; TASK-079's acceptance, D-2161).
 - 2026-10-25: TASK-087 accepted (decision D-3006): the file's composing and create-only writing closed; its wiring, its way into Git and its reader stay open (session ea6ea0a3; decisions D-2970, D-2979, D-3006).
+- 2026-10-25: TASK-094 accepted (decision D-3178): its wiring partly closed: launcher.launch_outside calls
+  handoff_file.write with commit None after an end that gave "done"; the shipped command has no runtime starter, so the
+  file is not written in a real session; the write after a submission, its way into Git and its reader stay open
+  (session ea6ea0a3; decisions D-3148, D-3165, D-3178).

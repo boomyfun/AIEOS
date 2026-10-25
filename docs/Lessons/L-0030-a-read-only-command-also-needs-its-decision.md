@@ -20,6 +20,10 @@ One, in session ea6ea0a3 (2026-10-25, D-3049):
 - A Bash command in the `python -c` form, meant to copy a script, was sent without a decision; the guard's rule R2
   refused it before it ran, so nothing was written; it was not resent, and the file was written by the Write tool.
 
+One, in session ea6ea0a3 (2026-10-25, D-3141):
+- A command meant to run a script was sent before the script existed and before any decision named it; it exited 2
+  and touched nothing; recorded with TASK-094's records.
+
 ## Why it happens
 A read is not felt as an act, and right after a compaction the habits of the call form are weakest.
 

@@ -36,6 +36,21 @@ Two, in session ea6ea0a3 (2026-10-25, during TASK-095):
 - **D-3127.** Two further text slips beside calls, not refused by the guard; reported in the next request and ruled
   in D-3127. D-3064 C1's rule stood: a message that holds a tool call holds nothing else.
 
+Four text slips, in session ea6ea0a3 (2026-10-25, during TASK-094):
+- **D-3147.** Two labels for reads ("Read 1:" and "Read 2:") went out beside two Reads during the scope reads; the
+  textblock guard refused the second before it ran; the Read was sent alone. D-3147 C2 then set: no number or label
+  for a read anywhere.
+- **D-3171 (b).** After a compaction, a short sentence went out beside a Glob; not refused.
+- **D-3174 (e).** A short sentence went out beside the Bash call that ran an approved script; not refused; the
+  command ran as approved.
+- **D-3178 (h).** A short sentence went out beside the Edit of an approved script's output name; not refused.
+
+Multi-call messages, a form of their own, in session ea6ea0a3 (2026-10-25, during TASK-094; the owner's rule "Mỗi
+tin nhắn chỉ có MỘT lệnh", D-3160: one tool call per message, Reads, Writes and Edits included):
+- Two Edits (D-3140), two Writes (D-3160), two Reads (D-3163), a Read and a Grep (D-3167), three Writes (D-3174a),
+  an Edit with a Grep (D-3177), and two Edits (D-3178); after D-3160's explicit instruction: D-3163, D-3167, D-3174a,
+  D-3177 and D-3178. No text beside them; nothing wrong was written.
+
 ## Why it happens
 The app's request reads as asking for words now, and the worker adds them to the call it is about to send.
 
