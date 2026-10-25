@@ -16,6 +16,10 @@ Four, in session 3797498a (2026-10-24 to 2026-10-25):
 - **D-2881.** A read-only sed.
 - **D-2889 (b).** A wc -l of the checkpoint file right after a compaction; the fourth, so the session ended at that checkpoint under D-2888 C3.
 
+One, in session ea6ea0a3 (2026-10-25, D-3049):
+- A Bash command in the `python -c` form, meant to copy a script, was sent without a decision; the guard's rule R2
+  refused it before it ran, so nothing was written; it was not resent, and the file was written by the Write tool.
+
 ## Why it happens
 A read is not felt as an act, and right after a compaction the habits of the call form are weakest.
 

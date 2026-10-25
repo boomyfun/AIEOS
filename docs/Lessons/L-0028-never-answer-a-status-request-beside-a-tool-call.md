@@ -23,6 +23,13 @@ Two, in session ea6ea0a3 (2026-10-25; ../History/2026-10/2026-10-25-0526-task-09
 - **:5065 (D-2953).** After a compaction and the app's status requests, a status sentence for the owner went out beside a Read of this lesson; listed by the owner by hand. D-2953 C5 then set: a second text slip in the session ends it at the next checkpoint.
 - **:6168 (D-2962).** A planning sentence went out beside the call that sent a request to the decision agent; the session ended at its checkpoint under D-2953 C5, and the landing of TASK-090 moved to the next session.
 
+Two, in session ea6ea0a3 (2026-10-25, during TASK-092):
+- **D-3062.** After the app's status request, a status sentence for the owner went out beside a Glob; the textblock
+  guard refused the call before it ran; the call was sent alone after the decision agent's ruling.
+- **D-3064.** The same, beside a Read. D-3064 C1 then set, for the rest of the session: status text for the owner
+  goes only in a turn's closing reply or in a message with no tool call; a message that holds a tool call holds
+  nothing else.
+
 ## Why it happens
 The app's request reads as asking for words now, and the worker adds them to the call it is about to send.
 
