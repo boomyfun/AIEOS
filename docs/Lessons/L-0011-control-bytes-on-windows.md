@@ -72,6 +72,9 @@ Two incidents in session 2026-10-09-0637 (../History/2026-10/2026-10-09-0637-fix
 Occurrences in session 2026-10-15-0028 (../History/2026-10/2026-10-15-0028-the-policy-list-and-scope-drift-accepted-and-on-main.md):
 - **2026-10-15.** A sed replacement holding an escaped "\r" wrote a carriage return into line 77 of a scratch builder (t033b1/build_b1.py), which broke it with a SyntaxError; repaired by a small script writing that line LF only. Nothing outside the scratchpad was touched.
 
+One occurrence in session ea6ea0a3 (the History of that session):
+- **2026-10-25 (D-2981, D-2982).** Escape sequences for U+2028 and U+2029 typed into an Edit of TASK-087's contract draft were written as the literal characters; review rv87c found them, and task_contract.py would have refused the YAML. Fixed by a script (fix87.py) with chr() codes and checked by an ASCII Grep. Drafts are checked for non-ASCII bytes before a review; special characters are written in code by chr(), never typed into tool text.
+
 ## Why it happens
 - Git Bash heredocs interpret quotes and backslashes.
 - Python text mode on Windows writes CRLF.
@@ -83,3 +86,4 @@ Occurrences in session 2026-10-15-0028 (../History/2026-10/2026-10-15-0028-the-p
 - Consider a `.gitattributes` with `eol=lf` (DEF-0006).
 - Never redirect output to a path outside the scratchpad in a read command; each request's definition check lists every Bash output target outside it (decision D-168 C5, widened by D-169 C2).
 - Edit scripts with the Edit or Write tool, not with a `sed` that holds escape sequences; check the bytes after every edit.
+- Before a draft goes to review, Grep it for any byte outside ASCII; write special characters by chr() in a script, never as escapes typed into an Edit.

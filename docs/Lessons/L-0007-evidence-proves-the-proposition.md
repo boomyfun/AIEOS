@@ -55,6 +55,7 @@ Occurrences in session ea6ea0a3 (the History of that session):
 - **2026-10-25 (D-2932, D-2940).** chk90 checks only part of the deterministic rule; the deterministic rule's own run (det90) found an os.mkdir in a test that chk90 passed. det90 is the check of record; chk90 is a quick proxy.
 - **2026-10-25 (D-2956).** Review outputs were saved with the harness's two-space indent removed and called verbatim; their hashes differ from the handbacks'. The records bind the handbacks' own hashes, read from the transcripts, so the evidence held. A saved copy is byte-exact or is not called verbatim.
 - **2026-10-25 (D-2959).** A request to the decision agent was sent in the same message as two reads and stated their outputs before they were seen. They matched, but the claim came before its evidence. Outputs are quoted only after they return.
+- **2026-10-25 (D-2998).** TASK-087's acceptance review t87x-S1 could not see what broken copy 22 changed, since the review folder held the broken-copy table and outputs but not the scripts that make the copies; its finding F2 was answered from brk87_a.py. A review folder holds the broken-copy scripts with their table, so each copy's change can be read.
 
 ## Why it happens
 - Proxies are cheaper than the real check.
