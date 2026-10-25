@@ -1,0 +1,503 @@
+# TASK-095: `aieos init`. A new writer function writer.init_layout, added to writer.py by added lines above its
+# TASK-066 marker, creates the twelve folders of the project-state layout the owner settled (specification 2 section 3;
+# DM B7 note, A59) in a folder that has no project-state directory; a new launcher function launcher.init_project calls
+# it; a new command init in cli.py calls that, refusing inside a runtime (specification 7 revision 2, section 3 :28,
+# section 10 point 4; M7's remaining part, its fourth task). Plan: decisions D-3117 to D-3124 (session ea6ea0a3): the
+# scope reads and the scope note (MYSP/t95/scope95.md) with D-3119's rulings Q1 to Q10; the pin scan
+# (pinscan95-out.txt at bff29a97) and its reading (pinscan95-reading.md) with D-3121's rulings Q1 to Q3 (the call path
+# O1 through launcher; writer's block above the TASK-066 marker and R23 widened; TASK-093's AC6 test widened); the risk
+# run (MYSP/t95/risk_class95.py at bff29a97: high) and the forbidden list (MYSP/t95/forbid95.txt at bff29a97; the five
+# existing write-set files left out; the new tests/unit/test_cli_init.py is not in it); the reviews rv95a
+# (claude-sonnet-5-5) and rv95b (claude-opus-5-5) of r0 and their dispositions (MYSP/t95/disp95.md, D-3124, which
+# reverses D-3119 Q2 (no ignore file) and Q7 (init refuses inside a runtime)); the round-2 review rv95c
+# (claude-opus-5-5) of r1 and its dispositions (MYSP/t95/disp95r2.md, D-3126, eight rows); the decision agent's read
+# of r2 in place of a third round, with this provenance fix and two rewrapped lines (D-3127).
+#
+# Scope:
+# - In src/aieos_bootstrap/writer.py, by added lines only (D-3121 Q2): a paragraph added to the module docstring after
+#   :64 (before the blank line :65), and a block inserted after :1144 (after write_handoff, which ends at :1142, and
+#   before the marker "# ---- the read-only lookup of the store (task TASK-066) ----" at :1145), holding only
+#   init_layout and names that begin "_init_layout" or "_INIT_LAYOUT":
+#   - _INIT_LAYOUT_DIRS = ('intent/requirements', 'intent/specs', 'intent/architecture', 'intent/decisions',
+#     'intent/conventions', 'changes', 'tasks', 'handoffs', 'genesis', 'conformance', 'plan', 'local')
+#     (specification 2 :28-40);
+#   - init_layout(root) -> a StoreResult; it never raises an Exception. In order:
+#     1. root: _check_root (a non-empty str naming an existing folder); a wrong one gives "refused", reason "root".
+#     2. Exists: when <root>/.aieos exists in any form (a folder, a file or a link; os.path.lexists), "refused", reason
+#        "exists", with the one finding 'exists: the project-state directory is present' and nothing created (D-3119
+#        Q5): init makes a new layout only. A real link at .aieos is refused here, as "exists".
+#     3. Links: os.path.islink on root, on <root>/.aieos and on each folder of the layout, and the realpath of each
+#        folder, normcased, compared with realpath(root) joined with the directory name and the folder (write_handoff's
+#        form, writer.py :1081-1090); before the folders are made and again after; a link or a path resolving
+#        elsewhere gives "refused", reason "link", with the one finding 'link: a link, or a path that resolves
+#        elsewhere' (write_handoff's text, writer.py :1126). "root" and "unwritable" carry _named's one finding (the
+#        exception's type only).
+#     4. The folders: os.makedirs of each of _INIT_LAYOUT_DIRS under <root>/.aieos, in that order, exist_ok False.
+#     5. "done", value the tuple of the twelve folders of _INIT_LAYOUT_DIRS, each '.aieos/' followed by the folder, in
+#        that order (.aieos and .aieos/intent are made as parents and are not listed).
+#     Any raise in steps 2 to 4 gives "refused", reason "unwritable", with one finding naming the exception's type only,
+#     never the caller's text (write_handoff's rule). The refusals of steps 1 to 3 before the folders are made create
+#     nothing; a refusal or a raise in the check after the folders, or a raise in step 4, leaves the folders made so
+#     far, and every later call refuses them ("exists") (D-3119 Q5).
+#   - It creates no file at all: no events.jsonl, no project.yaml, no constitution file, no store and no ignore file
+#     (D-3119 Q1, Q3, Q4; D-3124 Q2). It opens no file; of the os calls the deterministic rule refuses it calls only
+#     os.makedirs (it also calls os.path functions, which the rule allows).
+# - In src/aieos_bootstrap/launcher.py, by added lines only (D-3121 Q1, option O1): a paragraph added to the module
+#   docstring after :124 (before the closing quotes at :125), and after end_outside (which ends at :719):
+#   - INIT_KEYS = ('result', 'reason', 'findings', 'created');
+#   - init_project(root, init_layout=None) -> a mapping with exactly INIT_KEYS; it never raises. init_layout defaults
+#     at call time to writer.init_layout and is called once with root. An answer in form is one whose type is
+#     writer.StoreResult (type(answer) is writer.StoreResult) with either result "done", reason None, findings == ()
+#     and value a non-empty tuple of str, which gives {result: 'done', reason: None, findings: [], created: the value
+#     as a list}; or result "refused", reason a str and findings a tuple whose every item is a str, which gives
+#     {result: 'refused', reason: that reason, findings: the findings as a list, created: []}. Any other answer gives
+#     {result: 'refused', reason: 'init_layout', findings: ['init_layout: init_layout gave an answer out of form'],
+#     created: []}; a raise gives the same with 'init_layout: a step raised <type>'. Its helpers' names begin
+#     "_init_project" (not "_outside": tests/unit/test_launcher_outside.py :584-586 counts those).
+# - In src/aieos_bootstrap/cli.py:
+#   - COMMANDS becomes ('tasks', 'end', 'status', 'init'); USAGE gains the line for init and its description; _parse
+#     takes `init --root <path> [--json]` as it takes tasks; _run gets an explicit init branch after status's.
+#   - The command init, in three new functions: _init(root, as_json, environ), _render_init(created, as_json) and the
+#     form check _init_in_form(answer). After the parse, in_runtime(environ) true
+#     gives exit 1 and the one finding "init: refused inside a runtime (it writes; specification 7 :34 names end and
+#     launch, and init is refused for the same reason)", through _findings, with launcher.init_project not called
+#     (D-3124 Q1); else launcher.init_project(root) once, looked up at call time. It calls no clock (D-3119 Q6). The
+#     answer's form uses exact types: a dict (type(answer) is dict) with exactly launcher.INIT_KEYS, result 'done' with
+#     reason None, findings [] and created a non-empty list of str, or result 'refused' with reason a str, findings a
+#     list of str and created []; anything else gives exit 1 and the one finding "init: init_project gave an answer
+#     out of form". A raise in init_project gives exit 1 and "init: a step raised <type>". "done" gives exit 0 and
+#     _render_init's output: one line "created: <path>" per created path, or under --json the one line of
+#     json.dumps of a dict built as {"findings": [], "created": the list} (in that insertion order), with
+#     sort_keys=True, so the line reads '{"created": [...], "findings": []}'. "refused" gives exit 1 and the findings
+#     "init: <reason>" then the answer's findings, through _findings. A raise in _render_init gives exit 1 and "cli: a
+#     step raised <type>".
+#   - cli.py's docstring: line 1 names "tasks, end, status and init" and TASK-095; the sentence "a command of COMMANDS,
+#     tasks, end or status" names init ("tasks, end, status or init"); "end calls it after the parse" becomes "end and
+#     init call it after the parse"; main's "environ is read by end, after the parse, through in_runtime" names init
+#     too ("end and init"); a paragraph for init holding "aieos init" and "TASK-095"; the phrases of
+#     tests/unit/test_cli.py :405-411 stay each on one line (that test does not collapse whitespace). cli.py's imports
+#     stay {datetime, json, os, re, sys, execution, launcher}.
+#   - The added lines of launcher.py and cli.py (docstrings, USAGE and findings) hold no project-state directory name
+#     as text (aieos-checks.yml :1633-1635; tests/unit/test_launcher.py :718; tests/unit/test_cli.py :369-375): they
+#     say "the project-state directory".
+# - In tests/unit/test_writer.py: R23's test (:2079-2099) widened by exactly init_layout (with assertIn) and the
+#   prefixes "_init_layout" and "_INIT_LAYOUT" (every other check kept; its docstring names TASK-095 AC5); and a new
+#   class TASK095InitLayout over real temporary folders (tempfile, the module's own allowance), every test naming
+#   "TASK-095 AC", with the class's own naming test.
+# - In tests/unit/test_execution_status.py (TASK-093's file; D-3121 Q3): its AC6 test widened: cli.COMMANDS equal to
+#   ('tasks', 'end', 'status', 'init') and the docstring phrase "COMMANDS, tasks, end, status or init" in place of
+#   "COMMANDS, tasks, end or status", which joins the phrases that must be gone; its docstring keeps "TASK-093 AC6" and
+#   adds "TASK-095 AC6".
+# - New tests/unit/test_cli_init.py: launcher.init_project by stand-ins (mock.patch.object of writer.init_layout) and
+#   the command init by stand-ins (mock.patch.object of launcher.init_project), a literal root 'C:/init-root-95'
+#   (L-0032); no tempfile, sqlite3, shutil or open; its naming test requires "TASK-095 AC" in every test of the file,
+#   and stand-in defaults are sentinels, never a value a case passes (L-0033).
+# - What it does not do: no change to execute, list_tasks, status_report, end, end_outside, write_handoff or any other
+#   existing function; writer.py :24-25 is unchanged (its sentence on the ignore file stays true); no change to
+#   tests/unit/test_cli.py, test_launcher.py, test_launcher_outside.py, test_launcher_gone.py, mcp_server.py or
+#   __init__.py; no process; no runtime, hook or setting; init is not run on E:/AIEOS.
+#
+# Stated limits and departures: init writes no constitution proposal, a departure from specification 7 :28's and
+# :80's proposed "an empty constitution proposal" (D-3119 Q1): specification 2 names no file for an empty constitution
+# proposal (its section 4.3 form is a change request), and `aieos import` (TASK-097) drafts proposals; carried to the
+# specification revisions before TASK-096. init writes no ignore rule for local/: specification 2 :44's proposed rule
+# has no file the owner's settled layout names (DM B7 note :158; A59), so its placement is carried to specification 2's
+# revision (D-3124 Q2); so a layout made by init has no ignore rule for local/ until specification 2's revision places
+# one, a store made later under its local/ is not ignored by Git by this task, and writer.py :24-25's carry stays open.
+# init refuses inside a runtime, stricter than specification 7 :34 as written (D-3124 Q1); carried to the
+# specification revisions before TASK-096. The runtime refusal reads only the three variables, as end's does: an agent
+# that drops them, or calls writer.init_layout or launcher.init_project from Python, is not refused (cli.py's stated
+# limit; specification 5 :120). Specification 2's stale texts on the layout, since DM B7's
+# note (:158) settled it as the owner's, are carried to specification 2's revision (D-3119 Q8; D-3124): :5 ("the layout
+# part stays proposed until then"), :25 ("proposed; DM B7; owner point") and :274 (section 10 point 1). init creates
+# no project.yaml, events.jsonl or store (each made on first use by its own writer function, or with no empty form
+# fixed). A layout left part-way (a refusal by the check after the folders, or a raise in that check, a raise while
+# making them, or a crash) is refused, not repaired. A real link at .aieos is refused as "exists". The checks are
+# separate steps: a link made between a check and the folders' making is a race (write_handoff's limit). One run at a
+# time (the writer's limit).
+# Not run on E:/AIEOS by this task; the interim documents under docs/plan/ and docs/specs/ do not move (specification 2
+# :275; DM :158). launcher.py now also serves init, a CLI act outside the runtime like end_outside (D-3121 Q1).
+#
+# Owner-act boundary: none reached. Creating the folders of the project-state layout under a folder the caller names
+# is not an act DM A51 item (4) keeps (DM :112), and the folders are those the owner settled (DM :158); no file is
+# added to that layout; no process, no runtime, no hook, no setting, nothing under .github/; CR-002 part 4 limit 5
+# (CR-002-concept-errata.md :61) is not reached.
+#
+# The pins (L-0026; pinscan95-out.txt at bff29a97; pinscan95-reading.md; D-3121; D-3124): writer.py's import set
+# (tests/unit/test_writer.py :414-418), its single-writer rule (:397-412), its names (:2042-2099, widened by this task),
+# its docstring phrases (:883-904); launcher.py's import set (tests/unit/test_launcher.py :702-705) and names and
+# strings (:707-719), its docstring phrases (:722-733; tests/unit/test_launcher_gone.py :420-429), end_outside's helpers
+# (tests/unit/test_launcher_outside.py :580-595); cli.py's tests (tests/unit/test_cli.py :333-356, :369-375, :405-411;
+# tests/unit/test_launcher_outside.py :609-620; tests/unit/test_execution_status.py, widened by this task); the
+# deterministic rule (aieos-checks.yml :1489-1521, :1605-1635): writer.py keeps its ALLOW entry, launcher.py and cli.py
+# keep NONE, test_writer.py its ALLOW entry and test_cli_init.py NONE; GOV-003's EVALUATOR list
+# (src/aieos_bootstrap/**), unchanged; no change under .github/.
+#
+# Risk: high, computed over the base by MYSP/t95/risk_class95.py (R2 medium and R3 high, not evaluable, for each of
+# the six paths). GOV-003: an evaluator path; change class ruled at acceptance. Reviews on Sonnet 5.5 and Opus 5.5
+# (never Fable), read tools only; the acceptance review on Sonnet 5.5. Naming (D-544 Q3): every new test function names
+# "TASK-095 ACn" in its own docstring. Not applicable: OPS-001; INV-005 to INV-011; GOV-001, GOV-004 to GOV-006,
+# SEC-003. Owner-kept acts: none in this task. Shadow (D-2042 C3 as amended by D-2068): the governor's evaluate at
+# acceptance, any difference named. Local runs: the unit group in three parts, integration and property; before commit
+# X, a check of the new and changed files for the B105 pattern (D-2735 C6), for bandit's B608 form (L-0018), for
+# platform-dependent roots outside test_writer.py's temporary folders (L-0032), for any byte outside printable ASCII
+# and LF (L-0011, D-2981), and for the OPS-003 pattern rule (aieos-checks.yml :1672-1681).
+# Evaluation path (A61): commit C changes only
+# docs/tasks/TASK-095.yaml, has one parent equal to base_commit, and goes to main under its own decision; the task's
+# commits carry "AIEOS-Task: TASK-095" and go to task/TASK-095; main receives them only at acceptance.
+task: TASK-095
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add writer.init_layout above writer.py's TASK-066 marker, which creates the twelve folders of the project-state
+  layout the owner settled in a folder that has no project-state directory, refusing otherwise; add
+  launcher.init_project, which calls it; and add a command init in cli.py that calls that, refusing inside a runtime,
+  and prints the created folders; tests in tests/unit/test_writer.py and the new tests/unit/test_cli_init.py, each
+  naming "TASK-095 ACn".
+traces_to:
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#3
+  - docs/specs/spec-02-aieos-file-format.md#3
+input_state:
+  base_commit: bff29a971cac9f7456b5e44472586ac7e731b262
+  depends_on: [TASK-087, TASK-091, TASK-092, TASK-093]
+  intent_versions:
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 613cbd72dca411586ca03d790cd01bb044d0eb8e9a2885d9c3f8bb25cc9f5efb
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: d2fa59ae3f203b3a2108e55d23ddfb875e64ab57d27372c9d413bf30d7c2cbdd
+    docs/specs/spec-05-adapter-contract.md: ae7b99419d303db40b7200e39a22d93b9301b29900f3b1f5a5720b72d8eb9c2b
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 8e744daa31928621137db59a8a9d91ecf163879420e1f8e148232b149cafcdb7
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/cli.py
+    - src/aieos_bootstrap/launcher.py
+    - src/aieos_bootstrap/writer.py
+    - tests/unit/test_cli_init.py
+    - tests/unit/test_execution_status.py
+    - tests/unit/test_writer.py
+read_set:
+  paths:
+    - docs/specs/spec-07-cli-and-zero-friction-path.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/decision-matrix.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.writer.write_handoff, aieos_bootstrap.writer.StoreResult,
+    aieos_bootstrap.launcher.end_outside, aieos_bootstrap.cli.main, aieos_bootstrap.cli.in_runtime]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - pyproject.toml
+  - setup.py
+  - setup.cfg
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/handoff_file.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/resume_log_inputs.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_base_files_repo.py
+  - tests/integration/test_base_inputs_repo.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_launcher_repo.py
+  - tests/integration/test_mcp_server_work_order_repo.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_resume_inputs_repo.py
+  - tests/integration/test_resume_log_inputs_repo.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_base_files_properties.py
+  - tests/property/test_base_inputs_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_context_compiler_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_mcp_server_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_base_files.py
+  - tests/unit/test_base_inputs.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_cli.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_execution_list_tasks.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_handoff_file.py
+  - tests/unit/test_launcher.py
+  - tests/unit/test_launcher_end.py
+  - tests/unit/test_launcher_gone.py
+  - tests/unit/test_launcher_outside.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_mcp_server_work_order.py
+  - tests/unit/test_read_set_gone.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_resume_inputs.py
+  - tests/unit/test_resume_log_inputs.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      init_layout over a real temporary folder (tests/unit/test_writer.py, class TASK095InitLayout): "done", value
+      exactly the twelve '.aieos/<folder>' paths in _INIT_LAYOUT_DIRS' order; walking the temporary root (os.walk),
+      the folders are exactly .aieos, .aieos/intent and the twelve, and no file exists anywhere under the root (no
+      events.jsonl, project.yaml, constitution.yaml, ignore file or local/state.sqlite); a second call gives
+      "refused", reason "exists", and the walk is unchanged.
+  - AC2: >-
+      init_layout's refusals: a root that is not a str, empty, or names no existing folder gives "root"; a .aieos that
+      exists as a folder (made by a first init_layout call), an empty file or a non-empty file (made by open(path,
+      'ab'), the module's allowance) gives "exists" with nothing created; os.path.islink (patched) true at the root or
+      at .aieos gives "link" with nothing created; an islink stand-in that answers true for a layout folder only once
+      os.path.isdir of that folder is true gives "link" (the check after the folders); os.path.realpath (patched) that
+      resolves a layout folder elsewhere gives "link"; a raise in os.path.lexists or in os.makedirs (patched) gives
+      "unwritable" naming the exception's type; each refusal has exactly the one finding the scope gives for its
+      reason; no finding holds the root's text; no call raises.
+  - AC3: >-
+      launcher.init_project by stand-ins: init_layout is called exactly once with the root and defaults at call time
+      (mock.patch.object of writer.init_layout made after import is the one called); a StoreResult "done" with reason
+      None, no findings and a non-empty tuple of str, and a StoreResult "refused" with a str reason and a tuple of str
+      findings, map to the mapping with exactly INIT_KEYS as the scope says; each answer out of form gives reason
+      "init_layout" and the out-of-form finding: an object that is not a writer.StoreResult (a subclass included),
+      "done" with an empty tuple, a non-tuple value, a non-str item, a reason or findings, "refused" with a non-str
+      reason or findings that are not a tuple or hold a non-str item, a result other than done or refused; a raise
+      gives "init_layout: a step raised <type>"; no call raises; by ast, init_project and its helpers name no open, os,
+      sys, time or subprocess and no attribute now, environ, getenv or write.
+  - AC4: >-
+      The command init by stand-ins (mock.patch.object of launcher.init_project, restored after each test; a counting
+      clock): "init --root R" and "init --root R --json" call init_project once with R and the clock never; "init",
+      "init --root", "init --root R extra", "init R --root R" and "init --root R --json --json" give exit 2 and USAGE
+      with nothing called, inside a runtime too; an environ holding any one of the three RUNTIME_VARS (an empty value
+      included) gives exit 1 and the one runtime-refusal finding with nothing called; "done" gives exit 0 and the
+      "created: " lines, or under --json the exact string '{"created": [...], "findings": []}'; "refused" gives exit 1
+      and "finding: init: <reason>" then its findings; each answer out of form (not a dict, a dict subclass, other
+      keys, a created list subclass, a non-str item, an empty created list for done, a done with a reason or findings,
+      a refused with created items) gives the out-of-form finding; a raising init_project gives "init: a step raised
+      <type>"; a raising _render_init (patched) gives "cli: a step raised <type>"; tasks', end's and status' tests all
+      still pass.
+  - AC5: >-
+      The modules: writer.py's import set unchanged (tests/unit/test_writer.py :414-418 passes), its single-writer test
+      (:397-412) passes, R23 as widened passes with init_layout and its helpers above the TASK-066 marker; by ast,
+      init_layout and the names beginning _init_layout call no open; writer.py's diff from the base is an added
+      docstring paragraph after :64 and a block inserted after :1144 only, and launcher.py's diff is added lines only
+      (a docstring paragraph after :124 and a
+      block after :719), each checked at G3 by a scratchpad git-diff script; launcher.py's import set unchanged
+      (tests/unit/test_launcher.py :702-705 passes) and :707-719 passes; cli.py's imports unchanged and its refused
+      names and strings (tests/unit/test_cli.py :333-356, :369-375) pass; the new test file uses no tempfile, sqlite3,
+      shutil or open, roots only the literal 'C:/init-root-95', and uses no one-argument .replace() and no
+      .replace(target=...).
+  - AC6: >-
+      Docstrings: writer.py's module docstring gains a paragraph holding "init_layout", "TASK-095", "exists" and "no
+      file", and keeps every phrase of tests/unit/test_writer.py :883-904; launcher.py's gains a paragraph holding
+      "init_project" and "TASK-095" and keeps every phrase of tests/unit/test_launcher.py :722-733,
+      tests/unit/test_launcher_gone.py :420-429 and tests/unit/test_launcher_outside.py's launcher docstring test;
+      cli.py's gains "aieos init" and "TASK-095", holds "COMMANDS, tasks, end, status or init" and "end and init call
+      it after the parse" and not "COMMANDS, tasks, end or status", and keeps every phrase of tests/unit/test_cli.py
+      :405-411 and tests/unit/test_launcher_outside.py :609-620; USAGE names init; tests/unit/test_execution_status.py's
+      AC6 test as widened passes; every test of tests/unit/test_cli_init.py names "TASK-095 AC", checked by its own
+      naming test, more than 20 tests; every test of the class TASK095InitLayout names "TASK-095 AC", checked by the
+      class's own naming test.
+  - AC7: >-
+      Broken copies, each naming its file and failing the tests of its AC: (1) init_layout writing into an existing
+      .aieos (the exists step dropped) (AC1, AC2); (2) a folder of the layout left out (AC1); (3) a file created in the
+      layout (an empty events.jsonl by open 'ab') (AC1); (4) the link check before the folders dropped (AC2); (5) the
+      link check after the folders dropped (AC2); (6) the realpath comparison dropped (AC2); (7) a raise in
+      os.makedirs escaping (AC2); (8) a finding holding the root's text (AC2); (9) init_layout defined after the
+      TASK-066 marker (AC5, R23); (10) init_project calling init_layout twice (AC3); (11) init_project binding
+      writer.init_layout at import time (AC3); (12) init_project giving "done" for an answer out of form (AC3); (13)
+      the command not refusing inside a runtime (AC4); (14) the in_runtime check made before the parse (AC4); (15) the
+      command calling the clock (AC4); (16) a refusal giving exit 0 (AC4); (17) the --json line without sort_keys
+      (AC4); (18) an out-of-form answer printed (AC4); (19) cli.py importing writer (AC5); (20) a line of writer.py's
+      write_handoff changed (AC5, the G3 diff script); (21) a line of launcher.py's end_outside changed (AC5, the G3
+      diff script);
+      twenty-one copies in all; each copy made in a scratchpad script at G3, not committed; the governor's evaluate at
+      acceptance (the shadow) with any difference named.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1000k, wall_time: 5h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6]}
+  - {gate: G3, check: constitution, args: [AC7, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
