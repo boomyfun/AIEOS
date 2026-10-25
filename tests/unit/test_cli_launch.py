@@ -224,7 +224,8 @@ class TASK094AC2Failures(unittest.TestCase):
         """TASK-094 AC2: contract_at findings, a raise, an answer out of form, an empty paths list, or a path outside
         _LAUNCH_PATH or with an empty segment give reason "contract", no starter, no finish and one finish_outside."""
         cases = [(None, ['no file']), RuntimeError('r'), 'x', contract(paths=[]), contract(paths=['a b']),
-                 contract(paths=['x//y']), contract(paths=['/x']), contract(paths='src/a.py'), contract(paths=[3])]
+                 contract(paths=['x//y']), contract(paths=['/x']), contract(paths='src/a.py'), contract(paths=[3]),
+                 (contract()[0], ['x'])]
         for answer in cases:
             world = World(contract_at=answer)
             out = launch(world)
@@ -392,8 +393,7 @@ class TASK094AC4Command(unittest.TestCase):
         starter."""
         for argv in (cmd(), cmd('--json'), ['launch', TASK, '--json', '--root', ROOT]):
             rc, _, stand, clock = run(argv)
-            self.assertEqual((rc, len(stand.calls), stand.calls[0][:2], stand.calls[0][3]), (0, 1, (ROOT, TASK),
-                                                                                         starter), argv)
+            self.assertEqual((rc, stand.calls), (0, [(ROOT, TASK, clock, starter)]), argv)
 
     def test_usage_errors(self):
         """TASK-094 AC4: "launch", "launch --root R", "launch TASK-1", "launch task-1 --root R", "launch TASK-1 --root
@@ -445,7 +445,9 @@ class TASK094AC4Command(unittest.TestCase):
                dict(good, session_id=None), dict(good, start=granted(result='refused')), dict(good, run='raised X'),
                dict(good, end=ended('refused', 'end')), dict(good, handoff=handoff('refused')),
                dict(good, start=['x']), dict(good, end='done'), dict(good, run='other'),
-               answer('refused', 'other'), answer('refused', 3), dict(good, findings=[3]), dict(good, findings=('f',))]
+               answer('refused', 'other'), answer('refused', 3), dict(good, findings=[3]), dict(good, findings=('f',)),
+               answer('refused', 'end', ['e'], end=ended('refused', 'held'), handoff_answer='written'),
+               answer('refused', 'start', ['s'], None, start='granted', run=None, end=None, handoff_answer=None)]
         for given in bad:
             with self.subTest(given=given):
                 rc, out, _, _ = run(cmd(), given=given)

@@ -840,6 +840,8 @@ def _launch_write_set(answer):
     value, found = answer
     if value is None:
         return None, ['contract: %s' % f for f in _launch_strs(found)] or ['contract: contract_at gave no value']
+    if found is not None:
+        return None, ['contract: %s' % f for f in _launch_strs(found)] or ['contract: findings beside a value']
     if not (type(value) is tuple and len(value) == 2 and type(value[0]) is dict):
         return None, ['contract: contract_at gave an answer out of form']
     write_set = value[0].get('write_set')
