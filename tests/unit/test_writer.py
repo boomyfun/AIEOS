@@ -2077,9 +2077,10 @@ class R23TheNamesAtTheBase(unittest.TestCase):
         return out
 
     def test_only_the_new_function_and_its_helpers_are_added(self):
-        """TASK-078 AC2, as TASK-090 AC2 widens it: writer.py's top-level names are exactly the base's 94 plus
-        session_leases, read_sessions and names that begin "_session_leases", "_SESSION_LEASES", "_read_sessions" or
-        "_READ_SESSIONS", all above the TASK-066 marker."""
+        """TASK-078 AC2, as TASK-090 AC2 and TASK-087 AC4 widen it: writer.py's top-level names are exactly the base's
+        94 plus session_leases, read_sessions, write_handoff and names that begin "_session_leases",
+        "_SESSION_LEASES", "_read_sessions", "_READ_SESSIONS", "_write_handoff" or "_HANDOFF", all above the TASK-066
+        marker."""
         text = read(os.path.join(SRC, 'writer.py')).decode('utf-8')
         names = self.names(ast.parse(text))
         self.assertEqual(len(self.BASE), 94)
@@ -2087,9 +2088,10 @@ class R23TheNamesAtTheBase(unittest.TestCase):
         added = names - self.BASE
         self.assertIn('session_leases', added)
         self.assertIn('read_sessions', added)
-        for name in added - {'session_leases', 'read_sessions'}:
-            self.assertTrue(name.startswith(('_session_leases', '_SESSION_LEASES', '_read_sessions', '_READ_SESSIONS')),
-                            name)
+        self.assertIn('write_handoff', added)
+        for name in added - {'session_leases', 'read_sessions', 'write_handoff'}:
+            self.assertTrue(name.startswith(('_session_leases', '_SESSION_LEASES', '_read_sessions', '_READ_SESSIONS',
+                                             '_write_handoff', '_HANDOFF')), name)
         head, part = text.split('# ---- the read-only lookup of the store (task TASK-066) ----', 1)
         for name in added:
             with self.subTest(name=name):
@@ -2367,6 +2369,140 @@ class R26ReadSessions(ReadsCase):
             with self.subTest(r=r):
                 self.assertEqual(r.result, 'refused')
                 self.assertNotIn(hostile, ' '.join(r.findings))
+
+
+class _ReadBack:
+    """A stand-in for the read-back's file object, whose read gives other bytes."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self):
+        return b'other bytes'
+
+
+class TASK087WriteHandoff(unittest.TestCase):
+    """writer.write_handoff over real folders (task TASK-087)."""
+
+    TASK = 'TASK-087'
+    SESSION = 'launch-0123abcd'
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = self._tmp.name
+        self.addCleanup(self._tmp.cleanup)
+        self.rel = '.aieos/handoffs/%s-%s.md' % (self.TASK, self.SESSION)
+        self.path = os.path.join(self.root, '.aieos', 'handoffs', '%s-%s.md' % (self.TASK, self.SESSION))
+
+    def put(self, text, task=None, session=None, root=None):
+        return writer.write_handoff(self.root if root is None else root, task or self.TASK,
+                                    self.SESSION if session is None else session, text)
+
+    def refused(self, r, reason):
+        self.assertIsInstance(r, writer.StoreResult)
+        self.assertEqual((r.result, r.reason, len(r.findings)), ('refused', reason, 1), r)
+
+    def test_it_creates_the_folder_and_the_file(self):
+        """TASK-087 AC3: the first call creates .aieos/handoffs and the file with exactly the text's UTF-8 bytes,
+        gives "done" with the relative path, and creates nothing else under the root."""
+        text = '---\ntask: TASK-087\nnote: ' + chr(0xe9) + '\n---\n'
+        r = self.put(text)
+        self.assertEqual((r.result, r.value), ('done', self.rel))
+        self.assertEqual(read(self.path), text.encode('utf-8'))
+        self.assertEqual(files_under(self.root), [self.rel])
+
+    def test_a_second_call_is_refused(self):
+        """TASK-087 AC3: a second call with any text gives "exists" and leaves the file's bytes unchanged."""
+        self.assertEqual(self.put('first\n').result, 'done')
+        for text in ('first\n', 'second\n', ''):
+            with self.subTest(text=text):
+                self.refused(self.put(text), 'exists')
+                self.assertEqual(read(self.path), b'first\n')
+
+    def test_an_existing_empty_file_is_written(self):
+        """TASK-087 AC3: an existing empty file, made by a first call with '', is written by the next call."""
+        self.assertEqual(self.put('').result, 'done')
+        self.assertEqual(read(self.path), b'')
+        self.assertEqual(self.put('now written\n').result, 'done')
+        self.assertEqual(read(self.path), b'now written\n')
+
+    def test_arguments_out_of_form(self):
+        """TASK-087 AC3: arguments out of form give "argument", and a root naming no existing folder "root", each
+        creating nothing."""
+        cases = [dict(task='TASK-x'), dict(task='task-1'), dict(session='a/b'), dict(session='a\\b'),
+                 dict(session='.'), dict(session='..'), dict(session='x' * 129), dict(session='a b')]
+        for kw in cases:
+            with self.subTest(kw=kw):
+                self.refused(self.put('t\n', **kw), 'argument')
+        self.refused(self.put(b't\n'), 'argument')
+        self.refused(self.put(None), 'argument')
+        self.refused(self.put('bad ' + chr(0xd800)), 'argument')
+        self.refused(self.put('t\n', root=os.path.join(self.root, 'missing')), 'root')
+        self.assertEqual(files_under(self.root), [])
+
+    def test_a_link_at_each_place(self):
+        """TASK-087 AC3: os.path.islink true for root, root/.aieos, root/.aieos/handoffs or the path, each in turn
+        (called whether or not the entry exists; the path's case also after a first call with ''), gives "link" with
+        nothing written."""
+        places = [self.root, os.path.join(self.root, '.aieos'), os.path.join(self.root, '.aieos', 'handoffs'),
+                  self.path]
+        for place in places:
+            with self.subTest(place=place):
+                target = os.path.normcase(place)
+                with mock.patch.object(writer.os.path, 'islink', side_effect=lambda p: os.path.normcase(p) == target):
+                    self.refused(self.put('t\n'), 'link')
+                self.assertEqual(files_under(self.root), [])
+        self.assertEqual(self.put('').result, 'done')
+        target = os.path.normcase(self.path)
+        with mock.patch.object(writer.os.path, 'islink', side_effect=lambda p: os.path.normcase(p) == target):
+            self.refused(self.put('t\n'), 'link')
+        self.assertEqual(read(self.path), b'')
+
+    def test_a_path_that_resolves_elsewhere(self):
+        """TASK-087 AC3: a realpath that differs from the expected one gives "link" with nothing written."""
+        real = os.path.realpath
+        with mock.patch.object(writer.os.path, 'realpath', side_effect=lambda p: real(p) + 'x'):
+            self.refused(self.put('t\n'), 'link')
+        self.assertEqual(files_under(self.root), [])
+
+    def test_a_failing_open_and_a_differing_read_back(self):
+        """TASK-087 AC3: an OSError raised by the open gives "unwritable"; a read-back that differs gives
+        "unwritable"."""
+        with mock.patch('aieos_bootstrap.writer.open', create=True, side_effect=OSError):
+            self.refused(self.put('t\n'), 'unwritable')
+
+        def fake(path, mode):
+            if mode == 'rb':
+                return _ReadBack()
+            return open(path, 'ab')
+
+        with mock.patch('aieos_bootstrap.writer.open', create=True, side_effect=fake):
+            self.refused(self.put('t\n'), 'unwritable')
+
+    def test_no_finding_holds_the_callers_text(self):
+        """TASK-087 AC3: no finding holds the root, the session id or the task id; no call raises."""
+        hostile = 'zz-HOSTILE-zz'
+        out = [self.put('t\n', root=os.path.join(self.root, hostile)), self.put('t\n', session=hostile + '/x'),
+               self.put('t\n', task=hostile)]
+        self.assertEqual(self.put('t\n', session=hostile).result, 'done')
+        out.append(self.put('t\n', session=hostile))
+        for r in out:
+            with self.subTest(r=r):
+                self.assertEqual(r.result, 'refused')
+                self.assertNotIn(hostile, ' '.join(r.findings))
+
+    def test_the_docstrings(self):
+        """TASK-087 AC6: write_handoff's docstring says create-only by a size check after opening in append mode and
+        that two concurrent writers are not excluded; writer.py's module docstring says the writer also creates
+        .aieos/handoffs/<task>-<session>.md."""
+        doc = ' '.join(writer.write_handoff.__doc__.split())
+        for phrase in ('create-only', 'size check after opening in append mode', 'two concurrent writers are not'
+                       ' excluded'):
+            self.assertIn(phrase, doc)
+        self.assertIn('.aieos/handoffs/<task>-<session>.md', ' '.join(writer.__doc__.split()))
 
 
 if __name__ == '__main__':
