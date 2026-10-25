@@ -1,6 +1,6 @@
 # DEF-0103: specification 5's sentence on an unexpired lease row, against `aieos end`
 
-- Status: open
+- Status: closed (2026-10-25; DM F66)
 - Opened: 2026-10-25 (session ea6ea0a3; TASK-092's records, decisions D-3047 (c1), D-3051 Q1 and R5b, D-3076)
 - Deferred by: decision agent (A41, A51), D-3051 R5b (found by the contract's reviews rv92a F5 and rv92b B2; a
   specification text, not a code change).
@@ -31,3 +31,4 @@ revision 2.
 
 ## Log
 - 2026-10-25: opened with TASK-092's records (session ea6ea0a3; decisions D-3047, D-3051, D-3076).
+- 2026-10-25: closed by specification 5 revision 6 (DM F66; decisions D-3184 to D-3189): section 11 point 10 (:125) names the two paths through the core's outside end, `aieos end <session>` and the launcher's own fallback, as writing a gone session's record before the release while its lease row may be unexpired, the recorder naming the row as possibly unexpired, and reads "without a held lease" as said of the writer; carried to the next task that touches them: launcher.py :120-121's "departs from specification 5 :125", now out of date, and specification 4 :61's citation of specification 2 :156 for `models`, which is at :163 (session ea6ea0a3).

@@ -1,8 +1,8 @@
 # Specification 1: State & Event Model
 
-> - **Status:** revision 2. Whether it is approved and baselined is recorded in DM section F, not in this file. It decides nothing that a decision matrix (DM) row or a bound document decides.
+> - **Status:** revision 3. Whether it is approved and baselined is recorded in DM section F, not in this file. It decides nothing that a decision matrix (DM) row or a bound document decides.
 > - **Drafted under:** decision agent decision D-146 (the M1 drafting plan, item 1; Master Plan §4 M1). Decision files are kept outside the repository (`docs/WORKING-RECORDS.md`).
-> - **Path:** `docs/specs/spec-01-state-and-event-model.md` is interim, like `docs/plan/`. The layout (DM B7, proposed) and CR-001 E4 (working record DEF-0018) are open; specification 2 proposes them.
+> - **Path:** `docs/specs/spec-01-state-and-event-model.md` is interim, like `docs/plan/`. The layout (DM B7) and CR-001 E4 (working record DEF-0018) are settled as the owner's (DM B7's note; A59, A60); specification 2 §3 states them (revision 3).
 > - **Sources:** "concept line N" is a line of `AIEOS-concept.md` (v0.5, unchanged, A22). "DM B5" is a row of `docs/pre-genesis/decision-matrix.md`. Statuses are those the DM rows record: B3, B5, B7 and B9 are rows of DM section B, "Proposed architecture (not ratified)"; `governor-spec.md` revision 3 is approved in the owner's place (DM F3) and keeps its own "proposed" marks. "(proposed)" in this text marks a choice of this specification where the concept is silent or says less; each one is also listed in section 10.
 
 ## 1. Purpose and scope
@@ -48,7 +48,7 @@
 - One append-only log of events for the project (concept line 874, "append-only event log"; its file name and place are specification 2's).
 - Every event has an envelope with: an idempotent `event_id`; a `type` (section 5); the UTC time it was appended; a per-log sequence number assigned by the writer; the `task_id` where the event concerns a task; the `fencing_token` where the event results from a lease holder's action; for a correction, `corrects`, the `event_id` it corrects (proposed); and a payload. Events that carry a record also carry the record's B5 fields.
 - Appending an event whose `event_id` is already in the log has no effect (concept line 856).
-- Only the AIEOS core writes the project-state directory (`.aieos/` in the concept, lines 858 and 879; its layout is open: B7, E4), the event log included, through one writer (constitution INV-004). Agents act through the protocol (specification 6) or the CLI (specification 7), never by writing that directory.
+- Only the AIEOS core writes the project-state directory (`.aieos/` in the concept, lines 858 and 879; its layout is settled as the owner's: specification 2 §3, DM B7's note), the event log included, through one writer (constitution INV-004). Agents act through the protocol (specification 6) or the CLI (specification 7), never by writing that directory.
 - Events are never edited or removed. A correction is a new event whose `corrects` names the one it corrects.
 
 ## 5. Event list
@@ -123,7 +123,7 @@ At start, before any new event, the core reconciles Git and the event log (conce
 ## 10. Open points
 
 1. The spelling of event names and fields (specification 2).
-2. The file name and place of the event log and of the local store (specification 2; B7 and E4 open).
+2. The file name and place of the event log and of the local store: specification 2 §3, whose layout is settled as the owner's (DM B7's note; A59) (revision 3).
 3. Whether the log carries a hash chain between events. The concept does not ask for one; not proposed here.
 4. How long ephemeral items are kept.
 5. The M2 record store and its move into the event log (Master Plan §10).
@@ -131,10 +131,21 @@ At start, before any new event, the core reconciles Git and the event log (conce
 7. Settled by specification 3 §10 (proposed there): the task state each execution decision causes (section 5.1).
 8. Whether DONE, REJECTED and ESCALATED are among the states "sau READY" that INTENT_CHANGE or CONFLICT makes STALE (line 529); STALE → DRAFT as the reading of REPLAN; READY or REWORK → BLOCKED. READY → STALE for the Resume Check's REPLAN only is set by this revision (section 5.1; proposed, as specification 3 §12 point 6 proposes).
 9. Settled by specification 3 §9 (proposed there): an execution decision is an `interpretation` record, the kind B5 gives an acceptance decision.
-10. The other choices marked "(proposed)": IN_PROGRESS read from the local store, and what release, expiry and a lost store do (sections 5.1 and 5.2); one lease per task, only on READY or REWORK; releasing a lease on submission, blocking or staleness; the retry counter; the token's form, the token in the commit trailer, its use at recovery and the expiry check at submission (sections 7 and 8); the `corrects` field (section 4); where change requests and proposals are kept (section 3); the record kinds of DRIFT and VIOLATION (section 5.3); READY → STALE for the Resume Check's REPLAN (section 5.1; revision 2).
+10. The other choices marked "(proposed)": IN_PROGRESS read from the local store, and what release, expiry and a lost store do (sections 5.1 and 5.2); one lease per task, only on READY or REWORK; releasing a lease on submission, blocking or staleness; the retry counter; the token's form, the token in the commit trailer, its use at recovery and the expiry check at submission (sections 7 and 8); the `corrects` field (section 4); where change requests and proposals are kept (section 3); the record kinds of DRIFT and VIOLATION (section 5.3); READY → STALE for the Resume Check's REPLAN (section 5.1; revision 2); an intent as a `claim` record, and the approval flow's Reject as an `authority` record with `outcome` `fail` and Edit as a `claim` record, none adding a task state (section 12; revision 3).
+11. Whether a later approval of a contract version may follow a Reject of the same version (section 12; revision 3).
+12. The `source_class` of an intent's claim and of an Edit's claim: that of who records it, the user's channel at the CLI; which class that is stays open, and no class gives such a claim weight, since a claim satisfies no evidence entry (section 12; revision 3).
 
 ## 11. Revisions
 
 - Revision 0: first draft (D-146).
 - Revision 1: applies the fourteen findings of one read-only checker round (claude-sonnet-5-5), each verified against its source lines: acceptance routing as CR-001 E8 and `governor-spec.md` §5 give it, including leaving IN_REVIEW and ESCALATED; one event per fact; leases kept in the local store only, as concept line 876 says, with IN_PROGRESS read from it, and what release, expiry, rework and blocking do; fencing at recovery and at submission, with a token a lost store cannot repeat; the entities that were missing; the reconciliation effects; the single writer for the whole directory; proposed choices marked and listed in section 10; section 9 aligned with the Master Plan's open points.
 - Revision 2 (decisions D-254 and D-255; DEF-0025): records what specification 3 settles and uses: `task.stale` from READY for the Resume Check's REPLAN, set by this revision as specification 3 §12 point 6 proposes (section 5.1; section 10 point 8 narrowed, and the choice listed in point 10), and section 10 points 7 and 9 settled by specification 3 §10 and §9.
+- Revision 3 (decisions D-3183 to D-3187 and the decision that approves it; specification 7 §4 and §10 points 3 and 12): a new section 12 at the end, an intent kept as a `claim` record and the approval flow's answers (Approve the existing `authority` record, which `task.approved` cites; Reject an `authority` record with the same binding and `outcome` `fail`, never counted as an approval; Edit a `claim` record holding the note), none adding a task state and none appended by a new event type; section 10 points 2, 10, 11 and 12; the status line, the "Path" line and section 4's sentence on the project-state directory state the layout as settled. No other entity, event, state or decision value changes; no line before section 10's point 11 moves.
+
+## 12. Intents and the approval flow's answers (revision 3; proposed)
+
+- An intent, the user's statement of what AIEOS is to do (specification 7 §3, `aieos run`; concept lines 789-798), is kept as one `claim` record appended by `record.added` (section 5.4), its subject an intent id (spelling: specification 2). It changes no task state and approves nothing: a statement is a claim (B5), and what is built from it, a task contract or a proposal set, is approved only by the existing `authority` records (section 5.4; A42). An intent is not an intent artefact of section 3, which changes only through an approved change request. Its `source_class` is that of who records it, which class stays open (section 10 point 12).
+- The approval flow's answers (specification 7 §4; concept lines 797-798), each appended by `record.added`:
+  - Approve: the existing `authority` record bound to the contract's hash (A42), which `task.approved` cites (section 5.1). `task.approved` cites only an approving record: one with no `outcome`, or with `outcome` `pass`.
+  - Reject: an `authority` record with the same binding and `outcome` `fail`, which says that this contract version is not approved. It is never an approval: `task.approved` never cites it, and the governor's reading counts no authority record whose outcome is not `pass` [src/aieos_bootstrap/governor.py:384-386]. It adds no task state: the task stays in DRAFT and no lease is granted on it (section 5.2). Whether a later approval of the same contract version may follow a Reject is open (section 10 point 11).
+  - Edit: a `claim` record of the approver, holding the approver's note; it returns the item to its drafter and changes no task state; its `source_class` is open as an intent's is (section 10 point 12).
