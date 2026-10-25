@@ -1,0 +1,467 @@
+# TASK-091: the CLI frame and `aieos tasks`. A new module cli.py, run as `python -m aieos_bootstrap.cli <command>`,
+# with main(argv, stdout, environ, clock) that never raises, its own small argument parser, the helper in_runtime and
+# its one command, tasks, over execution.list_tasks (specification 7 revision 2, section 3 :26, :32, :34; section 10
+# points 10 and 15; M7's remaining part, its first task). Plan: decisions D-3013 to D-3017 (session ea6ea0a3): M7 stays
+# open for its own goal, the CLI commands (D-3013); the cut of M7's remaining tasks (MYSP/m7/m7-rest-plan.md, D-3014);
+# the scope note (MYSP/t91/scope91.md) with D-3015's rulings (a1), (b1) with (b2), (c1) with --json, (d) to (g) and R1;
+# the pin scan (pinscan91-out.txt at 49cd8795) and its reading (pinscan91-reading.md) with D-3017's ruling on
+# RUNTIME_VARS; the risk run (MYSP/t91/risk_class91.py at 49cd8795: high) and the forbidden list (MYSP/t91/forbid91.txt
+# at 49cd8795; the two write-set files are new and not in it) (D-3017); the reviews rv91a (claude-sonnet-5-5) and
+# rv91b (claude-opus-5-5) of r0 and their dispositions (MYSP/t91/disp91.md, D-3019, twenty rows); the round-2
+# review rv91c (claude-opus-5-5) of r1 and its dispositions (MYSP/t91/disp91r2.md, D-3021, six rows, and G7 of
+# D-3021 C2); the decision agent's read of r2 in place of a third round (D-3022).
+#
+# Scope:
+# - New src/aieos_bootstrap/cli.py (D-3015 (a1)):
+#   - main(argv, stdout, environ, clock) -> an int, 0, 1 or 2: argv exactly a list of str, the arguments after the
+#     program name; stdout an object with write(str); environ a mapping; clock a callable giving now. It never raises
+#     an Exception; KeyboardInterrupt and SystemExit escape, as mcp_server.py :525 and claude_code_pretool_hook.py
+#     :105-106 state (D-3019 row 8). The whole output of one call is built first, every line ending with LF, and is
+#     written by one stdout.write call; then stdout.flush is called through getattr when present (mcp_server.py
+#     :522-524) (row 1). A write or a flush that raises gives exit 1 on every path (a usage error, a success, findings),
+#     whatever the code would have been, and nothing more is written (row 3). The lines of tasks' answer are made by
+#     a module function _render(answer, as_json) -> str, looked up as a module global at each call; the CLI's own
+#     findings (out of form, no finding, a step raised) are made by a separate fixed function _findings(texts,
+#     as_json) -> str, never by _render. Any Exception outside the tasks step (in the parser or in _render) gives exit
+#     1 and the one finding "cli: a step raised <exception type name>" through _findings: in the text form when the
+#     parser raised (--json not yet known), in the chosen form when _render raised (row 4; rv91c F1, F4).
+#     The entry line is `if __name__ == '__main__':` followed by
+#     `sys.exit(main(sys.argv[1:], sys.stdout, os.environ, _clock))`, mcp_server.py :534-535's form; os.environ is
+#     read only there. _clock gives datetime.datetime.now(datetime.timezone.utc) with microseconds 0 (mcp_server.py
+#     :530-531).
+#   - Its own parser (D-3015 (c)), not argparse: argv[0] is the command, from the dispatch table COMMANDS, whose only
+#     entry is "tasks"; the flags are "--root <path>" (required, once, its value a non-empty str not beginning "--")
+#     and "--json" (optional, once). An empty argv, an argv that is not exactly a list (a tuple or a list subclass
+#     included) or holds a non-str, an unknown command, a missing --root, a flag without its value, an empty --root
+#     value, a --root value beginning "--", an unknown flag, a flag given twice and an extra positional argument each
+#     give exit 2 and the usage text USAGE on stdout (rv91c F3); USAGE ends with LF and names the command tasks and the
+#     flags --root and --json. On a usage error neither clock nor list_tasks is called. Nothing is written to stderr.
+#     So "--root R tasks", "--json tasks --root R", "--", "-h" and "--help" are unknown commands; "--root=R" and "-r"
+#     are unknown flags; "tasks --root -r" is accepted with the root "-r"; a whitespace-only root is accepted by the
+#     parser and refused through list_tasks' readers, a finding (D-3019 row 7).
+#   - The command tasks: calls clock() once, then execution.list_tasks(root, now) once, list_tasks looked up as
+#     execution.list_tasks at each call (a mock.patch.object of execution.list_tasks made after cli's import is the
+#     one called; row 13); when clock raises, list_tasks is not called. On (a list, None): exit 0 and, in the text
+#     form, one line per item in list_tasks' order, "<task> <state> <contract_hash> lease=<lease>", or the one line
+#     "no task may be taken" for an empty list; in the --json form one line, json.dumps({"tasks": <the list>},
+#     sort_keys=True). On (None, findings): exit 1 and one line "finding: <text>" per finding, list_tasks' str
+#     findings printed as given (the str items of a list or a tuple only, DEF-0102's rule; row 18); when no str
+#     finding remains (findings a str, an empty list or tuple, a list or tuple with no str item, or any other value
+#     such as None, 5 or a dict), the one finding "tasks: list_tasks gave no finding" (row 2; rv91c F2). An answer
+#     that is not a 2-tuple of (a list, None) or (None, any value) gives exit 1 and the finding "tasks: list_tasks
+#     gave an answer out of form"; so does an item that is not of type dict with exactly the keys task, state,
+#     contract_hash and lease, each value of type str exactly (type(v) is str; rv91c F1). A raise in clock or
+#     list_tasks gives exit 1 and the finding "tasks: a step raised <exception type name>".
+#     Every finding, list_tasks' and the CLI's own, is printed in the chosen form: one "finding: <text>" line each, or
+#     under --json the one line json.dumps({"findings": [...]}, sort_keys=True) (row 5); a usage error is always
+#     USAGE as text. No line holds the --root value or other caller text; the lines hold only list_tasks' values and
+#     findings and the CLI's own fixed texts (row 17).
+#   - RUNTIME_VARS = ('AIEOS_SESSION_ID', 'AIEOS_ROOT', 'AIEOS_BASE') and in_runtime(environ) -> bool: true when any
+#     name of RUNTIME_VARS is in environ, whatever its value ('' included); true also when the test itself raises (an
+#     environ whose membership test raises), failing closed; false otherwise (spec 7 :34; D-3015 (b)). Two stated
+#     choices, both fail-closed (D-3015 (b2); D-3019 row 11): AIEOS_BASE is counted beside spec 7 :34's session id and
+#     project root, and a name present with the value '' counts as present, while specification 5 :114 counts an
+#     empty session id or root as absent. Built and tested here; tasks does not call it and does not refuse inside a
+#     runtime (spec 7 :34 names only end and launch); spec 7 :34's refusal itself comes with TASK-092 and TASK-094,
+#     which call in_runtime.
+# - New tests/unit/test_cli.py: stand-ins only (a list of str as stdout's sink, compared as ''.join(sink); a fixed or
+#   counting clock; list_tasks replaced by mock.patch.object of execution.list_tasks, and in AC3 cli._render by
+#   mock.patch.object of cli._render, each restored after each test); a
+#   literal root 'C:/cli-root-91' (L-0032); no tempfile, sqlite3, shutil or open; no os.mkdir; RUNTIME_VARS checked
+#   against mcp_server.SESSION_VAR and ROOT_VAR, claude_code_pretool_hook.BASE_VAR (module attributes; only the test
+#   imports the hook module, and every attribute it takes of it is BASE_VAR, checked by ast) and the keys of the dict
+#   literal assigned to `environment` in launcher.start, read as (SRC / 'launcher.py').read_bytes().decode('utf-8') and
+#   ast.parse (tests/unit/test_launcher_end.py :360's form): the FunctionDef start, the one Assign whose target is the
+#   Name environment and whose value is an ast.Dict, its keys all str constants (D-3017: the ast read is used, since a
+#   granted start needs launcher.start's four input readers patched; D-3019 row 9); the naming test.
+# - What it does not do: no write of any file, store or log; no process; no change to execution.py, mcp_server.py,
+#   launcher.py, writer.py or __init__.py; no installed command, no manifest (pyproject.toml, setup.py and the rest are
+#   refused by the deterministic rule, aieos-checks.yml :1521, :1653, and are evaluator paths, :423-430, :490-497); no
+#   other command (end, status, init, launch, approve, import and run are TASK-092 to TASK-098, D-3014).
+#
+# Stated limits: the installed name and how the owner starts the CLI stay open (spec 7 :26); "aieos <command>" in texts
+# means `python -m aieos_bootstrap.cli <command>`; a root value beginning "--" cannot be given. in_runtime sees only the
+# three names: a determined agent can start a nested runtime with an environment it chooses (spec 5 :120); its two
+# stated choices are in Scope. "Never raises" covers every Exception, not KeyboardInterrupt or SystemExit. tasks lists
+# what list_tasks lists, with its own limits (execution.py :45-57; DEF-0099). A root that names no folder, or a
+# whitespace-only root, gives only the finding "list_tasks: a step raised <type>" (writer.py :208-211 raises in
+# read_log; execution.py :501-502). list_tasks' default held_leases reads the store inside BEGIN IMMEDIATE
+# (writer.py :298-313, :523-528): it changes no content, but it takes the store's write lock and can fail while a
+# session holds the lock, which also gives "a step raised". The text form of a non-ASCII value or finding on a stdout
+# in a legacy code page raises at the write (UnicodeEncodeError), exit 1; the --json form is ASCII. A real stdout in
+# Windows text mode writes CRLF for each LF. __init__.py's package docstring still says "It holds twenty-one modules"
+# (__init__.py :5), stale already and not changed (the file is forbidden; pinscan91-reading.md (2)). The CLI is not run
+# outside its tests by this task. (D-3019 rows 1, 7, 8, 11, 12.)
+#
+# Owner-act boundary: none reached. tasks reads the log and the store through list_tasks' readers and writes nothing; no
+# process, no hook, no setting, no runtime (DM A51 item (4)). CR-002 part 4 limit 5 (CR-002-concept-errata.md :61) is
+# not reached: the task neither carries out nor changes an act A51 item (4) keeps (D-3015 (e)).
+#
+# The pins (L-0026; pinscan91-out.txt at 49cd8795; pinscan91-reading.md; D-3017): tests/unit/test_writer.py :397-412
+# (R8: no open or connect call and no ".aieos" string outside writer.py), kept; tests/unit/test_ac_tests.py :249-250,
+# tests/unit/test_execution.py :739-740 and tests/unit/test_gitread.py :391 (__init__.py names their modules), kept;
+# tests/unit/test_gitread.py :370-380 and tests/unit/test_autonomy.py :238-246, kept. The deterministic rule
+# (.github/workflows/aieos-checks.yml :1489-1521, :1605-1635): cli.py has no ALLOW entry; it imports no refused module,
+# names no refused name, calls no refused os function or attribute; os.environ, sys.argv, sys.exit, sys.stdout and
+# stdout.write are not refused. GOV-003's EVALUATOR list (src/aieos_bootstrap/**), unchanged. No change under .github/.
+#
+# Risk: high, computed over the base by MYSP/t91/risk_class91.py (R2 medium and R3 high, not evaluable, for each path;
+# D-3017). GOV-003: an evaluator path; change class ruled at acceptance. Reviews on Sonnet 5.5 and Opus 5.5 (never
+# Fable), read tools only; the acceptance review on Sonnet 5.5. Naming (D-544 Q3): every new test function names
+# "TASK-091 ACn" in its own docstring. Not applicable: OPS-001; INV-005 to INV-011; GOV-001, GOV-004 to GOV-006,
+# SEC-003. Owner-kept acts: none in this task. Shadow (D-2042 C3 as amended by D-2068): the governor's evaluate at
+# acceptance, any difference named. Local runs: the unit group in three parts; before commit X, a Grep of the new
+# files for the B105 pattern (D-2735 C6), for bandit's B608 form (L-0018), for platform-dependent roots (L-0032), for
+# any byte outside printable ASCII and LF (L-0011, D-2981) and for the OPS-003 pattern rule (aieos-checks.yml
+# :1672-1681: no string exactly "valid", "accepted" or "approved"; no effect label MEASURED, ENFORCED or GUARANTEED
+# without a decision-matrix row) (D-3019 row 10).
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-091.yaml, has one parent equal to base_commit, and goes
+# to main under its own decision; the task's commits carry "AIEOS-Task: TASK-091" and go to task/TASK-091; main
+# receives them only at acceptance.
+task: TASK-091
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add a new module cli.py, run as python -m aieos_bootstrap.cli, with main(argv, stdout, environ, clock) that never
+  raises, its own argument parser with exit codes 0, 1 and 2, the helper in_runtime over RUNTIME_VARS, and one
+  command, tasks, that prints execution.list_tasks' answer as text lines or as JSON and writes nothing; new tests in
+  tests/unit/test_cli.py, each naming "TASK-091 ACn".
+traces_to:
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#3
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#1
+input_state:
+  base_commit: 49cd8795232e09b8d2f6f2c367a02363e73ded9d
+  depends_on: [TASK-072, TASK-078, TASK-084, TASK-086, TASK-090]
+  intent_versions:
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 613cbd72dca411586ca03d790cd01bb044d0eb8e9a2885d9c3f8bb25cc9f5efb
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: d2fa59ae3f203b3a2108e55d23ddfb875e64ab57d27372c9d413bf30d7c2cbdd
+    docs/specs/spec-05-adapter-contract.md: ae7b99419d303db40b7200e39a22d93b9301b29900f3b1f5a5720b72d8eb9c2b
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 8e744daa31928621137db59a8a9d91ecf163879420e1f8e148232b149cafcdb7
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/cli.py
+    - tests/unit/test_cli.py
+read_set:
+  paths:
+    - docs/specs/spec-07-cli-and-zero-friction-path.md
+    - docs/specs/spec-06-mcp-protocol-and-work-orders.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/pre-genesis/constitution.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.execution.list_tasks, aieos_bootstrap.mcp_server.SESSION_VAR,
+    aieos_bootstrap.mcp_server.ROOT_VAR, aieos_bootstrap.claude_code_pretool_hook.BASE_VAR]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - pyproject.toml
+  - setup.py
+  - setup.cfg
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/handoff_file.py
+  - src/aieos_bootstrap/launcher.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/resume_log_inputs.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_base_files_repo.py
+  - tests/integration/test_base_inputs_repo.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_launcher_repo.py
+  - tests/integration/test_mcp_server_work_order_repo.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_resume_inputs_repo.py
+  - tests/integration/test_resume_log_inputs_repo.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_base_files_properties.py
+  - tests/property/test_base_inputs_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_context_compiler_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_mcp_server_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_base_files.py
+  - tests/unit/test_base_inputs.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_execution_list_tasks.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_handoff_file.py
+  - tests/unit/test_launcher.py
+  - tests/unit/test_launcher_end.py
+  - tests/unit/test_launcher_gone.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_mcp_server_work_order.py
+  - tests/unit/test_read_set_gone.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_resume_inputs.py
+  - tests/unit/test_resume_log_inputs.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The parser: each of these gives exit 2 and exactly USAGE (ending with LF) as the whole output, with neither the
+      clock nor list_tasks called (a counting clock and a counting stand-in): an empty argv; an argv that is a tuple, a
+      list subclass, or a list holding a non-str; an unknown command ("task", "Tasks", "end", "--", "-h", "--help");
+      a flag before the command ("--root R tasks", "--json tasks --root R"); tasks without --root; "--root" as the
+      last argument; "--root" followed by a value beginning "--"; an empty --root value; an unknown flag ("--all",
+      "-r", "--root=R"); --root or --json given twice; an extra positional argument. These are accepted, each seen by
+      the stand-in called once with that root and an exit code other than 2: "tasks --root R", "tasks --json --root
+      R", "tasks --root R --json", "tasks --root -r" (the root "-r") and a whitespace-only root (passed to list_tasks
+      as given).
+  - AC2: >-
+      tasks by stand-ins (mock.patch.object of execution.list_tasks, restored after each test, seen called once with
+      (the root, the clock's value); the stand-in items built in the key order task, state, contract_hash, lease, as
+      execution.py :497 builds them; the output compared as ''.join(sink)): a list of two items gives exit 0 and
+      exactly the two lines "<task> <state> <contract_hash> lease=<lease>" in order, each ending with LF; an empty list
+      gives exit 0 and the one line "no task may be taken"; findings ['a', 'b'] give exit 1 and the lines "finding: a"
+      and "finding: b"; findings with non-str items keep only the str items of a list or tuple; findings given as a
+      str, as [], as (), as [3], as None, as 5 and as {} give exit 1 and the one line "finding: tasks: list_tasks gave
+      no finding"; with --json, the list gives the one line json.dumps({"tasks": [...]}, sort_keys=True) compared as
+      an exact string, and each findings case the one line json.dumps({"findings": [...]}, sort_keys=True), the CLI's
+      own findings included; an answer that is not a 2-tuple of (a list, None) or (None, any value), and an item that
+      is not of type dict with exactly the keys task, state, contract_hash and lease each of type str exactly, give
+      exit 1 and the finding "tasks: list_tasks gave an answer out of form", in both forms; list_tasks is looked up
+      as execution.list_tasks at each call (a mock.patch.object
+      made after cli's import is the one called); the clock is called once and its value passed; with stand-in
+      findings that do not name it, no output line holds the --root value.
+  - AC3: >-
+      Never raises an Exception: a raising list_tasks and a raising clock each give exit 1 and the one line
+      "finding: tasks: a step raised <type name>" (and its --json form), and a raising clock leaves list_tasks
+      uncalled; a mock.patch.object of cli._render that raises gives exit 1 and "finding: cli: a step raised <type
+      name>", in the text form and, under --json, in the --json form; the output of one call is one stdout.write
+      call, then flush through getattr when the sink has one; a stdout whose write raises gives exit 1 on a usage
+      error, on a success and on findings, and so does a stdout whose every call raises and a sink whose flush
+      raises; type(rc) is int and rc is 0, 1 or 2 in every case of AC1 to AC3; the module's entry line is exactly
+      `if __name__ == '__main__':` followed by `sys.exit(main(sys.argv[1:], sys.stdout, os.environ, _clock))` (checked
+      by ast), and _clock gives a timezone-aware UTC datetime with microsecond 0.
+  - AC4: >-
+      in_runtime and RUNTIME_VARS: RUNTIME_VARS is exactly ('AIEOS_SESSION_ID', 'AIEOS_ROOT', 'AIEOS_BASE'), equal to
+      (mcp_server.SESSION_VAR, mcp_server.ROOT_VAR, claude_code_pretool_hook.BASE_VAR) and, as a set, to the keys of
+      the one dict literal assigned to the name environment in the FunctionDef start of launcher.py, read as
+      (SRC / 'launcher.py').read_bytes().decode('utf-8') and ast.parse, its keys all str constants; in_runtime gives
+      true for an environ holding any one of the three names, with any value, '' included; false for {} and for an
+      environ holding only other names ("AIEOS_OTHER", "PATH"); true for an environ whose membership test raises;
+      tasks by stand-ins gives the same output with an environ holding all three names as with {}.
+  - AC5: >-
+      The module: cli.py's imports are exactly datetime, json, os, sys and execution (from aieos_bootstrap); it names
+      no open, exec, eval, compile, __import__, input, argparse, subprocess, writer, time or getenv; os is used only as
+      os.environ in the entry line; it holds no ".aieos" string, no assert and no except clause whose body is only
+      pass; tests/unit/test_writer.py :397-412 (R8), tests/unit/test_gitread.py :370-380 and
+      tests/unit/test_autonomy.py :238-246 pass; the new test file uses no tempfile, sqlite3, shutil or open, roots
+      only the literal 'C:/cli-root-91', takes of claude_code_pretool_hook only the attribute BASE_VAR (checked by
+      ast), and uses no one-argument .replace() and no .replace(target=...) (aieos-checks.yml :1622-1625).
+  - AC6: >-
+      Docstrings: cli.py's holds "python -m aieos_bootstrap.cli", "the installed name is open", "writes nothing",
+      "never raises", "every Exception", "outside any runtime", "AIEOS_BASE is counted", "'' counts as present",
+      "spec 5 :120", "__init__.py is not changed" and "TASK-091"; USAGE names the command tasks and the flags --root
+      and --json; every new test names "TASK-091 ACn", checked by a naming test in tests/unit/test_cli.py over its own
+      tests (tests/unit/test_launcher_end.py :359-364's form), more than 20 tests in all.
+  - AC7: >-
+      Broken copies, each naming its file and failing the tests of its AC: (1) --root defaulting to "." when missing
+      (AC1); (2) an unknown command giving exit 0 (AC1); (3) a usage error giving exit 1 (AC1); (4) an extra positional
+      argument accepted (AC1); (5) the lease mark left out of a task line (AC2); (6) findings giving exit 0 (AC2); (7)
+      list_tasks bound at import time (AC2); (8) now taken from datetime.now in place of clock (AC2); (9) the --json
+      form without sort_keys (AC2); (10) a raising list_tasks escaping (AC3); (11) a raising stdout escaping (AC3);
+      (12) in_runtime without AIEOS_BASE (AC4); (13) in_runtime giving false when the membership test raises (AC4);
+      (14) cli.py importing argparse (AC5); (15) an item out of form printed (AC2); (16) a raising clock not caught
+      (AC3); (17) a usage error whose raising write escapes (AC3); seventeen copies in all; each copy made in a
+      scratchpad script at G3, not committed; the governor's evaluate at acceptance (the shadow) with any difference
+      named.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1000k, wall_time: 5h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6]}
+  - {gate: G3, check: constitution, args: [AC7, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
