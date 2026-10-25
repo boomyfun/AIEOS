@@ -1,0 +1,595 @@
+# TASK-094: `aieos launch <task>` and the handoff file's wiring. A new launcher function launcher.launch_outside,
+# added after init_project by added lines, composes one launch from outside the runtime: launcher.start (max_risk
+# None), on a grant the contract's write set read at the grant's head, a starter given by the caller, the session's
+# end in every case after a grant (launcher.end, or launcher.end_outside where end cannot take the session), then
+# handoff_file.write after an end that gave "done"; a new command launch in cli.py calls it only when a starter is
+# given, which the shipped entry line never gives, so the shipped command refuses "no runtime starter" and starts no
+# runtime (specification 7 revision 2, section 3 :34-35, section 5, section 7; section 10 points 6, 7, 9; DEF-0095,
+# DEF-0101; M7's remaining part, its fifth task). Plan: decisions D-3146 to D-3155 (session ea6ea0a3): the scope reads
+# and the scope note (MYSP/t94/scope94.md) with D-3148's rulings Q2 to Q9 (P1: no real starter; refuse before start
+# with no starter; max_risk None; a fixed lease length; launch_outside in launcher.py; fixed strings; DEF log lines);
+# the pin scan (pinscan94-out.txt at 3c149917) and its reading (pinscan94-reading.md) with D-3150's rulings QA (the
+# write set by base_inputs.contract_at at the grant's head, the allowlist []), QB (handoff_file.py's docstring :18-19
+# in this task, its pin widened) and QC (cli.py's COMMANDS phrase reworded, its two pins widened); the risk run
+# (MYSP/t94/risk_class94.py at 3c149917: high) and the forbidden list (MYSP/t94/forbid94.txt at 3c149917; the seven
+# existing write-set files left out; the new tests/unit/test_cli_launch.py is not in it); D-3151 (owner_kept_act true;
+# the lease length); the reviews rv94a (claude-sonnet-5-5) and rv94b (claude-opus-5-5) of r0 and their dispositions
+# (MYSP/t94/disp94.md, eighteen rows, D-3152 with its conditions C1 to C3); the round-2 review rv94c
+# (claude-opus-5-5) of r1 and its dispositions (MYSP/t94/disp94r2.md, twelve rows, D-3155 with its conditions C1 to
+# C3); the decision agent's read of r2 in place of a third round.
+# The owner answered "co" (the owner's Vietnamese word "co" with an acute accent on the o, U+00F3; quoted exactly, with
+# its transcript line, in the records) (session ea6ea0a3 :25715; D-3154) to D-3148's question: the decision agent
+# approves and accepts this task in the owner's place; a real starter, and any run of the command with one, stays the
+# owner's and is asked separately.
+#
+# Scope:
+# - In src/aieos_bootstrap/launcher.py, by added lines only: a paragraph added to the module docstring after :130
+#   (before the closing quotes at :131), which also says that launch_outside reads the caller's clock twice and calls
+#   the caller's starter, the two exceptions to :109's "reads no clock" and "starts no process but through gitread"
+#   (the starter does whatever the caller's code does; the core's own code starts no process), and that
+#   launch_outside is a second caller of end_outside beside `aieos end` (:86-88); two imports,
+#   `from aieos_bootstrap import base_inputs` and `from aieos_bootstrap import handoff_file`, in the import block's
+#   sorted order; and a block after :765 (after init_project), under the marker "# ---- launch_outside, `aieos
+#   launch` (task TASK-094) ----", holding only launch_outside and names that begin "LAUNCH_" or "_launch" or
+#   "_LAUNCH":
+#   - LAUNCH_KEYS = ('result', 'reason', 'findings', 'session_id', 'start', 'run', 'end', 'handoff');
+#   - LAUNCH_REASONS = ('argument', 'clock', 'start', 'contract', 'run', 'end', 'handoff');
+#   - LAUNCH_LEASE = datetime.timedelta(hours=2), the lease length given to start as expires_at = now + LAUNCH_LEASE;
+#   - LAUNCH_ADAPTER = 'claude_code', LAUNCH_RECORDER = 'aieos cli launch', LAUNCH_HOLDER = 'aieos cli launch';
+#   - _LAUNCH_PATH = re.compile(r'[A-Za-z0-9._*/-]+'), the pattern of claude_code_channel.py :107, kept equal to it
+#     by a test (D-3155 C1);
+#   - launch_outside(root, task_id, clock, starter, begin=None, contract_at=None, finish=None, finish_outside=None,
+#     write_handoff=None) -> a mapping with exactly LAUNCH_KEYS; it never raises an Exception. Each callee defaults at
+#     call time: begin to this module's start, contract_at to base_inputs.contract_at, finish to this module's end,
+#     finish_outside to this module's end_outside, write_handoff to handoff_file.write. The value of "start", "end"
+#     and "handoff" is the callee's answer when it is a dict, else None (a raise or a non-dict gives None and the
+#     finding); "run" is None, "returned" or "raised <type>"; a key of a step not reached is None. In order:
+#     1. The arguments: root an absolute Windows path (_WINDOWS_ROOT), task_id TASK-<digits> (_TASK), clock and
+#        starter callable, every callee None or callable; a wrong one gives "refused", reason "argument", nothing
+#        called.
+#     2. now = clock() once; a raise or a value that is not timezone-aware UTC whole seconds gives "refused", reason
+#        "clock", nothing else called.
+#     3. begin(root, root, task_id, LAUNCH_ADAPTER, None, LAUNCH_HOLDER, LAUNCH_RECORDER, now, now + LAUNCH_LEASE)
+#        once (max_risk None, D-3148 Q4: start then never grants, the Resume Check's check 7 firing). An answer that
+#        is not a dict, a raise, or a result other than "granted" gives that result ("not granted" stays "not
+#        granted", anything else "refused") with reason "start" and start's str findings after "start: <start's
+#        result> <start's reason>"; no starter call, no end and no write_handoff (start ends an ungranted session
+#        itself, launcher.py :399-414, except its "argument" and "session" refusals, :397-398, and its own "end"
+#        refusal, :399-409).
+#     4. On "granted": session_id, fencing_token, head_commit and environment taken from start's answer, each checked
+#        (session_id a str, fencing_token a dict, head_commit 40 lowercase hex, environment a dict of str to str with
+#        exactly the three names of start); start's str findings (its gone sessions' lines) are kept in the findings.
+#        The recorder for the session's end is LAUNCH_RECORDER + ' for session ' + session_id, like end_outside's
+#        form (launcher.py :684; the read-set record's context requires the session id in the recorder,
+#        claude_code_channel.py :150-154). A granted answer out of form gives reason "start", no starter call, and the
+#        end by finish_outside (step 6) when session_id is a str, else no end.
+#     5. contract_at(root, head_commit, task_id) once (QA). The read passes when it gives ((contract, sha256), None)
+#        with contract['write_set'] a dict whose 'paths' is a non-empty list of str, each fully matching _LAUNCH_PATH
+#        with no empty segment between slashes (claude_code_channel.py :144-147): write_set is that list. Findings, a
+#        raise, or a write_set out of form, empty or with a path outside that rule give the findings "contract:
+#        <text>", reason "contract", no starter call, and the end by finish_outside (step 6). Otherwise
+#        starter(dict(environment)) once, a copy: "run" is "returned", or "raised <type>" with the finding "run: the
+#        starter raised <type>" and reason "run"; the starter's return value is not read. Steps 6 and 7 run in a
+#        finally around the starter call, which never returns inside the finally: an Exception is caught as said; a
+#        BaseException (KeyboardInterrupt among them) is re-raised after steps 6 and 7.
+#     6. now2 = clock() once (a raise or a bad value gives the finding "clock: ..." and now2 = now). The end: after a
+#        good contract read, finish(root, task_id, session_id, fencing_token, now2, write_set, [], recorder) once (the
+#        allowlist [] under specification 5 :109); when finish answers "refused" with reason "argument" or "record"
+#        (refusals before any release, launcher.py :71-73), finish_outside(root, session_id, now2, recorder) once
+#        after it, finish's findings kept; finish_outside is never called after finish's "held" or "lease_rows"
+#        (on "held" another unexpired row is the session's, which end_outside would release). On the paths of steps
+#        4 and 5 that name finish_outside, finish_outside(root, session_id, now2, recorder) once, which writes the
+#        gone record before the release (launcher.py :112-124). The last end call's answer goes in "end"; a result
+#        other than "done", or a raise, gives reason "end" and the finding "end: ..." with its str findings; a "done"
+#        end's str findings are kept.
+#     7. write_handoff(root, task_id, session_id, None) once, only after an end that gave "done" (commit None: the
+#        command makes no submission); its answer goes in "handoff"; a result other than "written" or "none", or a
+#        raise, gives reason "handoff" and the finding "handoff: ..."; after an end not "done", "handoff" is None and
+#        the finding "handoff: not written, the session's end was not done" is added.
+#     8. "done" only when steps 3 to 7 gave a grant in form, a passing contract read, a starter that returned, finish
+#        "done" and handoff "written" or "none"; else "refused" with reason the first failing step's name, from
+#        LAUNCH_REASONS ("start", "contract", "run", "end", "handoff").
+#   - It opens no file, reads no environment, starts no process itself and names no open, exec, eval, compile,
+#     __import__, subprocess, os, sys or time, and no attribute environ, getenv, now or open_store
+#     (tests/unit/test_launcher.py :707-719); its one attribute 'write' is handoff_file.write, which that test, as
+#     widened, allows; the starter is the caller's.
+# - In src/aieos_bootstrap/handoff_file.py: its docstring's limit at :18-19 replaced by the reworded lines, no other
+#   line changed (QB): "nothing calls write but its tests, so the handoff file is not written in a real session until
+#   the command-line frame calls it after the launcher's end and after a submission" becomes "launcher.launch_outside
+#   (task TASK-094) calls write after the launcher's end with commit None, so nothing calls write after a submission,
+#   and the shipped command, which has no runtime starter, does not reach it in a real session"; :24's "it writes the
+#   caller's commit as given" stays; the new lines hold no project-state directory name (tests/unit/test_handoff_file.py
+#   :265-266); no code line changes.
+# - In src/aieos_bootstrap/cli.py:
+#   - COMMANDS becomes ('tasks', 'end', 'status', 'init', 'launch'); USAGE gains the line for launch and its
+#     description; _parse takes `launch <task> --root <path> [--json]`, the task as argv[1] fully matching a new
+#     constant TASK = r'TASK-[0-9]+' (launcher._TASK's form); _run gets an explicit launch branch after init's.
+#   - main(argv, stdout, environ, clock, starter=None): the entry line passes no starter (tests/unit/test_cli.py
+#     :269-277 keeps pinning it).
+#   - The command launch, in new functions _launch(task, root, as_json, environ, clock, starter),
+#     _render_launch(answer, as_json) and the form check _launch_in_form(answer). After the parse: in_runtime(environ)
+#     true gives exit 1 and the one finding LAUNCH_RUNTIME_REFUSAL "launch: refused inside a runtime (spec 7 :34)";
+#     else a starter None gives exit 1 and the one finding NO_STARTER "launch: no runtime starter (a runtime is started
+#     by the owner; specification 7 :35, DEF-0101)", with neither the clock nor launch_outside called (D-3148 Q3);
+#     else launcher.launch_outside(root, task, clock, starter) once, looked up at call time.
+#   - The answer's form, exact types (_launch_in_form): a dict with exactly launcher.LAUNCH_KEYS; result a str, one of
+#     "done", "not granted" and "refused"; findings a list of str; for every result: session_id None or a str, start,
+#     end and handoff each None or a dict, run None, the str "returned" or a str beginning "raised "; for "done" also:
+#     reason None, session_id a str, start a dict whose 'result' is "granted", run "returned", end a dict whose
+#     'result' is "done", handoff a dict whose 'result' is "written" or "none"; for "not granted" and "refused": reason
+#     a str of launcher.LAUNCH_REASONS; anything else gives exit 1 and "launch: launch_outside gave an answer out of
+#     form".
+#   - Output: "done" gives exit 0 and the lines "session: <id>", "run: returned", "end: done", "handoff: <written or
+#     none>", then "finding: <text>" per finding; under --json one line of json.dumps of a dict built as
+#     {"session_id": <id>, "findings": [...]} (in that insertion order) with sort_keys=True, so the line reads
+#     '{"findings": [...], "session_id": ...}'; "not granted" and "refused" give exit 1 and the findings "launch:
+#     <result> <reason>" then the answer's findings. A raise in launch_outside gives "launch: a step raised <type>", in
+#     _render_launch "cli: a step raised <type>".
+#   - cli.py's docstring: line 1 names launch and TASK-094; :6-7 shows main(argv, stdout, environ, clock,
+#     starter=None); "argv[0] is a command of COMMANDS, tasks, end, status or init" becomes "... tasks, end, status,
+#     init or launch" (QC); the sentence "end and init call it after the parse" is kept word for word
+#     (tests/unit/test_cli_init.py :331-332) and "launch, which also refuses inside a runtime, comes with a later task"
+#     becomes "launch also calls it after the parse, then refuses with no starter"; "tasks and status do not call it"
+#     stays; main's docstring names launch ("environ is read by end, init and launch"); a paragraph for launch holding
+#     "aieos launch", "TASK-094" and "no runtime starter"; the phrases of tests/unit/test_cli.py :405-411,
+#     tests/unit/test_launcher_outside.py :609-620 and CLI_KEPT (tests/unit/test_execution_status.py :489-491) kept.
+#     cli.py's imports stay {datetime, json, os, re, sys, execution, launcher}.
+#   - The added lines of launcher.py and cli.py hold no project-state directory name as text.
+# - Tests:
+#   - tests/unit/test_launcher.py :695-705: the import-set test widened by exactly base_inputs and handoff_file; and
+#     :707-719, the names test: the attribute ban keeps environ, getenv, now and open_store in full, and for 'write'
+#     allows exactly the Attribute nodes whose value is an ast.Name with id 'handoff_file', any other 'write'
+#     attribute (writer.write among them) still failing; its docstring states the exception, names TASK-094 and keeps
+#     "TASK-086 AC" (tests/unit/test_launcher.py :743-749) (D-3152 C1). Both are changes to TASK-086's test, named;
+#     every other check kept.
+#   - tests/unit/test_handoff_file.py :298-305: the phrase 'nothing calls write but its tests' replaced by 'calls
+#     write after the launcher', the other eight phrases kept, and assertNotIn of the old phrase added (a change to
+#     TASK-087's test, named).
+#   - tests/unit/test_cli_init.py :271-272 and :328-334 and tests/unit/test_execution_status.py :509-519: COMMANDS
+#     equal to ('tasks', 'end', 'status', 'init', 'launch') and the phrase "COMMANDS, tasks, end, status, init or
+#     launch" in place of "COMMANDS, tasks, end, status or init", which joins the phrases that must be gone (changes to
+#     TASK-095's and TASK-093's tests, named); their docstrings add "TASK-094 AC6".
+#   - New tests/unit/test_cli_launch.py: launch_outside by stand-ins for begin, contract_at, finish, finish_outside,
+#     write_handoff, the clock and the starter (keyword arguments), and the command by mock.patch.object of
+#     launcher.launch_outside; it imports claude_code_channel to assert launcher._LAUNCH_PATH.pattern equal to
+#     claude_code_channel._PATTERN.pattern; a literal root 'C:/launch-root-94' (L-0032); no tempfile, sqlite3, shutil,
+#     subprocess or open; its naming test requires "TASK-094 AC" in every test of the file; stand-in defaults are
+#     sentinels (L-0033).
+# - What it does not do: no real starter, no process, no runtime, hook, setting or MCP connection; the command is not
+#   run on E:/AIEOS or anywhere outside its tests; no change to start, end, end_outside, init_project, execute,
+#   list_tasks, status_report or any writer function; no change to mcp_server.py, claude_code_channel.py or
+#   __init__.py; no submission.
+#
+# Stated limits and departures: the shipped command refuses with no starter, so a real launch is not possible until a
+# later task adds a starter, which would need gitread's pinned list widened (or another wrapper by the constitution's
+# own route, INV-001, docs/pre-genesis/constitution.md :29) and the workflow's pattern rule (aieos-checks.yml :1490,
+# :1513, :1519, :1565), each under its own decision; the real starter itself, and any run of the command with one,
+# stays the owner's and is asked separately (D-3154; the owner's "co" (U+00F3 on the o) at :25715 does not cover
+# it), and a widening of gitread's list or of the workflow rule does not make it the decision agent's; running it
+# stays the owner's (spec 7 :35, :50; A51 item (4)). With max_risk None start never grants (DEF-0101; D-2673 ruling
+# 2), so even with a starter the command grants nothing until a measured tier backs a declaration; DEF-0101's
+# base-tip check and check 0 stay open. The lease length LAUNCH_LEASE (two hours) is this task's choice, and the
+# task that adds a real starter reviews it (D-3151 Q3); the lease is not renewed, so a runtime that runs longer
+# runs on an expired lease (hooks refuse with no unexpired lease, spec 5 :116) and the end takes the gone path; the
+# starter is to block until the runtime exits, and it is given only the three variables (merging them with a
+# process environment is the caller's). The allowlist passed to end is [] (spec 5 :109). On a start answer out of
+# form, a contract read failure, an empty write set, a path outside claude_code_channel's rule, or a finish refused
+# "argument" or "record", the session is ended by end_outside, whose record says "no fencing token given" although
+# the launch held one (launcher.py :116-117) and whose recorder names the session id twice (its own tail after
+# launch's recorder); this extends D-3047 (c1)'s departure from spec 5 :125 ("a session whose lease row is still
+# unexpired is not processed") to a second caller beside `aieos end` (launcher.py :86-88, :120-121). A finish
+# refused "held" or "lease_rows", start's "argument", "session" and "end" refusals (launcher.py :397-409), a refused
+# end_outside, and a granted start answer whose session_id is not a str (step 4 calls finish_outside only for a str
+# session_id) leave the session for `aieos end` or the lease's expiry. The handoff is written only after an end that
+# gave "done", with commit None, and with no submission; its way into Git and "the last handoff" stay open (DEF-0095).
+# A BaseException from the starter is re-raised after the end and the handoff; a second interrupt during them leaves
+# the session for `aieos end`. The starter's return value is not read; two clock reads; the runtime refusal reads
+# only the three variables (spec 5 :120). One run at a time (the writer's limit). INV-001 also says the core runs no
+# model (docs/pre-genesis/constitution.md :28-29), and a real starter starts a runtime that runs one, so that later
+# task also faces INV-001's review question, whether an allowed executable runs a model, besides the wrapper list;
+# that question stays the owner's with the real starter (D-3154).
+#
+# Owner-act boundary: the owner answered "co" (U+00F3 on the o) (session ea6ea0a3 :25715; D-3154) to D-3148's
+# question: the decision agent approves and accepts this task in the owner's place; a real starter, and any run of
+# the command with one, stays the owner's and is asked separately. The task builds no code that starts a runtime,
+# connects the MCP server, changes a setting or places a hook, and its tests use stand-ins only; nothing under
+# .github/. owner_kept_act: true; the owner's "co" (U+00F3 on the o) (D-3154) is the owner act it calls for.
+#
+# The pins (L-0026; pinscan94-out.txt at 3c149917; pinscan94-reading.md; D-3150, D-3152, D-3155): launcher.py's import
+# set (tests/unit/test_launcher.py :702-705, widened), names and attributes (:707-719, widened for
+# handoff_file.write), the naming test (:743-749), docstring phrases (:722-733; tests/unit/test_launcher_gone.py
+# :420-429; tests/unit/test_launcher_outside.py :601), end_outside's helpers (tests/unit/test_launcher_outside.py
+# :580-595); handoff_file's docstring phrases (tests/unit/test_handoff_file.py :298-305, widened; :265-266); cli.py's
+# tests (tests/unit/test_cli.py :269-277, :333-356, :369-375, :405-411; tests/unit/test_launcher_outside.py :609-620;
+# tests/unit/test_cli_init.py and tests/unit/test_execution_status.py, widened); claude_code_channel.py :107 and
+# :144-154 (read, unchanged); the deterministic rule (aieos-checks.yml :1489-1521, :1605-1635): launcher.py,
+# handoff_file.py and cli.py keep NONE, test_cli_launch.py NONE; GOV-003's EVALUATOR list (src/aieos_bootstrap/**),
+# unchanged; no change under .github/.
+#
+# Risk: high, computed over the base by MYSP/t94/risk_class94.py (R2 medium and R3 high, not evaluable, for each of
+# the eight paths). GOV-003: an evaluator path; change class ruled at acceptance. Reviews on Sonnet 5.5 and Opus 5.5
+# (never Fable), read tools only; the acceptance review on Sonnet 5.5. Naming (D-544 Q3): every new test function names
+# "TASK-094 ACn" in its own docstring. Not applicable: OPS-001; INV-005 to INV-011; GOV-001, GOV-004 to GOV-006,
+# SEC-003. Shadow (D-2042 C3 as amended by D-2068): the governor's evaluate at acceptance, any difference named. Local
+# runs: the unit group in three parts, integration and property; before commit X, a check of the new and changed files
+# for the B105 pattern (D-2735 C6), for bandit's B608 form (L-0018), for platform-dependent roots (L-0032), for any
+# byte outside printable ASCII and LF (L-0011, D-2981), and for the OPS-003 pattern rule (aieos-checks.yml
+# :1672-1681).
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-094.yaml, has one parent equal to base_commit, and goes
+# to main under its own decision; the task's commits carry "AIEOS-Task: TASK-094" and go to task/TASK-094; main
+# receives them only at acceptance.
+task: TASK-094
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add launcher.launch_outside after init_project, which composes one launch from outside the runtime (start with
+  max_risk None, the contract's write set at the grant's head, a caller's starter, the session's end in every case
+  after a grant, then the handoff file after a done end), and a command launch in cli.py that calls it only with a
+  starter, so the shipped command refuses with no runtime starter; reword handoff_file.py's docstring limit; tests in
+  the new tests/unit/test_cli_launch.py, each naming "TASK-094 ACn", and five existing tests widened.
+traces_to:
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#3
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#5
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#7
+input_state:
+  base_commit: 3c1499179f9c99037bc15518b5a1b33f23bd4ac2
+  depends_on: [TASK-086, TASK-087, TASK-089, TASK-090, TASK-091, TASK-092, TASK-093, TASK-095]
+  intent_versions:
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 613cbd72dca411586ca03d790cd01bb044d0eb8e9a2885d9c3f8bb25cc9f5efb
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: d2fa59ae3f203b3a2108e55d23ddfb875e64ab57d27372c9d413bf30d7c2cbdd
+    docs/specs/spec-05-adapter-contract.md: ae7b99419d303db40b7200e39a22d93b9301b29900f3b1f5a5720b72d8eb9c2b
+    docs/specs/spec-01-state-and-event-model.md: 98ea939aa6f4664137c31325e2c01bb72d5056dbec427ca37aa1e5ef038e41e0
+    docs/specs/spec-02-aieos-file-format.md: 8e744daa31928621137db59a8a9d91ecf163879420e1f8e148232b149cafcdb7
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/cli.py
+    - src/aieos_bootstrap/handoff_file.py
+    - src/aieos_bootstrap/launcher.py
+    - tests/unit/test_cli_init.py
+    - tests/unit/test_cli_launch.py
+    - tests/unit/test_execution_status.py
+    - tests/unit/test_handoff_file.py
+    - tests/unit/test_launcher.py
+read_set:
+  paths:
+    - docs/specs/spec-07-cli-and-zero-friction-path.md
+    - docs/specs/spec-05-adapter-contract.md
+    - docs/specs/spec-06-mcp-protocol-and-work-orders.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/decision-matrix.md
+    - docs/pre-genesis/CR-002-concept-errata.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/Deferred/DEF-0095-the-handoff-file-of-the-claim-tools-for-the-launcher.md
+    - docs/Deferred/DEF-0101-the-launchers-open-requirements-before-a-runtime-is-launched.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.launcher.start, aieos_bootstrap.launcher.end, aieos_bootstrap.launcher.end_outside,
+    aieos_bootstrap.base_inputs.contract_at, aieos_bootstrap.handoff_file.write, aieos_bootstrap.cli.main,
+    aieos_bootstrap.cli.in_runtime]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - pyproject.toml
+  - setup.py
+  - setup.cfg
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/resume_log_inputs.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_base_files_repo.py
+  - tests/integration/test_base_inputs_repo.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_launcher_repo.py
+  - tests/integration/test_mcp_server_work_order_repo.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_resume_inputs_repo.py
+  - tests/integration/test_resume_log_inputs_repo.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_base_files_properties.py
+  - tests/property/test_base_inputs_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_context_compiler_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_mcp_server_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_base_files.py
+  - tests/unit/test_base_inputs.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_cli.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_execution_list_tasks.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_launcher_end.py
+  - tests/unit/test_launcher_gone.py
+  - tests/unit/test_launcher_outside.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_mcp_server_work_order.py
+  - tests/unit/test_read_set_gone.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_resume_inputs.py
+  - tests/unit/test_resume_log_inputs.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      launch_outside by stand-ins (keyword callees; a counting clock; a counting starter): a granting begin gives one
+      begin call with (root, root, task_id, 'claude_code', None, 'aieos cli launch', 'aieos cli launch', now, now +
+      LAUNCH_LEASE), then one contract_at call with (root, head_commit, task_id), then one starter call with a copy
+      of the grant's environment, then one finish call with (root, task_id, session_id, fencing_token, now2, the
+      contract's write_set paths, [], 'aieos cli launch for session ' + session_id), then one write_handoff call with
+      (root, task_id, session_id, None), in that order, no finish_outside call, and "done" with the session id, start,
+      end and handoff the callees' dicts, run "returned", and start's and finish's str findings kept; each callee
+      defaults at call time (mock.patch.object of launcher.start, launcher.end, launcher.end_outside,
+      base_inputs.contract_at and handoff_file.write made after import are the ones called); the result has exactly
+      LAUNCH_KEYS, with None for each step not reached.
+  - AC2: >-
+      launch_outside's failures: each wrong argument gives "argument" with nothing called; a raising or out-of-form
+      clock gives "clock" with nothing else called; a begin giving "not granted", "refused", a non-dict or a raise
+      gives that outcome with reason "start", "start" None for the non-dict and the raise, and no contract_at,
+      starter, finish, finish_outside or write_handoff call; a granted answer out of form (session_id, fencing_token,
+      head_commit or environment) gives reason "start", no starter call, and one finish_outside call with (root,
+      session_id, now2, the recorder) when session_id is a str; contract_at findings, a raise, a write_set out of
+      form, an empty paths list, or a path outside _LAUNCH_PATH or with an empty segment ('a b', 'x//y') give reason
+      "contract", no starter call, no finish call and one finish_outside call; a raising starter (an Exception) gives
+      "run" with finish and write_handoff still called; a starter raising KeyboardInterrupt has finish and
+      write_handoff called and the KeyboardInterrupt re-raised; finish "refused" with reason "argument" or "record"
+      is followed by one finish_outside call, whose answer is in "end"; finish "refused" with reason "held" or
+      "lease_rows" is followed by no finish_outside call; an end other than "done", a raise or a non-dict gives "end"
+      ("end" None for the raise and the non-dict) with no write_handoff call and the "handoff: not written" finding;
+      write_handoff "refused", a raise or a non-dict gives "handoff"; no Exception escapes; by ast, launch_outside
+      and the names beginning _launch name no open, exec, eval, compile, __import__, subprocess, os, sys or time.
+  - AC3: >-
+      handoff_file.py's docstring holds "calls write after the launcher" and not "nothing calls write but its tests",
+      keeps the other eight phrases of tests/unit/test_handoff_file.py :301-303 as widened, and holds no project-state
+      directory name; handoff_file.py's diff from the base replaces the docstring's :18-19 lines by the reworded lines
+      and changes no other line (checked at G3 by a scratchpad git-diff script).
+  - AC4: >-
+      The command launch by stand-ins (mock.patch.object of launcher.launch_outside; a counting clock): "launch TASK-1
+      --root R" with no starter (main's default) gives exit 1 and the one finding NO_STARTER with neither the clock
+      nor launch_outside called; with a starter, one launch_outside call with (R, 'TASK-1', the clock, the starter);
+      "launch", "launch --root R", "launch TASK-1", "launch task-1 --root R", "launch TASK-1 --root R extra" and
+      "launch TASK-1 --root R --json --json" give exit 2 and USAGE with nothing called, inside a runtime too; an
+      environ holding any one of the three RUNTIME_VARS ('' included) gives exit 1 and LAUNCH_RUNTIME_REFUSAL with
+      nothing called, starter given or not; "done" gives exit 0 and the four lines then one "finding:" line per
+      finding, or under --json the exact string '{"findings": [...], "session_id": "..."}'; "not granted" and
+      "refused" give exit 1 and "finding: launch: <result> <reason>" then the findings, a "refused" with reason "end"
+      (end a refused dict) and one with reason "handoff" (handoff a refused dict) among them; each answer out of form
+      (not a dict, a dict subclass, other keys, a result outside the three, a done with a reason, a done with
+      session_id None, a done whose start, run, end or handoff is out of form, a start, end or handoff that is
+      neither None nor a dict, a run outside its three forms, a reason outside LAUNCH_REASONS, a non-str finding)
+      gives the out-of-form finding; a raising launch_outside gives "launch: a step raised <type>"; a raising
+      _render_launch gives "cli: a step raised <type>"; tasks', end's, status' and init's tests all still pass.
+  - AC5: >-
+      The modules: launcher.py's import set equal to the widened test (base_inputs and handoff_file added);
+      launcher.py's diff from the base is the added docstring paragraph after :130, the two import lines and a block
+      after :765 only (checked at G3 by a scratchpad git-diff script); its names test (:707-719, as widened: the
+      'write' attribute allowed only on the Name handoff_file) passes, and fails for launcher.py with any other
+      'write' attribute; launcher._LAUNCH_PATH.pattern equals claude_code_channel._PATTERN.pattern; cli.py's imports
+      unchanged and its refused names and strings (tests/unit/test_cli.py :333-356, :369-375) pass; the
+      deterministic rule passes with launcher.py, handoff_file.py and cli.py at NONE; the new test file uses no
+      tempfile, sqlite3, shutil, subprocess or open, roots only the literal 'C:/launch-root-94', and uses no
+      one-argument .replace() and no .replace(target=...).
+  - AC6: >-
+      Docstrings: launcher.py's module docstring gains a paragraph holding "launch_outside", "TASK-094", "no starter",
+      "max_risk None", "reads the caller's clock" and "end_outside", and keeps every phrase of
+      tests/unit/test_launcher.py :722-733, tests/unit/test_launcher_gone.py :420-429 and
+      tests/unit/test_launcher_outside.py's launcher docstring test; cli.py's gains "aieos launch", "TASK-094" and "no
+      runtime starter", holds "COMMANDS, tasks, end, status, init or launch" and "end and init call it after the
+      parse" and not "COMMANDS, tasks, end, status or init" nor "comes with a later task", and keeps every phrase of
+      tests/unit/test_cli.py :405-411, tests/unit/test_launcher_outside.py :609-620 and CLI_KEPT; USAGE names launch;
+      the widened tests of tests/unit/test_cli_init.py and tests/unit/test_execution_status.py pass; every test of
+      tests/unit/test_cli_launch.py names "TASK-094 AC", checked by its own naming test, more than 20 tests.
+  - AC7: >-
+      Broken copies, each naming its file and failing the tests of its AC: (1) begin called with a max_risk other than
+      None (AC1); (2) begin bound at import time (AC1); (3) the starter called before contract_at (AC1); (4) finish
+      not called after a raising starter (AC2); (5) write_handoff called after a failing finish (AC2); (6) the starter
+      called on a contract_at failure (AC2); (7) finish called with write_set [] in place of finish_outside on a
+      contract failure (AC2); (8) a non-empty allowlist passed to finish (AC1); (9) write_handoff given a commit
+      (AC1); (10) the starter called on "not granted" (AC2); (11) a raise escaping launch_outside (AC2); (12)
+      launch_outside naming os (AC2, AC5); (13) the command calling the clock with no starter (AC4); (14) the command
+      calling launch_outside with no starter (AC4); (15) the command not refusing inside a runtime (AC4); (16) the
+      in_runtime check made before the parse (AC4); (17) a refusal giving exit 0 (AC4); (18) the --json line without
+      sort_keys (AC4); (19) cli.py importing handoff_file (AC5); (20) a line of launcher.py's init_project changed
+      (AC5, the G3 diff script); (21) a code line of handoff_file.py changed (AC3, the G3 diff script); (22) finish
+      given the bare LAUNCH_RECORDER, without the session id (AC1); (23) launcher.py with a writer.write attribute
+      (AC5, the widened names test); (24) finish and write_handoff skipped on a KeyboardInterrupt from the starter
+      (AC2); (25) _LAUNCH_PATH altered to allow a space (AC2, AC5); (26) no finish_outside after a finish refused
+      "record" (AC2); (27) the write set's path check dropped (AC2); twenty-seven copies in all; each copy made in a
+      scratchpad script at G3, not committed; the governor's evaluate at acceptance (the shadow) with any difference
+      named.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1000k, wall_time: 5h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6]}
+  - {gate: G3, check: constitution, args: [AC7, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: true
