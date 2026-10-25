@@ -506,15 +506,17 @@ class TASK093AC6Docs(unittest.TestCase):
             self.assertIn(phrase, text)
 
     def test_the_cli_docstring_and_usage(self):
-        """TASK-093 AC6: cli.py's docstring holds "aieos status" and "TASK-093", names status in its list of
-        COMMANDS, keeps its pinned phrases and holds none of the three replaced ones; USAGE names status."""
+        """TASK-093 AC6, as TASK-095 AC6 widens it: cli.py's docstring holds "aieos status" and "TASK-093", names
+        status and init in its list of COMMANDS, keeps its pinned phrases and holds none of the four replaced ones;
+        USAGE names status."""
         text = doc('cli.py')
-        for phrase in ('aieos status', 'TASK-093', 'COMMANDS, tasks, end or status') + CLI_KEPT:
+        for phrase in ('aieos status', 'TASK-093', 'COMMANDS, tasks, end, status or init') + CLI_KEPT:
             self.assertIn(phrase, text)
-        for phrase in ('COMMANDS, tasks or end', 'whose only entry is tasks', 'come with later tasks'):
+        for phrase in ('COMMANDS, tasks or end', 'COMMANDS, tasks, end or status', 'whose only entry is tasks',
+                       'come with later tasks'):
             self.assertNotIn(phrase, text)
         self.assertIn('status --root <path> [--json]', cli.USAGE)
-        self.assertEqual(cli.COMMANDS, ('tasks', 'end', 'status'))
+        self.assertEqual(cli.COMMANDS, ('tasks', 'end', 'status', 'init'))
 
     def test_every_test_names_its_criteria(self):
         """TASK-093 AC6: every test function of this module names "TASK-093 AC" in its own docstring, more than 20

@@ -2077,10 +2077,10 @@ class R23TheNamesAtTheBase(unittest.TestCase):
         return out
 
     def test_only_the_new_function_and_its_helpers_are_added(self):
-        """TASK-078 AC2, as TASK-090 AC2 and TASK-087 AC4 widen it: writer.py's top-level names are exactly the base's
-        94 plus session_leases, read_sessions, write_handoff and names that begin "_session_leases",
-        "_SESSION_LEASES", "_read_sessions", "_READ_SESSIONS", "_write_handoff" or "_HANDOFF", all above the TASK-066
-        marker."""
+        """TASK-078 AC2, as TASK-090 AC2, TASK-087 AC4 and TASK-095 AC5 widen it: writer.py's top-level names are
+        exactly the base's 94 plus session_leases, read_sessions, write_handoff, init_layout and names that begin
+        "_session_leases", "_SESSION_LEASES", "_read_sessions", "_READ_SESSIONS", "_write_handoff", "_HANDOFF",
+        "_init_layout" or "_INIT_LAYOUT", all above the TASK-066 marker."""
         text = read(os.path.join(SRC, 'writer.py')).decode('utf-8')
         names = self.names(ast.parse(text))
         self.assertEqual(len(self.BASE), 94)
@@ -2089,9 +2089,10 @@ class R23TheNamesAtTheBase(unittest.TestCase):
         self.assertIn('session_leases', added)
         self.assertIn('read_sessions', added)
         self.assertIn('write_handoff', added)
-        for name in added - {'session_leases', 'read_sessions', 'write_handoff'}:
+        self.assertIn('init_layout', added)
+        for name in added - {'session_leases', 'read_sessions', 'write_handoff', 'init_layout'}:
             self.assertTrue(name.startswith(('_session_leases', '_SESSION_LEASES', '_read_sessions', '_READ_SESSIONS',
-                                             '_write_handoff', '_HANDOFF')), name)
+                                             '_write_handoff', '_HANDOFF', '_init_layout', '_INIT_LAYOUT')), name)
         head, part = text.split('# ---- the read-only lookup of the store (task TASK-066) ----', 1)
         for name in added:
             with self.subTest(name=name):
@@ -2504,6 +2505,158 @@ class TASK087WriteHandoff(unittest.TestCase):
                        ' excluded'):
             self.assertIn(phrase, doc)
         self.assertIn('.aieos/handoffs/<task>-<session>.md', ' '.join(writer.__doc__.split()))
+
+
+class TASK095InitLayout(unittest.TestCase):
+    """writer.init_layout over real temporary folders (task TASK-095)."""
+
+    DIRS = ('intent/requirements', 'intent/specs', 'intent/architecture', 'intent/decisions', 'intent/conventions',
+            'changes', 'tasks', 'handoffs', 'genesis', 'conformance', 'plan', 'local')
+    EXISTS = 'exists: the project-state directory is present'
+    LINK = 'link: a link, or a path that resolves elsewhere'
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = self._tmp.name
+        self.addCleanup(self._tmp.cleanup)
+
+    def walk(self, root=None):
+        """(the folders, the files) under the root, as '/'-joined paths relative to it."""
+        root = self.root if root is None else root
+        folders, files = set(), set()
+        for here, names, leaves in os.walk(root):
+            rel = os.path.relpath(here, root).replace(os.sep, '/')
+            for name in names:
+                folders.add(name if rel == '.' else rel + '/' + name)
+            for leaf in leaves:
+                files.add(leaf if rel == '.' else rel + '/' + leaf)
+        return folders, files
+
+    def expected(self):
+        return {'.aieos', '.aieos/intent'} | {'.aieos/' + d for d in self.DIRS}
+
+    def refused(self, r, reason, finding=None):
+        self.assertIsInstance(r, writer.StoreResult)
+        self.assertEqual((r.result, r.reason, len(r.findings)), ('refused', reason, 1), r)
+        if finding is not None:
+            self.assertEqual(r.findings, (finding,))
+
+    def test_it_creates_the_twelve_folders(self):
+        """TASK-095 AC1: "done", value the twelve '.aieos/<folder>' paths in order; the folders under the root are
+        exactly .aieos, .aieos/intent and the twelve; no file exists anywhere under the root."""
+        r = writer.init_layout(self.root)
+        self.assertEqual((r.result, r.reason, r.findings), ('done', None, ()))
+        self.assertEqual(r.value, tuple('.aieos/' + d for d in self.DIRS))
+        self.assertEqual(self.walk(), (self.expected(), set()))
+
+    def test_a_second_call_is_refused(self):
+        """TASK-095 AC1 and TASK-095 AC2: a second call gives "exists" with its one finding, and the tree is
+        unchanged."""
+        self.assertEqual(writer.init_layout(self.root).result, 'done')
+        before = self.walk()
+        self.refused(writer.init_layout(self.root), 'exists', self.EXISTS)
+        self.assertEqual(self.walk(), before)
+
+    def test_a_root_out_of_form(self):
+        """TASK-095 AC2: a root that is not a str, empty, or names no existing folder gives "root" with nothing
+        created."""
+        for root in (None, 3, b'x', '', os.path.join(self.root, 'missing')):
+            with self.subTest(root=root):
+                self.refused(writer.init_layout(root), 'root')
+        self.assertEqual(self.walk(), (set(), set()))
+
+    def test_an_existing_file_named_like_the_directory(self):
+        """TASK-095 AC2: .aieos as an empty file or as a non-empty file gives "exists" with nothing created."""
+        path = os.path.join(self.root, '.aieos')
+        with open(path, 'ab') as f:
+            pass
+        self.refused(writer.init_layout(self.root), 'exists', self.EXISTS)
+        self.assertEqual(self.walk(), (set(), {'.aieos'}))
+        with open(path, 'ab') as f:
+            f.write(b'x')
+        self.refused(writer.init_layout(self.root), 'exists', self.EXISTS)
+        self.assertEqual(self.walk(), (set(), {'.aieos'}))
+
+    def test_a_link_before_the_folders(self):
+        """TASK-095 AC2: os.path.islink true at the root or at .aieos gives "link" with nothing created."""
+        for place in (self.root, os.path.join(self.root, '.aieos')):
+            with self.subTest(place=place):
+                target = os.path.normcase(place)
+                with mock.patch.object(writer.os.path, 'islink', side_effect=lambda p: os.path.normcase(p) == target):
+                    self.refused(writer.init_layout(self.root), 'link', self.LINK)
+                self.assertEqual(self.walk(), (set(), set()))
+
+    def test_a_link_after_the_folders(self):
+        """TASK-095 AC2: an islink stand-in that answers true for a layout folder only once that folder exists gives
+        "link" (the check after the folders); the folders made stay."""
+        target = os.path.normcase(os.path.join(self.root, '.aieos', 'plan'))
+        isdir = os.path.isdir
+
+        def islink(p):
+            return os.path.normcase(p) == target and isdir(p)
+
+        with mock.patch.object(writer.os.path, 'islink', side_effect=islink):
+            self.refused(writer.init_layout(self.root), 'link', self.LINK)
+        self.assertEqual(self.walk(), (self.expected(), set()))
+
+    def test_a_path_that_resolves_elsewhere(self):
+        """TASK-095 AC2: a realpath that resolves a layout folder elsewhere gives "link" with nothing created."""
+        real = os.path.realpath
+        with mock.patch.object(writer.os.path, 'realpath', side_effect=lambda p: real(p) + 'x'):
+            self.refused(writer.init_layout(self.root), 'link', self.LINK)
+        self.assertEqual(self.walk(), (set(), set()))
+
+    def test_raises_give_unwritable(self):
+        """TASK-095 AC2: a raise in os.path.lexists or in os.makedirs gives "unwritable" naming the exception's type
+        only; no call raises."""
+        with mock.patch.object(writer.os.path, 'lexists', side_effect=RuntimeError('a')):
+            self.refused(writer.init_layout(self.root), 'unwritable', 'unwritable: RuntimeError')
+        with mock.patch.object(writer.os, 'makedirs', side_effect=OSError('b')):
+            self.refused(writer.init_layout(self.root), 'unwritable', 'unwritable: OSError')
+        self.assertEqual(self.walk(), (set(), set()))
+
+    def test_no_finding_holds_the_root(self):
+        """TASK-095 AC2: no finding holds the root's text, for a missing root, an existing directory or a raise."""
+        hostile = 'zz-HOSTILE-zz'
+        named = tempfile.mkdtemp(prefix=hostile, dir=self.root)
+        out = [writer.init_layout(os.path.join(self.root, hostile))]
+        self.assertEqual(writer.init_layout(named).result, 'done')
+        out.append(writer.init_layout(named))
+        with mock.patch.object(writer.os, 'makedirs', side_effect=OSError(hostile)):
+            out.append(writer.init_layout(self.root))
+        for r in out:
+            with self.subTest(r=r):
+                self.assertEqual(r.result, 'refused')
+                self.assertNotIn(hostile, ' '.join(r.findings))
+
+    def test_it_opens_no_file(self):
+        """TASK-095 AC5: by ast, init_layout and the names beginning _init_layout call no open, and are defined above
+        the TASK-066 marker."""
+        text = read(os.path.join(SRC, 'writer.py')).decode('utf-8')
+        head = text.split('# ---- the read-only lookup of the store (task TASK-066) ----', 1)[0]
+        tree = ast.parse(text)
+        mine = [n for n in tree.body if isinstance(n, ast.FunctionDef)
+                and (n.name == 'init_layout' or n.name.startswith('_init_layout'))]
+        self.assertEqual(sorted(n.name for n in mine), ['_init_layout_links', 'init_layout'])
+        for node in mine:
+            calls = [c for c in ast.walk(node) if isinstance(c, ast.Call)
+                     and ((isinstance(c.func, ast.Name) and c.func.id == 'open')
+                          or (isinstance(c.func, ast.Attribute) and c.func.attr == 'open'))]
+            self.assertEqual(calls, [], node.name)
+            self.assertIn('def %s(' % node.name, head)
+
+    def test_the_docstring(self):
+        """TASK-095 AC6: writer.py's module docstring names init_layout, TASK-095, "exists" and "no file"."""
+        doc = ' '.join(writer.__doc__.split())
+        for phrase in ('init_layout', 'TASK-095', 'exists', 'no file'):
+            self.assertIn(phrase, doc)
+
+    def test_every_test_of_this_class_names_its_criteria(self):
+        """TASK-095 AC6: every test of this class names "TASK-095 AC" in its own docstring."""
+        names = unittest.TestLoader().getTestCaseNames(type(self))
+        self.assertGreater(len(names), 10)
+        for name in names:
+            self.assertIn('TASK-095 AC', getattr(type(self), name).__doc__ or '', name)
 
 
 if __name__ == '__main__':

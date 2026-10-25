@@ -122,6 +122,12 @@ still unexpired is not processed" (D-3047 (c1)), the recorder naming the possibl
 gets "no fencing token given"; a session with no lease row left gets no record; the rows, the reads, the records and
 the end are read and written at separate moments, so a lease added to the session between them is released with no
 record (a finding names it); a refusal before the end leaves the session open until its leases expire.
+
+init_project (task TASK-095; `aieos init`, specification 7 :28) calls writer.init_layout once, looked up at call
+time, and returns a mapping with exactly INIT_KEYS; it never raises. An answer is in form only as a writer.StoreResult
+that is "done" with reason None, no findings and a non-empty tuple of str, or "refused" with a str reason and a tuple
+of str findings; any other answer, or a raise, gives reason "init_layout". It creates nothing itself; the folders are
+the writer's.
 """
 
 import datetime
@@ -717,3 +723,43 @@ def end_outside(root, session_id, now, recorder, session_leases=None, stored_rea
             return _outside_result('refused', step, findings + [text], records)
         except Exception:  # the result's building raised: the step and its line only
             return {'result': 'refused', 'reason': step, 'findings': [text], 'records': [], 'released': []}
+
+
+# ---- init_project, `aieos init` (task TASK-095) ----
+
+INIT_KEYS = ('result', 'reason', 'findings', 'created')
+_INIT_PROJECT_OUT_OF_FORM = 'init_layout: init_layout gave an answer out of form'
+
+
+def _init_project_result(result, reason=None, findings=(), created=()):
+    return {'result': result, 'reason': reason, 'findings': list(findings), 'created': list(created)}
+
+
+def _init_project_str_tuple(value):
+    return type(value) is tuple and all(type(v) is str for v in value)
+
+
+def init_project(root, init_layout=None):
+    """Create the project-state layout's folders under root through writer.init_layout (task TASK-095; `aieos init`,
+    specification 7 :28): a mapping with exactly INIT_KEYS; it never raises. init_layout defaults, at call time, to
+    writer.init_layout and is called once with root. An answer in form is a writer.StoreResult (its type exactly)
+    that is "done" with reason None, findings () and a non-empty tuple of str as its value, giving result "done" and
+    created the value as a list; or "refused" with a str reason and a tuple of str findings, giving result "refused"
+    with that reason and those findings. Any other answer gives reason "init_layout" and the one finding
+    "init_layout: init_layout gave an answer out of form"; a raise gives "init_layout: a step raised <type>"."""
+    try:
+        init_layout = writer.init_layout if init_layout is None else init_layout
+        answer = init_layout(root)
+    except Exception as exc:
+        return _init_project_result('refused', 'init_layout', ['init_layout: a step raised %s' % type(exc).__name__])
+    try:
+        if type(answer) is writer.StoreResult:
+            if (answer.result == 'done' and answer.reason is None and answer.findings == ()
+                    and _init_project_str_tuple(answer.value) and answer.value):
+                return _init_project_result('done', created=answer.value)
+            if (answer.result == 'refused' and type(answer.reason) is str
+                    and _init_project_str_tuple(answer.findings)):
+                return _init_project_result('refused', answer.reason, answer.findings)
+        return _init_project_result('refused', 'init_layout', [_INIT_PROJECT_OUT_OF_FORM])
+    except Exception as exc:
+        return _init_project_result('refused', 'init_layout', ['init_layout: a step raised %s' % type(exc).__name__])
