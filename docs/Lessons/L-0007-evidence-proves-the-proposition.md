@@ -53,6 +53,8 @@ Occurrences in session 2026-10-15-2351 (../History/2026-10/2026-10-15-2351-the-h
 Occurrences in session ea6ea0a3 (the History of that session):
 - **2026-10-25 (D-2933).** TASK-090's draft check chk90, rerun after the drafts were placed in the clone, compared the drafts with the clone's working tree, which already held them, so it could not show a difference from the base; fixed by reading the base from git at the contract commit. A check script reads its base from git, never from a working tree it may have changed.
 - **2026-10-25 (D-2932, D-2940).** chk90 checks only part of the deterministic rule; the deterministic rule's own run (det90) found an os.mkdir in a test that chk90 passed. det90 is the check of record; chk90 is a quick proxy.
+- **2026-10-25 (D-2956).** Review outputs were saved with the harness's two-space indent removed and called verbatim; their hashes differ from the handbacks'. The records bind the handbacks' own hashes, read from the transcripts, so the evidence held. A saved copy is byte-exact or is not called verbatim.
+- **2026-10-25 (D-2959).** A request to the decision agent was sent in the same message as two reads and stated their outputs before they were seen. They matched, but the claim came before its evidence. Outputs are quoted only after they return.
 
 ## Why it happens
 - Proxies are cheaper than the real check.
