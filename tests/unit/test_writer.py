@@ -2433,7 +2433,8 @@ class TASK087WriteHandoff(unittest.TestCase):
         """TASK-087 AC3: arguments out of form give "argument", and a root naming no existing folder "root", each
         creating nothing."""
         cases = [dict(task='TASK-x'), dict(task='task-1'), dict(session='a/b'), dict(session='a\\b'),
-                 dict(session='.'), dict(session='..'), dict(session='x' * 129), dict(session='a b')]
+                 dict(session='.'), dict(session='..'), dict(session='x' * 129), dict(session='a b'),
+                 dict(session='')]
         for kw in cases:
             with self.subTest(kw=kw):
                 self.refused(self.put('t\n', **kw), 'argument')
