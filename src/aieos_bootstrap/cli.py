@@ -1,14 +1,16 @@
-"""The bootstrap's command-line entry point and its commands, tasks and end (tasks TASK-091 and TASK-092;
-specification 7 revision 2, section 3 :26, :32, :33-34; section 5 :45, :48; section 10 points 10, 11 and 15).
+"""The bootstrap's command-line entry point and its commands, tasks, end and status (tasks TASK-091, TASK-092 and
+TASK-093; specification 7 revision 2, section 3 :26, :31, :32, :33-34; section 5 :45, :48; section 10 points 5, 10, 11
+and 15).
 
 What it does:
 - It is run as ``python -m aieos_bootstrap.cli <command> [flags]``; the installed name is open (specification 7 :26),
   and "aieos <command>" in texts means that run form. ``main(argv, stdout, environ, clock)`` returns 0, 1 or 2 and
   never raises: every Exception is caught; KeyboardInterrupt and SystemExit are not. os.environ is read only in the
   entry line.
-- Its own parser, not argparse: argv is exactly a list of str; argv[0] is a command of COMMANDS, tasks or end; end
-  takes its session as argv[1]; the flags are --root <path> (required, once, a non-empty value not beginning "--") and
-  --json (optional, once). Anything else gives exit 2 and USAGE, with neither the clock nor a command's callee called.
+- Its own parser, not argparse: argv is exactly a list of str; argv[0] is a command of COMMANDS, tasks, end or
+  status; end takes its session as argv[1]; the flags are --root <path> (required, once, a non-empty value not
+  beginning "--") and --json (optional, once). Anything else gives exit 2 and USAGE, with neither the clock nor a
+  command's callee called.
 - tasks calls the clock once, then execution.list_tasks(root, now) once, looked up at each call. A list gives exit 0
   and one line "<task> <state> <contract_hash> lease=<lease>" per item (or "no task may be taken"), or under --json
   one JSON line; findings give exit 1 and one "finding: <text>" line each (or one JSON line), list_tasks' str findings
@@ -29,11 +31,21 @@ What it does:
   lines and end_outside's findings; an answer out of form gives "end: end_outside gave an answer out of form"; a raise
   in the clock or end_outside gives "end: a step raised <type>". end writes the core's store and log through the
   writer; it starts no process.
+- status (task TASK-093; specification 7 :31), ``aieos status``, gives the project's status through
+  execution.status_report: the clock once, then execution.status_report(root, now) once, looked up at each call; it
+  does not call in_runtime (spec 7 :34 names only end and launch). An answer gives exit 0 and the lines "progress:
+  <task> <state>" per approved task, " stale" added when its stale_evidence is true (or "progress: no approved task"),
+  then "drift: not available", "waiting for approval: not available" and "requirements lacking assurance: not
+  available", or under --json one JSON line; findings give exit 1 and one "finding: <text>" line each, status_report's
+  str findings printed as given, and "status: status_report gave no finding" when none is left; an answer out of form,
+  its types checked exactly, gives "status: status_report gave an answer out of form"; a raise in the clock or
+  status_report gives "status: a step raised <type>", and a raise in _render_status "cli: a step raised <type>".
+  status writes nothing: status_report reads the log once and reads no store.
 - RUNTIME_VARS and in_runtime(environ): outside any runtime means none of the three names is in the environment.
   in_runtime is true when any of them is present; AIEOS_BASE is counted beside the session id and the root, and a
   name whose value is '' counts as present (two stated choices, both fail-closed); an environment whose membership
-  test raises counts as inside. tasks does not call it; end calls it after the parse; launch, which also refuses
-  inside a runtime, comes with a later task.
+  test raises counts as inside. tasks and status do not call it; end calls it after the parse; launch, which also
+  refuses inside a runtime, comes with a later task.
 
 Limits, stated: a determined agent can start a nested runtime with an environment it chooses (spec 5 :120); a root
 value beginning "--" cannot be given; a root that names no folder gives only list_tasks' "a step raised" finding; a
@@ -52,11 +64,13 @@ from aieos_bootstrap import execution
 from aieos_bootstrap import launcher
 
 RUNTIME_VARS = ('AIEOS_SESSION_ID', 'AIEOS_ROOT', 'AIEOS_BASE')
-COMMANDS = ('tasks', 'end')
+COMMANDS = ('tasks', 'end', 'status')
 USAGE = ('usage: python -m aieos_bootstrap.cli tasks --root <path> [--json]\n'
          '       python -m aieos_bootstrap.cli end <session> --root <path> [--json]\n'
+         '       python -m aieos_bootstrap.cli status --root <path> [--json]\n'
          '  tasks          the tasks that may be taken\n'
          '  end <session>  end a crashed session from outside the runtime\n'
+         '  status         the status of the project\n'
          '  --root <path>  the project root (required)\n'
          '  --json         one JSON line in place of text lines\n')
 OUT_OF_FORM = 'tasks: list_tasks gave an answer out of form'
@@ -68,6 +82,9 @@ RUNTIME_REFUSAL = 'end: refused inside a runtime (spec 7 :34)'
 END_OUT_OF_FORM = 'end: end_outside gave an answer out of form'
 NO_LEASE = 'ended, no lease released'
 _VALUE_OUT_OF_FORM = "end: end_session's value is out of form"
+STATUS_OUT_OF_FORM = 'status: status_report gave an answer out of form'
+STATUS_NO_FINDING = 'status: status_report gave no finding'
+_PROGRESS_KEYS = ('task', 'state', 'stale_evidence')
 
 
 def in_runtime(environ):
@@ -189,6 +206,50 @@ def _end(session, root, as_json, environ, clock):
     return 0, ''.join(line + '\n' for line in lines)
 
 
+def _progress_in_form(item):
+    return (type(item) is dict and len(item) == len(_PROGRESS_KEYS) and all(k in item for k in _PROGRESS_KEYS)
+            and type(item['task']) is str and type(item['state']) is str and type(item['stale_evidence']) is bool)
+
+
+def _status_in_form(value):
+    others = [k for k in execution.STATUS_KEYS if k != 'progress']
+    return (type(value) is dict and len(value) == len(execution.STATUS_KEYS)
+            and all(k in value for k in execution.STATUS_KEYS) and type(value['progress']) is list
+            and all(_progress_in_form(item) for item in value['progress'])
+            and all(type(value[k]) is str and value[k] == execution.NOT_AVAILABLE for k in others))
+
+
+def _render_status(answer, as_json):
+    """The output of status' answer: the progress lines and the three other items, or one JSON line."""
+    if as_json:
+        return json.dumps({'drift': answer['drift'], 'progress': answer['progress'],
+                           'requirements_lacking_assurance': answer['requirements_lacking_assurance'],
+                           'waiting_for_approval': answer['waiting_for_approval']}, sort_keys=True) + '\n'
+    lines = ['progress: %s %s%s' % (item['task'], item['state'], ' stale' if item['stale_evidence'] else '')
+             for item in answer['progress']] or ['progress: no approved task']
+    lines += ['drift: %s' % answer['drift'], 'waiting for approval: %s' % answer['waiting_for_approval'],
+              'requirements lacking assurance: %s' % answer['requirements_lacking_assurance']]
+    return ''.join(line + '\n' for line in lines)
+
+
+def _status(root, as_json, clock):
+    """(the exit code, the whole output) of status."""
+    try:
+        now = clock()
+        answer = execution.status_report(root, now)
+    except Exception as exc:
+        return 1, _findings(['status: a step raised %s' % type(exc).__name__], as_json)
+    if type(answer) is not tuple or len(answer) != 2:
+        return 1, _findings([STATUS_OUT_OF_FORM], as_json)
+    value, found = answer
+    if value is None:
+        texts = [f for f in found if isinstance(f, str)] if isinstance(found, (list, tuple)) else []
+        return 1, _findings(texts or [STATUS_NO_FINDING], as_json)
+    if found is not None or not _status_in_form(value):
+        return 1, _findings([STATUS_OUT_OF_FORM], as_json)
+    return 0, _render_status(value, as_json)
+
+
 def _run(argv, environ, clock):
     """(the exit code, the whole output)."""
     try:
@@ -203,6 +264,11 @@ def _run(argv, environ, clock):
             return _end(session, root, as_json, environ, clock)
         except Exception as exc:
             return 1, _findings(['cli: a step raised %s' % type(exc).__name__], as_json)
+    if command == 'status':
+        try:
+            return _status(root, as_json, clock)
+        except Exception as exc:
+            return 1, _findings(['cli: a step raised %s' % type(exc).__name__], as_json)
     code, kind, payload = _tasks(root, clock)
     if kind == 'findings':
         return code, _findings(payload, as_json)
@@ -214,7 +280,7 @@ def _run(argv, environ, clock):
 
 def main(argv, stdout, environ, clock):
     """Run one command; return 0, 1 or 2; never raise an Exception. environ is read by end, after the parse, through
-    in_runtime; tasks does not read it."""
+    in_runtime; tasks and status do not read it."""
     try:
         code, text = _run(argv, environ, clock)
     except Exception:
