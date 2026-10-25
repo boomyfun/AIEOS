@@ -257,7 +257,9 @@ class TASK090AC5FailingPerSession(Base):
         is processed after each, and expire follows."""
         per = ['session_leases', 'stored_reads', 'observe_gone', 'remove_reads']
         for answer in (store('refused', 'session'), store('refused', 'tables'), RuntimeError('x'), Hostile(),
-                       store(value=None), leases([{'task_id': TASK}]), leases([row(expires=LATER.replace(
+                       store(value=None), store(value={'ended': 'no', 'leases': []}),
+                       store(value={'ended': False, 'leases': {}}), leases([dict(row(), extra=1)]),
+                       leases([{'task_id': TASK}]), leases([row(expires=LATER.replace(
                            tzinfo=None))])):
             r, c = run(listing=(S1, S2), session_leases=lambda root, sid, now, a=answer: (
                 self._raise_or(a) if sid == S1 else leases([])))
@@ -290,6 +292,23 @@ class TASK090AC5FailingPerSession(Base):
             self.stopped(r)
             self.assertEqual([x[1][1] for x in c.of('remove_reads')], [S2], answer)
             self.assertTrue(any(f.startswith('gone_records: %s: ' % S1) for f in r['findings']), answer)
+
+    def test_a_raise_names_its_callee(self):
+        """TASK-090 AC5: a raising session_leases, stored_reads, observe_gone or remove_reads gives the line
+        "gone_records: <id>: <callee>: a step raised RuntimeError"; a raising remove_reads keeps the record's line
+        before it; the next session and expire follow."""
+        for name in ('session_leases', 'stored_reads', 'observe_gone', 'remove_reads'):
+            r, c = run(listing=(S1, S2), **{name: lambda *a, n=name: self._raise_or(
+                RuntimeError(n) if a[2 if n == 'observe_gone' else 1] == S1 else
+                {'session_leases': leases([]), 'stored_reads': store(value=[]), 'observe_gone': recorded(),
+                 'remove_reads': store(value=2)}[n])})
+            self.stopped(r)
+            lines = self.gone_lines(r)
+            self.assertIn('gone_records: %s: %s: a step raised RuntimeError' % (S1, name), lines, name)
+            self.assertIn('gone_records: %s: record written, 2 reads removed' % S2, lines, name)
+        r, c = run(remove_reads=RuntimeError('x'))
+        self.assertEqual(self.gone_lines(r), ['gone_records: %s: record written' % S1,
+                                              'gone_records: %s: remove_reads: a step raised RuntimeError' % S1])
 
     def test_a_record_found_present(self):
         """TASK-090 AC5: "written", "duplicate" and a core "conflict" are each followed by remove_reads, the conflict

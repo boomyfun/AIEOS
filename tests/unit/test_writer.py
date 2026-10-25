@@ -2348,18 +2348,19 @@ class R26ReadSessions(ReadsCase):
         con = sqlite3.connect(writer.store_path(self.root), isolation_level=None)
         try:
             con.execute('BEGIN EXCLUSIVE')
-            self.refused(writer.read_sessions(self.root, 'TASK-090', 0.2), 'unreadable')
+            self.refused(self.listed(timeout=0.2), 'unreadable')
         finally:
             con.close()
         self.assertEqual(self.listed().value, [])
 
     def test_no_finding_holds_the_callers_text(self):
-        """TASK-090 AC1: with a made-up hostile root and store path, none of their text appears in the finding (the
-        rule of test_no_finding_holds_the_callers_text for the older functions)."""
+        """TASK-090 AC1: with a made-up hostile root, task id and store path, none of their text appears in the
+        finding (the rule of test_no_finding_holds_the_callers_text for the older functions)."""
         from unittest import mock
         hostile = 'zz-HOSTILE-zz'
         out = [writer.read_sessions(os.path.join(self.root, hostile), 'TASK-090')]
         self.store()
+        out.append(writer.read_sessions(self.root, hostile))
         with mock.patch.object(writer, '_store_present', lambda r: (None, '//' + hostile)):
             out.append(writer.read_sessions(self.root, 'TASK-090'))
         for r in out:
