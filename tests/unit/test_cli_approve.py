@@ -149,8 +149,10 @@ class TASK096AC1Writes(unittest.TestCase):
         recorder, task_id the task and no fencing token; "done" with the record id, two event ids, both appended."""
         w = World()
         log = w.data
-        out = act(w)
+        clock = Clock()
+        out = act(w, clock=clock)
         self.assertEqual(out['result'], 'done', out)
+        self.assertEqual(clock.calls, 1)
         self.assertEqual(w.names(), ['read', 'contract_at', 'read_log', 'task_states', 'append', 'append'])
         self.assertEqual(w.calls[0], ('read', ROOT, tuple(launcher.HEAD_ARGS)))
         self.assertEqual(w.calls[1], ('contract_at', ROOT, HEAD, TASK))
@@ -183,8 +185,10 @@ class TASK096AC1Writes(unittest.TestCase):
         """TASK-096 AC1: reject appends one record.added with outcome fail and no task.approved, and calls no
         task_states."""
         w = World()
-        out = act(w, what='reject')
+        clock = Clock()
+        out = act(w, what='reject', clock=clock)
         self.assertEqual(out['result'], 'done', out)
+        self.assertEqual(clock.calls, 1)
         calls = appended(w)
         self.assertEqual([c[1] for c in calls], ['record.added'])
         self.assertEqual((calls[0][2]['outcome'], calls[0][2]['approval_binding']), ('fail', {'kind': 'contract',
@@ -196,8 +200,10 @@ class TASK096AC1Writes(unittest.TestCase):
         """TASK-096 AC1: edit appends one record.added holding a claim with evidence_type contract_edit and the note
         as text, and calls no task_states."""
         w = World()
-        out = act(w, what='edit', note='rename the second criterion')
+        clock = Clock()
+        out = act(w, what='edit', note='rename the second criterion', clock=clock)
         self.assertEqual(out['result'], 'done', out)
+        self.assertEqual(clock.calls, 1)
         calls = appended(w)
         self.assertEqual([c[1] for c in calls], ['record.added'])
         record = calls[0][2]
