@@ -1,0 +1,609 @@
+# TASK-096: the approval flow, `aieos approve <task>`, `aieos edit <task>` and `aieos reject <task>`. A new launcher
+# function launcher.approval_act, added after launch_outside by added lines, writes through writer.append_event only:
+# for approve an `authority` record bound to the contract's hash (approval_binding kind contract, no outcome) and then
+# `task.approved` citing it; for reject an `authority` record with the same binding and outcome fail, and no state
+# event; for edit a `claim` record holding the note as text, and no state event (specification 1 revision 3, section
+# 12 and section 5.1 :65; specification 2 revision 11, sections 6.2 and 6.3; specification 7 revision 3, section 4;
+# DM A42; M7's remaining part, its sixth task). Three new commands in cli.py call it. Plan: decisions D-3192 to D-3201
+# (session ea6ea0a3): the scope reads and the scope note (MYSP/t96/scope96.md) with D-3193's rulings Q1 (to the owner)
+# and Q2 to Q6; the pin scan (pinscan96-out.txt at 9deca061) and its reading (pinscan96-reading.md) with D-3195's
+# rulings Q-B (cli.py's COMMANDS phrase reworded, its three pins widened), Q-C (the drafted-version check and the
+# dependency check) and Q-D (the marker 'contract_edit'), D-3196's revised Q-A (the contract read at HEAD through
+# launcher.start's own reader _head) and D-3197's Q-E (launcher.py imports records, E1); the risk run
+# (MYSP/t96/risk_class96.py at 9deca061: high) and the forbidden list (MYSP/t96/forbid96.txt at 9deca061; the write
+# set's existing files left out; the new tests/unit/test_cli_approve.py is not in it); the reviews rv96a
+# (claude-sonnet-5-5) and rv96b (claude-opus-5-5) of r0 and their dispositions (MYSP/t96/disp96.md, D1 to D21,
+# D-3198); the round-2 review rv96c (claude-opus-5-5) of r1 and its dispositions (MYSP/t96/disp96r2.md, E1 to E9,
+# D-3201); the decision agent's read of r2 in place of a third round.
+# The owner answered "co" (the owner's Vietnamese word "co" with an acute accent on the o, U+00F3; quoted exactly, with
+# its transcript line, in the records) (session ea6ea0a3 :31665; D-3194 C1) to D-3193's question, "do you agree that
+# the decision agent approves and accepts the work on these commands in your place": the decision agent approves and
+# accepts this task in the owner's place, within the limits that question named (the commands do not change how the
+# final acceptance works, never write that the owner approved, and are not run on the main project); the real use of
+# these commands in a project later stays the owner's and is asked separately.
+#
+# Scope:
+# - In src/aieos_bootstrap/launcher.py, by added lines only: a paragraph added to the module docstring before its
+#   closing quotes (after the launch_outside paragraph), which also names approval_act's exceptions to the purity
+#   paragraph's "reads no clock" (it reads the caller's clock once) and that it writes through writer.append_event;
+#   one import, `from aieos_bootstrap import records`, in the import block's sorted order (between read_set_record
+#   and resume_check; Q-E, D-3197: E1); and a block after the file's last code line (after launch_outside), under the
+#   marker "# ---- approval_act, `aieos approve`, `aieos edit` and `aieos reject` (task TASK-096) ----", holding only
+#   approval_act and names that begin "APPROVAL_" or "_approval" or "_APPROVAL". The local names `records` at
+#   launcher.py :600 and :664 shadow the module there and are not renamed; approval_act's code uses no local of that
+#   name (D17).
+#   - APPROVAL_KEYS = ('result', 'reason', 'findings', 'record_id', 'event_ids', 'appends');
+#   - APPROVAL_REASONS = ('argument', 'clock', 'head', 'contract', 'log', 'state', 'version', 'dependencies',
+#     'owner_kept_act', 'rejected', 'append');
+#   - APPROVAL_ACTS = ('approve', 'edit', 'reject'); APPROVAL_CLASSES = ('decision_agent', 'human_authority');
+#   - APPROVAL_EDIT_TYPE = 'contract_edit', the evidence_type of an Edit's claim (Q-D);
+#   - APPROVAL_TEXT_MAX = 2000;
+#   - approval_act(root, task_id, act, source_class, who, note, clock, read=None, read_log=None, append=None,
+#     contract_at=None, task_states=None) -> a mapping with exactly APPROVAL_KEYS; it never raises an Exception. Each
+#     callee defaults at call time: read to gitread.run, read_log to writer.read_log, append to writer.append_event,
+#     contract_at to base_inputs.contract_at, task_states to execution.task_states. A raise in a step's callee gives
+#     that step's reason (D6). In order, each refusal giving "refused" with its reason and nothing appended unless
+#     said; on "refused" record_id is None or a str and event_ids and appends are lists of str, possibly empty (D8):
+#     1. The arguments: root an absolute Windows path (_WINDOWS_ROOT), task_id TASK-<digits> (_TASK), act one of
+#        APPROVAL_ACTS, source_class one of APPROVAL_CLASSES; for decision_agent, who a decision id fully matching
+#        D-[0-9]+ (the record's decision_ref); for human_authority, who a non-empty one-line str of at most 200
+#        printable characters (the person's name as given, the writer's statement, not checked) that does not hold
+#        "owner" in any case (D1); note None unless act is edit, for edit a non-empty one-line str of at most
+#        APPROVAL_TEXT_MAX characters with no control character that does not hold "owner" in any case (E2); clock
+#        callable; every callee None or callable. A wrong one gives reason "argument", nothing called.
+#     2. now = clock() once; a raise or a value that is not timezone-aware UTC whole seconds gives reason "clock".
+#     3. head, findings = _head(read, root) once, launcher.start's own reader (launcher.py :226-237, HEAD_ARGS :165),
+#        looked up at call time (Q-A as revised by D-3196); findings or a raise give reason "head".
+#     4. contract_at(root, head, task_id) once, with no read argument (as launch_outside, D5); findings, a raise or an
+#        answer out of form give reason "contract" with the findings "contract: <text>"; else (contract,
+#        contract_hash).
+#     5. read_log(root) once; a raise or an answer that is not bytes gives reason "log"; the log's lines by
+#        records.check_log (records imported by launcher.py, Q-E; a finding gives reason "log"), the task's own events
+#        in log order, ignored duplicate lines left out.
+#     6. The state (D-3193 Q5): the task's last state-setting event (one of the task.* types of execution.STATE_OF,
+#        task.approved and decision.acceptance, D7) must be task.drafted or task.replanned; no such event, or a later
+#        one, gives reason "state" with the finding "state: <task> is not in DRAFT" (no task.drafted is written).
+#     7. The version (Q-C): contract_hash and the contract's contract_version must equal the contract_hash and
+#        contract_version of that last task.drafted or task.replanned payload; else reason "version".
+#     8. For approve only (reject and edit call no task_states, D7):
+#        - the dependencies (Q-C; specification 1 :65): the contract's input_state.depends_on, a list of TASK- ids,
+#          each DONE by task_states(log, depends_on); a dependency not DONE, task_states' findings, or a depends_on out
+#          of form give reason "dependencies";
+#        - owner_kept_act (D-3193 Q2): with source_class decision_agent, a contract whose owner_kept_act is not the
+#          string 'false' (base_inputs keeps values as str) gives reason "owner_kept_act" with the finding
+#          "owner_kept_act: a decision_agent approval of a task whose owner_kept_act is set is refused";
+#        - an earlier Reject (specification 1 section 10 point 11, open; this task's choice, failing closed): an
+#          `authority` record of the task with approval_binding {kind: contract, hash: contract_hash} and outcome
+#          fail after the last task.drafted or task.replanned gives reason "rejected".
+#     9. The record (D18): for approve and reject its record_id is "approval/" followed by the SHA-256 hex of
+#        "\n".join(('approval', act, task_id, contract_hash)), so one approval or rejection record per contract
+#        version (A42); for edit of "\n".join(('approval', act, task_id, contract_hash, source_class, who, note)).
+#        Every record has fact_kind, source_class (the given class), recorder, subject task_id; approve: fact_kind
+#        authority, approval_binding {kind: 'contract', hash: contract_hash}, no outcome; reject: the same with
+#        outcome 'fail'; edit: fact_kind claim, evidence_type APPROVAL_EDIT_TYPE, text the note, no session;
+#        decision_agent records carry decision_ref who. The recorder: for decision_agent "decided by: decision agent
+#        (A41, A51), decision <who>, through aieos cli <act>"; for human_authority "<who>, as stated to aieos cli <act>
+#        (not checked)". No recorder or text field of a record approval_act builds holds "owner" in any case (D1).
+#     10. The appends, through append(root, <event type>, <payload>, <event id>, now, <the record's recorder>,
+#        task_id=task_id), no fencing token (D5), the event id the SHA-256 hex of "\n".join(('approval-event', <event
+#        type>, record_id)): one record.added with the record; for approve then one task.approved with
+#        {contract_version, contract_hash, approval_record: record_id}. Each answer's result, "appended" or
+#        "duplicate", goes in appends; another result or a raise gives reason "append" with the finding "append:
+#        ..."; a rerun of approve or reject with another --class or --by makes the same event id with another payload,
+#        which eventlog refuses as a conflict, giving "append" (D18); a refusal of the task.approved after an appended
+#        record.added says so ("append: the record <record_id> is in the log, the task.approved is not; running
+#        approve again appends it").
+#     11. "done" with record_id, event_ids (two for approve, one for edit and reject) and appends.
+#   - _head is called, not changed; it opens no file, reads no environment, starts no process but through gitread and
+#     names no open, exec, eval, compile, __import__, subprocess, os, sys or time (tests/unit/test_launcher.py
+#     :708-725).
+# - In src/aieos_bootstrap/records.py (Q3, Q-D, D3): one added helper _is_edit_claim(record), true for a record whose
+#   fact_kind is claim, whose evidence_type is 'contract_edit', whose subject is a TASK- id and which has no 'session'
+#   key; and the one changed line :420, `elif not session_claim:` becoming `elif not (session_claim or
+#   _is_edit_claim(record)):`, so text is also allowed on an Edit's claim; the session and acs checks are unchanged,
+#   and every other case of TASK-077 AC3 keeps its "6.2:text" finding. This one changed line is a named departure
+#   from "added lines only". The module docstring gains a sentence, read as an "also" (the phrase at records.py
+#   :61 kept), naming 'contract_edit' and TASK-096; check_session_claim's docstring is not changed, its closing
+#   quotes sharing :412 with its last words (E1); imports unchanged.
+# - In src/aieos_bootstrap/cli.py:
+#   - COMMANDS becomes ('tasks', 'end', 'status', 'init', 'launch', 'approve', 'edit', 'reject'); USAGE gains three
+#     lines: "approve <task> --root <path> --class <decision_agent|human_authority> --by <decision id or name>
+#     [--json]", "edit <task> --root <path> --class <decision_agent|human_authority> --by <decision id or name>
+#     --note <text> [--json]" and "reject <task> --root <path> --class <decision_agent|human_authority> --by
+#     <decision id or name> [--json]".
+#   - _parse takes them (D9): the task fully matching TASK; --root, --class, --by and, for edit only, --note each
+#     exactly once, each value non-empty and not beginning "--" (as --root, cli.py :156); --class one of the two
+#     classes; --json at most once; no default class; anything else gives exit 2 and USAGE. For these commands its
+#     result is (act, task, root, as_json, source_class, who, note), note None for approve and reject. The form of
+#     who and note (a decision id, the name's rules, the note's length and lines) is approval_act's: exit 1 and
+#     "refused argument".
+#   - _run unpacks _parse's new result and gains a branch for approve, edit and reject after launch's (E9).
+#   - New functions _approval(act, task, root, source_class, who, note, as_json, environ, clock),
+#     _render_approval(answer, as_json) and _approval_in_form(answer, act). After the parse: in_runtime(environ) true
+#     gives exit 1 and the one finding APPROVAL_RUNTIME_REFUSAL % (act, act), APPROVAL_RUNTIME_REFUSAL being '%s:
+#     refused inside a runtime (it writes; specification 7 :34 names end and launch, and %s is refused for the same
+#     reason)' (D10); else launcher.approval_act(root, task, act, source_class, who, note, clock) once, looked up at
+#     call time.
+#   - The answer's form, exact types (D8): a dict with exactly launcher.APPROVAL_KEYS; result "done" or "refused";
+#     findings a list of str; event_ids and appends lists of str of equal length, each append "appended" or
+#     "duplicate"; "done": reason None, record_id a str, two event ids for approve and one for edit and reject;
+#     "refused": reason a str of launcher.APPROVAL_REASONS, record_id None or a str; else exit 1 and "<act>:
+#     approval_act gave an answer out of form".
+#   - Output: "done" gives exit 0 and the lines "record: <id>", one "event: <id> <appended or duplicate>" per event,
+#     then "finding: <text>" per finding; under --json one line of json.dumps({"record_id": ..., "event_ids": [...],
+#     "appends": [...], "findings": [...]}, sort_keys=True); "refused", the runtime refusal and an answer out of form
+#     go through _findings: "finding: <act>: refused <reason>" then one "finding:" line per finding, or under --json
+#     one findings line; a "refused" answer prints its findings only, not its record_id or event ids (E6). A raise
+#     in approval_act gives "<act>: a step raised <type>", in _render_approval "cli: a step raised <type>".
+#   - cli.py's docstring (D12): line 1 names approve, edit and reject and TASK-096; :10-11's argv sentence names the
+#     new commands' task as argv[1]; "argv[0] is a command of COMMANDS, tasks, end, status, init or launch" becomes
+#     "... tasks, end, status, init, launch, approve, edit or reject" (Q-B); "end and init call it after the parse"
+#     kept word for word; main's "environ is read by end, init and launch" becomes "... end, init, launch, approve,
+#     edit and reject"; a paragraph holding "aieos approve", "aieos edit", "aieos reject", "TASK-096", "writes
+#     nothing the governor counts at acceptance" and "not checked"; the phrases of tests/unit/test_cli.py :405-411,
+#     tests/unit/test_launcher_outside.py :609-620 and CLI_KEPT (tests/unit/test_execution_status.py :489-491) kept.
+#     cli.py's imports stay {datetime, json, os, re, sys, execution, launcher}.
+# - Tests (four existing tests widened, D4, D11):
+#   - tests/unit/test_cli_init.py :271-273 (COMMANDS equal to the new tuple) and :329-338 (the phrase "COMMANDS,
+#     tasks, end, status, init, launch, approve, edit or reject" in place of "COMMANDS, tasks, end, status, init or
+#     launch", which joins the phrases that must be gone); a change to TASK-095's test, named, its docstrings adding
+#     "TASK-096 AC6".
+#   - tests/unit/test_cli_launch.py :522-531: the phrase only, as above (no COMMANDS check added); a change to
+#     TASK-094's test, named, its docstring adding "TASK-096 AC6" (E7).
+#   - tests/unit/test_execution_status.py :508-519: the phrase and COMMANDS, as above; a change to TASK-093's test,
+#     named, its docstring adding "TASK-096 AC6" (E7).
+#   - tests/unit/test_launcher.py :694-706: the import-set test widened by exactly records; its docstring names
+#     "TASK-096 AC5" and keeps "TASK-086 AC" (the naming test :749-756); a change to TASK-086's test, named.
+#   - New tests/unit/test_cli_approve.py: approval_act by stand-ins for read, read_log, append, contract_at and
+#     task_states (keyword arguments; the append stand-in bound to writer.append_event's signature) over logs built
+#     with eventlog.append in memory, and the command by mock.patch.object of launcher.approval_act; records'
+#     widening by records.check_record and records.check_payload; a literal root 'C:/approve-root-96' (L-0032); no
+#     tempfile, sqlite3, shutil, subprocess or open; its naming test requires "TASK-096 AC" in every test of the
+#     file; stand-in defaults are sentinels (L-0033).
+#   - tests/unit/test_records_session_claims.py is not changed: the Edit-claim cases are in test_cli_approve.py, and
+#     TASK-077's tests pass unchanged.
+# - What it does not do: no change to governor.py, governor-spec.md, conformance.py, writer.py, execution.py,
+#   base_inputs.py or __init__.py; no acceptance-kind approval is written (limit (a)); no task.drafted is written; the
+#   commands are not run on E:/AIEOS or anywhere outside their tests (limit (c)); no batch approval; no intent record.
+#
+# Stated limits and departures: the contract is read at HEAD by start's reader; that HEAD is the base branch's tip is
+# not checked (DEF-0101's base-tip check, open); the drafted-version check binds the approval to the drafted text
+# whatever HEAD is. contract_at reads docs/tasks/<id>.yaml only (base_inputs.py :677), not a product's tasks/ folder
+# (specification 2 :34). No module writes task.drafted today, so approve, edit and reject refuse every real log until
+# a later task writes it (TASK-098's proposal); until then the commands are reachable only in tests, as limit (c)
+# already holds. The source class is the caller's statement: the CLI cannot prove who runs it, so a human_authority
+# record counts at most as a claim's weight until a channel proves the person (B5; P-CRED; C13); a decision_ref is
+# not checked against any decision. The governor's reading is unchanged (limit (b)): it counts no contract-kind
+# approval at acceptance (governor.py :381), and an Edit's claim carries no commit (:357). But task.approved makes the
+# task READY for execution and launch whatever the class the cited record names (execution.py :227-245;
+# base_inputs.py :16-18; records.py :10 does not check that approval_record exists), so the class statement weighs
+# nothing there (D13); task.approved also restarts the retry count (specification 1 :73), harmless since approve
+# needs DRAFT. The marker 'contract_edit' is this task's choice, a departure from specification 2 revision 11, which
+# widens text to an Edit's claim but names no marker; it is carried as a reserved evidence_type name to specification
+# 2's next revision. The Edit claim's source_class is the given class, this task's choice (specification 1 section
+# 10 point 12 open). records.py changes one line, :420, besides added lines. An approve after a Reject of the same
+# version is refused (specification 1 section 10 point 11 stays open for the specification). One approval or
+# rejection record per version: a rerun with another class or name is refused as a conflict. Approve's two appends
+# are separate: a refusal between them leaves the record without task.approved, which a rerun completes (the same
+# ids give "duplicate"); a full rerun after task.approved is refused "state". The log is read once and appended to
+# after, so an event appended between the read and the appends is not seen (one run at a time, the writer's limit).
+# Edit's and Reject's records add no task state. An Edit's note is one line of at most 2000 characters.
+#
+# Owner-act boundary: the owner answered "co" (U+00F3 on the o) (session ea6ea0a3 :31665; D-3194 C1) to D-3193's
+# question: the decision agent approves and accepts this task in the owner's place, within limits (a) to (c); the
+# real use of the commands in a project stays the owner's and is asked separately. Nothing under .github/.
+# owner_kept_act: true; the owner's "co" (U+00F3 on the o) (D-3194) is the owner act it calls for; with it the
+# governor counts no decision_agent acceptance (governor.py :393-394), so the acceptance follows TASK-094's path, its
+# INSUFFICIENT_EVIDENCE row named as a disagreement (D-3177; D20).
+#
+# The pins (L-0026; pinscan96-out.txt at 9deca061; pinscan96-reading.md; D-3195 to D-3198): launcher.py's import set
+# (tests/unit/test_launcher.py :697-705, widened by exactly records, Q-E), names (:708-725), naming test (:749-756),
+# docstring phrases (tests/unit/test_launcher.py :733; tests/unit/test_launcher_gone.py :424;
+# tests/unit/test_launcher_outside.py :601; tests/unit/test_cli_init.py :341-343; tests/unit/test_cli_launch.py
+# :516), the helper prefixes "_launch", "_init_project" and "_outside" (tests/unit/test_cli_launch.py :295-303,
+# tests/unit/test_cli_init.py :119-128, tests/unit/test_launcher_outside.py :584-594); cli.py's tests
+# (tests/unit/test_cli.py :130-133, :333-348, :406-411; tests/unit/test_launcher_outside.py :609-620; the widened
+# ones); records.py's imports (tests/unit/test_records_session_claims.py :126-131; tests/unit/test_records_read_set.py
+# :97-101) and docstring phrases (:138-141; :91-93); TASK-077 AC3 (tests/unit/test_records_session_claims.py :75-83);
+# the deterministic rule (aieos-checks.yml :1489-1521): launcher.py, cli.py and records.py keep NONE,
+# test_cli_approve.py NONE; no change under .github/.
+#
+# Risk: high, computed over the base by MYSP/t96/risk_class96.py (R2 medium and R3 high, not evaluable, for each
+# path; test_cli_launch.py and test_launcher.py match the same two rules). GOV-003: an evaluator path; change class
+# ruled at acceptance. Reviews on Sonnet 5.5 and Opus 5.5 (never Fable), read tools only; the acceptance review on
+# Sonnet 5.5. Naming (D-544 Q3): every new test function names "TASK-096 ACn" in its own docstring. Not applicable:
+# OPS-001; INV-005 to INV-011; GOV-001, GOV-004 to GOV-006, SEC-003. Shadow (D-2042 C3 as amended by D-2068): the
+# governor's evaluate at acceptance, any difference named. Local runs: the unit group in three parts, integration and
+# property; before commit X, a check of the new and changed files for the B105 pattern (D-2735 C6), for bandit's B608
+# form (L-0018), for platform-dependent roots (L-0032), for any byte outside printable ASCII and LF (L-0011, D-2981),
+# and for the OPS-003 pattern rule (aieos-checks.yml :1672-1681).
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-096.yaml, has one parent equal to base_commit, and goes
+# to main under its own decision; the task's commits carry "AIEOS-Task: TASK-096" and go to task/TASK-096; main
+# receives them only at acceptance.
+task: TASK-096
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add launcher.approval_act after launch_outside, which writes through writer.append_event an approval of the drafted
+  contract version (an authority record bound to its hash, then task.approved), a rejection (the same binding with
+  outcome fail) or an edit note (a claim marked contract_edit), refusing a task not in DRAFT, another version, a
+  dependency not DONE and a decision_agent approval of an owner-kept task; widen records.py's text rule for the edit
+  claim; add the commands approve, edit and reject to cli.py; tests in the new tests/unit/test_cli_approve.py, each
+  naming "TASK-096 ACn", and four existing tests widened.
+traces_to:
+  - docs/specs/spec-01-state-and-event-model.md#12
+  - docs/specs/spec-02-aieos-file-format.md#6.2
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#4
+input_state:
+  base_commit: 9deca061fc0846a32f284c73dd389be466a1ca24
+  depends_on: [TASK-077, TASK-085, TASK-086, TASK-088, TASK-091, TASK-092, TASK-093, TASK-094, TASK-095]
+  intent_versions:
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 94bf8928948662e75fb249c3e09f75dac54db0ec7b70e595c80578a257e22eea
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: d2fa59ae3f203b3a2108e55d23ddfb875e64ab57d27372c9d413bf30d7c2cbdd
+    docs/specs/spec-05-adapter-contract.md: c8a1243d00daa8db28f23977828de02ab7f2d4d7b6fdabf9e7cc2bc8155a001a
+    docs/specs/spec-01-state-and-event-model.md: f4e02c0c078b4aee490deb4bec97f4d4fdca2de93b50c204dcfd398378ffe826
+    docs/specs/spec-02-aieos-file-format.md: e7c427b06775069a43d5e6d317a61c1974e5be921aee08a581c1918572a37a61
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/cli.py
+    - src/aieos_bootstrap/launcher.py
+    - src/aieos_bootstrap/records.py
+    - tests/unit/test_cli_approve.py
+    - tests/unit/test_cli_init.py
+    - tests/unit/test_cli_launch.py
+    - tests/unit/test_execution_status.py
+    - tests/unit/test_launcher.py
+read_set:
+  paths:
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-07-cli-and-zero-friction-path.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/decision-matrix.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/pre-genesis/CR-002-concept-errata.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/Deferred/DEF-0101-the-launchers-open-requirements-before-a-runtime-is-launched.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.writer.append_event, aieos_bootstrap.writer.read_log,
+    aieos_bootstrap.base_inputs.contract_at, aieos_bootstrap.execution.task_states, aieos_bootstrap.records.check_log,
+    aieos_bootstrap.records.check_session_claim, aieos_bootstrap.cli.main, aieos_bootstrap.cli.in_runtime]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - pyproject.toml
+  - setup.py
+  - setup.cfg
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/handoff_file.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/resume_log_inputs.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_base_files_repo.py
+  - tests/integration/test_base_inputs_repo.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_launcher_repo.py
+  - tests/integration/test_mcp_server_work_order_repo.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_resume_inputs_repo.py
+  - tests/integration/test_resume_log_inputs_repo.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_base_files_properties.py
+  - tests/property/test_base_inputs_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_context_compiler_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_mcp_server_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_base_files.py
+  - tests/unit/test_base_inputs.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_cli.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_execution_list_tasks.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_handoff_file.py
+  - tests/unit/test_launcher_end.py
+  - tests/unit/test_launcher_gone.py
+  - tests/unit/test_launcher_outside.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_mcp_server_work_order.py
+  - tests/unit/test_read_set_gone.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_resume_inputs.py
+  - tests/unit/test_resume_log_inputs.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      approval_act by stand-ins (keyword callees; a counting clock), over a log holding the task's task.drafted with
+      the contract's hash and version and its dependencies' task.approved and task.done: approve with decision_agent
+      and 'D-1' gives one _head read, one contract_at call with (root, head, task_id), one read_log, one task_states
+      call with (log, depends_on), then two appends, each (root, <type>, <payload>, <event id>, now, the record's
+      recorder) with task_id the task and no fencing token: record.added (an authority record, approval_binding
+      {kind: 'contract', hash}, no outcome, decision_ref 'D-1', the stated recorder) then task.approved
+      {contract_version, contract_hash, approval_record}, and "done" with record_id, both event ids and appends
+      ['appended', 'appended']; with human_authority the record has no decision_ref and its recorder says "not
+      checked"; reject appends one record.added with outcome 'fail' and no task.approved; edit appends one
+      record.added holding a claim with evidence_type 'contract_edit' and the note as text; reject and edit call no
+      task_states; every record passes records.check_payload('record.added', ...) and the resulting log passes
+      records.check_log; over the log a first run made, a rerun of reject or edit gives "done" with the same ids and
+      appends ['duplicate'], a rerun of an approve whose task.approved was refused after its record was appended gives
+      "done" with ['duplicate', 'appended'], and a full rerun of approve gives "refused" with reason "state"; each
+      callee defaults at call time (mock.patch.object of gitread.run, writer.read_log, writer.append_event,
+      base_inputs.contract_at and execution.task_states made after import are the ones called); the result has
+      exactly APPROVAL_KEYS.
+  - AC2: >-
+      approval_act's refusals, each with nothing appended unless said: each wrong argument ("argument", nothing
+      called), a human_authority `who` or an Edit note holding "owner" in any case among them; a raising or
+      out-of-form clock ("clock"); _head's findings or a raising read ("head"); contract_at findings, a raise or an
+      answer out of form ("contract"); a raising or non-bytes read_log or a log check_log refuses ("log"); a task
+      with no task.drafted,
+      or whose task.drafted is followed by task.approved, task.blocked, decision.acceptance or another state event
+      ("state"); a contract hash or contract_version other than the last task.drafted's or task.replanned's
+      ("version"); for approve a dependency not DONE, task_states' findings or a raise, or a depends_on out of form
+      ("dependencies"), a decision_agent approval of a contract whose owner_kept_act is 'true' or out of form
+      ("owner_kept_act", while a human_authority approval of it is done), an earlier Reject of the same version after
+      the last task.drafted ("rejected"); an append "refused" or raising ("append"), a rerun of approve with another
+      --by over a log holding the first record and no task.approved refused as a conflict ("append"), a refused
+      task.approved after an
+      appended record.added naming that the record is in the log, with record_id and the first event id given; no
+      Exception escapes; by ast, approval_act and the names beginning _approval name no open, exec, eval, compile,
+      __import__, subprocess, os, sys or time.
+  - AC3: >-
+      records.py: a claim with evidence_type 'contract_edit', a TASK- subject, text and no session gives no finding by
+      check_record; the same with a subject that is not a TASK- id, or with another evidence_type, gives "6.2:text";
+      the same with a session that is not a non-empty str gives "6.2:session"; the same with acs and no gate gives
+      "6.2:acs"; an observation with evidence_type 'contract_edit' and text gives "6.2:text";
+      tests/unit/test_records_session_claims.py passes unchanged; records.py's diff from the base is added lines and
+      the one changed line :420 (checked at G3 by a scratchpad git-diff script) and its imports unchanged.
+  - AC4: >-
+      The commands by stand-ins (mock.patch.object of launcher.approval_act; a counting clock): "approve TASK-1 --root
+      R --class decision_agent --by D-1" gives one approval_act call with (R, 'TASK-1', 'approve', 'decision_agent',
+      'D-1', None, the clock); edit with --note passes the note; each argv out of form (no --class, no --by, a class
+      outside the two, --note on approve or reject, no --note on edit, a flag twice, a value empty or beginning "--",
+      a bad task, an extra word) gives exit 2 and USAGE with nothing called, inside a runtime too; a --by out of
+      approval_act's form passes the parse and, with the real approval_act (step 1 refuses before any callee),
+      gives exit 1 with "finding: approve: refused argument"; an environ
+      holding any one of the three RUNTIME_VARS ('' included) gives exit 1 and the runtime refusal, filled with the
+      act, with nothing called; "done" gives exit 0 and the record and event lines, or under --json the exact sorted
+      string; "refused" gives exit 1 and "finding: <act>: refused <reason>" then the findings, or under --json one
+      findings line; each answer out of form (not a dict, a dict subclass, other keys, a result outside the two, a
+      done with a reason, a done with the wrong number of event ids, event_ids and appends of unequal length, an
+      append outside its two words, a reason outside APPROVAL_REASONS, a non-str finding) gives the out-of-form
+      finding; a raising approval_act gives "<act>: a step raised <type>"; a raising _render_approval gives "cli: a
+      step raised <type>"; the earlier commands' tests all still pass.
+  - AC5: >-
+      The modules: launcher.py's import set equal to the widened test (tests/unit/test_launcher.py :697-705, widened
+      by exactly records, a change to TASK-086's test, named); launcher.py's diff from the base is the added
+      docstring paragraph, the one import line and a block after launch_outside only (checked at G3 by a scratchpad
+      git-diff script); its names test (tests/unit/test_launcher.py :708-725) passes; cli.py's imports unchanged and
+      its refused names and strings (tests/unit/test_cli.py :333-356, :369-375) pass; the deterministic rule passes
+      with launcher.py, records.py and cli.py at NONE; no recorder or text field of any record approval_act builds,
+      over every act and class of AC1, holds "owner" in any case; the new test file uses no tempfile, sqlite3,
+      shutil, subprocess or open, roots only the literal 'C:/approve-root-96', and uses no one-argument .replace() and
+      no .replace(target=...).
+  - AC6: >-
+      Docstrings: launcher.py's module docstring gains a paragraph holding "approval_act", "TASK-096", "contract-kind",
+      "HEAD", "not checked", "DEF-0101", "reads the caller's clock once" and "writer.append_event", and keeps every
+      phrase of its pinned tests; records.py's module docstring gains "contract_edit" and "TASK-096" and keeps its
+      pinned phrases (records.py :61 among them);
+      cli.py's gains "aieos approve", "aieos edit", "aieos reject", "TASK-096", "writes nothing the governor counts at
+      acceptance" and "not checked", holds "COMMANDS, tasks, end, status, init, launch, approve, edit or reject" and
+      "end and init call it after the parse" and not "COMMANDS, tasks, end, status, init or launch", and keeps every
+      phrase of tests/unit/test_cli.py :405-411, tests/unit/test_launcher_outside.py :609-620 and CLI_KEPT; USAGE
+      names approve, edit and reject; the widened tests of tests/unit/test_cli_init.py, tests/unit/test_cli_launch.py,
+      tests/unit/test_execution_status.py and tests/unit/test_launcher.py pass; every test of
+      tests/unit/test_cli_approve.py names "TASK-096 AC", checked by its own naming test, more than 20 tests.
+  - AC7: >-
+      Broken copies, each naming its file and failing the tests of its AC: (1) an acceptance-kind binding written by
+      approve (AC1); (2) task.approved appended before the record (AC1); (3) an outcome on the approve record (AC1);
+      (4) reject appending task.approved (AC1); (5) approve with no task.drafted appending (AC2); (6) the version check
+      dropped (AC2); (7) the dependency check dropped (AC2); (8) a decision_agent approval of an owner-kept task done
+      (AC2); (9) the Reject check dropped (AC2); (10) a fencing token passed to append (AC1); (11) a callee bound at
+      import time (AC1); (12) a raise escaping approval_act (AC2); (13) approval_act naming os (AC2, AC5); (14) a
+      recorder holding "owner" (AC5); (15) records' widening for every claim without session (AC3); (16) the command
+      not refusing inside a runtime (AC4); (17) the in_runtime check made before the parse (AC4); (18) a default class
+      when --class is missing (AC4); (19) the --json line without sort_keys (AC4); (20) cli.py importing writer (AC5);
+      (21) a line of launch_outside changed (AC5, the G3 diff script); (22) the contract read at a commit other than
+      _head's (AC1); (23) approve's record_id holding who and the class (AC2, the conflict case); (24) a
+      human_authority `who` holding "owner" accepted (AC2); (25) records' widening that skips the session check for
+      an Edit's claim (AC3); (26) decision.acceptance left out of the state-setting events (AC2); (27) an Edit note
+      holding "owner" accepted (AC2); twenty-seven copies in all; each copy made in a scratchpad script at G3, not
+      committed; the governor's evaluate at acceptance (the shadow) with any difference named.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1000k, wall_time: 5h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6]}
+  - {gate: G3, check: constitution, args: [AC7, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: true
