@@ -24,6 +24,9 @@ One, in session ea6ea0a3 (2026-10-25, D-3141):
 - A command meant to run a script was sent before the script existed and before any decision named it; it exited 2
   and touched nothing; recorded with TASK-094's records.
 
+One, in session ea6ea0a3 (the specification revisions, D-3185):
+- mkdraft6 was run without a decision naming it; it wrote only to the scratchpad; recorded with TASK-096's records.
+
 ## Why it happens
 A read is not felt as an act, and right after a compaction the habits of the call form are weakest.
 

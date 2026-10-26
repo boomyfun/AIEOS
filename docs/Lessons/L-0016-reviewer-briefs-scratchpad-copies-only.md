@@ -35,6 +35,13 @@ Occurrence in session 2026-10-12-0944 (../History/2026-10/2026-10-12-0944-the-ev
 One occurrence in session ea6ea0a3 (the History of that session):
 - **2026-10-25 (t91x-S1, D-3037).** TASK-091's acceptance reviewer, its brief limited to FOLDER, listed the parent scratchpad folder t91 by one Glob after missing the run outputs at FOLDER's top level, where they were, and read three files there (brk91.py, brk91-out.txt, chk91-out.txt) that are byte copies of files in FOLDER; it disclosed this itself (rs91x-sonnet.md :3). The review was accepted, its evidence being the same as inside FOLDER (D-3037). A brief names where each copied file sits in FOLDER.
 
+One, in session ea6ea0a3 (2026-10-26, TASK-096, D-3223):
+- **D-3223.** The acceptance reviewer t96x-S1 (claude-sonnet-5-5, general-purpose), told "Use only Read, Grep and
+  Glob; run no command; a command makes this review void.", made one Bash call ("echo no", no effect on any file) and
+  reported it itself: "REVIEW VOID BY ITS OWN RULE. I made one Bash call by mistake ("echo no", no effect on any file)
+  after the instruction "run no command"." The review was taken as unapproved evidence only; the round-2 brief added an
+  explicit line naming every other tool, and round 2 (t96y-S1) declared "only Read and Grep were used".
+
 ## Why it happens
 A brief's tool rule competes with the reviewer's habit of checking things by shell, and a path into the working tree makes a read-only command able to touch it.
 

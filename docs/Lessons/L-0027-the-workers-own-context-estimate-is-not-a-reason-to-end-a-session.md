@@ -18,6 +18,8 @@ The worker cannot see the context level; its estimate, counted from the conversa
 - **2026-10-25 (session 3797498a, D-2889).** After a compaction, the first call was a Write of a scratch script (forbid90.py), made before the lessons and the checkpoint were reread; the same order slip as D-2518 and D-2598 (a). Three more slips followed in the next few calls (D-2889 (b) to (d)).
 - **2026-10-25 (session ea6ea0a3, D-3171 (a)).** After a compaction, the first call was the ls-remote that decision
   D-3170 had named, sent before the lessons and the checkpoint were reread; nothing depended on the order.
+- **2026-10-26 (session ea6ea0a3, D-3220 (a)).** After a compaction, the first call was the dry run that decision
+  D-3219 had named, sent before the lessons and the checkpoint were reread; nothing depended on the order.
 
 ## Why it happens
 The level is shown to the owner by the app, not to the worker. The worker counts what it has read and written, and that count runs high (long tool outputs and agent reports weigh less than they seem, or the window is larger than assumed). Which of these holds is a guess.

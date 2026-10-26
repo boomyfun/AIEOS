@@ -51,6 +51,16 @@ tin nhắn chỉ có MỘT lệnh", D-3160: one tool call per message, Reads, Wr
   an Edit with a Grep (D-3177), and two Edits (D-3178); after D-3160's explicit instruction: D-3163, D-3167, D-3174a,
   D-3177 and D-3178. No text beside them; nothing wrong was written.
 
+Session ea6ea0a3 (2026-10-25 to 2026-10-26; after TASK-094's records, during the specification revisions and TASK-096;
+the list of decision D-3230):
+- Text beside a call: D-3179 (k) and (l); D-3184 (o), refused by the guard;
+  D-3185 (p) and (q); D-3186 (r); D-3206, refused by the guard; D-3208, beside the run of mk_execc96.
+- Messages holding more than one call: D-3179 (j); D-3186 (s) and (t); D-3188 (v); D-3190 (w) and (y); D-3191 (z);
+  D-3196, a Bash call and a Read; D-3198, four messages, one bundling a script run; D-3208, a run and its Read;
+  D-3216, two Edits and two Reads; D-3224 (c), two Edits, and (d), two Reads.
+- A Grep before a full Read, and partial reads: D-3179 (m); D-3181 (n); D-3188 (u); D-3190 (x) and the partial reads
+  of scan6b; D-3213; D-3216, diff96-out2 read in part.
+
 ## Why it happens
 The app's request reads as asking for words now, and the worker adds them to the call it is about to send.
 
