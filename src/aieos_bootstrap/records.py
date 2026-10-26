@@ -65,6 +65,10 @@ Limits (TASK-001 AC7):
   from these keys' values. ci_run is not a record key. The pinned identities of governor.py and resume_check.py do not
   see this module: a change here changes which records are well formed for the governor and the evaluator, and
   neither pin sees it (a limit).
+- An Edit's claim (task TASK-096; specification 1 section 12, specification 2 revision 11): text is also allowed on a
+  claim whose evidence_type is contract_edit, whose subject is "TASK-" followed by digits and which has no session key
+  (_is_edit_claim); the session and acs rules above are unchanged for it, and every other record keeps the text rule
+  above. The marker contract_edit is TASK-096's choice, carried to specification 2's next revision.
 - record_id is checked as a non-empty string; whether it is unique across a log is not checked. evidence_type and
   dimension are open vocabularies, checked as non-empty strings only.
 - An ignored duplicate is reported as such whether or not the line it repeats has findings of its own.
@@ -406,6 +410,13 @@ def check_read_set(record, where='record'):
     return findings
 
 
+def _is_edit_claim(record):
+    """TASK-096: an Edit's claim, which may carry text with no session: fact_kind claim, evidence_type contract_edit,
+    subject "TASK-" followed by digits, and no session key."""
+    return (record.get('fact_kind') == 'claim' and record.get('evidence_type') == 'contract_edit'
+            and _matches(_TASK, record.get('subject')) and 'session' not in record)
+
+
 def check_session_claim(record, where='record'):
     """The rules of the keys session, text and acs of specification 2 revision 10 (TASK-077 AC2 to AC4), for one
     record (a dict). The findings are "6.2:session", "6.2:text" and "6.2:acs"; a record that carries none of the three
@@ -417,7 +428,7 @@ def check_session_claim(record, where='record'):
     if 'text' in record:
         if not _is_str(record['text']):
             findings.append(Finding('6.2:text', '%s text is not a non-empty string' % where))
-        elif not session_claim:
+        elif not (session_claim or _is_edit_claim(record)):
             findings.append(Finding('6.2:text', '%s carries text, but it is not a claim whose session is set' % where))
     if 'acs' in record:
         acs = record['acs']

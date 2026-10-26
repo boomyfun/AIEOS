@@ -139,6 +139,17 @@ an end that gave "done". The shipped command passes no starter, so it starts no 
 caller's clock twice and calls the caller's starter, the two exceptions to "reads no clock" and "starts no process but
 through gitread" above: the starter does whatever the caller's code does; the core's own code starts no process. A
 BaseException from the starter is re-raised after the end and the handoff.
+
+approval_act (task TASK-096; `aieos approve`, `aieos edit` and `aieos reject`, specification 1 section 12,
+specification 7 section 4) records an approval, a rejection or an edit note of a task's drafted contract version and
+returns a mapping with exactly APPROVAL_KEYS; it never raises an Exception. It writes through writer.append_event only:
+for approve a contract-kind authority record (approval_binding kind contract, no outcome) and then task.approved citing
+it; for reject the same binding with outcome fail and no state event; for edit a claim marked contract_edit, holding the
+note as text, and no state event. It writes no acceptance-kind approval, so nothing it writes is counted by the
+governor at acceptance. It reads the contract at HEAD through start's own reader, _head; that HEAD is the base
+branch's tip is not checked (DEF-0101's base-tip check, open), and the check that the contract equals the last drafted
+version binds the approval to the drafted text whatever HEAD is. The source class and the name are the caller's
+statement, not checked. approval_act reads the caller's clock once, an exception to "reads no clock" above.
 """
 
 import datetime
@@ -152,6 +163,7 @@ from aieos_bootstrap import execution
 from aieos_bootstrap import gitread
 from aieos_bootstrap import handoff_file
 from aieos_bootstrap import read_set_record
+from aieos_bootstrap import records
 from aieos_bootstrap import resume_check
 from aieos_bootstrap import resume_inputs
 from aieos_bootstrap import resume_log_inputs
@@ -991,3 +1003,258 @@ def launch_outside(root, task_id, clock, starter, begin=None, contract_at=None, 
     finally:
         out = _launch_finish(state, clock, finish, finish_outside, write_handoff)
     return out
+
+
+# ---- approval_act, `aieos approve`, `aieos edit` and `aieos reject` (task TASK-096) ----
+
+APPROVAL_KEYS = ('result', 'reason', 'findings', 'record_id', 'event_ids', 'appends')
+APPROVAL_REASONS = ('argument', 'clock', 'head', 'contract', 'log', 'state', 'version', 'dependencies',
+                    'owner_kept_act', 'rejected', 'append')
+APPROVAL_ACTS = ('approve', 'edit', 'reject')
+APPROVAL_CLASSES = ('decision_agent', 'human_authority')
+APPROVAL_EDIT_TYPE = 'contract_edit'
+APPROVAL_TEXT_MAX = 2000
+_APPROVAL_NAME_MAX = 200
+_APPROVAL_DECISION = re.compile(r'D-[0-9]+')
+_APPROVAL_HASH = re.compile(r'[0-9a-f]{64}')
+_APPROVAL_CALLEES = ('read', 'read_log', 'append', 'contract_at', 'task_states')
+_APPROVAL_DRAFTED = ('task.drafted', 'task.replanned')
+_APPROVAL_STATE_EVENTS = ('task.approved', 'decision.acceptance')
+_APPROVAL_APPENDED = ('appended', 'duplicate')
+_APPROVAL_WORD = 'owner'
+_APPROVAL_BAD_CLOCK = 'clock: the clock gave no timezone-aware UTC time with whole seconds'
+
+
+class _approval_stop(Exception):
+    """A refusal at a step: its reason and its findings."""
+
+    def __init__(self, reason, findings):
+        Exception.__init__(self, reason)
+        self.reason = reason
+        self.findings = list(findings)
+
+
+def _approval_result(result, reason=None, findings=(), record_id=None, event_ids=(), appends=()):
+    return {'result': result, 'reason': reason, 'findings': [f for f in findings if isinstance(f, str)],
+            'record_id': record_id, 'event_ids': list(event_ids), 'appends': list(appends)}
+
+
+def _approval_strs(value):
+    """Only the str items of a list or a tuple; any other value gives none."""
+    return [f for f in value if isinstance(f, str)] if isinstance(value, (list, tuple)) else []
+
+
+def _approval_line(value, most):
+    """A non-empty one-line str of at most ``most`` printable characters (no control character, no line break)."""
+    return type(value) is str and 0 < len(value) <= most and value.isprintable()
+
+
+def _approval_argument_findings(root, task_id, act, source_class, who, note, clock, callees):
+    """Step 1: the arguments' findings."""
+    found = []
+    if not (isinstance(root, str) and _WINDOWS_ROOT.fullmatch(root) is not None):
+        found.append('argument: root is not an absolute Windows path')
+    if not (isinstance(task_id, str) and _TASK.fullmatch(task_id) is not None):
+        found.append('argument: task_id is not TASK- followed by digits')
+    if not (type(act) is str and act in APPROVAL_ACTS):
+        found.append('argument: act is not approve, edit or reject')
+    if not (type(source_class) is str and source_class in APPROVAL_CLASSES):
+        found.append('argument: source_class is not decision_agent or human_authority')
+    elif source_class == 'decision_agent':
+        if not (type(who) is str and _APPROVAL_DECISION.fullmatch(who) is not None):
+            found.append('argument: who is not a decision id D- followed by digits')
+    elif not (_approval_line(who, _APPROVAL_NAME_MAX) and _APPROVAL_WORD not in who.lower()):
+        found.append('argument: who is not a one-line name of at most %d printable characters without the word '
+                     '"%s"' % (_APPROVAL_NAME_MAX, _APPROVAL_WORD))
+    if act == 'edit':
+        if not (_approval_line(note, APPROVAL_TEXT_MAX) and _APPROVAL_WORD not in note.lower()):
+            found.append('argument: note is not a one-line text of at most %d printable characters without the word '
+                         '"%s"' % (APPROVAL_TEXT_MAX, _APPROVAL_WORD))
+    elif note is not None:
+        found.append('argument: a note is given, but act is not edit')
+    if not callable(clock):
+        found.append('argument: clock is not callable')
+    for name, value in zip(_APPROVAL_CALLEES, callees):
+        if value is not None and not callable(value):
+            found.append('argument: %s is neither None nor callable' % name)
+    return found
+
+
+def _approval_contract(answer):
+    """Step 4: (contract, contract_hash) from contract_at's answer, or a stop with reason "contract"."""
+    if not (type(answer) is tuple and len(answer) == 2):
+        raise _approval_stop('contract', ['contract: contract_at gave an answer out of form'])
+    value, found = answer
+    if value is None:
+        raise _approval_stop('contract', ['contract: %s' % f for f in _approval_strs(found)]
+                            or ['contract: contract_at gave no value'])
+    if found is not None:
+        raise _approval_stop('contract', ['contract: %s' % f for f in _approval_strs(found)]
+                            or ['contract: findings beside a value'])
+    if not (type(value) is tuple and len(value) == 2 and type(value[0]) is dict and type(value[1]) is str
+            and _APPROVAL_HASH.fullmatch(value[1]) is not None and type(value[0].get('contract_version')) is str):
+        raise _approval_stop('contract', ['contract: contract_at gave an answer out of form'])
+    return value
+
+
+def _approval_events(log, task_id):
+    """Step 5: the task's own events in log order, ignored duplicate lines left out, after records.check_log."""
+    if type(log) is not bytes:
+        raise _approval_stop('log', ['log: read_log gave an answer that is not bytes'])
+    report = records.check_log(log)
+    found = ['log: %s' % f for _, f in report.findings()]
+    if found:
+        raise _approval_stop('log', found)
+    return [line.event for line in report.lines if line.duplicate_of is None and line.event.get('task_id') == task_id]
+
+
+def _approval_drafted(mine, task_id):
+    """Step 6: the index of the task's last state-setting event, which must be task.drafted or task.replanned."""
+    kinds = set(execution.STATE_OF) | set(_APPROVAL_STATE_EVENTS)
+    setting = [i for i, e in enumerate(mine) if e.get('type') in kinds]
+    if not setting or mine[setting[-1]].get('type') not in _APPROVAL_DRAFTED:
+        raise _approval_stop('state', ['state: %s is not in DRAFT' % task_id])
+    return setting[-1]
+
+
+def _approval_dependencies(contract, log, task_states):
+    """Step 8, the dependencies: each of the contract's depends_on DONE by task_states."""
+    state = contract.get('input_state')
+    depends = state.get('depends_on') if type(state) is dict else None
+    if not (type(depends) is list and all(type(d) is str and _TASK.fullmatch(d) is not None for d in depends)):
+        raise _approval_stop('dependencies', ['dependencies: depends_on is not a list of TASK- ids'])
+    answer = task_states(log, list(depends))
+    if not (type(answer) is tuple and len(answer) == 2):
+        raise _approval_stop('dependencies', ['dependencies: task_states gave an answer out of form'])
+    states, found = answer
+    if found is not None or type(states) is not dict:
+        raise _approval_stop('dependencies', ['dependencies: %s' % f for f in _approval_strs(found)]
+                            or ['dependencies: task_states gave an answer out of form'])
+    missing = [d for d in depends if not (type(states.get(d)) is dict and states[d].get('state') == 'DONE')]
+    if missing:
+        raise _approval_stop('dependencies', ['dependencies: %s is not DONE' % d for d in missing])
+
+
+def _approval_rejected(mine, start, contract_hash):
+    """Step 8, the earlier Reject: an authority record of the version with outcome fail after the last draft."""
+    binding = {'kind': 'contract', 'hash': contract_hash}
+    for event in mine[start + 1:]:
+        payload = event.get('payload')
+        if (event.get('type') == 'record.added' and type(payload) is dict and payload.get('fact_kind') == 'authority'
+                and payload.get('approval_binding') == binding and payload.get('outcome') == 'fail'):
+            raise _approval_stop('rejected', ['rejected: this contract version was rejected after its last draft'])
+
+
+def _approval_record(act, task_id, source_class, who, note, contract_hash):
+    """Step 9: the record and its recorder."""
+    parts = ('approval', act, task_id, contract_hash)
+    if act == 'edit':
+        parts += (source_class, who, note)
+    record_id = 'approval/' + hashlib.sha256('\n'.join(parts).encode('utf-8')).hexdigest()
+    if source_class == 'decision_agent':
+        recorder = 'decided by: decision agent (A41, A51), decision %s, through aieos cli %s' % (who, act)
+    else:
+        recorder = '%s, as stated to aieos cli %s (not checked)' % (who, act)
+    record = {'record_id': record_id, 'source_class': source_class, 'recorder': recorder, 'subject': task_id}
+    if act == 'edit':
+        record.update({'fact_kind': 'claim', 'evidence_type': APPROVAL_EDIT_TYPE, 'text': note})
+    else:
+        record.update({'fact_kind': 'authority', 'approval_binding': {'kind': 'contract', 'hash': contract_hash}})
+        if act == 'reject':
+            record['outcome'] = 'fail'
+    if source_class == 'decision_agent':
+        record['decision_ref'] = who
+    return record, recorder
+
+
+def _approval_append(append, root, task_id, event_type, payload, record_id, now, recorder):
+    """Step 10, one append: (its event id, "appended" or "duplicate"), or a stop with reason "append"."""
+    event_id = hashlib.sha256('\n'.join(('approval-event', event_type, record_id)).encode('utf-8')).hexdigest()
+    try:
+        got = append(root, event_type, payload, event_id, now, recorder, task_id=task_id)
+    except Exception as exc:
+        raise _approval_stop('append', ['append: %s: a step raised %s' % (event_type, type(exc).__name__)])
+    result = got.result if isinstance(got, writer.WriteResult) else None
+    if result not in _APPROVAL_APPENDED:
+        if isinstance(got, writer.WriteResult):
+            raise _approval_stop('append', ['append: %s: %s %s' % (event_type, got.result, got.reason)]
+                                + _approval_strs(got.findings))
+        raise _approval_stop('append', ['append: %s: append gave an answer that is not a WriteResult' % event_type])
+    return event_id, result
+
+
+def approval_act(root, task_id, act, source_class, who, note, clock, read=None, read_log=None, append=None,
+                 contract_at=None, task_states=None):
+    """Record an approval, a rejection or an edit note of a task's drafted contract version (task TASK-096; `aieos
+    approve`, `aieos edit` and `aieos reject`, specification 1 section 12, specification 7 section 4): a mapping with
+    exactly APPROVAL_KEYS; it never raises an Exception. Its steps, each step's name being the reason of a refusal or
+    a raise at it: argument; clock; head (start's own reader, _head); contract (contract_at at that head); log
+    (read_log, then records.check_log); state (the last state-setting event task.drafted or task.replanned); version
+    (the contract's hash and contract_version equal to that event's); for approve, dependencies, owner_kept_act and
+    rejected; then the appends through append only: record.added, and for approve task.approved citing the record."""
+    callees = (read, read_log, append, contract_at, task_states)
+    step = 'argument'
+    record_id, event_ids, appends = None, [], []
+    try:
+        found = _approval_argument_findings(root, task_id, act, source_class, who, note, clock, callees)
+        if found:
+            raise _approval_stop('argument', found)
+        read = gitread.run if read is None else read
+        read_log = writer.read_log if read_log is None else read_log
+        append = writer.append_event if append is None else append
+        contract_at = base_inputs.contract_at if contract_at is None else contract_at
+        task_states = execution.task_states if task_states is None else task_states
+        step = 'clock'
+        moment = clock()
+        if not _utc_whole(moment):
+            raise _approval_stop('clock', [_APPROVAL_BAD_CLOCK])
+        step = 'head'
+        head, found = _head(read, root)
+        if found is not None:
+            raise _approval_stop('head', found)
+        step = 'contract'
+        contract, contract_hash = _approval_contract(contract_at(root, head, task_id))
+        step = 'log'
+        log = read_log(root)
+        mine = _approval_events(log, task_id)
+        step = 'state'
+        start = _approval_drafted(mine, task_id)
+        step = 'version'
+        drafted = mine[start].get('payload') or {}
+        if (drafted.get('contract_hash') != contract_hash
+                or drafted.get('contract_version') != contract['contract_version']):
+            raise _approval_stop('version', ['version: the contract at HEAD is not the version of the last %s'
+                                            % mine[start].get('type')])
+        if act == 'approve':
+            step = 'dependencies'
+            _approval_dependencies(contract, log, task_states)
+            step = 'owner_kept_act'
+            if source_class == 'decision_agent' and contract.get('owner_kept_act') != 'false':
+                raise _approval_stop('owner_kept_act', ['owner_kept_act: a decision_agent approval of a task whose '
+                                                       'owner_kept_act is set is refused'])
+            step = 'rejected'
+            _approval_rejected(mine, start, contract_hash)
+        step = 'append'
+        record, recorder = _approval_record(act, task_id, source_class, who, note, contract_hash)
+        record_id = record['record_id']
+        events = [('record.added', record)]
+        if act == 'approve':
+            events.append(('task.approved', {'contract_version': contract['contract_version'],
+                                             'contract_hash': contract_hash, 'approval_record': record_id}))
+        for event_type, payload in events:
+            try:
+                event_id, result = _approval_append(append, root, task_id, event_type, payload, record_id, moment,
+                                                    recorder)
+            except _approval_stop as stop:
+                if event_ids:
+                    stop.findings.append('append: the record %s is in the log, the task.approved is not; running '
+                                         'approve again appends it' % record_id)
+                raise
+            event_ids.append(event_id)
+            appends.append(result)
+    except _approval_stop as stop:
+        return _approval_result('refused', stop.reason, stop.findings, record_id, event_ids, appends)
+    except Exception as exc:  # TASK-096: a raise at a step gives that step's reason
+        return _approval_result('refused', step, ['%s: a step raised %s' % (step, type(exc).__name__)], record_id,
+                                event_ids, appends)
+    return _approval_result('done', None, [], record_id, event_ids, appends)
