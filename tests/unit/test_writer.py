@@ -2077,10 +2077,11 @@ class R23TheNamesAtTheBase(unittest.TestCase):
         return out
 
     def test_only_the_new_function_and_its_helpers_are_added(self):
-        """TASK-078 AC2, as TASK-090 AC2, TASK-087 AC4 and TASK-095 AC5 widen it: writer.py's top-level names are
-        exactly the base's 94 plus session_leases, read_sessions, write_handoff, init_layout and names that begin
-        "_session_leases", "_SESSION_LEASES", "_read_sessions", "_READ_SESSIONS", "_write_handoff", "_HANDOFF",
-        "_init_layout" or "_INIT_LAYOUT", all above the TASK-066 marker."""
+        """TASK-078 AC2, as TASK-090 AC2, TASK-087 AC4, TASK-095 AC5 and TASK-097 AC3 widen it: writer.py's top-level
+        names are exactly the base's 94 plus session_leases, read_sessions, write_handoff, init_layout, write_contract
+        and names that begin "_session_leases", "_SESSION_LEASES", "_read_sessions", "_READ_SESSIONS",
+        "_write_handoff", "_HANDOFF", "_init_layout", "_INIT_LAYOUT", "_write_contract" or "_CONTRACT", all above the
+        TASK-066 marker."""
         text = read(os.path.join(SRC, 'writer.py')).decode('utf-8')
         names = self.names(ast.parse(text))
         self.assertEqual(len(self.BASE), 94)
@@ -2090,9 +2091,11 @@ class R23TheNamesAtTheBase(unittest.TestCase):
         self.assertIn('read_sessions', added)
         self.assertIn('write_handoff', added)
         self.assertIn('init_layout', added)
-        for name in added - {'session_leases', 'read_sessions', 'write_handoff', 'init_layout'}:
+        self.assertIn('write_contract', added)
+        for name in added - {'session_leases', 'read_sessions', 'write_handoff', 'init_layout', 'write_contract'}:
             self.assertTrue(name.startswith(('_session_leases', '_SESSION_LEASES', '_read_sessions', '_READ_SESSIONS',
-                                             '_write_handoff', '_HANDOFF', '_init_layout', '_INIT_LAYOUT')), name)
+                                             '_write_handoff', '_HANDOFF', '_init_layout', '_INIT_LAYOUT',
+                                             '_write_contract', '_CONTRACT')), name)
         head, part = text.split('# ---- the read-only lookup of the store (task TASK-066) ----', 1)
         for name in added:
             with self.subTest(name=name):
@@ -2657,6 +2660,196 @@ class TASK095InitLayout(unittest.TestCase):
         self.assertGreater(len(names), 10)
         for name in names:
             self.assertIn('TASK-095 AC', getattr(type(self), name).__doc__ or '', name)
+
+
+class TASK097WriteContract(unittest.TestCase):
+    """writer.write_contract over real temporary folders (task TASK-097)."""
+
+    TASK = 'TASK-097'
+    TEXT = 'task_id: TASK-097\ntitle: caf' + chr(0xe9) + '\n'
+    VALUE = '.aieos/tasks/TASK-097.yaml'
+    LAYOUT = 'layout: the tasks folder of the project-state directory is not an existing folder'
+    LINK = 'link: a link, or a path that resolves elsewhere'
+    EXISTS = 'exists: the contract file is not empty'
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = self._tmp.name
+        self.addCleanup(self._tmp.cleanup)
+
+    def walk(self, root=None):
+        """(the folders, the files) under the root, as '/'-joined paths relative to it."""
+        root = self.root if root is None else root
+        folders, files = set(), set()
+        for here, names, leaves in os.walk(root):
+            rel = os.path.relpath(here, root).replace(os.sep, '/')
+            for name in names:
+                folders.add(name if rel == '.' else rel + '/' + name)
+            for leaf in leaves:
+                files.add(leaf if rel == '.' else rel + '/' + leaf)
+        return folders, files
+
+    def tasks(self):
+        """Make the layout by writer.init_layout (the test may not make folders itself: the deterministic rule refuses
+        os.mkdir and os.makedirs here) and give the path of .aieos/tasks."""
+        self.assertEqual(writer.init_layout(self.root).result, 'done')
+        return os.path.join(self.root, '.aieos', 'tasks')
+
+    def refused(self, r, reason, finding=None):
+        self.assertIsInstance(r, writer.StoreResult)
+        self.assertEqual((r.result, r.reason, len(r.findings)), ('refused', reason, 1), r)
+        if finding is not None:
+            self.assertEqual(r.findings, (finding,))
+
+    def test_it_writes_the_contract(self):
+        """TASK-097 AC3: over a folder where .aieos/tasks exists, "done" with value ".aieos/tasks/<task>.yaml"; the
+        file holds exactly the text's UTF-8 bytes and is the only file under the root."""
+        folder = self.tasks()
+        r = writer.write_contract(self.root, self.TASK, self.TEXT)
+        self.assertEqual((r.result, r.reason, r.findings, r.value), ('done', None, (), self.VALUE))
+        self.assertEqual(read(os.path.join(folder, 'TASK-097.yaml')), self.TEXT.encode('utf-8'))
+        self.assertEqual(self.walk()[1], {self.VALUE})
+
+    def test_no_tasks_folder_gives_layout(self):
+        """TASK-097 AC3: no .aieos, or .aieos as a file, gives "layout" with its one finding and nothing made."""
+        self.refused(writer.write_contract(self.root, self.TASK, self.TEXT), 'layout', self.LAYOUT)
+        self.assertEqual(self.walk(), (set(), set()))
+        with open(os.path.join(self.root, '.aieos'), 'ab') as f:
+            f.write(b'x')
+        self.refused(writer.write_contract(self.root, self.TASK, self.TEXT), 'layout', self.LAYOUT)
+        self.assertEqual(self.walk(), (set(), {'.aieos'}))
+        self.assertEqual(read(os.path.join(self.root, '.aieos')), b'x')
+
+    def test_a_second_call_is_refused(self):
+        """TASK-097 AC3: a second call, with the same text or another, gives "exists" and the file is unchanged."""
+        folder = self.tasks()
+        self.assertEqual(writer.write_contract(self.root, self.TASK, self.TEXT).result, 'done')
+        for text in (self.TEXT, 'other: text\n'):
+            with self.subTest(text=text):
+                self.refused(writer.write_contract(self.root, self.TASK, text), 'exists', self.EXISTS)
+                self.assertEqual(read(os.path.join(folder, 'TASK-097.yaml')), self.TEXT.encode('utf-8'))
+
+    def test_a_non_empty_file_already_there_is_refused(self):
+        """TASK-097 AC3: a non-empty file already at the path gives "exists" and keeps its bytes."""
+        folder = self.tasks()
+        path = os.path.join(folder, 'TASK-097.yaml')
+        with open(path, 'ab') as f:
+            f.write(b'x')
+        self.refused(writer.write_contract(self.root, self.TASK, self.TEXT), 'exists', self.EXISTS)
+        self.assertEqual(read(path), b'x')
+
+    def test_arguments_out_of_form(self):
+        """TASK-097 AC3: a task_id that is not TASK-<digits> or a text that is not a non-empty str encoding as UTF-8,
+        text '' among them, gives "argument", before the root is checked, with nothing written."""
+        self.tasks()
+        for task_id in (None, 3, b'TASK-1', '', 'TASK-', 'task-1', 'TASK-1a', ' TASK-1'):
+            with self.subTest(task_id=task_id):
+                self.refused(writer.write_contract(self.root, task_id, self.TEXT), 'argument')
+        for text in ('', None, b'x', 3, '\ud800'):
+            with self.subTest(text=text):
+                self.refused(writer.write_contract(self.root, self.TASK, text), 'argument')
+        self.refused(writer.write_contract(None, None, None), 'argument')
+        self.assertEqual(self.walk()[1], set())
+
+    def test_a_root_out_of_form(self):
+        """TASK-097 AC3: a root that is not a str, empty, or names no existing folder gives "root" with nothing
+        made."""
+        for root in (None, 3, b'x', '', os.path.join(self.root, 'missing')):
+            with self.subTest(root=root):
+                self.refused(writer.write_contract(root, self.TASK, self.TEXT), 'root')
+        self.assertEqual(self.walk(), (set(), set()))
+
+    def test_a_patched_link_at_each_place(self):
+        """TASK-097 AC3: os.path.islink patched to return True for the root, .aieos, .aieos/tasks or the path gives
+        "link" with no file written."""
+        folder = self.tasks()
+        places = (self.root, os.path.join(self.root, '.aieos'), folder, os.path.join(folder, 'TASK-097.yaml'))
+        for place in places:
+            with self.subTest(place=place):
+                target = os.path.normcase(place)
+                with mock.patch.object(writer.os.path, 'islink', side_effect=lambda p: os.path.normcase(p) == target):
+                    self.refused(writer.write_contract(self.root, self.TASK, self.TEXT), 'link', self.LINK)
+                self.assertEqual(self.walk()[1], set())
+
+    def test_a_path_that_resolves_elsewhere(self):
+        """TASK-097 AC3: a realpath that resolves the path elsewhere gives "link" with no file written."""
+        self.tasks()
+        real = os.path.realpath
+        with mock.patch.object(writer.os.path, 'realpath', side_effect=lambda p: real(p) + 'x'):
+            self.refused(writer.write_contract(self.root, self.TASK, self.TEXT), 'link', self.LINK)
+        self.assertEqual(self.walk()[1], set())
+
+    def test_raises_give_unwritable(self):
+        """TASK-097 AC3: a raise in the link check gives "unwritable" with nothing written; a raise in os.fsync gives
+        "unwritable" with the file staying; each finding names the exception's type only; no call raises."""
+        folder = self.tasks()
+        with mock.patch.object(writer.os.path, 'islink', side_effect=RuntimeError('a')):
+            self.refused(writer.write_contract(self.root, self.TASK, self.TEXT), 'unwritable',
+                         'unwritable: RuntimeError')
+        self.assertEqual(self.walk()[1], set())
+        with mock.patch.object(writer.os, 'fsync', side_effect=OSError('b')):
+            self.refused(writer.write_contract(self.root, self.TASK, self.TEXT), 'unwritable', 'unwritable: OSError')
+        self.assertEqual(self.walk()[1], {self.VALUE})
+        self.assertTrue(os.path.isfile(os.path.join(folder, 'TASK-097.yaml')))
+
+    def test_no_finding_holds_caller_text(self):
+        """TASK-097 AC3: no finding holds the root's, the task_id's or the text's words, for a missing root, a bad
+        task_id, a bad text or a raise."""
+        hostile = 'zz-HOSTILE-zz'
+        self.tasks()
+        out = [writer.write_contract(os.path.join(self.root, hostile), self.TASK, self.TEXT),
+               writer.write_contract(self.root, 'TASK-1' + hostile, self.TEXT),
+               writer.write_contract(self.root, self.TASK, hostile + '\ud800')]
+        with mock.patch.object(writer.os.path, 'islink', side_effect=OSError(hostile)):
+            out.append(writer.write_contract(self.root, self.TASK, hostile))
+        for r in out:
+            with self.subTest(r=r):
+                self.assertEqual(r.result, 'refused')
+                self.assertNotIn(hostile, ' '.join(r.findings))
+
+    def test_its_only_open_modes(self):
+        """TASK-097 AC3: by ast, write_contract's open calls are exactly two, in the modes 'ab' and 'rb'; the names
+        beginning _write_contract call no open."""
+        tree = ast.parse(read(os.path.join(SRC, 'writer.py')).decode('utf-8'))
+        mine = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)
+                and (n.name == 'write_contract' or n.name.startswith('_write_contract'))}
+        self.assertEqual(sorted(mine), ['_write_contract_links', 'write_contract'])
+        for name, node in mine.items():
+            calls = [c for c in ast.walk(node) if isinstance(c, ast.Call)
+                     and ((isinstance(c.func, ast.Name) and c.func.id == 'open')
+                          or (isinstance(c.func, ast.Attribute) and c.func.attr == 'open'))]
+            if name != 'write_contract':
+                self.assertEqual(calls, [], name)
+                continue
+            modes = []
+            for c in calls:
+                self.assertEqual((len(c.args), c.keywords), (2, []), ast.dump(c))
+                self.assertIsInstance(c.args[1], ast.Constant)
+                modes.append(c.args[1].value)
+            self.assertEqual(modes, ['ab', 'rb'])
+
+    def test_its_names_above_the_marker(self):
+        """TASK-097 AC3: write_contract, the names beginning _write_contract and the _CONTRACT constants are defined
+        above the TASK-066 marker."""
+        text = read(os.path.join(SRC, 'writer.py')).decode('utf-8')
+        head = text.split('# ---- the read-only lookup of the store (task TASK-066) ----', 1)[0]
+        for name in ('write_contract', '_write_contract_links'):
+            self.assertIn('def %s(' % name, head)
+        for name in ('_CONTRACT_DIR', '_CONTRACT_LAYOUT', '_CONTRACT_LINK', '_CONTRACT_EXISTS'):
+            self.assertIn('\n%s = ' % name, head)
+
+    def test_the_docstring(self):
+        """TASK-097 AC6: writer.py's module docstring names write_contract, TASK-097, "create-only" and "'ab'"."""
+        doc = ' '.join(writer.__doc__.split())
+        for phrase in ('write_contract', 'TASK-097', 'create-only', "'ab'"):
+            self.assertIn(phrase, doc)
+
+    def test_every_test_of_this_class_names_its_criteria(self):
+        """TASK-097 AC3: every test of this class names "TASK-097 AC" in its own docstring."""
+        names = unittest.TestLoader().getTestCaseNames(type(self))
+        self.assertGreater(len(names), 10)
+        for name in names:
+            self.assertIn('TASK-097 AC', getattr(type(self), name).__doc__ or '', name)
 
 
 if __name__ == '__main__':

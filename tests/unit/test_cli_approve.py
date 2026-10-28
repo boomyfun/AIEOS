@@ -707,15 +707,17 @@ class TASK096AC6Docs(unittest.TestCase):
             self.assertIn(phrase, text)
 
     def test_the_cli_docstring_and_usage(self):
-        """TASK-096 AC6: cli.py's docstring holds the new commands' phrases and the COMMANDS phrase, and not the
-        replaced one; USAGE names approve, edit and reject."""
+        """TASK-096 AC6, as TASK-097 AC6 widens it: cli.py's docstring holds the new commands' phrases and the COMMANDS
+        phrase, and not the two replaced ones; USAGE names approve, edit and reject."""
         text = doc('cli.py')
         for phrase in ('aieos approve', 'aieos edit', 'aieos reject', 'TASK-096',
                        'writes nothing the governor counts at acceptance', 'not checked',
-                       'COMMANDS, tasks, end, status, init, launch, approve, edit or reject',
+                       'COMMANDS, tasks, end, status, init, launch, approve, edit, reject or import',
                        'end and init call it after the parse'):
             self.assertIn(phrase, text)
-        self.assertNotIn('COMMANDS, tasks, end, status, init or launch', text)
+        for phrase in ('COMMANDS, tasks, end, status, init or launch',
+                       'COMMANDS, tasks, end, status, init, launch, approve, edit or reject'):
+            self.assertNotIn(phrase, text)
         for what in ('approve <task>', 'edit <task>', 'reject <task>', '--note <text>'):
             self.assertIn(what, cli.USAGE)
         self.assertTrue(cli.USAGE.endswith('\n'))

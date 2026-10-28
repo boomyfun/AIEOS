@@ -1,6 +1,7 @@
-"""The bootstrap's command-line entry point and its commands, tasks, end, status, init, launch, approve, edit and reject
-(tasks TASK-091, TASK-092, TASK-093, TASK-095, TASK-094 and TASK-096; specification 7 revision 2, section 3 :26, :28,
-:31, :32, :33-35; section 4; section 5 :45, :48; section 10 points 4, 5, 6, 10, 11 and 15).
+"""The bootstrap's command-line entry point and its commands, tasks, end, status, init, launch, approve, edit, reject
+and import (tasks TASK-091, TASK-092, TASK-093, TASK-095, TASK-094, TASK-096 and TASK-097; specification 7 revision
+2, section 3 :26, :28, :29, :31, :32, :33-35; section 4; section 5 :45, :48; section 10 points 4, 5, 6, 10, 11 and
+15).
 
 What it does:
 - It is run as ``python -m aieos_bootstrap.cli <command> [flags]``; the installed name is open (specification 7 :26),
@@ -8,11 +9,11 @@ What it does:
   1 or 2 and never raises: every Exception is caught; KeyboardInterrupt and SystemExit are not. os.environ is read only
   in the entry line, which passes no starter.
 - Its own parser, not argparse: argv is exactly a list of str; argv[0] is a command of COMMANDS, tasks, end, status,
-  init, launch, approve, edit or reject; end takes its session as argv[1], and launch, approve, edit and reject their
-  task as argv[1]; the flags are --root <path> (required, once, a non-empty value not beginning "--") and --json
-  (optional, once); approve, edit and reject also take --class and --by (each required, once) and edit --note
-  (required, once, edit only). Anything else gives exit 2 and USAGE, with neither the clock nor a command's callee
-  called.
+  init, launch, approve, edit, reject or import; end takes its session as argv[1], and launch, approve, edit, reject
+  and import their task as argv[1]; the flags are --root <path> (required, once, a non-empty value not beginning "--")
+  and --json (optional, once); approve, edit and reject also take --class and --by (each required, once) and edit
+  --note (required, once, edit only). Anything else gives exit 2 and USAGE, with neither the clock nor a command's
+  callee called.
 - tasks calls the clock once, then execution.list_tasks(root, now) once, looked up at each call. A list gives exit 0
   and one line "<task> <state> <contract_hash> lease=<lease>" per item (or "no task may be taken"), or under --json
   one JSON line; findings give exit 1 and one "finding: <text>" line each (or one JSON line), list_tasks' str findings
@@ -76,11 +77,23 @@ What it does:
   form, its types checked exactly, gives "<command>: approval_act gave an answer out of form"; a raise in approval_act
   gives "<command>: a step raised <type>", and a raise in _render_approval "cli: a step raised <type>". approve writes a
   contract-kind approval and task.approved; it writes nothing the governor counts at acceptance.
+- import <task> (task TASK-097; specification 7 section 3 :29), ``aieos import``, makes and records a drafting task
+  through launcher.import_task, which fills a fixed template with the task and HEAD, writes the contract through the
+  writer and appends task.drafted; it drafts nothing: reading the repository and drafting the proposals are a
+  launched session's, the owner's. After the parse it is refused inside a runtime: in_runtime(environ) true gives exit
+  1 and the one finding IMPORT_RUNTIME_REFUSAL; else launcher.import_task(root, task, clock) once, looked up at each
+  call. "done" gives exit 0 and the lines "contract: <path> <hash>" and "event: <id> <appended or duplicate>", then
+  "finding: <text>" per finding, or under --json one JSON line of path, contract_hash, event_id, append and findings;
+  "refused" gives exit 1 and the findings "import: refused <reason>" then the answer's findings; an answer out of form,
+  its types checked exactly, gives IMPORT_OUT_OF_FORM; a raise in import_task gives "import: a step raised <type>",
+  and a raise in _render_import "cli: a step raised <type>". It is not run on any real project: its real use is the
+  owner's, asked separately.
 - RUNTIME_VARS and in_runtime(environ): outside any runtime means none of the three names is in the environment.
   in_runtime is true when any of them is present; AIEOS_BASE is counted beside the session id and the root, and a
   name whose value is '' counts as present (two stated choices, both fail-closed); an environment whose membership
   test raises counts as inside. tasks and status do not call it; end and init call it after the parse; launch also
-  calls it after the parse, then refuses with no starter; approve, edit and reject also call it after the parse.
+  calls it after the parse, then refuses with no starter; approve, edit and reject also call it after the parse; import
+  also calls it after the parse.
 
 Limits, stated: a determined agent can start a nested runtime with an environment it chooses (spec 5 :120); a root
 value beginning "--" cannot be given; a root that names no folder gives only list_tasks' "a step raised" finding; a
@@ -99,7 +112,7 @@ from aieos_bootstrap import execution
 from aieos_bootstrap import launcher
 
 RUNTIME_VARS = ('AIEOS_SESSION_ID', 'AIEOS_ROOT', 'AIEOS_BASE')
-COMMANDS = ('tasks', 'end', 'status', 'init', 'launch', 'approve', 'edit', 'reject')
+COMMANDS = ('tasks', 'end', 'status', 'init', 'launch', 'approve', 'edit', 'reject', 'import')
 USAGE = ('usage: python -m aieos_bootstrap.cli tasks --root <path> [--json]\n'
          '       python -m aieos_bootstrap.cli end <session> --root <path> [--json]\n'
          '       python -m aieos_bootstrap.cli status --root <path> [--json]\n'
@@ -111,6 +124,7 @@ USAGE = ('usage: python -m aieos_bootstrap.cli tasks --root <path> [--json]\n'
          '--by <decision id or name> --note <text> [--json]\n'
          '       python -m aieos_bootstrap.cli reject <task> --root <path> --class <decision_agent|human_authority> '
          '--by <decision id or name> [--json]\n'
+         '       python -m aieos_bootstrap.cli import <task> --root <path> [--json]\n'
          '  tasks          the tasks that may be taken\n'
          '  end <session>  end a crashed session from outside the runtime\n'
          '  status         the status of the project\n'
@@ -119,6 +133,7 @@ USAGE = ('usage: python -m aieos_bootstrap.cli tasks --root <path> [--json]\n'
          '  approve <task> approve the task\'s drafted contract version\n'
          '  edit <task>    record an edit note on the task\'s drafted contract version\n'
          '  reject <task>  reject the task\'s drafted contract version\n'
+         '  import <task>  make and record a drafting task for a repository\'s proposals\n'
          '  --root <path>  the project root (required)\n'
          '  --class <c>    who acts, decision_agent or human_authority, as the caller states it (not checked)\n'
          '  --by <who>     the decision id (decision_agent) or the name (human_authority)\n'
@@ -149,6 +164,9 @@ APPROVAL_RUNTIME_REFUSAL = ('%s: refused inside a runtime (it writes; specificat
 APPROVAL_OUT_OF_FORM = '%s: approval_act gave an answer out of form'
 _APPROVAL_FLAGS = ('--class', '--by', '--note')
 _APPROVAL_EVENTS = {'approve': 2, 'edit': 1, 'reject': 1}
+IMPORT_RUNTIME_REFUSAL = ('import: refused inside a runtime (it writes; specification 7 :34 names end and launch, and '
+                          'import is refused for the same reason)')
+IMPORT_OUT_OF_FORM = 'import: import_task gave an answer out of form'
 
 
 def in_runtime(environ):
@@ -176,7 +194,7 @@ def _parse(argv):
         if not rest or not _session_in_form(rest[0]):
             return None
         session, rest = rest[0], rest[1:]
-    elif command == 'launch' or command in APPROVAL_COMMANDS:
+    elif command in ('launch', 'import') or command in APPROVAL_COMMANDS:
         if not rest or re.fullmatch(TASK, rest[0]) is None:
             return None
         session, rest = rest[0], rest[1:]
@@ -483,6 +501,61 @@ def _approval(act, task, root, source_class, who, note, as_json, environ, clock)
     return 0, _render_approval(answer, as_json)
 
 
+def _none_or_str(value):
+    return value is None or type(value) is str
+
+
+def _import_in_form(answer):
+    """True for import_task's mapping in form, its types checked exactly: exactly launcher.IMPORT_KEYS; result "done"
+    or "refused"; findings a list of str; "done" with reason None, path, contract_hash and event_id each a str and
+    append "appended" or "duplicate"; "refused" with a reason of launcher.IMPORT_REASONS, path, contract_hash and
+    event_id each None or a str, and append None or a str."""
+    if type(answer) is not dict or len(answer) != len(launcher.IMPORT_KEYS):
+        return False
+    if not all(k in answer for k in launcher.IMPORT_KEYS):
+        return False
+    if not (type(answer['result']) is str and answer['result'] in ('done', 'refused')
+            and _str_list(answer['findings'])):
+        return False
+    if answer['result'] == 'done':
+        return (answer['reason'] is None
+                and all(type(answer[k]) is str for k in ('path', 'contract_hash', 'event_id'))
+                and type(answer['append']) is str and answer['append'] in ('appended', 'duplicate'))
+    return (type(answer['reason']) is str and answer['reason'] in launcher.IMPORT_REASONS
+            and all(_none_or_str(answer[k]) for k in ('path', 'contract_hash', 'event_id', 'append')))
+
+
+def _render_import(answer, as_json):
+    """The output of import's "done": the contract line and the event line, then the findings, or one JSON line."""
+    if as_json:
+        return json.dumps({'path': answer['path'], 'contract_hash': answer['contract_hash'],
+                           'event_id': answer['event_id'], 'append': answer['append'],
+                           'findings': answer['findings']}, sort_keys=True) + '\n'
+    lines = ['contract: %s %s' % (answer['path'], answer['contract_hash']),
+             'event: %s %s' % (answer['event_id'], answer['append'])]
+    lines += ['finding: %s' % f for f in answer['findings']]
+    return ''.join(line + '\n' for line in lines)
+
+
+def _import(task, root, as_json, environ, clock):
+    """(the exit code, the whole output) of import."""
+    if in_runtime(environ):
+        return 1, _findings([IMPORT_RUNTIME_REFUSAL], as_json)
+    try:
+        answer = launcher.import_task(root, task, clock)
+    except Exception as exc:
+        return 1, _findings(['import: a step raised %s' % type(exc).__name__], as_json)
+    try:
+        in_form = _import_in_form(answer)
+    except Exception:
+        in_form = False
+    if not in_form:
+        return 1, _findings([IMPORT_OUT_OF_FORM], as_json)
+    if answer['result'] != 'done':
+        return 1, _findings(['import: refused %s' % answer['reason']] + answer['findings'], as_json)
+    return 0, _render_import(answer, as_json)
+
+
 def _run(argv, environ, clock, starter=None):
     """(the exit code, the whole output)."""
     try:
@@ -517,6 +590,11 @@ def _run(argv, environ, clock, starter=None):
             return _approval(command, session, root, source_class, who, note, as_json, environ, clock)
         except Exception as exc:
             return 1, _findings(['cli: a step raised %s' % type(exc).__name__], as_json)
+    if command == 'import':
+        try:
+            return _import(session, root, as_json, environ, clock)
+        except Exception as exc:
+            return 1, _findings(['cli: a step raised %s' % type(exc).__name__], as_json)
     code, kind, payload = _tasks(root, clock)
     if kind == 'findings':
         return code, _findings(payload, as_json)
@@ -528,8 +606,8 @@ def _run(argv, environ, clock, starter=None):
 
 def main(argv, stdout, environ, clock, starter=None):
     """Run one command; return 0, 1 or 2; never raise an Exception. environ is read by end, init, launch, approve,
-    edit and reject, after the parse, through in_runtime; tasks and status do not read it. starter is None unless a
-    caller passes one; the entry line passes none."""
+    edit, reject and import, after the parse, through in_runtime; tasks and status do not read it. starter is None
+    unless a caller passes one; the entry line passes none."""
     try:
         code, text = _run(argv, environ, clock, starter)
     except Exception:
