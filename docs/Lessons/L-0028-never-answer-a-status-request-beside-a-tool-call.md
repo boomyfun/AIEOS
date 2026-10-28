@@ -66,6 +66,15 @@ D-3267 C1):
 - Messages holding more than one call: D-3233, a Write and its run (carried from TASK-096); D-3243 (i), two Writes;
   D-3259 (d), three Writes; D-3265 (g), three read-only calls. No text beside them; nothing wrong was written.
 
+Session ea6ea0a3 (2026-10-28 to 2026-10-29; TASK-098, the list of the acceptance text, decisions D-3290 to D-3311):
+- Text beside a call: D-3290 (l), refused by the guard; D-3291 (m); D-3299 (p), refused by the guard; D-3304 (r) and
+  (t); D-3309 (x); D-3311 (z), refused by the guard. Each refused call was sent alone only after the decision agent's
+  ruling.
+- Messages holding more than one call: D-3273 (i, carried from TASK-097), D-3289 (j), D-3290 (k), D-3304 (s) and (u).
+  No text beside them; nothing wrong was written.
+- A Grep or a partial read before the full read of an output: D-3294 (n) and (o), D-3309 (w); each output was then
+  read in full before anything acted on it.
+
 ## Why it happens
 The app's request reads as asking for words now, and the worker adds them to the call it is about to send.
 
