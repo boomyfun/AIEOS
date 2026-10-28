@@ -424,19 +424,54 @@ class Naming(unittest.TestCase):
     """R9."""
 
     def test_every_test_names_its_criteria(self):
-        """TASK-033 AC12 and TASK-033 AC13: every test method of this module's test classes names "TASK-033 AC" in its
-        docstring and no other task's criterion in qualified form (read from the loaded objects, no file opened)."""
-        seen = 0
+        """TASK-033 AC12 and TASK-033 AC13, as task TASK-098 widens it: every test method of this module's test classes
+        names "TASK-033 AC" in its docstring and no other task's criterion in qualified form, but the methods of the
+        class PathClass, which name task TASK-098's criteria and no other's (read from the loaded objects, no file
+        opened)."""
+        seen = added = 0
         for cls in list(globals().values()):
             if not (isinstance(cls, type) and issubclass(cls, unittest.TestCase)):
                 continue
+            task = '098' if cls.__name__ == 'PathClass' else '033'
             for name, fn in vars(cls).items():
                 if name.startswith('test_'):
                     seen += 1
+                    added += task == '098'
                     doc = fn.__doc__ or ''
-                    self.assertIn('TASK-033 AC', doc, name)
-                    self.assertEqual([t for t in re.findall(r'TASK-(\d+) AC', doc) if t != '033'], [], name)
+                    self.assertIn('TASK-%s AC' % task, doc, name)
+                    self.assertEqual([t for t in re.findall(r'TASK-(\d+) AC', doc) if t != task], [], name)
         self.assertGreater(seen, 20)
+        self.assertEqual(added, 2)
+
+
+class PathClass(unittest.TestCase):
+    def test_path_class_equals_the_private_one(self):
+        """TASK-098 AC3: path_class gives _path_class's class over the cases of the class test: the policy's rules with
+        a path for each rule and a path no rule matches, rules with an unevaluable match or an unreadable class, and
+        a rule whose match cannot be read."""
+        paths = ['docs/History/x.md', 'README.md', 'src/x.py', 'tests/y.py', 'docs/plan/master-plan.md',
+                 'docs/WORKING-RECORDS.md', '.gitignore', 'a/migrations/x', 'docs/Deferred/contracts/x.md',
+                 'AIEOS-concept.md', CONST, 'docs/pre-genesis/CR-002.md', 'docs/specs/x.md', 'docs/genesis/x.md',
+                 'docs/pre-genesis/measurements/x', '.github/workflows/x.yml', '.claude/x', 'CLAUDE.md',
+                 'tests/conformance/set.py', 'other/file.txt']
+        for path in paths:
+            self.assertEqual(scope_drift.path_class(RULES, path), scope_drift._path_class(RULES, path), path)
+        self.assertIsNone(scope_drift.path_class(RULES, 'other/file.txt'))
+        odd = [{'match': ['docs/**'], 'class': 'low'}, {'match': 'x', 'class': 'medium'},
+               {'match': ['src/**'], 'class': 'unknown'}]
+        surrogate = [{'match': ['docs/**'], 'class': 'low'}, {'match': ['\ud800/**'], 'class': 'high'}]
+        for rules in (odd, surrogate, []):
+            for path in ('docs/a.md', 'src/b.py', 'z'):
+                self.assertEqual(scope_drift.path_class(rules, path), scope_drift._path_class(rules, path), path)
+        self.assertEqual(scope_drift.path_class(surrogate, 'docs/a.md'), 'high')
+
+    def test_the_docstring_names_path_class(self):
+        """TASK-098 AC3: the module docstring names path_class and TASK-098, and path_class's own docstring names
+        _path_class."""
+        doc = ' '.join(ast.get_docstring(ast.parse(SRC.read_bytes().decode('utf-8'))).split())
+        for s in ('path_class', 'TASK-098'):
+            self.assertIn(s, doc)
+        self.assertIn('_path_class', scope_drift.path_class.__doc__)
 
 
 if __name__ == '__main__':

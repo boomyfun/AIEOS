@@ -22,10 +22,12 @@ def rules(record):
     return [f.rule for f in records.check_record(record)]
 
 
-def names_its_criteria(doc):
-    """True when ``doc`` names "TASK-077 ACn" and no other task's AC in qualified form (whitespace collapsed)."""
+def names_its_criteria(doc, task='077'):
+    """True when ``doc`` names "TASK-<task> ACn" and no other task's AC in qualified form (whitespace collapsed); task
+    is '077' but for the tests of the class IntentClaim, added by task TASK-098, which pass '098'."""
     doc = ' '.join((doc or '').split())
-    return bool(re.findall(r'TASK-077 AC[0-9]+', doc)) and not re.findall(r'TASK-(?!077 )[0-9]+ AC[0-9]+', doc)
+    return (bool(re.findall(r'TASK-%s AC[0-9]+' % task, doc))
+            and not re.findall(r'TASK-(?!%s )[0-9]+ AC[0-9]+' % task, doc))
 
 
 class Keys(unittest.TestCase):
@@ -148,12 +150,16 @@ class Docstring(unittest.TestCase):
 
 class Naming(unittest.TestCase):
     def test_every_test_names_its_criteria(self):
-        """TASK-077 AC8: every test function of this module names "TASK-077 ACn" in its own docstring and no other
-        task's AC in qualified form."""
+        """TASK-077 AC8, as task TASK-098 widens it: every test function of this module names "TASK-077 ACn" in its
+        own docstring and no other task's AC in qualified form, but the tests of the class IntentClaim, which name
+        "TASK-098 ACn" and no other task's AC."""
         tree = ast.parse(pathlib.Path(__file__).resolve().read_bytes().decode('utf-8'))
+        added = {n.name for c in ast.walk(tree) if isinstance(c, ast.ClassDef) and c.name == 'IntentClaim'
+                 for n in c.body if isinstance(n, ast.FunctionDef)}
+        self.assertGreater(len([name for name in added if name.startswith('test')]), 4)
         for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name.startswith('test')]:
             with self.subTest(test=fn.name):
-                self.assertTrue(names_its_criteria(ast.get_docstring(fn)))
+                self.assertTrue(names_its_criteria(ast.get_docstring(fn), '098' if fn.name in added else '077'))
 
     def test_the_naming_check_refuses(self):
         """TASK-077 AC8: the naming check refuses another task's id and a missing id, and admits this task's."""
@@ -162,6 +168,69 @@ class Naming(unittest.TestCase):
         self.assertFalse(names_its_criteria(None))
         self.assertFalse(names_its_criteria('TASK-077 AC1 and TASK-076 AC2: made up.'))
         self.assertTrue(names_its_criteria('TASK-077 AC1: made up.'))
+
+
+class IntentClaim(unittest.TestCase):
+    def intent(self, **kw):
+        r = rec(subject='INT-001', evidence_type='intent', text='made-up intent text')
+        r.update(kw)
+        return r
+
+    def test_an_intent_claim_may_carry_text(self):
+        """TASK-098 AC3: a claim whose evidence_type is intent, whose subject is "INT-" followed by digits and which has
+        no session key gives no finding with its text."""
+        self.assertEqual(records.check_record(self.intent()), [])
+        self.assertEqual(records.check_record(self.intent(subject='INT-12')), [])
+
+    def test_the_intent_claim_test(self):
+        """TASK-098 AC3: _is_intent_claim is true for an intent's claim only: not for another fact_kind, another or no
+        evidence_type, a subject out of form, or a record with a session key."""
+        self.assertTrue(records._is_intent_claim(self.intent()))
+        bad = [self.intent(fact_kind='observation'), self.intent(fact_kind='interpretation'),
+               self.intent(evidence_type='contract_edit'), self.intent(evidence_type='intents'),
+               self.intent(session='s-1')]
+        for subject in ('TASK-100', 'INT-', 'INT-1a', 'int-1', ' INT-1', 'INT-1\n', 3, None):
+            bad.append(self.intent(subject=subject))
+        no_type = self.intent()
+        del no_type['evidence_type']
+        bad.append(no_type)
+        for record in bad:
+            with self.subTest(record=record):
+                self.assertFalse(records._is_intent_claim(record))
+
+    def test_text_still_refused_off_an_intent_claim(self):
+        """TASK-098 AC3: text on an intent-typed claim whose subject is a task id or another subject, on an INT- claim
+        of another evidence_type, on one with a session key that is '' or not a str, or on an intent-typed observation
+        or interpretation gives "6.2:text"; an empty text on an intent's claim gives it too."""
+        for record in (self.intent(subject='TASK-100'), self.intent(subject='made-up'),
+                       self.intent(evidence_type='other'), self.intent(session=''), self.intent(session=3),
+                       self.intent(fact_kind='observation', source_class='deterministic_tool_local'),
+                       self.intent(fact_kind='interpretation'), self.intent(text='')):
+            with self.subTest(record=record):
+                self.assertIn('6.2:text', rules(record))
+
+    def test_the_session_and_acs_rules_are_unchanged(self):
+        """TASK-098 AC3: on an intent's claim, acs gives "6.2:acs" (no session and no gate) and a session of ''
+        gives "6.2:session"."""
+        self.assertIn('6.2:acs', rules(self.intent(acs=['AC1'])))
+        self.assertIn('6.2:session', rules(self.intent(session='')))
+
+    def test_the_widened_naming_check(self):
+        """TASK-098 AC3: the naming check, given '098', admits "TASK-098 ACn" alone and refuses this module's other
+        id, another task's AC beside it and a missing id; without it, it still reads '077'."""
+        self.assertTrue(names_its_criteria('TASK-098 AC3: made up.', '098'))
+        self.assertFalse(names_its_criteria('TASK-077 AC3: made up.', '098'))
+        self.assertFalse(names_its_criteria('TASK-098 AC3 and TASK-096 AC2: made up.', '098'))
+        self.assertFalse(names_its_criteria('made up, no id', '098'))
+        self.assertFalse(names_its_criteria('TASK-098 AC3: made up.'))
+
+    def test_the_docstring(self):
+        """TASK-098 AC3: the module docstring of records.py holds the intent's claim bullet and keeps the text rule's
+        phrase."""
+        doc = ' '.join(ast.get_docstring(ast.parse(SRC.read_text(encoding='utf-8'))).split())
+        for words in ("An intent's claim", 'TASK-098', '_is_intent_claim', 'whose evidence_type is intent',
+                      'allowed only on a record whose fact_kind is claim and whose session is set'):
+            self.assertIn(words, doc, words)
 
 
 if __name__ == '__main__':
