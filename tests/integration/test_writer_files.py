@@ -780,5 +780,108 @@ class PretoolHookFiles(unittest.TestCase):
                                    'findings': ['store: session id form']})
 
 
+class RunEndToEnd(unittest.TestCase):
+    """TASK-098 AC6 (the init end-to-end test carried from TASK-095, t95x-S1 F3): init, import and run through cli.main
+    over a temporary folder with the real writer and launcher, only the Git reader and the base read stood in. The
+    import leg runs on a Windows root only (import_task takes a Windows root only, TASK-097's limit)."""
+
+    POLICY = ('## 3. The rules\n\n```yaml\nrisk_rules:\n'
+              '  - match: { paths: ["docs/**", "*.md"] }\n    risk: low\n'
+              '  - match: { paths: ["src/**", "tests/**"] }\n    risk: medium\n'
+              '```\n')
+
+    class Out:
+        def __init__(self):
+            self.writes = []
+
+        def write(self, text):
+            self.writes.append(text)
+
+    def call(self, root, argv):
+        from unittest import mock
+        from aieos_bootstrap import cli, gitread, scope_reconcile
+
+        def fake_read(*args, **kwargs):
+            return {'exit': 0, 'out': (C40 + '\n').encode('ascii'), 'err': b'', 'error': None}
+
+        def fake_base(repo, parent, read=None):
+            return {'policy_blob': H64[:40], 'policy': self.POLICY, 'workflow_blob': H64[:40], 'workflow': 'made-up'}
+
+        out = self.Out()
+        with mock.patch.object(gitread, 'run', fake_read), mock.patch.object(scope_reconcile, 'read_base', fake_base):
+            rc = cli.main(argv + ['--root', root], out, {}, lambda: T0)
+        return rc, ''.join(out.writes)
+
+    def check_the_log_and_files(self, root, tasks):
+        """The log passes records.check_log; each task's contract file holds the bytes its task.drafted hash names."""
+        import hashlib
+        log = read(writer.log_path(root))
+        report = records.check_log(log)
+        self.assertEqual(report.findings(), [])
+        drafted = {x.event['task_id']: x.event['payload']['contract_hash'] for x in report.lines
+                   if x.event['type'] == 'task.drafted'}
+        self.assertEqual(sorted(drafted), sorted(tasks))
+        for task in tasks:
+            data = read(os.path.join(root, writer.STATE_DIR, 'tasks', task + '.yaml'))
+            self.assertEqual(hashlib.sha256(data).hexdigest(), drafted[task], task)
+        return report
+
+    def init_and_runs(self, root):
+        rc, out = self.call(root, ['init'])
+        self.assertEqual(rc, 0, out)
+        for folder in ('intent/requirements', 'intent/specs', 'intent/architecture', 'intent/decisions',
+                       'intent/conventions', 'changes', 'tasks', 'handoffs', 'genesis', 'conformance', 'plan',
+                       'local'):
+            self.assertTrue(os.path.isdir(os.path.join(root, writer.STATE_DIR, *folder.split('/'))), folder)
+        rc, out = self.call(root, ['run', 'TASK-2', 'a made-up intent', '--class', 'decision_agent', '--by', 'D-1',
+                                   '--write', 'docs/a.md'])
+        self.assertEqual(rc, 0, out)
+        lines = out.splitlines()
+        self.assertEqual(lines[0].split()[:2], ['intent:', 'INT-001'])
+        self.assertEqual(lines[1].split()[1::2], ['%s/tasks/TASK-2.yaml' % writer.STATE_DIR, 'single'])
+        self.assertEqual(lines[1].split()[4], 'low')
+        rc, out = self.call(root, ['run', 'TASK-3', 'another made-up intent', '--class', 'human_authority', '--by',
+                                   'A made-up person'])
+        self.assertEqual(rc, 0, out)
+        lines = out.splitlines()
+        self.assertEqual(lines[0].split()[:2], ['intent:', 'INT-002'])
+        self.assertEqual(lines[1].split()[1::2], ['%s/tasks/TASK-3.yaml' % writer.STATE_DIR, 'drafting'])
+        self.assertEqual(lines[1].split()[4], 'none')
+
+    def test_init_then_run(self):
+        """TASK-098 AC6: init makes the twelve folders; run makes a single task and a drafting task, each contract
+        file's bytes matching its task.drafted hash, the claims INT-001 and INT-002 in the log, which check_log
+        passes."""
+        with tempfile.TemporaryDirectory() as root:
+            self.init_and_runs(root)
+            report = self.check_the_log_and_files(root, ['TASK-2', 'TASK-3'])
+            claims = [x.event['payload']['subject'] for x in report.lines if x.event['type'] == 'record.added']
+            self.assertEqual(claims, ['INT-001', 'INT-002'])
+
+    @unittest.skipIf(os.name != 'nt', "import_task takes a Windows root only (TASK-097's limit)")
+    def test_init_import_then_run(self):
+        """TASK-098 AC6: on a Windows root, init, then import, then run: the three contract files match their
+        task.drafted hashes and the log passes check_log."""
+        with tempfile.TemporaryDirectory() as root:
+            rc, out = self.call(root, ['init'])
+            self.assertEqual(rc, 0, out)
+            rc, out = self.call(root, ['import', 'TASK-1'])
+            self.assertEqual(rc, 0, out)
+            rc, out = self.call(root, ['run', 'TASK-2', 'a made-up intent', '--class', 'decision_agent', '--by', 'D-1',
+                                       '--write', 'docs/a.md'])
+            self.assertEqual(rc, 0, out)
+            self.check_the_log_and_files(root, ['TASK-1', 'TASK-2'])
+
+    def test_run_with_no_layout(self):
+        """TASK-098 AC6: run on a folder with no layout is refused "layout", with nothing appended and no
+        project-state directory made."""
+        with tempfile.TemporaryDirectory() as root:
+            rc, out = self.call(root, ['run', 'TASK-2', 'a made-up intent', '--class', 'decision_agent', '--by', 'D-1',
+                                       '--write', 'docs/a.md'])
+            self.assertEqual(rc, 1, out)
+            self.assertIn('finding: run: refused layout\n', out)
+            self.assertFalse(os.path.lexists(os.path.join(root, writer.STATE_DIR)))
+
+
 if __name__ == '__main__':
     unittest.main()

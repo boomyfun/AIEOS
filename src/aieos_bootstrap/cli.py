@@ -1,7 +1,7 @@
-"""The bootstrap's command-line entry point and its commands, tasks, end, status, init, launch, approve, edit, reject
-and import (tasks TASK-091, TASK-092, TASK-093, TASK-095, TASK-094, TASK-096 and TASK-097; specification 7 revision
-2, section 3 :26, :28, :29, :31, :32, :33-35; section 4; section 5 :45, :48; section 10 points 4, 5, 6, 10, 11 and
-15).
+"""The bootstrap's command-line entry point and its commands, tasks, end, status, init, launch, approve, edit, reject,
+import and run (tasks TASK-091, TASK-092, TASK-093, TASK-095, TASK-094, TASK-096, TASK-097 and TASK-098;
+specification 7 revision 2, section 3 :26, :28, :29, :30, :31, :32, :33-35; section 4; section 5 :45, :48; section 10
+points 4, 5, 6, 10, 11 and 15).
 
 What it does:
 - It is run as ``python -m aieos_bootstrap.cli <command> [flags]``; the installed name is open (specification 7 :26),
@@ -9,11 +9,12 @@ What it does:
   1 or 2 and never raises: every Exception is caught; KeyboardInterrupt and SystemExit are not. os.environ is read only
   in the entry line, which passes no starter.
 - Its own parser, not argparse: argv is exactly a list of str; argv[0] is a command of COMMANDS, tasks, end, status,
-  init, launch, approve, edit, reject or import; end takes its session as argv[1], and launch, approve, edit, reject
-  and import their task as argv[1]; the flags are --root <path> (required, once, a non-empty value not beginning "--")
-  and --json (optional, once); approve, edit and reject also take --class and --by (each required, once) and edit
-  --note (required, once, edit only). Anything else gives exit 2 and USAGE, with neither the clock nor a command's
-  callee called.
+  init, launch, approve, edit, reject, import or run; end takes its session as argv[1], and launch, approve, edit,
+  reject, import and run their task as argv[1]; run takes its intent as argv[2] (a non-empty value not beginning
+  "--"); the flags are --root <path> (required, once, a non-empty value not beginning "--") and --json (optional,
+  once); approve, edit and reject also take --class and --by (each required, once) and edit --note (required, once,
+  edit only); run also takes --class and --by (each required, once) and --write <path> (any number of times).
+  Anything else gives exit 2 and USAGE, with neither the clock nor a command's callee called.
 - tasks calls the clock once, then execution.list_tasks(root, now) once, looked up at each call. A list gives exit 0
   and one line "<task> <state> <contract_hash> lease=<lease>" per item (or "no task may be taken"), or under --json
   one JSON line; findings give exit 1 and one "finding: <text>" line each (or one JSON line), list_tasks' str findings
@@ -88,12 +89,24 @@ What it does:
   its types checked exactly, gives IMPORT_OUT_OF_FORM; a raise in import_task gives "import: a step raised <type>",
   and a raise in _render_import "cli: a step raised <type>". It is not run on any real project: its real use is the
   owner's, asked separately.
+- run <task> <intent> (task TASK-098; specification 7 section 3 :30), ``aieos run``, records the intent and makes
+  and records its task through launcher.run_task, which classes the --write paths at the base and fills a fixed
+  template; it drafts nothing: doing the change or drafting the proposal set is a launched session's, the owner's.
+  After the parse it is refused inside a runtime: in_runtime(environ) true gives exit 1 and the one finding
+  RUN_RUNTIME_REFUSAL; else launcher.run_task(root, task, intent, class, who, write, clock) once, looked up at each
+  call, who being --by, the decision id (decision_agent) or the name (human_authority), as approve's is (r3).
+  "done" gives exit 0 and the lines "intent: <id> <claim id>", "contract: <path> <hash> <kind> <risk or none>" and
+  "event: <id> <appended or duplicate>" twice, then "finding: <text>" per finding, or under --json one sorted JSON
+  line; "refused" gives exit 1 and the findings "run: refused <reason>" then the answer's findings; an answer out of
+  form, its types checked exactly, gives RUN_OUT_OF_FORM; a raise in run_task gives "run: a step raised <type>", and
+  a raise in _render_intent_run "cli: a step raised <type>". It is not run on any real project: its real use is the
+  owner's, asked separately.
 - RUNTIME_VARS and in_runtime(environ): outside any runtime means none of the three names is in the environment.
   in_runtime is true when any of them is present; AIEOS_BASE is counted beside the session id and the root, and a
   name whose value is '' counts as present (two stated choices, both fail-closed); an environment whose membership
   test raises counts as inside. tasks and status do not call it; end and init call it after the parse; launch also
   calls it after the parse, then refuses with no starter; approve, edit and reject also call it after the parse; import
-  also calls it after the parse.
+  also calls it after the parse; run also calls it after the parse.
 
 Limits, stated: a determined agent can start a nested runtime with an environment it chooses (spec 5 :120); a root
 value beginning "--" cannot be given; a root that names no folder gives only list_tasks' "a step raised" finding; a
@@ -112,7 +125,7 @@ from aieos_bootstrap import execution
 from aieos_bootstrap import launcher
 
 RUNTIME_VARS = ('AIEOS_SESSION_ID', 'AIEOS_ROOT', 'AIEOS_BASE')
-COMMANDS = ('tasks', 'end', 'status', 'init', 'launch', 'approve', 'edit', 'reject', 'import')
+COMMANDS = ('tasks', 'end', 'status', 'init', 'launch', 'approve', 'edit', 'reject', 'import', 'run')
 USAGE = ('usage: python -m aieos_bootstrap.cli tasks --root <path> [--json]\n'
          '       python -m aieos_bootstrap.cli end <session> --root <path> [--json]\n'
          '       python -m aieos_bootstrap.cli status --root <path> [--json]\n'
@@ -125,6 +138,8 @@ USAGE = ('usage: python -m aieos_bootstrap.cli tasks --root <path> [--json]\n'
          '       python -m aieos_bootstrap.cli reject <task> --root <path> --class <decision_agent|human_authority> '
          '--by <decision id or name> [--json]\n'
          '       python -m aieos_bootstrap.cli import <task> --root <path> [--json]\n'
+         '       python -m aieos_bootstrap.cli run <task> <intent> --root <path> '
+         '--class <decision_agent|human_authority> --by <decision id or name> [--write <path>]... [--json]\n'
          '  tasks          the tasks that may be taken\n'
          '  end <session>  end a crashed session from outside the runtime\n'
          '  status         the status of the project\n'
@@ -134,10 +149,12 @@ USAGE = ('usage: python -m aieos_bootstrap.cli tasks --root <path> [--json]\n'
          '  edit <task>    record an edit note on the task\'s drafted contract version\n'
          '  reject <task>  reject the task\'s drafted contract version\n'
          '  import <task>  make and record a drafting task for a repository\'s proposals\n'
+         '  run <task>     record an intent and make and record its task\n'
          '  --root <path>  the project root (required)\n'
          '  --class <c>    who acts, decision_agent or human_authority, as the caller states it (not checked)\n'
          '  --by <who>     the decision id (decision_agent) or the name (human_authority)\n'
          '  --note <text>  the edit note (edit only)\n'
+         '  --write <path> a file the run task may change (run only; any number of times)\n'
          '  --json         one JSON line in place of text lines\n')
 OUT_OF_FORM = 'tasks: list_tasks gave an answer out of form'
 NO_FINDING = 'tasks: list_tasks gave no finding'
@@ -167,6 +184,10 @@ _APPROVAL_EVENTS = {'approve': 2, 'edit': 1, 'reject': 1}
 IMPORT_RUNTIME_REFUSAL = ('import: refused inside a runtime (it writes; specification 7 :34 names end and launch, and '
                           'import is refused for the same reason)')
 IMPORT_OUT_OF_FORM = 'import: import_task gave an answer out of form'
+RUN_RUNTIME_REFUSAL = ('run: refused inside a runtime (it writes; specification 7 :34 names end and launch, and run '
+                       'is refused for the same reason)')
+RUN_OUT_OF_FORM = 'run: run_task gave an answer out of form'
+_RUN_RISKS = ('low', 'medium', 'high', 'critical')
 
 
 def in_runtime(environ):
@@ -183,28 +204,36 @@ def _session_in_form(session):
 
 
 def _parse(argv):
-    """(command, session or task, root, as_json, source_class, who, note) for a well-formed argv, else None (a usage
-    error); source_class, who and note are None except for approve, edit and reject."""
+    """(command, session or task, root, as_json, source_class, who, note, write) for a well-formed argv, else None (a
+    usage error); source_class, who and note are None except for approve, edit and reject, and for run, whose
+    --class is source_class, whose --by is who and whose intent is in the note's place; write is run's --write paths,
+    a tuple, () for every other command."""
     if type(argv) is not list or not argv or any(type(a) is not str for a in argv):
         return None
     if argv[0] not in COMMANDS:
         return None
-    command, session, rest = argv[0], None, argv[1:]
+    command, session, rest, intent = argv[0], None, argv[1:], None
     if command == 'end':
         if not rest or not _session_in_form(rest[0]):
             return None
         session, rest = rest[0], rest[1:]
-    elif command in ('launch', 'import') or command in APPROVAL_COMMANDS:
+    elif command in ('launch', 'import', 'run') or command in APPROVAL_COMMANDS:
         if not rest or re.fullmatch(TASK, rest[0]) is None:
             return None
         session, rest = rest[0], rest[1:]
+    if command == 'run':
+        if not rest or not rest[0] or rest[0].startswith('--'):
+            return None
+        intent, rest = rest[0], rest[1:]
     allowed = ()
     if command in APPROVAL_COMMANDS:
         allowed = _APPROVAL_FLAGS if command == 'edit' else _APPROVAL_FLAGS[:2]
-    root, as_json, values, i = None, False, {}, 0
+    elif command == 'run':
+        allowed = _APPROVAL_FLAGS[:2]
+    root, as_json, values, write, i = None, False, {}, [], 0
     while i < len(rest):
         flag = rest[i]
-        if flag == '--root' or flag in allowed:
+        if flag == '--root' or flag in allowed or (command == 'run' and flag == '--write'):
             if (flag == '--root' and root is not None) or flag in values or i + 1 >= len(rest):
                 return None
             value = rest[i + 1]
@@ -212,6 +241,8 @@ def _parse(argv):
                 return None
             if flag == '--root':
                 root = value
+            elif flag == '--write':
+                write.append(value)
             else:
                 values[flag] = value
             i += 2
@@ -223,9 +254,10 @@ def _parse(argv):
             return None
     if root is None or set(values) != set(allowed):
         return None
-    if command in APPROVAL_COMMANDS and values['--class'] not in launcher.APPROVAL_CLASSES:
+    if (command in APPROVAL_COMMANDS or command == 'run') and values['--class'] not in launcher.APPROVAL_CLASSES:
         return None
-    return (command, session, root, as_json, values.get('--class'), values.get('--by'), values.get('--note'))
+    note = intent if command == 'run' else values.get('--note')
+    return (command, session, root, as_json, values.get('--class'), values.get('--by'), note, tuple(write))
 
 
 def _findings(texts, as_json):
@@ -556,6 +588,67 @@ def _import(task, root, as_json, environ, clock):
     return 0, _render_import(answer, as_json)
 
 
+def _intent_run_in_form(answer):
+    """True for run_task's mapping in form, its types checked exactly: exactly launcher.RUN_KEYS; result "done" or
+    "refused"; findings, event_ids and appends lists of str; "done" with reason None, intent_id, claim_id, path and
+    contract_hash each a str, kind one of launcher.RUN_KINDS, risk None or a risk class, two event ids and two
+    appends "appended" or "duplicate"; "refused" with a reason of launcher.RUN_REASONS, the others None or a str, kind
+    None or one of launcher.RUN_KINDS, and as many appends as event ids."""
+    if type(answer) is not dict or len(answer) != len(launcher.RUN_KEYS):
+        return False
+    if not all(k in answer for k in launcher.RUN_KEYS):
+        return False
+    if not (type(answer['result']) is str and answer['result'] in ('done', 'refused')
+            and _str_list(answer['findings']) and _str_list(answer['event_ids']) and _str_list(answer['appends'])):
+        return False
+    if len(answer['event_ids']) != len(answer['appends']):
+        return False
+    if any(a not in ('appended', 'duplicate') for a in answer['appends']):
+        return False
+    risk_ok = answer['risk'] is None or (type(answer['risk']) is str and answer['risk'] in _RUN_RISKS)
+    if answer['result'] == 'done':
+        return (answer['reason'] is None and risk_ok
+                and all(type(answer[k]) is str for k in ('intent_id', 'claim_id', 'path', 'contract_hash'))
+                and type(answer['kind']) is str and answer['kind'] in launcher.RUN_KINDS
+                and len(answer['appends']) == 2)
+    return (type(answer['reason']) is str and answer['reason'] in launcher.RUN_REASONS and risk_ok
+            and all(_none_or_str(answer[k]) for k in ('intent_id', 'claim_id', 'path', 'contract_hash'))
+            and (answer['kind'] is None or (type(answer['kind']) is str and answer['kind'] in launcher.RUN_KINDS)))
+
+
+def _render_intent_run(answer, as_json):
+    """The output of run's "done": the intent line, the contract line and the two event lines, then the findings, or
+    one JSON line."""
+    if as_json:
+        keys = ('intent_id', 'claim_id', 'kind', 'risk', 'path', 'contract_hash', 'event_ids', 'appends', 'findings')
+        return json.dumps(dict((k, answer[k]) for k in keys), sort_keys=True) + '\n'
+    lines = ['intent: %s %s' % (answer['intent_id'], answer['claim_id']),
+             'contract: %s %s %s %s' % (answer['path'], answer['contract_hash'], answer['kind'],
+                                        answer['risk'] or 'none')]
+    lines += ['event: %s %s' % (e, a) for e, a in zip(answer['event_ids'], answer['appends'])]
+    lines += ['finding: %s' % f for f in answer['findings']]
+    return ''.join(line + '\n' for line in lines)
+
+
+def _intent_run(task, intent, root, source_class, who, write, as_json, environ, clock):
+    """(the exit code, the whole output) of run."""
+    if in_runtime(environ):
+        return 1, _findings([RUN_RUNTIME_REFUSAL], as_json)
+    try:
+        answer = launcher.run_task(root, task, intent, source_class, who, write, clock)
+    except Exception as exc:
+        return 1, _findings(['run: a step raised %s' % type(exc).__name__], as_json)
+    try:
+        in_form = _intent_run_in_form(answer)
+    except Exception:
+        in_form = False
+    if not in_form:
+        return 1, _findings([RUN_OUT_OF_FORM], as_json)
+    if answer['result'] != 'done':
+        return 1, _findings(['run: refused %s' % answer['reason']] + answer['findings'], as_json)
+    return 0, _render_intent_run(answer, as_json)
+
+
 def _run(argv, environ, clock, starter=None):
     """(the exit code, the whole output)."""
     try:
@@ -564,7 +657,7 @@ def _run(argv, environ, clock, starter=None):
         return 1, _findings(['cli: a step raised %s' % type(exc).__name__], False)
     if parsed is None:
         return 2, USAGE
-    command, session, root, as_json, source_class, who, note = parsed
+    command, session, root, as_json, source_class, who, note, write = parsed
     if command == 'end':
         try:
             return _end(session, root, as_json, environ, clock)
@@ -595,6 +688,11 @@ def _run(argv, environ, clock, starter=None):
             return _import(session, root, as_json, environ, clock)
         except Exception as exc:
             return 1, _findings(['cli: a step raised %s' % type(exc).__name__], as_json)
+    if command == 'run':
+        try:
+            return _intent_run(session, note, root, source_class, who, write, as_json, environ, clock)
+        except Exception as exc:
+            return 1, _findings(['cli: a step raised %s' % type(exc).__name__], as_json)
     code, kind, payload = _tasks(root, clock)
     if kind == 'findings':
         return code, _findings(payload, as_json)
@@ -606,8 +704,8 @@ def _run(argv, environ, clock, starter=None):
 
 def main(argv, stdout, environ, clock, starter=None):
     """Run one command; return 0, 1 or 2; never raise an Exception. environ is read by end, init, launch, approve,
-    edit, reject and import, after the parse, through in_runtime; tasks and status do not read it. starter is None
-    unless a caller passes one; the entry line passes none."""
+    edit, reject, import and run, after the parse, through in_runtime; tasks and status do not read it. starter is
+    None unless a caller passes one; the entry line passes none."""
     try:
         code, text = _run(argv, environ, clock, starter)
     except Exception:

@@ -160,6 +160,17 @@ the proposals are a launched session's, and every launch is the owner's. base_in
 it writes is not yet read by launch or approve. import_task reads the caller's clock once, an exception to "reads no
 clock" above, and writes through writer.write_contract and writer.append_event, the writer being the one module that
 opens a file.
+
+run_task (task TASK-098; `aieos run`, specification 7 section 3 :30, specification 1 section 12) records the intent
+as a claim and makes and records one task; it returns a mapping with exactly RUN_KEYS and never raises an Exception.
+It drafts nothing and runs no model: it classes the caller's literal write set at the base through
+scope_reconcile.read_base, rules_from_policy and scope_drift.path_class, each path in its own form and in its
+lowercased form against the rules with their patterns lowercased, failing closed to no class; a low class gives a
+single task from a fixed template, anything else a drafting task from another fixed template, both with
+owner_kept_act true. It writes the contract through writer.write_contract before any
+append, then appends the intent's claim and task.drafted through writer.append_event; the claim names who stated the
+intent, as approval_act's records do, with decision_ref for decision_agent (r3). run_task reads the caller's
+clock once, an exception to "reads no clock" above.
 """
 
 import datetime
@@ -177,6 +188,8 @@ from aieos_bootstrap import records
 from aieos_bootstrap import resume_check
 from aieos_bootstrap import resume_inputs
 from aieos_bootstrap import resume_log_inputs
+from aieos_bootstrap import scope_drift
+from aieos_bootstrap import scope_reconcile
 from aieos_bootstrap import writer
 
 START_KEYS = ('result', 'reason', 'findings', 'session_id', 'head_commit', 'decision', 'fencing_token', 'environment',
@@ -1449,3 +1462,291 @@ def import_task(root, task_id, clock, read=None, read_log=None, write_contract=N
         return _import_result('refused', step, ['%s: a step raised %s' % (step, type(exc).__name__)], path,
                               contract_hash, event_id)
     return _import_result('done', None, [], path, contract_hash, event_id, result)
+
+
+# ---- run_task, `aieos run` (task TASK-098) ----
+
+RUN_KEYS = ('result', 'reason', 'findings', 'intent_id', 'claim_id', 'kind', 'risk', 'path', 'contract_hash',
+            'event_ids', 'appends')
+RUN_REASONS = ('argument', 'clock', 'head', 'log', 'exists', 'layout', 'write', 'append')
+RUN_KINDS = ('single', 'drafting')
+RUN_RECORDER = 'aieos cli run'
+RUN_INTENT_MAX = 2000
+RUN_WRITE_MAX = 50
+_RUN_CALLEES = ('read', 'read_log', 'read_base', 'write_contract', 'append')
+_RUN_PATH = re.compile(r'[A-Za-z0-9_./-]+')
+_RUN_INTENT_ID = re.compile(r'INT-([0-9]+)')
+_RUN_APPENDED = ('appended', 'duplicate')
+_RUN_BAD_CLOCK = 'clock: the clock gave no timezone-aware UTC time with whole seconds'
+_RUN_TAIL = '''capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: []}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: %(risk)s
+autonomy:
+  max_level: L1
+  budgets: {tokens: 400k, wall_time: 2h, retries: 1, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+%(gates)sexit_conditions:
+  success: %(success)s
+  escalate: [needs_out_of_scope_change, needs_owner_act]
+owner_kept_act: true
+'''
+_RUN_HEAD = '''task: %(task)s
+contract_version: v1
+task_type: %(kind)s
+objective: >-
+%(objective)straces_to: []
+input_state:
+  base_commit: %(head)s
+  depends_on: []
+  intent_versions: {}
+write_set:
+  paths:
+%(paths)sread_set:
+  paths:
+    - "**"
+  interfaces: []
+  schemas: []
+forbidden:
+  - %(state)s/**
+constitution: []
+acceptance_criteria:
+%(criteria)s'''
+_RUN_SINGLE = {
+    'kind': 'implementation',
+    'objective': '  Make the change that intent %(intent)s states, within the write set.\n',
+    'criteria': ('  - AC1: >-\n      The change does what intent %(intent)s states, within the write set.\n'
+                 '  - AC2: >-\n      No other path is changed.\n'),
+    'risk': 'low',
+    'gates': '  - {gate: G1, check: build}\n  - {gate: G3, check: review, args: [AC1, AC2]}\n',
+    'success': 'the change is made within the write set and nothing else changed',
+}
+_RUN_DRAFTING = {
+    'kind': 'drafting',
+    'objective': ('  Draft the proposal set of intent %(intent)s (a requirement, its specifications and task '
+                  'contracts with their risk\n  and verification plans), proposing only and changing nothing else.\n'),
+    'criteria': ('  - AC1: >-\n      docs/proposals/%(intent)s-requirement.md is a requirement in '
+                 "specification 2 section 4.2's form.\n"
+                 '  - AC2: >-\n      docs/proposals/%(intent)s-specifications.md holds specifications in '
+                 "specification 2 section 4.2's form, each\n      tracing to the requirement.\n"
+                 '  - AC3: >-\n      docs/proposals/%(intent)s-tasks.md holds task contracts in specification 2 '
+                 "section 5.1's form, each with its risk\n      and verification plan.\n"
+                 '  - AC4: >-\n      No other path is changed.\n'),
+    'risk': 'critical',
+    'gates': '  - {gate: G3, check: review, args: [AC1, AC2, AC3, AC4]}\n',
+    'success': 'the three proposal files present and nothing else changed',
+}
+_RUN_PROPOSALS = ('requirement', 'specifications', 'tasks')
+
+
+def _run_result(result, reason=None, findings=(), intent_id=None, claim_id=None, kind=None, risk=None, path=None,
+                contract_hash=None, event_ids=(), appends=()):
+    return {'result': result, 'reason': reason, 'findings': [f for f in findings if isinstance(f, str)],
+            'intent_id': intent_id, 'claim_id': claim_id, 'kind': kind, 'risk': risk, 'path': path,
+            'contract_hash': contract_hash, 'event_ids': list(event_ids), 'appends': list(appends)}
+
+
+def _run_path_ok(path):
+    """A literal file path of the write set (step 1): task_contract's _item_ok form, no "*", no segment ending with
+    "." or " ", not "-", and not under the project-state directory in any case."""
+    if not (isinstance(path, str) and _RUN_PATH.fullmatch(path) is not None) or path == '-':
+        return False
+    if path.startswith(('/', './')) or path.endswith('/'):
+        return False
+    parts = path.split('/')
+    if any(p in ('', '.', '..') or p.endswith(('.', ' ')) for p in parts):
+        return False
+    return parts[0].lower() != writer.STATE_DIR.lower()
+
+
+def _run_argument_findings(root, task_id, intent, source_class, who, write, clock, callees):
+    """Step 1: the arguments' findings; who is checked as approval_act checks it (r3, D-3296)."""
+    found = []
+    if not (isinstance(root, str) and _ROOT.fullmatch(root) is not None):
+        found.append('argument: root is not an absolute Windows or POSIX path')
+    if not (isinstance(task_id, str) and _TASK.fullmatch(task_id) is not None):
+        found.append('argument: task_id is not TASK- followed by digits')
+    if not (isinstance(intent, str) and 0 < len(intent) <= RUN_INTENT_MAX and intent.isprintable()):
+        found.append('argument: intent is not 1 to %d printable characters' % RUN_INTENT_MAX)
+    if not (isinstance(source_class, str) and source_class in APPROVAL_CLASSES):
+        found.append('argument: source_class is not one of %s' % ', '.join(APPROVAL_CLASSES))
+    elif source_class == 'decision_agent':
+        if not (type(who) is str and _APPROVAL_DECISION.fullmatch(who) is not None):
+            found.append('argument: who is not a decision id D- followed by digits')
+    elif not (_approval_line(who, _APPROVAL_NAME_MAX) and _APPROVAL_WORD not in who.lower()):
+        found.append('argument: who is not a one-line name of at most %d printable characters without the word '
+                     '"%s"' % (_APPROVAL_NAME_MAX, _APPROVAL_WORD))
+    if not (isinstance(write, (list, tuple)) and len(write) <= RUN_WRITE_MAX and all(_run_path_ok(p) for p in write)
+            and len(set(write)) == len(write)):
+        found.append('argument: write is not up to %d distinct literal file paths of form' % RUN_WRITE_MAX)
+    if not callable(clock):
+        found.append('argument: clock is not callable')
+    for name, value in zip(_RUN_CALLEES, callees):
+        if value is not None and not callable(value):
+            found.append('argument: %s is neither None nor callable' % name)
+    return found
+
+
+def _run_log(log, task_id):
+    """Steps 4 and 5: the log's report, or a stop with reason "log" or "exists"."""
+    if type(log) is not bytes:
+        raise _import_stop('log', ['log: read_log gave an answer that is not bytes'])
+    report = records.check_log(log)
+    found = ['log: %s' % f for _, f in report.findings()]
+    if found:
+        raise _import_stop('log', found)
+    if any(line.event.get('task_id') == task_id for line in report.lines):
+        raise _import_stop('exists', ['exists: %s has events in the log' % task_id])
+    return report
+
+
+def _run_class(read_base, read, root, head, write):
+    """Step 6: (the class or None, the findings); never a refusal."""
+    if not write:
+        return None, []
+    try:
+        base = read_base(root, head, read)
+    except Exception as exc:
+        return None, ['class: the policy at the base was not read (%s)' % type(exc).__name__]
+    try:
+        rules = scope_reconcile.rules_from_policy(base['policy'])
+        if not rules or any(rule.get('class') not in RISKS for rule in rules):
+            return None, ["class: the policy's rules are not in form"]
+        lowered = [{'match': [p.lower() for p in rule['match']], 'class': rule['class']} for rule in rules]
+        best = None
+        for path in write:
+            both = [scope_drift.path_class(rules, path), scope_drift.path_class(lowered, path.lower())]
+            if None in both:
+                return None, ['class: %s matches no rule' % path]
+            cls = max(both, key=RISKS.index)
+            best = cls if best is None or RISKS.index(cls) > RISKS.index(best) else best
+        return best, []
+    except Exception as exc:
+        return None, ['class: a step raised %s' % type(exc).__name__]
+
+
+def _run_intent(report, intent, source_class, who):
+    """Step 7: (the intent id, the claim's record); the record's recorder in approval_act's two forms and, for
+    decision_agent, decision_ref who (r3, D-3296); who does not enter the record_id."""
+    record_id = 'intent/' + hashlib.sha256('\n'.join(('intent', source_class, intent)).encode('utf-8')).hexdigest()
+    highest, mine = 0, None
+    for line in report.lines:
+        event = line.event
+        payload = event.get('payload') if isinstance(event, dict) else None
+        if not (isinstance(event, dict) and event.get('type') == 'record.added' and isinstance(payload, dict)
+                and payload.get('fact_kind') == 'claim' and payload.get('evidence_type') == 'intent'):
+            continue
+        m = _RUN_INTENT_ID.fullmatch(payload.get('subject')) if isinstance(payload.get('subject'), str) else None
+        if m is None:
+            continue
+        highest = max(highest, int(m.group(1)))
+        if payload.get('record_id') == record_id and mine is None:
+            mine = payload.get('subject')
+    intent_id = mine if mine is not None else 'INT-%03d' % (highest + 1)
+    if source_class == 'decision_agent':
+        recorder = 'decided by: decision agent (A41, A51), decision %s, through aieos cli run' % who
+    else:
+        recorder = '%s, as stated to aieos cli run (not checked)' % who
+    record = {'record_id': record_id, 'fact_kind': 'claim', 'source_class': source_class, 'recorder': recorder,
+              'subject': intent_id, 'evidence_type': 'intent', 'text': intent}
+    if source_class == 'decision_agent':
+        record['decision_ref'] = who
+    return intent_id, record
+
+
+def _run_contract(kind, task_id, head, intent_id, write):
+    """Step 8: the template of the kind, filled with the task id, the head, the intent id and the write set."""
+    form = _RUN_SINGLE if kind == 'single' else _RUN_DRAFTING
+    paths = list(write) if kind == 'single' else ['docs/proposals/%s-%s.md' % (intent_id, p) for p in _RUN_PROPOSALS]
+    values = {'task': task_id, 'head': head, 'intent': intent_id, 'state': writer.STATE_DIR}
+    filled = dict((k, v % values) if k in ('objective', 'criteria') else (k, v) for k, v in form.items())
+    text = _RUN_HEAD % dict(values, kind=filled['kind'], objective=filled['objective'], criteria=filled['criteria'],
+                            paths=''.join('    - %s\n' % p for p in paths))
+    return text + _RUN_TAIL % {'risk': filled['risk'], 'gates': filled['gates'], 'success': filled['success']}
+
+
+def _run_append(append, root, event_type, payload, event_id, now, recorder, task_id, stuck):
+    """Steps 10 and 11: one append, its answer's word, or a stop with reason "append"."""
+    try:
+        if task_id is None:
+            got = append(root, event_type, payload, event_id, now, recorder)
+        else:
+            got = append(root, event_type, payload, event_id, now, recorder, task_id=task_id)
+    except Exception as exc:
+        raise _import_stop('append', ['append: %s: a step raised %s' % (event_type, type(exc).__name__), stuck])
+    if not isinstance(got, writer.WriteResult):
+        raise _import_stop('append', ['append: %s: append gave an answer that is not a WriteResult' % event_type,
+                                      stuck])
+    if got.result not in _RUN_APPENDED:
+        raise _import_stop('append', ['append: %s: %s %s' % (event_type, got.result, got.reason), stuck])
+    return got.result
+
+
+def run_task(root, task_id, intent, source_class, who, write, clock, read=None, read_log=None, read_base=None,
+             write_contract=None, append=None):
+    """Record an intent and make and record its task (task TASK-098; `aieos run`, specification 7 section 3 :30): a
+    mapping with exactly RUN_KEYS; it never raises an Exception. Its steps, each step's name being the reason of a
+    refusal or a raise at it: argument (who as approval_act checks it, r3); clock; head (start's own reader, _head, 40
+    lowercase hex); log (read_log, then records.check_log); exists (any event of the task in the log); the class at the
+    base (never a refusal); the intent's id and claim; the kind and its template; write (write_contract, before any
+    append, whose "exists" and "layout" pass through); append (the intent's claim with its record's recorder, then
+    task.drafted with RUN_RECORDER, no fencing token)."""
+    callees = (read, read_log, read_base, write_contract, append)
+    step = 'argument'
+    found = []
+    intent_id = claim_id = kind = risk = path = contract_hash = None
+    event_ids, appends = [], []
+    try:
+        bad = _run_argument_findings(root, task_id, intent, source_class, who, write, clock, callees)
+        if bad:
+            raise _import_stop('argument', bad)
+        write = tuple(write)
+        read = gitread.run if read is None else read
+        read_log = writer.read_log if read_log is None else read_log
+        read_base = scope_reconcile.read_base if read_base is None else read_base
+        write_contract = writer.write_contract if write_contract is None else write_contract
+        append = writer.append_event if append is None else append
+        step = 'clock'
+        moment = clock()
+        if not _utc_whole(moment):
+            raise _import_stop('clock', [_RUN_BAD_CLOCK])
+        step = 'head'
+        head, bad = _head(read, root)
+        if bad is not None:
+            raise _import_stop('head', bad)
+        if not (isinstance(head, str) and _HEX40.fullmatch(head) is not None):
+            raise _import_stop('head', ['head: not 40 lowercase hex characters'])
+        step = 'log'
+        report = _run_log(read_log(root), task_id)
+        risk, found = _run_class(read_base, read, root, head, write)
+        intent_id, record = _run_intent(report, intent, source_class, who)
+        claim_id = record['record_id']
+        kind = 'single' if risk == 'low' else 'drafting'
+        text = _run_contract(kind, task_id, head, intent_id, write)
+        digest = hashlib.sha256(text.encode('utf-8')).hexdigest()
+        step = 'write'
+        path = _import_write(write_contract, root, task_id, text)
+        contract_hash = digest
+        step = 'append'
+        claim_event = hashlib.sha256('\n'.join(('run-event', 'record.added', claim_id)).encode('utf-8')).hexdigest()
+        event_ids.append(claim_event)
+        appends.append(_run_append(append, root, 'record.added', record, claim_event, moment, record['recorder'], None,
+                                   "append: the contract %s (%s) is written, the intent's claim is not" % (path,
+                                                                                                          digest)))
+        drafted_event = hashlib.sha256('\n'.join(('run-event', 'task.drafted', task_id, digest)).encode('utf-8'))
+        event_ids.append(drafted_event.hexdigest())
+        appends.append(_run_append(append, root, 'task.drafted', {'contract_version': 'v1', 'contract_hash': digest},
+                                   event_ids[-1], moment, RUN_RECORDER, task_id,
+                                   'append: the contract %s (%s) is written, the task.drafted is not' % (path, digest)))
+    except _import_stop as stop:
+        return _run_result('refused', stop.reason, found + stop.findings, intent_id, claim_id, kind, risk, path,
+                           contract_hash, event_ids[:len(appends)], appends)
+    except Exception as exc:  # TASK-098: a raise at a step gives that step's reason
+        return _run_result('refused', step, found + ['%s: a step raised %s' % (step, type(exc).__name__)], intent_id,
+                           claim_id, kind, risk, path, contract_hash, event_ids[:len(appends)], appends)
+    return _run_result('done', None, found, intent_id, claim_id, kind, risk, path, contract_hash, event_ids, appends)

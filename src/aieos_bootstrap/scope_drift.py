@@ -54,6 +54,9 @@ Limits (TASK-033 AC7 and AC11):
 - governor.matches is recursive over a pattern's "/" parts, so a pathological pattern may raise; claims and
   non_task_list catch any exception and return it as an error, and no exception escapes.
 - It reads no file, no clock and no environment, and makes no process, network or model call (INV-001 to INV-003).
+
+Task TASK-098 adds path_class(rules, path), a public wrapper of _path_class with the same answer, for
+launcher.run_task's classing of a write set at the base (specification 7 section 3 :30); nothing else changes.
 """
 
 import hashlib
@@ -270,3 +273,11 @@ def claims(inputs):
         return _claims(inputs)
     except Exception as exc:  # noqa: BLE001 - fail closed (AC8)
         return _result([], False, False, set(), 'an exception: ' + type(exc).__name__)
+
+
+# ---- path_class (task TASK-098) ----
+
+def path_class(rules, path):
+    """The per-path class of _path_class, unchanged (task TASK-098): the highest class of the rules whose match holds
+    the path, None when no rule matches; launcher.run_task calls it."""
+    return _path_class(rules, path)
