@@ -61,6 +61,11 @@ the list of decision D-3230):
 - A Grep before a full Read, and partial reads: D-3179 (m); D-3181 (n); D-3188 (u); D-3190 (x) and the partial reads
   of scan6b; D-3213; D-3216, diff96-out2 read in part.
 
+Session ea6ea0a3 (2026-10-26 to 2026-10-28; after TASK-096's records and during TASK-097; the list of decision
+D-3267 C1):
+- Messages holding more than one call: D-3233, a Write and its run (carried from TASK-096); D-3243 (i), two Writes;
+  D-3259 (d), three Writes; D-3265 (g), three read-only calls. No text beside them; nothing wrong was written.
+
 ## Why it happens
 The app's request reads as asking for words now, and the worker adds them to the call it is about to send.
 
