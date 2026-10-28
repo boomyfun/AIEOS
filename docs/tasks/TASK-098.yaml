@@ -1,0 +1,601 @@
+# TASK-098: `aieos run`, an intent recorded and its task made (specification 7 revision 3, section 3 :30 and section
+# 10 points 12 and 13; specification 1 section 12; concept :789-798, unchanged; M7's remaining part, its eighth and
+# last task). A new launcher function launcher.run_task, added after import_task by added lines, records the intent
+# as a claim through writer.append_event, classes the user's write set at the base through scope_reconcile's public
+# readers and a new public wrapper scope_drift.path_class, fills one of two fixed templates, writes it through
+# writer.write_contract and appends `task.drafted`; records.py's text rule admits an intent's claim by one changed line;
+# a new command in cli.py calls it. The core runs no model (INV-001): it drafts no write set, classes no bare intent and
+# writes no task-specific criteria; doing the single task's change and drafting a proposal set are a launched
+# session's, and every launch is the owner's (TASK-094; A51 item (4)). Plan: decisions D-3276 to D-3283 (session
+# ea6ea0a3): the scope reads and the scope note (MYSP/t98/scope98.md) with D-3277's rulings Q1 (a given write set
+# classed low gives a single task; any other class, no class, or no write set gives a drafting task), Q2 (the intent's
+# claim: _is_intent_claim and records.py :431 widened, the marker `intent`), Q3 ((r3): the reader of the tasks folder
+# left, with the question of who commits it, carried to M7's exit review), Q4 (the end-to-end tests in
+# tests/integration/test_writer_files.py), Q5 (the classing through scope_reconcile and a public wrapper in
+# scope_drift), Q6 (Reading 1: this task's owner_kept_act false; both templates' true), Q7 (no CR-002 matter) and Q8
+# (the single task's fixed criteria judged by a G3 review gate); the pin scan (pinscan98-out.txt at abf312d3) and its
+# reading (pinscan98-reading.md) with D-3279's rulings Q1 (test_cli_import.py :641 widened to COMMANDS[-2:]), Q2
+# (scope_drift's wrapper tested in tests/unit/test_scope_drift.py) and Q3 (`--class` required, no default); the risk
+# run (MYSP/t98/risk_class98.py at abf312d3: high) and the forbidden list (MYSP/t98/forbid98.txt at abf312d3; the write
+# set's existing files left out; the new tests/unit/test_cli_run.py is not in it); the reviews rv98a
+# (claude-sonnet-5-5) and rv98b (claude-opus-5-5) of r0 and their dispositions (MYSP/t98/disp98.md, D1 to D14,
+# D-3281); the round-2 review rv98c (claude-opus-5-5) of r1 and its dispositions (MYSP/t98/disp98r2.md, E1
+# to E5, D-3283); the decision agent's read of r2 in place of a third round.
+#
+# Scope:
+# - In src/aieos_bootstrap/scope_drift.py, by added lines only: a paragraph added to the module docstring before its
+#   closing quotes, and after the file's last code line a block under the marker "# ---- path_class (task TASK-098)
+#   ----" holding only path_class(rules, path), which returns _path_class(rules, path) unchanged: the highest class of
+#   the rules whose match holds the path, None when no rule matches.
+# - In src/aieos_bootstrap/records.py: a bullet added to the module docstring after TASK-096's Edit bullet, naming
+#   "An intent's claim", "TASK-098" and the marker "intent"; a helper _is_intent_claim(record) added after
+#   _is_edit_claim (fact_kind claim, evidence_type `intent`, subject "INT-" followed by digits, no session key); and the
+#   one changed line, the base's :431, which becomes
+#   `        elif not (session_claim or _is_edit_claim(record) or _is_intent_claim(record)):` (D3 of TASK-096's form).
+#   The session and acs rules are unchanged; every other record keeps the text rule. The marker `intent` is this task's
+#   choice, carried to specification 2's next revision with `contract_edit`.
+# - In src/aieos_bootstrap/launcher.py, by added lines only: the imports of scope_drift and scope_reconcile; a
+#   paragraph added to the module docstring before its closing quotes (after the import_task paragraph) naming
+#   "run_task", "TASK-098", "records the intent", "drafts nothing", "path_class" and "reads the caller's clock once";
+#   and a block after the file's last code line (after import_task), under the marker "# ---- run_task, `aieos run`
+#   (task TASK-098) ----", holding only run_task and names that begin "RUN_", "_RUN" or "_run":
+#   - run_task(root, task_id, intent, source_class, write, clock, read=None, read_log=None, read_base=None,
+#     write_contract=None, append=None) -> a mapping with exactly RUN_KEYS = ('result', 'reason', 'findings',
+#     'intent_id', 'claim_id', 'kind', 'risk', 'path', 'contract_hash', 'event_ids', 'appends'); RUN_REASONS =
+#     ('argument', 'clock', 'head', 'log', 'exists', 'layout', 'write', 'append'); RUN_KINDS = ('single', 'drafting');
+#     RUN_RECORDER = 'aieos cli run'. It never raises an Exception; a raise at a step gives that step's reason with the
+#     finding "<step>: a step raised <type>". Its steps, in order:
+#     1. argument: root an absolute Windows or POSIX path (launcher's _ROOT, as start takes it; D6); task_id
+#        TASK-<digits>; intent a str of 1 to 2000 printable characters with no line end; source_class one of
+#        APPROVAL_CLASSES, stated by the caller and not checked; write a tuple or list of 0 to 50 distinct literal
+#        file paths (a write set names files, not patterns; D2), each matching `[A-Za-z0-9_./-]+` (no "*"), not
+#        beginning with "/" or "./", not ending with "/", holding no empty, "." or ".." segment (task_contract's
+#        _item_ok form; D1) and no segment ending with "." or " " (E1), not "-", and whose first segment
+#        lowercased is not writer.STATE_DIR lowercased (D14);
+#        clock callable; each callee None or callable. Nothing is called on a refusal.
+#     2. clock: read once; a time not timezone-aware UTC with whole seconds gives "clock".
+#     3. head: start's own reader, _head(read, root), and 40 lowercase hex, else "head".
+#     4. log: read_log(root), bytes, and records.check_log with no finding, else "log".
+#     5. exists: any event of the log with task_id the task, a duplicate line included, gives "exists" with nothing
+#        appended.
+#     6. the class: with a write set, read_base(root, head, read) (scope_reconcile.read_base) and
+#        scope_reconcile.rules_from_policy over its policy text, then each path's class by scope_drift.path_class in
+#        its own form and in its lowercased form, the higher of the two (E1); the task's class the highest. It is
+#        None, never a refusal (fail closed; D4), with one finding kept in the result's findings, when read_base
+#        raises ("class: the policy at the base was not read (<type>)"), when the rules are empty or hold a rule whose
+#        class is not one of low, medium, high and critical ("class: the policy's rules are not in form"), when either
+#        form of a path matches no rule ("class: <path> matches no rule"), or when anything else in this step raises
+#        ("class: a step raised <type>"; E3). With no write set, no class and nothing read.
+#     7. the intent: its claim's record_id "intent/" followed by the SHA-256 of "intent", LF, the source class, LF
+#        and the intent's UTF-8 bytes (E4); its intent id
+#        the one already recorded under that record_id in the log, else "INT-" followed by 1 +
+#        the highest number among the INT- subjects of intent claims in the log (0 when none), written with at least
+#        three digits (D10); the record {record_id, fact_kind claim, source_class the caller's, recorder
+#        RUN_RECORDER, subject the intent id, evidence_type `intent`, text the intent}.
+#     8. the kind and the template: "single" when the class is "low"; else "drafting". The template is filled:
+#        single with the task id, the head, the intent id and the write set; drafting with the task id, the head and
+#        the intent id. A project-state path in a template is built from writer.STATE_DIR.
+#     9. write: write_contract(root, task_id, text), before any append (E2), so a "layout" refusal appends nothing
+#        and makes no folder; "done" with value "<STATE_DIR>/tasks/<task_id>.yaml" goes on; its "exists" and
+#        "layout" pass through with their findings; any other answer or a raise gives "write"; none appends.
+#     10. the claim's append: record.added with event id the SHA-256 of "run-event", LF, "record.added", LF and the
+#        record_id, now, RUN_RECORDER, no task_id and no fencing token. "appended" or "duplicate" goes on; anything
+#        else, a raise or an answer that is not a WriteResult gives "append" with the findings "append: record.added:
+#        ..." and the exact "append: the contract <path> (<hash>) is written, the intent's claim is not" (E2).
+#     11. append: task.drafted {contract_version 'v1', contract_hash the SHA-256 of the text's UTF-8 bytes}, event id
+#        the SHA-256 of "run-event", LF, "task.drafted", LF, the task id, LF and the hash, now, RUN_RECORDER,
+#        task_id the task, no fencing token; "appended" or "duplicate" gives "done"; else "append" with the exact
+#        finding "append: the contract <path> (<hash>) is written, the task.drafted is not".
+#     12. the result: "done" with the intent id, the claim id, the kind, the risk (the class, or None), the path, the
+#        hash, the two event ids and the two appends; "refused" keeps what earlier steps fixed.
+#     Each callee defaults at call time: gitread.run, writer.read_log, scope_reconcile.read_base,
+#     writer.write_contract and writer.append_event.
+#   - The single task's template (t1), its lines fixed but for the task id, the head, the intent id and the write set:
+#     task the task id; contract_version v1; task_type implementation; objective "Make the change that intent <id>
+#     states, within the write set."; traces_to []; input_state {base_commit the head, depends_on [], intent_versions
+#     {}}; write_set the given paths, in the given order; read_set paths ["**"], interfaces [], schemas []; forbidden
+#     the project-state directory; constitution []; acceptance_criteria AC1 "The change does what intent <id> states,
+#     within the write set." and AC2 "No other path is changed."; capabilities as import's template; risk low;
+#     autonomy {max_level L1, budgets as import's}; verification_plan G0 scope, {gate: G1, check: build} (V1; D5) and
+#     {gate: G3, check: review, args: [AC1, AC2]} (D-3277 Q8); exit_conditions {success "the change is made within the
+#     write set and nothing else changed", escalate as import's} (D7); owner_kept_act true. <id> is the intent id
+#     (D8).
+#   - The drafting task's template (t2), its lines fixed but for the task id, the head and the intent id (D7): task
+#     the task id; contract_version v1; task_type drafting; objective "Draft the proposal set of intent <id> (a
+#     requirement, its specifications and task contracts with their risk and verification plans), proposing only
+#     and changing nothing else."; traces_to []; input_state as t1's; write_set docs/proposals/<id>-requirement.md,
+#     docs/proposals/<id>-specifications.md and docs/proposals/<id>-tasks.md (the proposal set of concept :796, the
+#     last holding the drafted task contracts, their risk and their verification plans); read_set, forbidden,
+#     constitution and capabilities as t1's; acceptance_criteria AC1 "docs/proposals/<id>-requirement.md is a
+#     requirement in specification 2 section 4.2's form.", AC2 "docs/proposals/<id>-specifications.md holds
+#     specifications in specification 2 section 4.2's form, each tracing to the requirement.", AC3
+#     "docs/proposals/<id>-tasks.md holds task contracts in specification 2 section 5.1's form, each with its risk
+#     and verification plan." and AC4 "No other path is changed."; risk critical; autonomy as t1's;
+#     verification_plan G0 scope and {gate: G3, check: review, args: [AC1, AC2, AC3, AC4]}; exit_conditions {success
+#     "the three proposal files present and nothing else changed", escalate as import's}; owner_kept_act true.
+# - In src/aieos_bootstrap/cli.py: COMMANDS gains 'run' after 'import'; USAGE gains "run <task> <intent> --root <path>
+#   --class <decision_agent|human_authority> [--write <path>]... [--json]" and a help line; _parse takes the task as
+#   argv[1] and the intent as argv[2] (a non-empty value not beginning "--"), --class required once (one of
+#   launcher.APPROVAL_CLASSES; missing gives exit 2, D-3279 Q3), --write any number of times, and returns an 8-tuple:
+#   today's seven, with run's intent in the note's place, and the write paths last (a tuple, () for every other
+#   command; D13); the command's functions are _intent_run, _render_intent_run and _intent_run_in_form (cli.py
+#   already has _run); after the parse, inside a
+#   runtime, RUN_RUNTIME_REFUSAL and exit 1; else launcher.run_task(root, task, intent, class, write, clock) once,
+#   looked up at each call; its answer's form checked by exact types (RUN_OUT_OF_FORM); "done" gives exit 0 and the
+#   lines "intent: <id> <claim id>", "contract: <path> <hash> <kind> <risk or none>" and "event: <id> <append>" twice,
+#   then the findings; under --json one sorted JSON line; "refused" gives exit 1 and "run: refused <reason>" then the
+#   findings; a raise in run_task gives "run: a step raised <type>", a raise in
+#   _render_intent_run "cli: a step raised <type>".
+#   The docstring: line 1 names run and TASK-098; its argv and flags sentence names argv[2], --class and --write;
+#   the COMMANDS phrase becomes "COMMANDS, tasks, end, status, init,
+#   launch, approve, edit, reject, import or run"; a paragraph holding "aieos run", "TASK-098", "records the intent",
+#   "drafts nothing" and "not run on any real project"; the in_runtime sentence gains "run also calls it after the
+#   parse"; main's "environ is read by ..." names run. cli.py's imports stay {datetime, json, os, re, sys, execution,
+#   launcher}.
+# - Tests (six existing pins widened, each a change to its task's test, named, each widened docstring adding "TASK-098
+#   AC6"; D-3279):
+#   - tests/unit/test_cli_init.py (COMMANDS and the phrase; the old phrase joins the gone list);
+#   - tests/unit/test_cli_launch.py (the phrase; the old phrase joins the gone list);
+#   - tests/unit/test_execution_status.py (the phrase and COMMANDS; the old phrase joins the gone list);
+#   - tests/unit/test_cli_approve.py (the phrase; the old phrase joins the gone list);
+#   - tests/unit/test_cli_import.py :631-639 (the phrase; the old one joins its gone check) and :641, which becomes
+#     `self.assertEqual(cli.COMMANDS[-2:], ('import', 'run'))` (D-3279 Q1);
+#   - tests/unit/test_launcher.py :703-707, the import set widened by exactly scope_drift and scope_reconcile, a change
+#     to TASK-086's test (D-3277 Q5); its docstring names "TASK-098 AC5".
+#   - tests/unit/test_records_session_claims.py: added tests of the intent's claim (AC3), each naming "TASK-098 AC3",
+#     beside its TASK-077 tests (its naming test reads "TASK-077 ACn" only in its own functions and is widened to admit
+#     "TASK-098 ACn" in the added ones, a change named).
+#   - tests/unit/test_scope_drift.py: an added test that path_class equals _path_class over its existing cases (AC3),
+#     naming "TASK-098 AC3", its naming test widened likewise.
+#   - New tests/unit/test_cli_run.py: run_task by stand-ins for read, read_log, read_base, write_contract and append
+#     (keyword arguments; the append stand-in bound to writer.append_event's signature taken at import) over logs built
+#     with eventlog.append in memory, and the command by mock.patch.object of launcher.run_task; no tempfile, sqlite3,
+#     shutil, subprocess or open; the literal root 'C:/run-root-98' (L-0032); stand-in defaults are sentinels (L-0033);
+#     its naming test requires "TASK-098 AC" in every test.
+#   - tests/integration/test_writer_files.py, by added lines: a class over tempfile.TemporaryDirectory that runs,
+#     through cli.main and the real writer and launcher with only read (Git) and read_base stood in, `init`, then
+#     `import`, then `run` (a single task and a drafting task), and checks the folders, the contract files' bytes and
+#     the log's events and records by records.check_log (the init end-to-end test carried from TASK-095, t95x-S1 F3;
+#     D-3138; D-3277 Q4).
+# - What it does not do: no change to base_inputs.py, task_contract.py, writer.py, governor.py, scope_reconcile.py or
+#   the workflow; no reader of `.aieos/tasks/`; no model run, no session launched, no proposal drafted; the command is
+#   not run on E:/AIEOS or any real project.
+#
+# Stated limits: the reader (D-3277 Q3, (r3)): every contract reader reads docs/tasks/<id>.yaml at a commit while
+# write_contract writes the uncommitted `.aieos/tasks/`, so a task `run` makes cannot be approved or launched until a
+# reader of the tasks folder exists and the file is committed; who commits that folder is not settled; both are carried
+# to M7's exit review. Only the self-build's policy file (docs/specs/risk-rules-gov-aieos.md, scope_reconcile's
+# POLICY_PATH) is read, with the workflow file (.github/workflows/aieos-checks.yml), which read_base also reads at the
+# base (scope_reconcile.py :246); no product project's own risk rules (project.yaml) are read. When read_base raises,
+# when the rules are empty or hold a rule with no valid class, or when a path matches no rule, there is no class and
+# the drafting task is made (step 6; D4). A rule that cannot be evaluated (R3 by component tags) matches every path
+# under src/** and tests/** as scope_reconcile reads it. A write set names files, not patterns: "*" is refused (D2).
+# run_task takes a Windows or POSIX root, import_task a Windows root only (TASK-097), so the end-to-end class runs its
+# import leg only on a Windows root (unittest.skipIf), and the CI's Linux runner runs init and run only; import's
+# root form is carried to M7's exit review (D6). After a refused task.drafted append, or a write refused
+# "unwritable" after a partial write, the file stays and every rerun is refused "exists" (TASK-097's limit). The
+# templates' read_set "**" makes base_inputs read every file of the repository, refusing past 2000 files or 16 MiB
+# (TASK-097's limit). The same intent text under two source classes is two claims with two intent ids (E4). A
+# claim append refused after the contract's write leaves the contract written with no claim, as step 10's finding
+# says (E2). The single task's
+# criteria are fixed text, judged by its G3 review gate; an Edit (TASK-096) carries the user's corrections.
+# "auto-accept" (concept :793) is not built; the approval of a proposal set's requirement or specification is not built
+# (specification 7 section 10 point 3); the automatic run (concept :798) is not built. The intent's source class is the
+# caller's statement, not checked (specification 1 section 10 point 12). The intent id's number is read from the log at
+# the call; two concurrent runs can choose the same number (one run at a time, as approve's limit). The intent's text
+# is kept only in its claim; the contract names the intent by its id. The task id is the user's, with no default; a
+# task id with any event in the log is refused; the claim of a refused run stays in the log (a claim approves nothing).
+# Both templates' owner_kept_act is true, a fail-safe choice: a decision_agent approval of either is refused.
+#
+# Owner-act boundary: Reading 1 of scope98.md (D-3277 Q6): run records a claim and makes and records a task; it starts
+# no runtime, connects nothing, changes no setting, places no hook, asks nothing at a permission prompt and changes
+# nothing in who may approve what. The sessions it prepares are launches, which stay the owner's and are not run. The
+# commands import and run are not run on E:/AIEOS or any real project; their real use, alone or together, is the
+# owner's and is asked separately; the tests use stand-ins, the literal root or temporary folders only. Nothing under
+# .github/. owner_kept_act: false.
+#
+# The pins (L-0026; pinscan98-out.txt at abf312d3; pinscan98-reading.md; D-3278, D-3279): the six COMMANDS and phrase
+# pins named above; launcher.py's import set (tests/unit/test_launcher.py :703-707, widened), names (:709-726; no
+# ".aieos" string in launcher.py or cli.py), and docstring phrases (test_launcher.py :735-740; test_launcher_gone.py
+# :424; test_launcher_outside.py :601-606; test_cli_approve.py :694-699; test_cli_import.py :624-630); records.py's
+# imports (test_records_read_set.py :97-101; test_records_session_claims.py :126-131, unchanged), docstring phrases
+# (test_records_session_claims.py :138-143; test_records_read_set.py :91-93; test_cli_approve.py :702-707) and the text
+# rule's cases (test_cli_approve.py :464-486; test_records_session_claims.py :65-82); scope_drift.py's imports
+# (test_scope_drift.py :384-394, unchanged), docstring (:416-417) and _path_class's tests (:284-293);
+# scope_reconcile.py unchanged; tests/integration/test_writer_files.py's allowance (aieos-checks.yml :1503-1510);
+# cli.py's imports, refused names and state-directory strings (tests/unit/test_cli.py :333-378), the only-the-writer
+# test (tests/unit/test_writer.py :399-413) and scope_drift's refused attributes (tests/unit/test_scope_drift.py
+# :396-412), each met and unchanged (D12). The deterministic rule: launcher.py, cli.py, records.py, scope_drift.py,
+# test_cli_run.py and the widened unit tests at NONE, test_writer_files.py at its allowance; no change under .github/.
+#
+# Risk: high, computed over the base by MYSP/t98/risk_class98.py (R2 medium and R3 high, not evaluable, for each path).
+# GOV-003: an evaluator path; change class ruled at acceptance. Reviews on Sonnet 5.5 and Opus 5.5 (never Fable), read
+# tools only; the acceptance review on Sonnet 5.5. Naming (D-544 Q3): every new test function names "TASK-098 ACn" in
+# its own docstring. Not applicable: OPS-001; INV-005 to INV-011; GOV-001, GOV-004 to GOV-006, SEC-003. Shadow (D-2042
+# C3 as amended by D-2068): the governor's evaluate at acceptance, any difference named. Local runs: the unit group in
+# three parts, integration and property; before commit X, a check of the new and changed files for the B105 pattern
+# (D-2735 C6), for bandit's B608 form (L-0018), for platform-dependent roots (L-0032), for any byte outside printable
+# ASCII and LF (L-0011, D-2981), and for the OPS-003 pattern rule (aieos-checks.yml :1672-1681).
+# Evaluation path (A61): commit C changes only docs/tasks/TASK-098.yaml, has one parent equal to base_commit, and goes
+# to main under its own decision; the task's commits carry "AIEOS-Task: TASK-098" and go to task/TASK-098; main
+# receives them only at acceptance.
+task: TASK-098
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add launcher.run_task after import_task, which records the intent as a claim, classes the user's write set at the
+  base through scope_reconcile and a new scope_drift.path_class, fills a fixed single-task or drafting-task template,
+  writes it through writer.write_contract and appends task.drafted; widen records.py's text rule for an intent's claim
+  by one changed line; add the command run to cli.py; tests in the new tests/unit/test_cli_run.py, each naming
+  "TASK-098 ACn", end-to-end tests in tests/integration/test_writer_files.py, and six existing pins widened.
+traces_to:
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#3
+  - docs/specs/spec-01-state-and-event-model.md#12
+input_state:
+  base_commit: abf312d31ca2427ea6b3140326668debe5ad1e01
+  depends_on: [TASK-091, TASK-096, TASK-097]
+  intent_versions:
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 94bf8928948662e75fb249c3e09f75dac54db0ec7b70e595c80578a257e22eea
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: d2fa59ae3f203b3a2108e55d23ddfb875e64ab57d27372c9d413bf30d7c2cbdd
+    docs/specs/spec-05-adapter-contract.md: c8a1243d00daa8db28f23977828de02ab7f2d4d7b6fdabf9e7cc2bc8155a001a
+    docs/specs/spec-01-state-and-event-model.md: f4e02c0c078b4aee490deb4bec97f4d4fdca2de93b50c204dcfd398378ffe826
+    docs/specs/spec-02-aieos-file-format.md: e7c427b06775069a43d5e6d317a61c1974e5be921aee08a581c1918572a37a61
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 29dd803aed6a55c11fad04d01dac32ee10a8f15f96f099857a00212c100d4ed5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+write_set:
+  paths:
+    - src/aieos_bootstrap/cli.py
+    - src/aieos_bootstrap/launcher.py
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/scope_drift.py
+    - tests/integration/test_writer_files.py
+    - tests/unit/test_cli_approve.py
+    - tests/unit/test_cli_import.py
+    - tests/unit/test_cli_init.py
+    - tests/unit/test_cli_launch.py
+    - tests/unit/test_cli_run.py
+    - tests/unit/test_execution_status.py
+    - tests/unit/test_launcher.py
+    - tests/unit/test_records_session_claims.py
+    - tests/unit/test_scope_drift.py
+read_set:
+  paths:
+    - docs/specs/spec-01-state-and-event-model.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/spec-07-cli-and-zero-friction-path.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/decision-matrix.md
+    - docs/pre-genesis/CR-002-concept-errata.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/**
+    - src/aieos_bootstrap/**
+    - tests/**
+    - .github/workflows/aieos-checks.yml
+  interfaces: [aieos_bootstrap.writer.append_event, aieos_bootstrap.writer.read_log,
+    aieos_bootstrap.writer.write_contract, aieos_bootstrap.records.check_log, aieos_bootstrap.scope_reconcile.read_base,
+    aieos_bootstrap.scope_reconcile.rules_from_policy, aieos_bootstrap.cli.main, aieos_bootstrap.cli.in_runtime]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - bench/**
+  - tests/conformance/**
+  - .gitattributes
+  - .gitignore
+  - pyproject.toml
+  - setup.py
+  - setup.cfg
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/handoff_file.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/resume_log_inputs.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_base_files_repo.py
+  - tests/integration/test_base_inputs_repo.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_launcher_repo.py
+  - tests/integration/test_mcp_server_work_order_repo.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_resume_inputs_repo.py
+  - tests/integration/test_resume_log_inputs_repo.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_base_files_properties.py
+  - tests/property/test_base_inputs_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_context_compiler_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_mcp_server_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/run_tests.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_base_files.py
+  - tests/unit/test_base_inputs.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_cli.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_execution_list_tasks.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_handoff_file.py
+  - tests/unit/test_launcher_end.py
+  - tests/unit/test_launcher_gone.py
+  - tests/unit/test_launcher_outside.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_mcp_server_work_order.py
+  - tests/unit/test_read_set_gone.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_resume_inputs.py
+  - tests/unit/test_resume_log_inputs.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      run_task by stand-ins (keyword callees; a counting clock), over a log without the task: for a write set classed
+      low, one clock read, one _head read, one read_log, one read_base, one write_contract with (root, task, text),
+      one claim append and one task.drafted append, in that order, "done" with kind single, risk low and every
+      RUN_KEYS value as the header states; for no write set, a class other than low, a path no rule matches, and one
+      low path beside one path no rule matches, kind drafting with no read_base call where no write set is given;
+      each text equal to a literal expected text in the test (t1 and t2, every line as the header fixes it), its keys
+      in TASK-097's order, owner_kept_act true, t1's risk low with its G1 build gate and its G3 review gate over AC1
+      and AC2, t2's risk critical with its G3 gate over AC1 to AC4, forbidden the project-state directory built
+      from writer.STATE_DIR; each text parses by task_contract.parse_contract with no finding and by base_inputs'
+      contract parser with every CONTRACT_NEEDS key; the claim's record, record_id, intent id (a second intent
+      INT-002; a rerun of the same intent under the same class reusing INT-001, under the other class a new id) and
+      event id exactly as the header states, with no task_id and no fencing token,
+      and records.check_record giving no finding; the task.drafted payload and event id as the
+      header states; the resulting log passes records.check_log; each callee defaults at call time
+      (mock.patch.object of gitread.run, writer.read_log, scope_reconcile.read_base, writer.write_contract and
+      writer.append_event made after import are the ones called); the result has exactly RUN_KEYS.
+  - AC2: >-
+      run_task's refusals and fail-closed paths: each wrong argument ("argument", nothing called), an intent '' or over
+      2000 characters or with a line end, a write path holding "*", "docs/", "a//b", ".", "./x", "a/./b", "-",
+      ".." or "docs/specs./x.md", a path under the project-state directory in any case (".AIEOS/x" among them), a
+      repeated path, a source_class outside APPROVAL_CLASSES; a raising or out-of-form clock ("clock"); _head's
+      findings or a head not 40 lowercase hex ("head"); a raising or non-bytes read_log or a log check_log refuses
+      ("log"); a log holding any event of the task ("exists", nothing appended); read_base raising, rules empty, rules
+      holding a rule with no valid class, a path no rule matches, a raising path_class, and "DOCS/specs/x.md",
+      ".GITHUB/workflows/x.md" and "AIEOS-CONCEPT.md" (classed by their lowercased forms too) each give kind drafting
+      with its "class:" finding as the header words it, or the higher class, and no refusal; a root with no layout
+      gives "layout" with nothing appended and no project-state directory made;
+      a write_contract "exists" or "layout" passed through, any other answer or a raise ("write", nothing
+      appended); a claim append refused, raising or out of form after the write ("append" with its exact finding,
+      no task.drafted); a
+      task.drafted append refused or raising ("append" with the exact finding); no Exception escapes; by ast, run_task
+      and the names beginning _run, _RUN or RUN_ name no open, exec, eval, compile, __import__, subprocess, os, sys
+      or time, and hold no string constant naming the project-state directory.
+  - AC3: >-
+      records.py: a claim with evidence_type intent, subject INT-<digits>, text and no session gives no finding by
+      check_record; with a TASK- or other subject, another evidence_type, a session key that is '' or not a str, or
+      as an observation, text gives "6.2:text"; the session and acs rules and every TASK-077 and TASK-096 case are
+      unchanged; records.py's
+      diff from the base is added lines and the one changed line :431 only. scope_drift.py: path_class equals
+      _path_class over test_scope_drift.py's existing cases, None included; its diff is added lines only.
+  - AC4: >-
+      The command by stand-ins (mock.patch.object of launcher.run_task; a counting clock): "run TASK-1 <intent> --root
+      R --class decision_agent" and with each --write gives one run_task call with (R, 'TASK-1', intent, class, the
+      write paths as a tuple in order, the clock); each argv out of form (no task, a bad task, no intent, an intent
+      beginning "--", no --root, no --class, a class outside the two, a flag twice but --write, a value empty or
+      beginning "--", an extra word) gives exit 2 and USAGE with nothing called, inside a runtime too; an environ
+      holding any one of the three RUNTIME_VARS ('' included) gives exit 1 and the runtime refusal with nothing called;
+      "done" gives exit 0 and the lines, or under --json the exact sorted string; "refused" gives exit 1 and "finding:
+      run: refused <reason>" then the findings; each answer out of form gives the out-of-form finding; a raising
+      run_task gives "run: a step raised <type>"; a raising _render_intent_run gives "cli: a step raised <type>".
+  - AC5: >-
+      The modules: launcher.py's import set equal to the base's with exactly scope_drift and scope_reconcile added
+      (test_launcher.py :703-707 widened) and its names test passing; cli.py's, records.py's and scope_drift.py's
+      import sets unchanged; launcher.py's and scope_drift.py's diffs from the base added lines only, records.py's
+      added lines and the one changed line (checked at G3 by a scratchpad git-diff script); the deterministic rule
+      passes with every changed src path at NONE, test_cli_run.py at NONE and test_writer_files.py at its allowance;
+      no recorder text holds "owner"; the new unit test file uses no tempfile, sqlite3, shutil, subprocess or open,
+      roots only the literal 'C:/run-root-98', and uses no one-argument .replace() and no .replace(target=...).
+  - AC6: >-
+      Docstrings: launcher.py's gains "run_task", "TASK-098", "records the intent", "drafts nothing", "path_class" and
+      "reads the caller's clock once"; records.py's gains "An intent's claim", "TASK-098" and "intent" and keeps its
+      pinned phrases; scope_drift.py's gains "path_class" and "TASK-098"; cli.py's gains "aieos run", "TASK-098",
+      "records the intent", "drafts nothing" and "not run on any real project", holds "COMMANDS, tasks, end, status,
+      init, launch, approve, edit, reject, import or run", "end and init call it after the parse", "run also calls
+      it after the parse" and main's environ sentence naming run, and not "COMMANDS, tasks, end, status, init,
+      launch, approve, edit, reject or import"; USAGE names run; the six widened
+      pins pass; every test of tests/unit/test_cli_run.py names "TASK-098 AC", checked by its own naming test, more
+      than 20 tests; the end-to-end class of tests/integration/test_writer_files.py runs init, import and run (single
+      and drafting; import on a Windows root only, D6) through cli.main over a temporary folder with the real
+      writer and launcher, read and read_base stood in, and checks the twelve folders, the contract files' bytes
+      against their task.drafted hashes, and the log by records.check_log.
+  - AC7: >-
+      Broken copies, each naming its file and failing the tests of its AC: (1) the claim appended before the contract's
+      write (AC1); (2) the claim's record_id not from the intent's text (AC1); (3) a task_id on the claim's event
+      (AC1); (4) a fencing token passed to an append (AC1); (5) a callee bound at import time (AC1); (6) the single
+      kind made for a class other than low (AC1, AC2); (7) the single kind made with no write set (AC1); (8) a failure
+      of the class step giving low (the fail-closed path, AC2); (9) a path no rule matches classed low (AC1); (10) t1's
+      owner_kept_act false (AC1); (11) t2's owner_kept_act false (AC1); (12) t1 without its G3 review gate (AC1); (13)
+      a raise escaping run_task (AC2); (14) run_task naming os (AC2, AC5); (15) records.py :431 without
+      _is_intent_claim (AC3); (16) _is_intent_claim accepting a TASK- subject (AC3); (17) _is_intent_claim not
+      checking evidence_type (AC3);
+      (18) path_class differing from _path_class (AC3); (19) a default --class (AC4); (20) the
+      command not refusing inside a runtime (AC4); (21) the --json line without sort_keys (AC4); (22) cli.py importing
+      writer (AC5); (23) a line of import_task changed (AC5, the G3 diff script); (24) a line of records.py other than
+      :431 changed (AC5, the G3 diff script); (25) a string naming the project-state directory in launcher.py (AC2,
+      AC5); (26) run_task skipping write_contract (AC6, the end-to-end class);
+      (27) a write path holding "*" accepted and classed (AC2);
+      (28) the lowercased form of a path not classed (AC2); twenty-eight copies in all; each copy made in a
+      scratchpad script at G3, not committed; the governor's evaluate at acceptance (the shadow) with any
+      difference named.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1000k, wall_time: 5h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6]}
+  - {gate: G3, check: constitution, args: [AC7, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one
+    approval record counts
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
