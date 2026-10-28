@@ -6,7 +6,7 @@
 # writer.write_contract and appends `task.drafted`; records.py's text rule admits an intent's claim by one changed line;
 # a new command in cli.py calls it. The core runs no model (INV-001): it drafts no write set, classes no bare intent and
 # writes no task-specific criteria; doing the single task's change and drafting a proposal set are a launched
-# session's, and every launch is the owner's (TASK-094; A51 item (4)). Plan: decisions D-3276 to D-3283 (session
+# session's, and every launch is the owner's (TASK-094; A51 item (4)). Plan: decisions D-3276 to D-3296 (session
 # ea6ea0a3): the scope reads and the scope note (MYSP/t98/scope98.md) with D-3277's rulings Q1 (a given write set
 # classed low gives a single task; any other class, no class, or no write set gives a drafting task), Q2 (the intent's
 # claim: _is_intent_claim and records.py :431 widened, the marker `intent`), Q3 ((r3): the reader of the tasks folder
@@ -20,7 +20,10 @@
 # set's existing files left out; the new tests/unit/test_cli_run.py is not in it); the reviews rv98a
 # (claude-sonnet-5-5) and rv98b (claude-opus-5-5) of r0 and their dispositions (MYSP/t98/disp98.md, D1 to D14,
 # D-3281); the round-2 review rv98c (claude-opus-5-5) of r1 and its dispositions (MYSP/t98/disp98r2.md, E1
-# to E5, D-3283); the decision agent's read of r2 in place of a third round.
+# to E5, D-3283); the decision agent's read of r2 in place of a third round. r3 (D-3296): the unit run of the first
+# placement found that an intent's claim of class decision_agent lacks the decision_ref that records.py requires
+# (:478-483), so run takes --by as approve does; an exact edit list over r2, read by the decision agent in place of a
+# review.
 #
 # Scope:
 # - In src/aieos_bootstrap/scope_drift.py, by added lines only: a paragraph added to the module docstring before its
@@ -39,7 +42,7 @@
 #   "run_task", "TASK-098", "records the intent", "drafts nothing", "path_class" and "reads the caller's clock once";
 #   and a block after the file's last code line (after import_task), under the marker "# ---- run_task, `aieos run`
 #   (task TASK-098) ----", holding only run_task and names that begin "RUN_", "_RUN" or "_run":
-#   - run_task(root, task_id, intent, source_class, write, clock, read=None, read_log=None, read_base=None,
+#   - run_task(root, task_id, intent, source_class, who, write, clock, read=None, read_log=None, read_base=None,
 #     write_contract=None, append=None) -> a mapping with exactly RUN_KEYS = ('result', 'reason', 'findings',
 #     'intent_id', 'claim_id', 'kind', 'risk', 'path', 'contract_hash', 'event_ids', 'appends'); RUN_REASONS =
 #     ('argument', 'clock', 'head', 'log', 'exists', 'layout', 'write', 'append'); RUN_KINDS = ('single', 'drafting');
@@ -47,7 +50,9 @@
 #     finding "<step>: a step raised <type>". Its steps, in order:
 #     1. argument: root an absolute Windows or POSIX path (launcher's _ROOT, as start takes it; D6); task_id
 #        TASK-<digits>; intent a str of 1 to 2000 printable characters with no line end; source_class one of
-#        APPROVAL_CLASSES, stated by the caller and not checked; write a tuple or list of 0 to 50 distinct literal
+#        APPROVAL_CLASSES, stated by the caller and not checked; who as approval_act checks it (D-3296): for
+#        decision_agent a decision id "D-" followed by digits, for human_authority a one-line name of at most 200
+#        printable characters without the word "owner"; write a tuple or list of 0 to 50 distinct literal
 #        file paths (a write set names files, not patterns; D2), each matching `[A-Za-z0-9_./-]+` (no "*"), not
 #        beginning with "/" or "./", not ending with "/", holding no empty, "." or ".." segment (task_contract's
 #        _item_ok form; D1) and no segment ending with "." or " " (E1), not "-", and whose first segment
@@ -70,8 +75,11 @@
 #        and the intent's UTF-8 bytes (E4); its intent id
 #        the one already recorded under that record_id in the log, else "INT-" followed by 1 +
 #        the highest number among the INT- subjects of intent claims in the log (0 when none), written with at least
-#        three digits (D10); the record {record_id, fact_kind claim, source_class the caller's, recorder
-#        RUN_RECORDER, subject the intent id, evidence_type `intent`, text the intent}.
+#        three digits (D10); the record {record_id, fact_kind claim, source_class the caller's, recorder, subject the
+#        intent id, evidence_type `intent`, text the intent}, with decision_ref who for decision_agent; its recorder
+#        "decided by: decision agent (A41, A51), decision <who>, through aieos cli run" for decision_agent and "<who>,
+#        as stated to aieos cli run (not checked)" for human_authority, approval_act's forms (D-3296); who does not
+#        enter the record_id.
 #     8. the kind and the template: "single" when the class is "low"; else "drafting". The template is filled:
 #        single with the task id, the head, the intent id and the write set; drafting with the task id, the head and
 #        the intent id. A project-state path in a template is built from writer.STATE_DIR.
@@ -79,9 +87,10 @@
 #        and makes no folder; "done" with value "<STATE_DIR>/tasks/<task_id>.yaml" goes on; its "exists" and
 #        "layout" pass through with their findings; any other answer or a raise gives "write"; none appends.
 #     10. the claim's append: record.added with event id the SHA-256 of "run-event", LF, "record.added", LF and the
-#        record_id, now, RUN_RECORDER, no task_id and no fencing token. "appended" or "duplicate" goes on; anything
-#        else, a raise or an answer that is not a WriteResult gives "append" with the findings "append: record.added:
-#        ..." and the exact "append: the contract <path> (<hash>) is written, the intent's claim is not" (E2).
+#        record_id, now, the record's recorder (D-3297), no task_id and no fencing token. "appended" or "duplicate"
+#        goes on; anything else, a raise or an answer that is not a WriteResult gives "append" with the findings
+#        "append: record.added: ..." and the exact "append: the contract <path> (<hash>) is written, the intent's
+#        claim is not" (E2).
 #     11. append: task.drafted {contract_version 'v1', contract_hash the SHA-256 of the text's UTF-8 bytes}, event id
 #        the SHA-256 of "run-event", LF, "task.drafted", LF, the task id, LF and the hash, now, RUN_RECORDER,
 #        task_id the task, no fencing token; "appended" or "duplicate" gives "done"; else "append" with the exact
@@ -114,13 +123,14 @@
 #     verification_plan G0 scope and {gate: G3, check: review, args: [AC1, AC2, AC3, AC4]}; exit_conditions {success
 #     "the three proposal files present and nothing else changed", escalate as import's}; owner_kept_act true.
 # - In src/aieos_bootstrap/cli.py: COMMANDS gains 'run' after 'import'; USAGE gains "run <task> <intent> --root <path>
-#   --class <decision_agent|human_authority> [--write <path>]... [--json]" and a help line; _parse takes the task as
-#   argv[1] and the intent as argv[2] (a non-empty value not beginning "--"), --class required once (one of
-#   launcher.APPROVAL_CLASSES; missing gives exit 2, D-3279 Q3), --write any number of times, and returns an 8-tuple:
-#   today's seven, with run's intent in the note's place, and the write paths last (a tuple, () for every other
+#   --class <decision_agent|human_authority> --by <decision id or name> [--write <path>]... [--json]" and a help
+#   line; _parse takes the task as argv[1] and the intent as argv[2] (a non-empty value not beginning "--"), --class
+#   required once (one of launcher.APPROVAL_CLASSES; missing gives exit 2, D-3279 Q3), --by required once (D-3296;
+#   missing gives exit 2), --write any number of times, and returns an 8-tuple: today's seven, with --by in who's
+#   place and run's intent in the note's place, and the write paths last (a tuple, () for every other
 #   command; D13); the command's functions are _intent_run, _render_intent_run and _intent_run_in_form (cli.py
 #   already has _run); after the parse, inside a
-#   runtime, RUN_RUNTIME_REFUSAL and exit 1; else launcher.run_task(root, task, intent, class, write, clock) once,
+#   runtime, RUN_RUNTIME_REFUSAL and exit 1; else launcher.run_task(root, task, intent, class, who, write, clock) once,
 #   looked up at each call; its answer's form checked by exact types (RUN_OUT_OF_FORM); "done" gives exit 0 and the
 #   lines "intent: <id> <claim id>", "contract: <path> <hash> <kind> <risk or none>" and "event: <id> <append>" twice,
 #   then the findings; under --json one sorted JSON line; "refused" gives exit 1 and "run: refused <reason>" then the
@@ -499,7 +509,8 @@ acceptance_criteria:
       contract parser with every CONTRACT_NEEDS key; the claim's record, record_id, intent id (a second intent
       INT-002; a rerun of the same intent under the same class reusing INT-001, under the other class a new id) and
       event id exactly as the header states, with no task_id and no fencing token,
-      and records.check_record giving no finding; the task.drafted payload and event id as the
+      for both classes, decision_ref and the record's recorder as the header states for each (D-3296), and
+      records.check_record giving no finding; the task.drafted payload and event id as the
       header states; the resulting log passes records.check_log; each callee defaults at call time
       (mock.patch.object of gitread.run, writer.read_log, scope_reconcile.read_base, writer.write_contract and
       writer.append_event made after import are the ones called); the result has exactly RUN_KEYS.
@@ -529,9 +540,10 @@ acceptance_criteria:
       _path_class over test_scope_drift.py's existing cases, None included; its diff is added lines only.
   - AC4: >-
       The command by stand-ins (mock.patch.object of launcher.run_task; a counting clock): "run TASK-1 <intent> --root
-      R --class decision_agent" and with each --write gives one run_task call with (R, 'TASK-1', intent, class, the
-      write paths as a tuple in order, the clock); each argv out of form (no task, a bad task, no intent, an intent
-      beginning "--", no --root, no --class, a class outside the two, a flag twice but --write, a value empty or
+      R --class decision_agent --by D-1" and with each --write gives one run_task call with (R, 'TASK-1', intent,
+      class, who, the write paths as a tuple in order, the clock); each argv out of form (no task, a bad task, no
+      intent, an intent beginning "--", no --root, no --class, a class outside the two, no --by (D-3296), a flag twice
+      but --write, a value empty or
       beginning "--", an extra word) gives exit 2 and USAGE with nothing called, inside a runtime too; an environ
       holding any one of the three RUNTIME_VARS ('' included) gives exit 1 and the runtime refusal with nothing called;
       "done" gives exit 0 and the lines, or under --json the exact sorted string; "refused" gives exit 1 and "finding:
@@ -574,7 +586,8 @@ acceptance_criteria:
       :431 changed (AC5, the G3 diff script); (25) a string naming the project-state directory in launcher.py (AC2,
       AC5); (26) run_task skipping write_contract (AC6, the end-to-end class);
       (27) a write path holding "*" accepted and classed (AC2);
-      (28) the lowercased form of a path not classed (AC2); twenty-eight copies in all; each copy made in a
+      (28) the lowercased form of a path not classed (AC2); (29) decision_ref missing on a decision_agent claim
+      (AC1); twenty-nine copies in all; each copy made in a
       scratchpad script at G3, not committed; the governor's evaluate at acceptance (the shadow) with any
       difference named.
 capabilities:
