@@ -1,7 +1,7 @@
-# The self-build's risk rules (gov-AIEOS), policy version v4
+# The self-build's risk rules (gov-AIEOS), policy version v5
 
-> - **Status:** revision 6. Whether it is approved is recorded in DM section F, not in this file. It decides nothing that a decision matrix (DM) row or a bound document decides.
-> - **Drafted under:** decision agent decisions D-146 (the M1 drafting plan, item 3) and D-157 (Master Plan §4 M1); revision 2 under decision D-174 (C4); revision 3 under decisions D-195 (P3) and D-196; revision 4 under decisions D-696 (Q3) and D-698; revision 5 under decisions D-794 (Q3) to D-796; revision 6 under decisions D-810 (dispositions 1 to 3), D-827 and D-828. Decision files are kept outside the repository (`docs/WORKING-RECORDS.md`).
+> - **Status:** revision 7. Whether it is approved is recorded in DM section F, not in this file. It decides nothing that a decision matrix (DM) row or a bound document decides.
+> - **Drafted under:** decision agent decisions D-146 (the M1 drafting plan, item 3) and D-157 (Master Plan §4 M1); revision 2 under decision D-174 (C4); revision 3 under decisions D-195 (P3) and D-196; revision 4 under decisions D-696 (Q3) and D-698; revision 5 under decisions D-794 (Q3) to D-796; revision 6 under decisions D-810 (dispositions 1 to 3), D-827 and D-828; revision 7 under decisions D-3336 (E4), D-3345 and the decision that approves it. Decision files are kept outside the repository (`docs/WORKING-RECORDS.md`).
 > - **Path:** `docs/specs/risk-rules-gov-aieos.md` is interim, like specifications 1 and 2. In specification 2's layout these rules are the `risk_rules` of `.aieos/project.yaml` (specification 2 §7); that file is written only by a core, which does not exist yet (constitution INV-004).
 > - **Sources:** "concept line N" is a line of `AIEOS-concept.md` (v0.5, unchanged, A22). "Spec 2" is `docs/specs/spec-02-aieos-file-format.md` revision 1 (DM F12). "(proposed)" marks a choice of this policy where the concept is silent or says less; each one is also listed in section 7.
 
@@ -24,7 +24,7 @@
 ## 3. The rules
 
 ```yaml
-policy_version: v4
+policy_version: v5
 non_task_paths: ["docs/History/**", "docs/Progress/**", "docs/Deferred/**", "docs/Lessons/**"]
 risk_rules:
   # R1, low: concept line 597.
@@ -63,6 +63,9 @@ risk_rules:
   # R12, high (proposed): the stack benchmark's language ports.
   - match: { paths: ["bench/**"] }
     risk: high
+  # R13, high (proposed): the native implementation's code (Master Plan §4, M8).
+  - match: { paths: ["native/**"] }
+    risk: high
 ```
 
 ## 4. Why each rule is where it is
@@ -75,9 +78,10 @@ risk_rules:
 - **R10:** only the core writes `.aieos/` (concept line 879; constitution INV-004), and a change that touches the policy, the risk rules or the default profiles is never auto-accepted (`assurance-model.md` §6).
 - **R11:** a fixture's expected result states what AIEOS must do (`conformance-methodology.md` §5), which is intent, and concept line 601 makes a change that touches intent critical, as the scenario text already is under R7. A29 also counts fixtures and scenarios in the evaluator, and their final place, `.aieos/conformance/`, is critical under R10. Without R11 these paths would be high (R3 read fail closed; R2 alone gives medium); R11 lowers nothing.
 - **R12:** `bench/` holds the stack benchmark's ports of the bootstrap into other languages (Master Plan §4, the benchmark; `docs/plan/m4-exit-review.md` §6), disposable code with advisory results (A29, A31). That no part of AIEOS imports it and that only the benchmark's own workflow runs it is a condition on each port task, which the task's contract must test (decision D-800 C3), not a property this policy checks. It cannot live under `tests/`, whose files must be Python source (constitution INV-002, as the CI channel checks it). Without R12 a change touching it would get no class (section 2, point 2). High, not medium, keeps the property of section 6's reference that every path the concept's rules do not cover is either without a class or high or critical; it is code that the CI channel runs, like `src/**` and `tests/**`, which R3's fail-closed reading makes high (decision D-794 Q3).
+- **R13:** `native/` holds the native implementation in the stack the stack ADR chose (Go; `docs/plan/stack-adr.md`), whose ports run beside the bootstrap at the "shadow" stage and decide nothing (Master Plan §4, M8; `docs/plan/m8-plan.md` §2, §3). That no part of the bootstrap imports or runs it is a condition on each native task, which the task's contract must test (decision D-3336 E4), not a property this policy checks. It cannot live under `src/` or `tests/`, whose files must be Python source (constitution INV-002, as the CI channel checks it). Without R13 a change touching it would get no class (section 2, point 2). High keeps the property of section 6's reference that every path the concept's rules do not cover is either without a class or high or critical; it is code that the CI channel is to run, under a workflow change decided on its own (DM A66).
 - **Low is not without checks.** The records (`docs/History/`, `docs/Progress/`, `docs/Deferred/`, `docs/Lessons/`) are low, but the constitution articles whose scope meets a changed path still add their `evidence_required` to its profile (`governor-spec.md` §3.2, "applicable articles"), for example GOV-005 for the records.
 - **The non-task list** (section 2, point 7) names the four working-record folders of `docs/WORKING-RECORDS.md`, which are written at a session's end under the decision agent's own decision, never under a task's lease; they are low (above). Not on the list: `docs/tasks/` (a contract defines a write-set, and its commit stays visible as a claim closed by the decision that approved it), `docs/records/` (an evaluator path of GOV-003) and `docs/WORKING-RECORDS.md` (R4). Conditions 2 to 4 keep any path above low, any evaluator path, the constitution, this policy and `.github/` out of it, even if such a file is later placed under one of the four folders (for example R5's `**/contracts/**`). A scope-drift claim changes no state (specification 1, `drift.detected`) and no evidence profile names it, so the list lowers no class and weakens no evidence requirement (section 6).
-- **No rule** covers a new top-level file or folder other than `src/`, `tests/` and `bench/`: such a change gets no class until this policy is changed (section 2, point 2). Concept line 592 also names "loại thay đổi" and "điều khoản Constitution bị chạm" as rule inputs; spec 2 §7 has no key for the kind of change and does not say how `touches` names an article, so v1 uses paths and tags only (section 7).
+- **No rule** covers a new top-level file or folder other than `src/`, `tests/`, `bench/` and `native/`: such a change gets no class until this policy is changed (section 2, point 2). Concept line 592 also names "loại thay đổi" and "điều khoản Constitution bị chạm" as rule inputs; spec 2 §7 has no key for the kind of change and does not say how `touches` names an article, so v1 uses paths and tags only (section 7).
 
 ## 5. What the classes mean now
 
@@ -89,7 +93,7 @@ risk_rules:
 ## 6. Change control
 
 - This policy is versioned (`policy_version`). A change to it is a change request, approved by the decision agent in the owner's place (CR-002 Đ2), except a change that lowers the class of a kind of change or otherwise weakens an evidence requirement, which is the owner's (CR-002 part 4 limit 8). A change to it is itself critical (R6, and R10 once it lives in `.aieos/`).
-- The reference for this first version (CR-002 part 4 limit 8; A54 point 4) is the repository on GitHub before it was drafted, where the only risk rules were the concept's examples (lines 595-602) and a change that matches no rule is never low (A35). R1 to R10 lower none of the concept's rules, and every path those rules do not cover is, under this version, either without a class (section 2) or high or critical (R3 over `src/**` and `tests/**`, R4, R5, R7 to R10, and R12, added in v4).
+- The reference for this first version (CR-002 part 4 limit 8; A54 point 4) is the repository on GitHub before it was drafted, where the only risk rules were the concept's examples (lines 595-602) and a change that matches no rule is never low (A35). R1 to R10 lower none of the concept's rules, and every path those rules do not cover is, under this version, either without a class (section 2) or high or critical (R3 over `src/**` and `tests/**`, R4, R5, R7 to R10, R12, added in v4, and R13, added in v5).
 - A change to the non-task list (section 2, point 7) is a change to this policy with the same limits: narrowing it is never a weakening; widening it is checked by a decision against point 7's four conditions.
 - A change to the component tags or paths of an architecture entity that would lower the class of any change counts as a change to this policy, with the same limits (proposed).
 - When a document named in R4 to R9 moves (spec 2 §10 point 2), the rule moves with it in the same change; the layout is settled (CR-001 E4, Genesis version 2; DM A60), and the rules move into `.aieos/project.yaml` (spec 2 §7) when a core exists to write that file (constitution INV-004). Neither move changes a class.
@@ -101,7 +105,7 @@ risk_rules:
 3. The components, their paths and tags, in an approved architecture entity (spec 2 §4.2), which makes R3 evaluable; no milestone of the Master Plan delivers one yet. Whether `governor-spec.md` §3.2's weakens-evidence input covers a change to component tags (section 6) is for that document's next revision.
 4. The source tree's top-level name (`src/`) and `tests/` with it, to be set by the first code task's contract, whose write-set has new paths only (Master Plan §8). Closed for fixtures in revision 3: their paths are `tests/conformance/` (`docs/specs/conformance-files.md`), under rule R11.
 5. Rules by kind of change and by constitution article touched (concept line 592), which spec 2 §7 cannot express yet.
-6. The choices marked "(proposed)": the per-path reading of section 2 point 2; the fail-closed reading of an unevaluable rule and of R3 before an architecture exists; a higher declared risk; renames and deletions; the pattern rules of section 2, point 6; `tests/**` in R2; R3's four tags; R4; R5's any-depth folders; R6's path spelling; R7 to R12; the tag-change rule of section 6.
+6. The choices marked "(proposed)": the per-path reading of section 2 point 2; the fail-closed reading of an unevaluable rule and of R3 before an architecture exists; a higher declared risk; renames and deletions; the pattern rules of section 2, point 6; `tests/**` in R2; R3's four tags; R4; R5's any-depth folders; R6's path spelling; R7 to R13; the tag-change rule of section 6.
 7. Specification 4 §12 point 11 (the non-task list) is closed by version v3 (section 2, point 7). Specification 4 §12 point 12 (the policy's machine-readable form, and which path rules report as G0 and which as G3) stays open, except for the list's own line form.
 
 ## 8. Revisions
@@ -113,3 +117,4 @@ risk_rules:
 - Revision 4: policy version v3 (decisions D-696 and D-698): adds the list of non-task paths for scope drift (section 2, point 7; section 3's `non_task_paths`), with its reason in section 4, its change rule in section 6 and open point 7. The rules R1 to R11 and every class are unchanged.
 - Revision 5: policy version v4 (decisions D-794 Q3, D-795 and D-796): adds rule R12, which makes `bench/**` high, with its reason in section 4, and names it in sections 4 and 6 and open point 6. No other rule changes and no class is lowered.
 - Revision 6: wording only; the policy version stays v4 (decisions D-810, dispositions 1 to 3; D-827 and D-828). Section 4's R12 paragraph now states as a condition on each port task, tested by that task's contract (decision D-800 C3), what revision 5 stated as a fact (that no part of AIEOS imports `bench/` and only the benchmark's workflow runs it). The header's Status and "Drafted under" lines name revision 6; revision 5 also changed both lines (to revision 5 and its decisions) without its line here saying so. No rule, class or list of section 3 changes, and no class is lowered.
+- Revision 7: policy version v5 (decisions D-3336 E4, D-3345 and the decision that approves it): adds rule R13, which makes `native/**` high, with its reason in section 4, and names it in sections 4 and 6 and open point 6; the title line, the Status line and the "Drafted under" line change with it. No other rule changes and no class is lowered.

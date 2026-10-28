@@ -240,6 +240,12 @@ DATA = r'''{
             "match": [
               "bench/**"
             ]
+          },
+          {
+            "class": "high",
+            "match": [
+              "native/**"
+            ]
           }
         ],
         "ruleset_version": "v1"

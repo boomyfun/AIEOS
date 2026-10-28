@@ -117,14 +117,14 @@ def case(log_seq=5, session='session-2', violation_id='violation-1', submit_id='
 
 
 ADV_02_SHA256 = 'f6fed8e0db041705f870631ca46b32ba50cb43ed29f6f143f97d19c152938385'
-CB_SET_SHA256 = 'd237d5dcded3fd9fa5bdacd68b098d5818a5d12d0acfa918fd29141e699d7506'
+CB_SET_SHA256 = 'f3297aec6d9ba78df02c7e335cb64e26dd43ee5583b94f8ba45ac9bdaaa5e5ec'
 
 
 def cb_state(value=None):
     """The state of the set file's Capability Boundaries entries (TASK-058, contract AC1): 'null' when ADV-02, the only
     one, names no fixture; 'present' when it names the file conformance.expected_path gives with the SHA-256 that DM row
     F49's freeze binds, that file in the tree having that SHA-256, and the set file, written as the runner writes it,
-    has the SHA-256 d237d5dc... and fixture_set_version 5; any other value fails. Without a value it reads the tree's
+    has the SHA-256 f3297aec... and fixture_set_version 6; any other value fails. Without a value it reads the tree's
     set file."""
     if value is None:
         value = conformance.unwrap((ROOT / conformance.SET_FILE).read_bytes())
@@ -137,7 +137,7 @@ def cb_state(value=None):
     data = conformance.FIRST + conformance.canonical_text(value) + conformance.LAST
     if (cb[0]['fixture'] == {'path': path, 'sha256': ADV_02_SHA256}
             and conformance.sha256((ROOT / path).read_bytes()) == ADV_02_SHA256
-            and conformance.sha256(data) == CB_SET_SHA256 and value['fixture_set_version'] == 5):
+            and conformance.sha256(data) == CB_SET_SHA256 and value['fixture_set_version'] == 6):
         return 'present'
     raise AssertionError('the ADV-02 entry names neither no fixture nor its frozen file in the set file of AC1')
 

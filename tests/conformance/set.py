@@ -1,5 +1,5 @@
 DATA = r'''{
-  "fixture_set_version": 5,
+  "fixture_set_version": 6,
   "scenario_set_file_hash": "6b5c0666a1f364f5ecec9ad516c9a749969a1963f4e5dbef566adcbc8c80e24d",
   "scenario_set_version": 2,
   "scenarios": [
@@ -160,7 +160,7 @@ DATA = r'''{
       "capability": "Risk Engine",
       "fixture": {
         "path": "tests/conformance/fixtures_risk/risk_01.py",
-        "sha256": "d04f33395b7dad7f296038dbdf277dba3fadbd00bfbf85cb8ae32bfc6f8723df"
+        "sha256": "463c772e4be707b82ebf31b918a2ddf5fc292f21dbeba8d341fe2931e44709af"
       },
       "id": "RISK-01",
       "row_hash": "d04e8131768256470e2f2ab872bd18023dc90b9d45bf6853156bdea68c2b06f2"
