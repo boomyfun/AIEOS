@@ -56,3 +56,4 @@ TASK-051 (adapter); specification 5 section 11 points 7 and 10, specification 7 
   question whether an allowed executable runs a model, the lease length and its renewal, and a finish refused
   "stored_reads", which launch_outside leaves to `aieos end` or the lease's expiry with no end_outside call (session
   ea6ea0a3; decisions D-3154, D-3164, D-3172, D-3178).
+- 2026-10-29: M7 exited (`docs/plan/m7-exit-review.md`): the base-tip check, check 0 and max_risk stay open before any runtime launch (session ea6ea0a3).

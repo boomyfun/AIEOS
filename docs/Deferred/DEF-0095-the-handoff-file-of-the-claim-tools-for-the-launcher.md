@@ -24,3 +24,4 @@ TASK-079 (the handoff's claim records); specification 6 section 7 and section 11
   handoff_file.write with commit None after an end that gave "done"; the shipped command has no runtime starter, so the
   file is not written in a real session; the write after a submission, its way into Git and its reader stay open
   (session ea6ea0a3; decisions D-3148, D-3165, D-3178).
+- 2026-10-29: M7 exited (`docs/plan/m7-exit-review.md`): the file is written after a done end with commit None (TASK-094); the write after a submission, the way to Git, the reader of "the last handoff" and abnormal ends stay open (session ea6ea0a3).
