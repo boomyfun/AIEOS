@@ -268,9 +268,10 @@ class TASK095AC4Command(unittest.TestCase):
         self.assertEqual((rc, out), (1, 'finding: cli: a step raised ValueError\n'))
 
     def test_the_other_commands_still_parse(self):
-        """TASK-095 AC4, as TASK-094 AC6 and TASK-096 AC6 widen it: COMMANDS keeps tasks, end and status before init,
-        then launch, approve, edit and reject, and init takes no session."""
-        self.assertEqual(cli.COMMANDS, ('tasks', 'end', 'status', 'init', 'launch', 'approve', 'edit', 'reject'))
+        """TASK-095 AC4, as TASK-094 AC6, TASK-096 AC6 and TASK-097 AC6 widen it: COMMANDS keeps tasks, end and status
+        before init, then launch, approve, edit, reject and import, and init takes no session."""
+        self.assertEqual(cli.COMMANDS, ('tasks', 'end', 'status', 'init', 'launch', 'approve', 'edit', 'reject',
+                                        'import'))
         rc, out, stand, _ = run(['init', 'S', '--root', ROOT])
         self.assertEqual((rc, out, stand.calls), (2, cli.USAGE, []))
 
@@ -326,16 +327,19 @@ def doc(file_name):
 
 class TASK095AC6Docs(unittest.TestCase):
     def test_the_cli_docstring_and_usage(self):
-        """TASK-095 AC6, as TASK-094 AC6 and TASK-096 AC6 widen it: cli.py's docstring holds "aieos init",
-        "TASK-095", "COMMANDS, tasks, end, status, init, launch, approve, edit or reject" and "end and init call it
-        after the parse", and not "COMMANDS, tasks, end or status", "COMMANDS, tasks, end, status or init" nor
-        "COMMANDS, tasks, end, status, init or launch"; USAGE names init."""
+        """TASK-095 AC6, as TASK-094 AC6, TASK-096 AC6 and TASK-097 AC6 widen it: cli.py's docstring holds "aieos
+        init", "TASK-095", "COMMANDS, tasks, end, status, init, launch, approve, edit, reject or import" and "end and
+        init call it after the parse", and not "COMMANDS, tasks, end or status", "COMMANDS, tasks, end, status or
+        init", "COMMANDS, tasks, end, status, init or launch" nor "COMMANDS, tasks, end, status, init, launch,
+        approve, edit or reject"; USAGE names init."""
         text = doc('cli.py')
-        for phrase in ('aieos init', 'TASK-095', 'COMMANDS, tasks, end, status, init, launch, approve, edit or reject',
+        for phrase in ('aieos init', 'TASK-095',
+                       'COMMANDS, tasks, end, status, init, launch, approve, edit, reject or import',
                        'end and init call it after the parse'):
             self.assertIn(phrase, text)
         for phrase in ('COMMANDS, tasks, end or status', 'COMMANDS, tasks, end, status or init',
-                       'COMMANDS, tasks, end, status, init or launch'):
+                       'COMMANDS, tasks, end, status, init or launch',
+                       'COMMANDS, tasks, end, status, init, launch, approve, edit or reject'):
             self.assertNotIn(phrase, text)
         self.assertIn('init --root <path> [--json]', cli.USAGE)
 

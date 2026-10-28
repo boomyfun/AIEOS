@@ -150,6 +150,16 @@ governor at acceptance. It reads the contract at HEAD through start's own reader
 branch's tip is not checked (DEF-0101's base-tip check, open), and the check that the contract equals the last drafted
 version binds the approval to the drafted text whatever HEAD is. The source class and the name are the caller's
 statement, not checked. approval_act reads the caller's clock once, an exception to "reads no clock" above.
+
+import_task (task TASK-097; `aieos import`, specification 7 section 3 :29) makes and records a drafting task and
+returns a mapping with exactly IMPORT_KEYS; it never raises an Exception. It drafts nothing: it fills a fixed
+template with the task id and HEAD only (HEAD read through start's own reader, _head, and refused unless it is 40
+lowercase hex), writes it through writer.write_contract and then appends task.drafted with the text's hash through
+writer.append_event, and refuses a task id that already has events in the log. Reading the repository and drafting
+the proposals are a launched session's, and every launch is the owner's. base_inputs is not changed, so the contract
+it writes is not yet read by launch or approve. import_task reads the caller's clock once, an exception to "reads no
+clock" above, and writes through writer.write_contract and writer.append_event, the writer being the one module that
+opens a file.
 """
 
 import datetime
@@ -1258,3 +1268,184 @@ def approval_act(root, task_id, act, source_class, who, note, clock, read=None, 
         return _approval_result('refused', step, ['%s: a step raised %s' % (step, type(exc).__name__)], record_id,
                                 event_ids, appends)
     return _approval_result('done', None, [], record_id, event_ids, appends)
+
+
+# ---- import_task, `aieos import` (task TASK-097) ----
+
+IMPORT_KEYS = ('result', 'reason', 'findings', 'path', 'contract_hash', 'event_id', 'append')
+IMPORT_REASONS = ('argument', 'clock', 'head', 'log', 'exists', 'layout', 'write', 'append')
+IMPORT_RECORDER = 'aieos cli import'
+_IMPORT_CALLEES = ('read', 'read_log', 'write_contract', 'append')
+_IMPORT_APPENDED = ('appended', 'duplicate')
+_IMPORT_PASSED = ('exists', 'layout')
+_IMPORT_BAD_CLOCK = 'clock: the clock gave no timezone-aware UTC time with whole seconds'
+_IMPORT_TEMPLATE = '''task: %(task)s
+contract_version: v1
+task_type: drafting
+objective: >-
+  Read the repository and draft an architecture proposal and a constitution change request, proposing only and
+  changing nothing else.
+traces_to: []
+input_state:
+  base_commit: %(head)s
+  depends_on: []
+  intent_versions: {}
+write_set:
+  paths:
+    - docs/proposals/ARCH-001.md
+    - docs/proposals/CHG-001.md
+read_set:
+  paths:
+    - "**"
+  interfaces: []
+  schemas: []
+forbidden:
+  - %(state)s/**
+constitution: []
+acceptance_criteria:
+  - AC1: >-
+      docs/proposals/ARCH-001.md is an architecture proposal in specification 2 section 4.2's form.
+  - AC2: >-
+      docs/proposals/CHG-001.md is a change request in specification 2 section 4.3's form naming the constitution as a
+      target with no current version, a new entity.
+  - AC3: >-
+      No other path is changed.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: []}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: critical
+autonomy:
+  max_level: L1
+  budgets: {tokens: 400k, wall_time: 2h, retries: 1, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G3, check: review, args: [AC1, AC2, AC3]}
+exit_conditions:
+  success: both proposals present in their forms and nothing else changed
+  escalate: [needs_out_of_scope_change, needs_owner_act]
+owner_kept_act: true
+'''
+
+
+class _import_stop(Exception):
+    """A refusal at a step: its reason and its findings."""
+
+    def __init__(self, reason, findings):
+        Exception.__init__(self, reason)
+        self.reason = reason
+        self.findings = list(findings)
+
+
+def _import_result(result, reason=None, findings=(), path=None, contract_hash=None, event_id=None, append=None):
+    return {'result': result, 'reason': reason, 'findings': [f for f in findings if isinstance(f, str)],
+            'path': path, 'contract_hash': contract_hash, 'event_id': event_id, 'append': append}
+
+
+def _import_argument_findings(root, task_id, clock, callees):
+    """Step 1: the arguments' findings."""
+    found = []
+    if not (isinstance(root, str) and _WINDOWS_ROOT.fullmatch(root) is not None):
+        found.append('argument: root is not an absolute Windows path')
+    if not (isinstance(task_id, str) and _TASK.fullmatch(task_id) is not None):
+        found.append('argument: task_id is not TASK- followed by digits')
+    if not callable(clock):
+        found.append('argument: clock is not callable')
+    for name, value in zip(_IMPORT_CALLEES, callees):
+        if value is not None and not callable(value):
+            found.append('argument: %s is neither None nor callable' % name)
+    return found
+
+
+def _import_seen(log, task_id):
+    """Step 5: whether any event of the log, an ignored duplicate line included, has task_id the task."""
+    if type(log) is not bytes:
+        raise _import_stop('log', ['log: read_log gave an answer that is not bytes'])
+    report = records.check_log(log)
+    found = ['log: %s' % f for _, f in report.findings()]
+    if found:
+        raise _import_stop('log', found)
+    return any(line.event.get('task_id') == task_id for line in report.lines)
+
+
+def _import_contract(task_id, head):
+    """Step 6: the template filled with the task id and the head only."""
+    return _IMPORT_TEMPLATE % {'task': task_id, 'head': head, 'state': writer.STATE_DIR}
+
+
+def _import_write(write_contract, root, task_id, text):
+    """Step 7: the path written, or a stop with reason "exists", "layout" or "write"."""
+    want = '%s/tasks/%s.yaml' % (writer.STATE_DIR, task_id)
+    got = write_contract(root, task_id, text)
+    if not isinstance(got, writer.StoreResult):
+        raise _import_stop('write', ['write: write_contract gave an answer that is not a StoreResult'])
+    if got.result == 'done' and got.value == want:
+        return want
+    if got.result == 'refused' and got.reason in _IMPORT_PASSED:
+        raise _import_stop(got.reason, [f for f in got.findings if isinstance(f, str)]
+                           or ['%s: write_contract refused' % got.reason])
+    raise _import_stop('write', ['write: write_contract gave %s %s' % (got.result, got.reason)])
+
+
+def import_task(root, task_id, clock, read=None, read_log=None, write_contract=None, append=None):
+    """Make and record a drafting task (task TASK-097; `aieos import`, specification 7 section 3 :29): a mapping with
+    exactly IMPORT_KEYS; it never raises an Exception. Its steps, each step's name being the reason of a refusal or a
+    raise at it: argument; clock; head (start's own reader, _head, 40 lowercase hex); log (read_log, then
+    records.check_log); exists (any event of the task in the log); the template; write (write_contract, whose
+    "exists" and "layout" pass through); append (task.drafted with the text's hash, no fencing token)."""
+    callees = (read, read_log, write_contract, append)
+    step = 'argument'
+    path = contract_hash = event_id = None
+    try:
+        found = _import_argument_findings(root, task_id, clock, callees)
+        if found:
+            raise _import_stop('argument', found)
+        read = gitread.run if read is None else read
+        read_log = writer.read_log if read_log is None else read_log
+        write_contract = writer.write_contract if write_contract is None else write_contract
+        append = writer.append_event if append is None else append
+        step = 'clock'
+        moment = clock()
+        if not _utc_whole(moment):
+            raise _import_stop('clock', [_IMPORT_BAD_CLOCK])
+        step = 'head'
+        head, found = _head(read, root)
+        if found is not None:
+            raise _import_stop('head', found)
+        if not (isinstance(head, str) and _HEX40.fullmatch(head) is not None):
+            raise _import_stop('head', ['head: not 40 lowercase hex characters'])
+        step = 'log'
+        log = read_log(root)
+        seen = _import_seen(log, task_id)
+        step = 'exists'
+        if seen:
+            raise _import_stop('exists', ['exists: %s has events in the log' % task_id])
+        text = _import_contract(task_id, head)
+        digest = hashlib.sha256(text.encode('utf-8')).hexdigest()
+        step = 'write'
+        path = _import_write(write_contract, root, task_id, text)
+        contract_hash = digest
+        step = 'append'
+        parts = ('import-event', 'task.drafted', task_id, digest)
+        event_id = hashlib.sha256('\n'.join(parts).encode('utf-8')).hexdigest()
+        stuck = 'append: the contract %s (%s) is written, the task.drafted is not' % (path, digest)
+        try:
+            got = append(root, 'task.drafted', {'contract_version': 'v1', 'contract_hash': digest}, event_id, moment,
+                         IMPORT_RECORDER, task_id=task_id)
+        except Exception as exc:
+            raise _import_stop('append', ['append: task.drafted: a step raised %s' % type(exc).__name__, stuck])
+        if not isinstance(got, writer.WriteResult):
+            raise _import_stop('append', ['append: task.drafted: append gave an answer that is not a WriteResult',
+                                          stuck])
+        result = got.result
+        if result not in _IMPORT_APPENDED:
+            raise _import_stop('append', ['append: task.drafted: %s %s' % (got.result, got.reason), stuck])
+    except _import_stop as stop:
+        return _import_result('refused', stop.reason, stop.findings, path, contract_hash, event_id)
+    except Exception as exc:  # TASK-097: a raise at a step gives that step's reason
+        return _import_result('refused', step, ['%s: a step raised %s' % (step, type(exc).__name__)], path,
+                              contract_hash, event_id)
+    return _import_result('done', None, [], path, contract_hash, event_id, result)

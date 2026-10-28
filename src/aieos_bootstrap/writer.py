@@ -70,6 +70,15 @@ path resolving elsewhere before and after the folders are made, and creates no f
 constitution or ignore file); it opens no file. A refusal or a raise after the folders are made leaves those made so
 far, which every later call refuses ("exists").
 
+Task TASK-097 (specification 7 section 3 :29; specification 2 sections 3 and 5.1) adds ``write_contract(root,
+task_id, text)``: the writer also creates ``<root>/.aieos/tasks/<task>.yaml``, create-only, holding a task contract's
+text, a fourth kind of file in the project-state directory. It refuses ("layout") unless the tasks folder of the
+layout already exists, so ``aieos init`` comes first, and makes no folder; it refuses ("link") a link or a path
+resolving elsewhere, and a non-empty file ("exists"). Create-only is write_handoff's size check after opening in
+append mode ('ab'), not an exclusive create, with the same limits: two concurrent writers are not excluded, and a
+write cut off part-way leaves a non-empty file that every later write refuses. Core-only; launcher.import_task calls
+it.
+
 Readings of the specifications that the contract marks "(reading)" are noted where they are applied.
 """
 
@@ -1208,6 +1217,72 @@ def init_layout(root):
     except Exception as e:
         return _named('unwritable', e)
     return StoreResult('done', value=tuple('%s/%s' % (STATE_DIR, folder) for folder in _INIT_LAYOUT_DIRS))
+
+
+# ---- write_contract (task TASK-097) ----
+
+_CONTRACT_DIR = 'tasks'
+_CONTRACT_LAYOUT = 'layout: the tasks folder of the project-state directory is not an existing folder'
+_CONTRACT_LINK = 'link: a link, or a path that resolves elsewhere'
+_CONTRACT_EXISTS = 'exists: the contract file is not empty'
+
+
+def _write_contract_links(root, path):
+    """True when root, root/.aieos, root/.aieos/tasks or the path is a link, os.path.islink being called on each of
+    the four whether or not it exists, or when the path's realpath, normcased, differs from the normcased realpath of
+    root joined with the project-state directory, tasks and the file name (write_handoff's form)."""
+    folder = os.path.join(root, STATE_DIR, _CONTRACT_DIR)
+    for p in (root, os.path.join(root, STATE_DIR), folder, path):
+        if os.path.islink(p):
+            return True
+    expected = os.path.join(os.path.realpath(root), STATE_DIR, _CONTRACT_DIR, os.path.basename(path))
+    return os.path.normcase(os.path.realpath(path)) != os.path.normcase(expected)
+
+
+def write_contract(root, task_id, text):
+    """Create <root>/.aieos/tasks/<task_id>.yaml holding the text's UTF-8 bytes, create-only (task TASK-097;
+    specification 7 section 3 :29; specification 2 sections 3 and 5.1). Core-only; launcher.import_task calls it.
+
+    In order: task_id TASK-<digits> and text a non-empty str that encodes as UTF-8 ("argument"); root an existing
+    folder ("root"); root/.aieos/tasks an existing folder, else "layout" with nothing made (no folder is made, so
+    ``aieos init`` comes first); the link check (_write_contract_links) before the open ("link"); the open in append
+    mode, and a size above 0 at f.tell() refuses ("exists") with nothing written; then the bytes are written, flushed
+    and synced, and read back, which must give the same bytes ("unwritable", the file then staying). Create-only is a
+    size check after opening in append mode, not an exclusive create (write_handoff's limit). The result is a
+    StoreResult: "done" with value ".aieos/tasks/<task_id>.yaml", or "refused" with one finding naming an exception's
+    type, never caller text. No exception escapes."""
+    try:
+        _check_task(task_id)
+        if not (isinstance(text, str) and text):
+            raise TypeError('text is not a non-empty str')
+        data = text.encode('utf-8')
+    except Exception as e:
+        return _named('argument', e)
+    try:
+        _check_root(root)
+    except Exception as e:
+        return _named('root', e)
+    name = '%s.yaml' % task_id
+    folder = os.path.join(root, STATE_DIR, _CONTRACT_DIR)
+    path = os.path.join(folder, name)
+    try:
+        if not os.path.isdir(folder):
+            return _refused('layout', _CONTRACT_LAYOUT)
+        if _write_contract_links(root, path):
+            return _refused('link', _CONTRACT_LINK)
+        with open(path, 'ab') as f:
+            if f.tell() > 0:
+                return _refused('exists', _CONTRACT_EXISTS)
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        with open(path, 'rb') as f:
+            back = f.read()
+        if back != data:
+            return _refused('unwritable', 'unwritable: the read-back differs')
+    except Exception as e:
+        return _named('unwritable', e)
+    return StoreResult('done', value='%s/%s/%s' % (STATE_DIR, _CONTRACT_DIR, name))
 
 
 # ---- the read-only lookup of the store (task TASK-066) ----

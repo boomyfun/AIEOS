@@ -519,16 +519,18 @@ class TASK094AC6Docs(unittest.TestCase):
             self.assertIn(phrase, text)
 
     def test_the_cli_docstring_and_usage(self):
-        """TASK-094 AC6, as TASK-096 AC6 widens it: cli.py's docstring holds "aieos launch", "TASK-094", "no runtime
-        starter", "COMMANDS, tasks, end, status, init, launch, approve, edit or reject" and "end and init call it after
-        the parse", and not "COMMANDS, tasks, end, status or init", "COMMANDS, tasks, end, status, init or launch" nor
-        "comes with a later task"; USAGE names launch."""
+        """TASK-094 AC6, as TASK-096 AC6 and TASK-097 AC6 widen it: cli.py's docstring holds "aieos launch",
+        "TASK-094", "no runtime starter", "COMMANDS, tasks, end, status, init, launch, approve, edit, reject or import"
+        and "end and init call it after the parse", and not "COMMANDS, tasks, end, status or init", "COMMANDS, tasks,
+        end, status, init or launch", "COMMANDS, tasks, end, status, init, launch, approve, edit or reject" nor "comes
+        with a later task"; USAGE names launch."""
         text = doc('cli.py')
         for phrase in ('aieos launch', 'TASK-094', 'no runtime starter',
-                       'COMMANDS, tasks, end, status, init, launch, approve, edit or reject',
+                       'COMMANDS, tasks, end, status, init, launch, approve, edit, reject or import',
                        'end and init call it after the parse'):
             self.assertIn(phrase, text)
         for phrase in ('COMMANDS, tasks, end, status or init', 'COMMANDS, tasks, end, status, init or launch',
+                       'COMMANDS, tasks, end, status, init, launch, approve, edit or reject',
                        'comes with a later task'):
             self.assertNotIn(phrase, text)
         self.assertIn('launch <task> --root <path> [--json]', cli.USAGE)
