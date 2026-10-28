@@ -40,6 +40,9 @@ One occurrence in session 2026-10-23-1555, later part 6 (../History/2026-10/2026
 One occurrence in session 3797498a (../History/2026-10/2026-10-24-0319-the-later-part-tasks-081-to-089-and-task-090s-preparation.md):
 - **2026-10-25 (D-2815).** After TASK-089's clone was made, a turn ended with nothing to wait on, so the owner had to write "tiếp tục đi, tại sao lại dừng" to resume it. D-2815 set the rule: a turn ends only at a wait on the decision agent or a background run, a stop the decision agent rules, an owner-only act, or the owner's word.
 
+One occurrence in session ea6ea0a3 (../History/2026-10/2026-10-25-0526-the-later-part-tasks-087-and-091-to-098-and-m7s-exit.md):
+- **2026-10-29 (D-3323 (aa)).** After TASK-098's CI watch had exited, the turn ended with nothing to wait on; the owner asked "M7 đã xong chưa? Tại sao lại dừng" and the work resumed.
+
 ## Why it happens
 - Claude treats a step as mechanical (a display, a change of order, a turn end) and does not see it as a decision.
 - The request checklist of the decision agent's definition was not applied before sending.
