@@ -1,0 +1,336 @@
+# Task contract TASK-102 (draft r1 in the scratchpad: r0 after the findings of its review r0b; the changes are not
+# reviewed again), the joint cleanup of M8: text, test and spec-wording items
+# of the open deferred items DEF-0026 to DEF-0106 that the scope note takes (M8 plan, docs/plan/m8-plan.md section 1;
+# decisions D-3466 C3, D-3550, D-3568, D-3595 to D-3599). Drafted under D-3598 C2 to C4 and corrected under D-3599 M1 to M9;
+# brought for approval in its own request; whether it is approved is recorded in the decision files, not here. Fields and
+# value forms follow specification 2 section 5.1 and TASK-101's contract.
+# The contract's own review (a read-only review by another model, voided once and repeated: D-3623, D-3624), its findings,
+# the script outputs and the dry records are in the approval request (D-3600 C5 to C7, D-3620 C4 to C6).
+# The scope: the placed scope note C:\Users\Admin\AIEOS-REG0-lite\CS\records\cleanup-scope-note-2026-10-29.md, SHA-256
+# b0b01e08bc821edf6951785c7a82664b0c39688fbf7a063ff696beb5bea19f3b (decision D-3597). It lists, per item, what enters and what
+# leaves and the lines checked at main 148da42d; this contract lists files and findings per item (appendix A) and takes the
+# exact lines from the note by reference, finding them again in the work. Where the note says "lines in step 2", they are
+# found in the first step of the work and written in commit X's map. One change to the note's list, ruled in D-3599 M2:
+# DEF-0036 leaves whole and DEF-0046 keeps only F4 and F5, because the shared-helper move cannot be made under the CI's
+# import rule for modules under tests/ (aieos-checks.yml :1611-1621 at main db866ffd refuses any absolute import whose top name is neither
+# the standard library nor aieos_bootstrap; relative imports are skipped, :1613; no __init__.py exists under tests/ and
+# tests/run_tests.py :20 discovers each folder as its own top level; allowing a sibling import would loosen a CI check, which
+# is not wording-sized). So 37 of the note's 38 entering items enter this task.
+# Place in the order (D-3466 C3): after the native governor (TASK-100) and the native Resume Check (TASK-101), before the
+# open links of m8-plan section 7 (DEF-0105, DEF-0101, DEF-0095, each its own task, which start from this task's result).
+# What the task does not do: it changes no DEF file (each DEF log line is its own decision), no code behaviour (text, tests
+# and docstrings only), nothing under native/, bench/, .github/, docs/ or tests/conformance/, no spec 2, no accepted task's
+# contract or record. It does not take the 17 after-v0.1 rows, the owner-kept parts, or the leaving parts written in the
+# note (DEF-0033, 0036, 0071, 0102, 0104 whole; DEF-0054's M1, M7; the others part by part).
+# Prerequisites that land on main before this task starts, each its own change-set and its own decision (D-3598 C3, D-3599 M9):
+#   P1 docs/specs/spec-01-state-and-event-model.md (DEF-0026: :89; DEF-0039: :105), one spec 1 revision.
+#   P2 docs/specs/spec-03-resume-check-and-decision-engine.md (DEF-0083: :25, :178).
+#   P3 docs/specs/spec-05-adapter-contract.md (DEF-0093: :109, :118, and point 6's text).
+#   P4 docs/specs/spec-06-mcp-protocol-and-work-orders.md (DEF-0098: the departures (a) to (e)).
+#   P5 docs/specs/spec-07-cli-and-zero-friction-path.md (DEF-0098: :56 and section 10 item 8).
+#   P6 docs/specs/conformance-files.md section 10 (DEF-0043 (e): section 10's articles row at :115; section 9's row at :94
+#      stays for the file's next revision).
+#   P7 .github/workflows/aieos-checks.yml (DEF-0031: the SEC-003 message, :404), under A66, its exact diff and SHA-256s.
+#   P8 .github/workflows/aieos-bench.yml (DEF-0062 F4, F7, F8: :2, :9, :39), under A66, likewise.
+# The plan (D-3599 M9): the texts of P1 to P6 come one per decision; their commits then follow under one executor plan, one
+# push decision and one CI read; P7 and P8 each come as their own A66 decision with the exact diff and SHA-256, and may ride
+# in the same push or the next; all land on main before commit C. Each spec change-set re-checks that no pin of a current
+# spec text exists (the scope note's spec-pin search found none in src/, native/, tests/ or .github/). input_state pins the
+# revised hashes at the time of commit C. If a P-item turns out to need the code first, it goes back to the decision agent.
+# Carries and the gate (named, per the scope note section 4): TASK-100's t100x-R1 findings 1 and 3 and t100x-R5 findings 1 and 3
+# (D-3451 C3), for the next change of native/go/governor, tests/unit/test_export_governor.py or test_native_isolation.py;
+# TASK-101's R1-1, R1-4, R1-5, R1-6, R4-1, R5-3 (D-3537 C2), for the next change of native/go/resume; gate T5 (D-3537 C3)
+# before the native Resume Check reads non-fixture input. This task changes none of those folders, so the carries stay
+# carried and the gate stays closed; a part that would need such a change leaves.
+# Risk: high. R2 matches src/** and tests/** (medium) and R3 reads them fail closed as high until an architecture names the
+# components (risk-rules section 2 point 3; section 4 R11 reasoning; section 5); R6 (docs/specs/**) and R9 (.github/**) are
+# critical but belong to the prerequisites, outside this task's write set; the highest rule that matches the write set is R3:
+# high. Confirmed by script over the base (risk_class102.py, TASK-101's form), its output in the approval request.
+# Change class: critical_cr (D-3599 M3): the CI's EVALUATOR list (aieos-checks.yml :429-436 at main db866ffd) holds 'src/aieos_bootstrap/**',
+# 'tests/unit/**', 'tests/integration/**' and 'tests/property/**', so every path of the write set is a GOV-003 evaluator path.
+# Commit C (docs/tasks/**) and P7, P8 (.github/**) are evaluator paths too. The script (gov003_class102.py) only
+# confirms it; its output is in the approval request.
+# Profile (assurance-model.md section 5, gov-AIEOS, high): as TASK-101: unit_test, integration_test, deterministic_rule,
+# static_security_analysis, ai_review (cross-model); plus the evidence_required of the applicable articles, recorded per
+# article from the start (L-0034), built at r0's approval request through records.check_record and the governor shadow.
+# Applicable articles: INV-001 to INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003, and INV-005 to INV-008
+# and INV-010, applied fail closed as in TASK-101's contract (:90-95): the write set changes tests of the Resume Check's
+# and the governor's conformance evidence (appendix 0029: the INV-005 assertion and the INV-007 property of
+# test_runner_rc_properties.py; conformance.py), so INV-005 to INV-008 require property_test and INV-010 is the replay
+# (ruled in D-3625). Not applicable: OPS-001, INV-009, INV-011, GOV-001, GOV-004 to GOV-006, SEC-003.
+# Reviews: five way-2 reviews by a Claude model other than the implementer's, each brief to the decision agent first, and
+# the decision agent's reviews, as TASK-101. Evaluation path: the approved contract is committed on main as its own commit
+# C, changing only docs/tasks/TASK-102.yaml; the work is made in a scratchpad clone (push URL disabled, no-reply identity)
+# and the suite runs locally on a compiled tree (L-0018); the work is made as about four task commits by module family, each
+# with its own section of commit X's map (D-3599 (5)); task commits carry the trailer "AIEOS-Task: TASK-102", go to
+# task/TASK-102 each under its own push decision after a secret scan and a dry run, never by force; the records commit
+# lands on main by the fast-forward form of TASK-099.
+# Owner-kept acts: none. No setting, no hook, no install, no class lowered, no evidence requirement weakened. Approver
+# of the acceptance (reading): one delegated approval of the decision agent (Master Plan section 6).
+# Uncovered and stated limits: the contract does not copy the exact lines of each point (the note holds them and they move
+# with each earlier edit), and for DEF-0049, 0050, 0052, 0061, 0069 and 0087 the note confirmed only the files; the first
+# step of the work finds the lines and writes them in commit X's map, and a point whose check shows it done, or not text
+# or test, leaves with the reason; the write set is complete for the files of the entering items and any other path is a
+# contract revision with its own decision (D-3599 M1); a point whose change needs a file outside the write set leaves,
+# with the reason in commit X's map, and stays deferred; it enters only by a contract revision with its own decision
+# (D-3600 C5); every review is by AI of one vendor.
+task: TASK-102
+contract_version: v1
+task_type: implementation
+objective: >-
+  Close the text and test points of the open deferred items that the scope note takes, in src/ docstrings and comments
+  and in tests (the spec-wording points land as P1 to P6 before this task), with no change of behaviour: the Python Resume Check, the governor and their frozen
+  fixtures and reference outputs stay byte-equal, the native ports' CI jobs stay unchanged, and no DEF file changes.
+traces_to:
+  - docs/specs/spec-01-state-and-event-model.md#7
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#1
+  - docs/specs/spec-05-adapter-contract.md#11
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#4
+  - docs/plan/m8-plan.md#7
+input_state:
+  # base_commit is filled by script from refs/heads/main just before commit C is made; it must be a main commit on which
+  # P1 to P8 have landed, and commit C has it as its one parent. Commit C is made on exactly this main; if main moves
+  # first, base_commit and the pins are refilled and the contract is approved again.
+  base_commit: db866ffdf5d9162ea42957f950e604f857316801
+  depends_on: [TASK-100, TASK-101]
+  intent_versions:
+    docs/specs/spec-01-state-and-event-model.md: c79897a1f82590046e1f49c3753e934e0b3df2893f0c627dd6ac90c8b8c6eebb
+    docs/specs/spec-03-resume-check-and-decision-engine.md: fc65d9a6490fa740072bb47dce142e17c6d82dcf0a5c7bc515965c97015eb59a
+    docs/specs/spec-05-adapter-contract.md: c3d356414d46db76b2e95a321c49ee11670b592f3dfec714ba7874df89f873de
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: ff2f80e24e8b519d3cb4ab7904e613f6dfb6c5c3a991c63bf38de4826def8b69
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 8739a44748fb9c15fafe8031a86f67dce56eeb5cb3b0b3e0db60681503c7f29a
+    docs/specs/conformance-files.md: efb9903e5981f836be7bd841bdca8fe2140661f7bac7a0aabe62414fac5ceca9
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+write_set:
+  # 19 src paths and 56 test paths (17 property, 25 unit, 14 integration), all existing; each is traced to an item of
+  # appendix A. No other path may be changed; a later path is a contract revision with its own decision.
+  paths:
+    - src/aieos_bootstrap/conformance.py
+    - src/aieos_bootstrap/eventlog.py
+    - src/aieos_bootstrap/recovery.py
+    - src/aieos_bootstrap/writer.py
+    - src/aieos_bootstrap/ac_coverage.py
+    - src/aieos_bootstrap/ac_tests.py
+    - src/aieos_bootstrap/stale.py
+    - src/aieos_bootstrap/gitread.py
+    - src/aieos_bootstrap/startup.py
+    - src/aieos_bootstrap/replay.py
+    - src/aieos_bootstrap/claude_code_channel.py
+    - src/aieos_bootstrap/claude_code.py
+    - src/aieos_bootstrap/t0.py
+    - src/aieos_bootstrap/read_set_record.py
+    - src/aieos_bootstrap/claude_code_reads.py
+    - src/aieos_bootstrap/task_contract.py
+    - src/aieos_bootstrap/context_compiler.py
+    - src/aieos_bootstrap/launcher.py
+    - src/aieos_bootstrap/cli.py
+    - tests/property/test_conformance_rc_properties.py
+    - tests/property/test_runner_rc_properties.py
+    - tests/property/test_conformance_risk_properties.py
+    - tests/property/test_claude_code_reads_properties.py
+    - tests/property/test_records_execution_properties.py
+    - tests/property/test_resume_check_properties.py
+    - tests/property/test_recovery_properties.py
+    - tests/property/test_writer_properties.py
+    - tests/property/test_ac_coverage_properties.py
+    - tests/property/test_ac_tests_properties.py
+    - tests/property/test_runner_risk_properties.py
+    - tests/property/test_scope_reconcile_properties.py
+    - tests/property/test_evaluation_properties.py
+    - tests/property/test_stale_properties.py
+    - tests/property/test_gitread_properties.py
+    - tests/property/test_claude_code_channel_properties.py
+    - tests/property/test_task_contract_properties.py
+    - tests/unit/test_conformance_files.py
+    - tests/unit/test_conformance_rc_files.py
+    - tests/unit/test_conformance_risk_files.py
+    - tests/unit/test_runner_rc.py
+    - tests/unit/test_runner_risk.py
+    - tests/unit/test_eventlog.py
+    - tests/unit/test_recovery.py
+    - tests/unit/test_resume_check.py
+    - tests/unit/test_writer.py
+    - tests/unit/test_ac_coverage.py
+    - tests/unit/test_ac_tests.py
+    - tests/unit/test_stale.py
+    - tests/unit/test_gitread.py
+    - tests/unit/test_scope_reconcile.py
+    - tests/unit/test_violation.py
+    - tests/unit/test_adapter.py
+    - tests/unit/test_replay.py
+    - tests/unit/test_evaluation.py
+    - tests/unit/test_evaluation_violation.py
+    - tests/unit/test_claude_code_channel.py
+    - tests/unit/test_read_set_record.py
+    - tests/unit/test_claude_code_reads.py
+    - tests/unit/test_task_contract.py
+    - tests/unit/test_context_compiler.py
+    - tests/unit/test_t0.py
+    - tests/integration/test_conformance_rc_set.py
+    - tests/integration/test_conformance_set.py
+    - tests/integration/test_conformance_risk_set.py
+    - tests/integration/test_runner_risk_run.py
+    - tests/integration/test_runner_rc_run.py
+    - tests/integration/test_writer_files.py
+    - tests/integration/test_scope_reconcile_log.py
+    - tests/integration/test_evaluation_repo.py
+    - tests/integration/test_stale_records.py
+    - tests/integration/test_gitread_repo.py
+    - tests/integration/test_ac_tests_tree.py
+    - tests/integration/test_resume_check_fixtures.py
+    - tests/integration/test_read_set_record_store.py
+    - tests/integration/test_task_contract_repo.py
+read_set:
+  paths:
+    - docs/Deferred/
+    - docs/tasks/TASK-101.yaml
+    - docs/plan/m8-plan.md
+    - docs/specs/
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - src/aieos_bootstrap/
+    - tests/
+    - .github/workflows/
+    - native/go/governor/
+    - native/go/resume/
+  interfaces: [aieos_bootstrap.resume_check.check, aieos_bootstrap.governor.evaluate]
+  schemas: []
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - bench/**
+  - native/**
+  - docs/**
+  - tests/conformance/**
+  - tests/run_tests.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_governor.py
+  - tests/unit/test_export_resume.py
+  - tests/unit/test_native_isolation.py
+  - tests/unit/test_bench_isolation.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/session_violation.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-005, INV-006, INV-007, INV-008, INV-010, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      Scope. Each entering part of the scope note, as adjusted in the header (appendix A lists the items, files and
+      findings), is either changed, or listed in commit X's map with the reason it leaves (done already, not text or test,
+      group B, or needs a file outside the write set: header and D-3600 C5), by a script check that every entering item of appendix A appears once in the map. The map's exact lines
+      come from the files at the task's base. No item or part that the note leaves is changed. DEF-0033, 0036, 0071, 0102
+      and 0104 are not touched. DEF-0067's D11 is done already and not changed.
+  - AC2: >-
+      No behaviour changes in src/. For every file of src/ in the write set, the module's parse tree with every docstring
+      removed and every comment dropped is equal at the base and at the task commit, shown by a script that prints the
+      comparison per file; the comparison is ast.dump(ast.parse(text)) with default attributes (no positions) after removing
+      the first statement of every Module, ClassDef, FunctionDef and AsyncFunctionDef when it is a string constant; any
+      difference fails. A point that would change the parse tree (for
+      example removing the unused KINDS of ac_coverage.py, moving state['passed'] in read_set_record.py, or changing a
+      string literal or a message) is done by a comment or a docstring only, or leaves with
+      the reason in the map. src/aieos_bootstrap/resume_check.py, governor.py, records.py and session_violation.py are not
+      in the write set.
+  - AC3: >-
+      Tests. Every existing test function that the task changes keeps its assertions, or gets stronger ones: a script
+      compares, per test function (by name, or through the rename map of commit X's map), the ordered list of ast.dump of
+      each assert statement and each self.assert* call at the base and at the task commit, and prints every difference;
+      it passes when the base list is a subsequence of the new list, the one named exception below differs only in its
+      expected string, and every renamed test keeps its assertions; a rename changes the name and the docstring and
+      nothing else of that test;
+      an added test passes at the task commit and fails on a stated broken copy where the item says "pin"; no existing
+      test is deleted, and the number of test functions of each changed module does not fall. Where a test pins a
+      docstring sentence that the task corrects (DEF-0094: tests/unit/test_t0.py :359 pins the sentence of t0.py :48), its
+      expected text changes to the corrected sentence, named in the map, and the test is shown failing on a copy that
+      holds the old sentence. A test added or changed in a module whose naming test requires a task's criteria in every
+      docstring (test_t0.py, test_task_contract.py, test_task_contract_properties.py, test_task_contract_repo.py,
+      test_adapter.py, test_scope_reconcile.py, test_scope_reconcile_properties.py, test_scope_reconcile_log.py,
+      test_context_compiler.py, test_ac_tests_tree.py, test_writer.py) names the criteria that module's naming test
+      requires and no TASK-102 id; the link to TASK-102 is in commit X's map. A docstring edit in src/ keeps every
+      phrase that a test outside the write set pins (for example launcher.py, cli.py and claude_code.py in
+      tests/unit/test_cli_*.py, test_launcher*.py, test_claude_code.py, test_execution_status.py and test_mcp_server.py) and adds none that such a
+      test refuses by assertNotIn; otherwise the point leaves (header; D-3600 C5).
+  - AC4: >-
+      Withdrawn (D-3599 M2). The shared state helpers of DEF-0036 and DEF-0046 stay copied in the four test modules,
+      because a shared module under tests/ cannot be imported under the CI's rule (aieos-checks.yml :1611-1621 at main db866ffd). DEF-0046's
+      F4 (the docstring line of tests/integration/test_runner_risk_run.py) and F5 (the count assertion) remain in this task.
+  - AC5: >-
+      Parity. The frozen fixtures and the reference outputs of the Python Resume Check and governor are byte-unchanged:
+      tests/conformance/ is unchanged, tests/unit/test_export_reference.py and test_export_resume.py are unchanged and their
+      pins hold (REFERENCE_SHA256 and the Resume Check pin), and the aieos-native run of the task commit shows the governor
+      and the Resume Check compare lines byte-equal as before, both jobs. native/go/governor, native/go/resume and bench/go
+      are unchanged, each file checked by SHA-256 against main. This is checked by the CI.
+  - AC6: >-
+      Prerequisites. P1 to P8 are on main before commit C. The texts of P1 to P6 are decided one by one and land under
+      one executor plan, one push decision and one CI read; P7 and P8 each land under their own A66 decision; input_state
+      pins the revised hashes; this task changes no spec and no workflow file.
+  - AC7: >-
+      Nothing else changes. Every test that tests/run_tests.py runs passes at the task's commit on a compiled tree; no DEF
+      file, no record of an accepted task and no contract is changed; the carries and gate T5 of the header are named in the
+      acceptance record and stay carried.
+  - AC8: >-
+      Purity and the CI checks (INV-001, INV-002, INV-004). No exec, eval, builtin compile, __import__ or importlib is
+      added; nothing starts a process, opens a connection or writes a file at import; no Python file is added; no added text
+      in src/ names .aieos (INV-004, aieos-checks.yml :1483, coded :1639-1641 at main db866ffd); the ALLOW entries for writer.py and its three tests are not used
+      for anything new. The CI steps at the task's commits report no finding (deterministic_rule, OPS-003, SEC-001, SEC-002,
+      bandit); before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns and
+      the pre-push pattern, each count 0. No added text in src/ or tests/ holds the byte strings that the closed name
+      lists refuse outside the modules already allowed ('native/', 'bench/', 'fixtures_rc', 'fixtures_risk',
+      'fixtures_cb'; TASK-101's contract, test_native_isolation.py, test_bench_isolation.py).
+  - AC9: >-
+      The records (L-0034). The task's evidence records' forms are built and checked through records.check_record and a
+      governor shadow over a dry records list at r0's approval request with their raw output: per-article records for
+      INV-001, INV-002, INV-004, GOV-002, GOV-003, SEC-001, SEC-002 and OPS-003 (whichever of them the constitution gives an
+      evidence_required), the property_test step's copies for INV-005 to INV-008 and the replay record for INV-010, INV-003 and OPS-002 (decision agent
+      reviews), and the profile entries of risk high; the expected result, to be confirmed by the shadow's raw output for
+      risk high and change class critical_cr, is NEEDS_REVIEW at row 5 with no missing entry; if the output differs, this
+      line is corrected from it.
+  - AC10: >-
+      The CI evidence. On the aieos-checks and aieos-native runs of the accepted commit, every job and step is
+      successful, read by a read-only script by run id; on main after the records commit likewise.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1500k, wall_time: 8h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC5, AC7]}
+  - {gate: G3, check: constitution, args: [AC6, AC8, AC9, AC10, INV-001, INV-002, INV-004, INV-010, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts AND the aieos-checks and aieos-native runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
+# Appendix A: the entering items, files and findings (the lines are in the scope note, section 6 and its LINE CHECKS blocks).
+# 0027 test_conformance_rc_properties.py (R1-1 canon TypeError on a float, :22-41), test_conformance_rc_files.py, test_conformance_files.py (the first two are TASK-005's modules, the last TASK-002's); R5-1 leaves.
+# 0028 test_conformance_rc_set.py (R1-1, R5-1, R5-3, R4-2, R4-3).  0029 test_runner_rc.py (R5-1 order cases, :468, :488), test_runner_rc_properties.py (R4-5/R5-3 INV-007 property, R4-4 INV-005 assertion, R4-6 one-byte property), test_runner_rc_run.py (R4-7; only DEF-0029's lines change, the copied helpers stay) and conformance.py :52 (R4-1 to R4-3 wording).
+# 0032 eventlog.py and test_eventlog.py (F-c note or test, F-e, F-f, F-i).  0034 test_records_execution_properties.py :77 (F-d).
+# 0035 test_resume_check.py, test_resume_check_properties.py, test_resume_check_fixtures.py (R2 e, R5 F6 test gaps; R1 3 wording).  0036 leaves (D-3599 M2).
+# 0037 test_conformance_files.py :630, :632; test_conformance_set.py comment; test_conformance_rc_set.py :103, :151 (names, docstring).
+# 0038 test_recovery.py (:1, :203, failing cases), test_recovery_properties.py, recovery.py docstring.  0040 test_eventlog.py :300 and the rest (the eventlog.py finding text leaves: pinned at :370).
+# 0041 test_writer.py, test_writer_properties.py, writer.py docstrings ((i) :529).  0043 test_runner_risk_properties.py :151 (a), test_runner_risk.py (b); (e) is P6.
+# 0044 test_conformance_risk_files.py (:346, :465), test_conformance_risk_set.py (:91), test_conformance_risk_properties.py (the second reading of point 6, the minimal INV-005/006 properties). The contract-header sentence (TASK-018's contract,
+# under docs/) leaves.  0046 (F4, F5) test_runner_risk_run.py.  0047 test_conformance_risk_set.py (:6, :29), test_conformance_files.py :626.
+# 0048 ac_coverage.py (:29 KINDS by comment or docstring only, coverage_record docstring), test_ac_coverage.py, test_ac_coverage_properties.py.  0049 ac_tests.py, test_ac_tests.py, test_ac_tests_properties.py, test_ac_tests_tree.py (F1, F3, F4, F5, F7, F9, F11).
+# 0050 stale.py docstring, test_stale.py, test_stale_properties.py, test_stale_records.py (F8, empty patterns, F3/F4 note).  0052 gitread.py wording (G2), test_gitread.py, test_gitread_properties.py, test_gitread_repo.py (F13, G3, G5).  0054 startup.py :48 (M3).
+# 0061 test_scope_reconcile.py, test_scope_reconcile_properties.py, test_scope_reconcile_log.py (t1, t2, rest of t5).  0062 test_conformance_risk_set.py :32 (F5); F13 leaves (its file, tests/unit/test_export_fixtures.py, is forbidden); the
+# workflow wording is P8.
+# 0067 replay.py (:1, :56, :60 D14, by comment or docstring only), test_violation.py, test_adapter.py, test_replay.py (D3, D5 to D10, D12, D15, D16).  0069 test_evaluation.py, test_evaluation_violation.py, test_evaluation_properties.py, test_evaluation_repo.py, test_adapter.py (D6: R9OwnTests) (D4, D6, D9, D10).
+# 0080/0094 claude_code_channel.py :18-19, claude_code.py :77, t0.py :48 with test_t0.py :359; test_claude_code_channel.py, test_claude_code_channel_properties.py (0080 untested points).  0081 read_set_record.py (:24, :181, :236 by docstring only), test_read_set_record.py, test_read_set_record_store.py.  0082 claude_code_reads.py :42, test_claude_code_reads.py :179, test_claude_code_reads_properties.py (R3-5 test_deterministic's bytes(data), about :69).
+# 0087 writer.py reads functions, test_writer.py, test_writer_properties.py, test_writer_files.py.  0091 task_contract.py, test_task_contract.py (:261, :306; the fake author lines at :31), test_task_contract_properties.py (about :46), test_task_contract_repo.py; session_violation.py's points R4-4 and R4-5 leave as behaviour (the file is forbidden); the AC8 wording of TASK-071's contract (under docs/) leaves.  0096 context_compiler.py :127 and a pin test in test_context_compiler.py.
+# 0098 context_compiler.py :38 (the spec parts are P4, P5).  0106 launcher.py :120-121, cli.py :3, TASK-098's docstring sentence (the candidate is launcher.py :168, "lowercased form against the rules with their patterns lowercased", to be confirmed in step 1); the spec 4 :61 point and the markers leave.
+# 0026, 0039 (P1), 0083 (P2), 0093 (P3), 0043 (e) (P6), 0031 (P7), 0062 workflow wording (P8) are in the prerequisites, not in the write set.
