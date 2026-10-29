@@ -55,6 +55,17 @@ class Parse(unittest.TestCase):
             self.assertEqual((r['result'], r['reason'], r['read_paths']), ('uncovered', reason, []), data[:40])
             self.assertEqual(len(r['findings']), 1)
 
+    def test_nested_duplicates_constants_and_odd_paths(self):
+        """TASK-065 AC1 and TASK-065 AC2: a nested duplicate key and the constants Infinity and -Infinity give
+        input_json; a lone-surrogate, NUL or whitespace-only file_path is read as given (pinned as today)."""
+        head = b'{"tool_name": "Read", "tool_input": {"file_path": '
+        for tail in (b'"C:/a", "file_path": "C:/b"}}', b'Infinity}}', b'-Infinity}}'):
+            r = cr.read_paths(head + tail)
+            self.assertEqual((r['result'], r['reason'], r['read_paths']), ('uncovered', 'input_json', []), tail)
+        for tail, want in ((b'"\\ud800"}}', '\ud800'), (b'"\\u0000"}}', '\x00'), (b'" "}}', ' ')):
+            r = cr.read_paths(head + tail)
+            self.assertEqual((r['result'], r['read_paths']), ('read', [want]), tail)
+
     def test_not_bytes(self):
         """TASK-065 AC1: an argument that is not a bytes object gives reason "argument"."""
         for data in ('{}', None, bytearray(b'{}'), 7, ['x']):
@@ -67,6 +78,12 @@ class Parse(unittest.TestCase):
             r = entry(data)
             self.assertNotEqual(r['verdict'], 'allow', data[:40])
             self.assertEqual(r['exit_code'], 2)
+
+    def test_parse_reasons_match_the_hook_entry(self):
+        """TASK-065 AC1: for the parse kinds and a non-bytes argument, claude_code_hook.entry gives the same reason."""
+        for reason, data in MALFORMED + [('argument', '{}')]:
+            if reason in ('input_bytes', 'input_json', 'input_shape', 'argument'):
+                self.assertEqual(entry(data)['reason'], reason, data[:40])
 
     def test_a_well_formed_read_passes(self):
         """TASK-065 AC1: a well-formed Read input is not refused by the parse."""
@@ -144,12 +161,13 @@ class ReadAndKept(unittest.TestCase):
     def test_deterministic_and_unchanged(self):
         """TASK-065 AC4: equal inputs give equal results, and the given bytes keep their value."""
         data = hook('Read', {'file_path': 'C:/a.py'})
-        before = bytes(data)
+        before = bytes(bytearray(data))
         self.assertEqual(cr.read_paths(data), cr.read_paths(data))
         self.assertEqual(data, before)
 
     def test_result_keys(self):
         """TASK-065 AC4: every result has exactly the four keys."""
+        self.assertEqual(cr.RESULT_KEYS, ('result', 'reason', 'findings', 'read_paths'))
         for data in [hook('Read', {'file_path': 'C:/a'}), hook('Grep', {}), b'{', 'x']:
             self.assertEqual(sorted(cr.read_paths(data)), sorted(cr.RESULT_KEYS))
 
@@ -173,7 +191,8 @@ class Stated(unittest.TestCase):
              'not attributable', 'Bash and PowerShell', 'mcp__', 'Task and Agent', 'over-inclusive', 'tool_response is not read',
              'PostToolUseFailure', 'not normalised', 'section 10 point 13', 'claude_code.normalise_path',
              'unmeasured', 'inferred from the documentation', 'supported live only for Bash', 'D-1202 and D-1203',
-             'lower bound at best', 'kept and not used', 'CC-3', 'section 11 points 7 and 10', 'a summary, not the page']
+             'lower bound at best', 'kept and not used', 'CC-3', 'section 11 points 7 and 10', 'a summary, not the page',
+             'session 1947b313', 'matcher "*"', 'the live evidence is negative']
 
     def test_docstring_words(self):
         """TASK-065 AC6: the module's docstring states each required point (matched with whitespace collapsed)."""

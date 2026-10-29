@@ -18,13 +18,19 @@ The interface (specification 5 section 11 point 7), as task TASK-064 states it (
   session_id verbatim, and by the ids below; the lease by fencing_token.
 - The event is a lease holder's action (a reading of specification 2 section 6.2, which leaves it to the first M5
   contract that writes an adapter's observations to the core): the record is added by one record.added event with
-  task_id the task and the context's fencing_token, so the writer's fence accepts it only from the session that holds
-  the task's lease. A token that is not the held lease's gives the writer's fence refusal, which the writer records as
-  its own record, and nothing else. So the caller passes the read-set before the lease is released: before
-  adapter.end, and before a violation releases it.
+  task_id the task and the context's fencing_token, so the writer's fence accepts it only from the holder of the token of
+  the task's lease (the fence ties the write to the token, not to a session). For an event_id not yet in the log, a token
+  that is not the held lease's gives the writer's fence refusal, which the writer records as its own record, and
+  nothing else; a repeat of an event_id already in the log is answered first by eventlog's idempotency check, which
+  compares the token too (eventlog.py:42, :180-184), so it gives "duplicate" or "conflict", not the fence refusal, even
+  after a release or under another token, and no read-set record is appended. So the caller passes the read-set before
+  the lease is released: before
+  adapter.end, before adapter.submit (a submission may release the lease, as the description of adapter.end says), and
+  before a violation releases it.
 - The ids are derived, not given: event_id "observed-read-set/<task_id>/<session_id>", record_id that text followed by
-  "/record". A second observe for the same task and session gives eventlog's "duplicate" with the same list (nothing
-  appended, no error) and eventlog's refusal "conflict" with another list (eventlog.py:180-184). So the log holds at
+  "/record". A second observe for the same task and session gives eventlog's "duplicate" with the same list and the same
+  fencing token (nothing appended, no error) and eventlog's refusal "conflict" with another list or another token
+  (eventlog.py:180-184). So the log holds at
   most one such record per task and session_id; two session_ids for one session, or one session_id over two tasks,
   are not found (a limit). A session_id that holds "/" is refused, so the ids can be read back.
 - The paths are the caller's list. Repeats are removed by exact string equality, the first occurrence's order kept,
@@ -45,9 +51,12 @@ above, and no runtime's tier counts until it is measured (C6, P-LOC, the owner's
 observe (AC5):
 - The order: the context, then now, then the ids, then the record; then one call of append.
 - The result's findings hold only this module's own fixed words, an exception's type and the append result's findings;
-  no path of read_paths is copied into them. The context and read_paths are never changed.
-- After an exception, the result's record is the record when append was already called with it, and None otherwise;
-  when append itself raised, whether anything was written is then not known.
+  no path of read_paths is copied into them. This module changes neither the context nor read_paths; the context's
+  fencing_token is passed to append itself, not a copy, so an append that changes it changes the context (a stated
+  limit).
+- After an exception, the result's record is the record once append is reached with it (state['passed'] is set just
+  before the call, so an append that is not callable still leaves the record in the result though nothing ran), and
+  None otherwise; when append itself raised, whether anything was written is then not known.
 - The module writes only through writer.append_event, or the append given (INV-004); tests pass a stand-in. It opens
   no file itself, starts no process, reads no clock or environment and makes no network or model call; it is not
   pure, since the writer writes.
@@ -61,8 +70,8 @@ What is not covered (AC6):
   aieos_bootstrap.claude_code_hook and aieos_bootstrap.claude_code_channel holds here too. Nothing is installed or
   measured, and no test asserts anything about a running Claude Code.
 
-observe_gone (task TASK-089; specification 5 revision 5, section 11 point 10), added after the text above, which is
-kept unchanged, so two of its statements no longer hold as written: "Three functions, called only by their tests" (a
+observe_gone (task TASK-089; specification 5 revision 5, section 11 point 10), added after the text above, which TASK-089 left
+unchanged (TASK-102 has reworded some of it since), so two of its statements no longer hold as written: "Three functions, called only by their tests" (a
 fourth, observe_gone, is added, and the launcher's end calls observe and observe_gone), and the abnormal session ends
 listed as not covered (the launcher's end now writes the record of a session whose lease is gone; a crash before the
 end still leaves no record until the next start's record, task TASK-090).
@@ -75,7 +84,8 @@ end still leaves no record until the next start's record, task TASK-090).
   "argument"; then read_paths, a refusal with reason "read_paths"; then one call of append. "appended" gives
   "written", "duplicate" gives "duplicate", any other answer gives "refused" with reason "core" and the append's result
   in "core", as observe does, so a "conflict" there is seen by its core reason. Its reasons are GONE_RESULT_REASONS;
-  REASONS is observe's. It never raises; only the launcher calls it.
+  REASONS is observe's. It never raises; only the launcher calls it. After an exception its result's record follows
+observe's rule: it is set just before the append call.
 """
 
 import datetime
@@ -178,7 +188,7 @@ def _observe(context, read_paths, now, append, state):
     if record is None:
         return _result('refused', 'read_paths', ['read_paths is not a list of non-empty strings'])
     append = writer.append_event if append is None else append
-    state['passed'] = record
+    state['passed'] = record  # set just before the call; see the docstring
     w = append(context['root'], EVENT_TYPE, record, ids[0], now, context['recorder'], task_id=context['task_id'],
                fencing_token=context['fencing_token'])
     core = _core(w)
@@ -233,7 +243,7 @@ def _observe_gone(root, task_id, session_id, read_paths, reason, now, recorder, 
     if record is None:
         return _result('refused', 'read_paths', ['read_paths is not a list of non-empty strings'])
     append = writer.append_event if append is None else append
-    state['passed'] = record
+    state['passed'] = record  # set just before the call; see the docstring
     w = append(root, EVENT_TYPE, record, ids[0], now, text, task_id=task_id)
     core = _core(w)
     if core['result'] == 'appended':

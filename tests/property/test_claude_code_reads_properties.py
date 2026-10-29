@@ -72,6 +72,7 @@ class Properties(unittest.TestCase):
         for _ in range(1000):
             _, data = gen(rng)
             self.assertEqual(cr.read_paths(data), cr.read_paths(bytes(data)))
+            self.assertEqual(cr.read_paths(data), cr.read_paths(bytes(bytearray(data))))
 
 
 if __name__ == '__main__':

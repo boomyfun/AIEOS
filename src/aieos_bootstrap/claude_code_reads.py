@@ -24,7 +24,8 @@ The tools (AC2, AC3; specification 5 section 11 point 8, the read hook point's c
 - A partial read (tool_input.offset or limit present) counts as a read of the whole path: the over-inclusive side,
   which is the fail-safe side for a read-set.
 - A failed read is not seen: tool_response is not read, so the path is still returned (over-inclusive). The hooks
-  documentation (summarised by a web-reading tool on 2026-10-18: a summary, not the page) says PostToolUse "Runs
+  documentation (characters 0 to 200000 of the page, summarised by a web-reading tool on 2026-10-18: a summary, not the
+  page) says PostToolUse "Runs
   immediately after a tool completes successfully" and that failed calls go to a separate event,
   PostToolUseFailure, which this function is not meant for; placed there, it would return the path of a failed read.
 
@@ -39,17 +40,20 @@ What this shows, and what it does not (AC6):
   fields file_path, offset and limit are given in its PreToolUse section, and file-tool paths in PostToolUse arrive in
   the same format as for PreToolUse. That Read's file_path is in that input is so inferred from the documentation, not
   stated there for Read.
-- The tool names are those seen in this project's transcripts, supported live only for Bash; in session 1947b313 a
+- The covered name, Read, is one seen in this project's transcripts (not every uncovered name above was seen there);
+  hooks are supported live only for Bash; in session 1947b313 a
   hook with matcher "*" did not refuse Read calls it was written to refuse (decisions D-1202 and D-1203), so whether a
   hook fires for Read is unknown and the live evidence is negative.
-- A result is a lower bound at best (specification 5 line 73): the hook may not fire, may not cover a tool and cannot
+- A result is a lower bound at best across calls (specification 5 line 73; within one call it is over-inclusive, as
+  above): the hook may not fire, may not cover a tool and cannot
   show its own completeness; the record built from these paths is kept and not used (specification 5 line 72).
 - Gathering the paths across hook calls, the hook process and its context, placing the hook and choosing its matcher
   stay out (part CC-3, the owner's; specification 5 section 11 points 7 and 10).
 
 Purity (AC7): it imports only the standard library's json module and nothing of aieos_bootstrap; it opens no file,
 starts no process, reads no standard input, prints nothing, reads no clock or environment and makes no network or
-model call. It keeps no state, and no exception escapes.
+model call. It keeps no state, and no Exception escapes (a BaseException that is not an Exception, such as
+KeyboardInterrupt, does).
 """
 
 import json
@@ -120,8 +124,8 @@ def _read_paths(stdin_bytes):
 
 
 def read_paths(stdin_bytes):
-    """The paths a file-reading tool call read, from a PostToolUse hook's input bytes (AC1 to AC4). No exception
-    escapes."""
+    """The paths a file-reading tool call read, from a PostToolUse hook's input bytes (AC1 to AC4). No Exception
+    escapes (a BaseException that is not an Exception does)."""
     try:
         return _read_paths(stdin_bytes)
     except Exception as e:  # noqa: BLE001 - AC4: any exception becomes a result, its type only

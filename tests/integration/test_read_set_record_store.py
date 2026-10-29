@@ -3,7 +3,8 @@ of decision D-1291: observe through the real eventlog.append and the real record
 store. The append stand-in keeps the log bytes in memory, passes a lease of writer.held_lease's form (task_id,
 fencing_token, expires_at), or None after a release, appends the new line on "appended", and on a fence refusal whose
 record is not None appends that record as one record.added event, as writer.append_event does. The writer's file and
-store code (open_store, grant_lease, the file write) is tested by the writer's own tests, not here (D-1291 E1).
+store code (open_store, grant_lease, the file write) is tested by the writer's own tests, not here (D-1291 E1). So
+observe's own path through the real writer.append_event, its file and its store, is not tested by this module.
 Checked: the record appended once and read back, a repeat "duplicate", another list "conflict", a token that is not the
 lease's refused by the fence, and the read-set refused after the release; and observe's call binds to
 writer.append_event's own signature. Each test names its criteria in its own docstring."""

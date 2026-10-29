@@ -62,6 +62,13 @@ class Ids(unittest.TestCase):
                                     ('TASK-1', 'a/b'), ('TASK-1', None), ('TASK-1', 7), ('TASK-1', 'a\tb')):
             self.assertIsNone(rs.record_ids(task_id, session_id), (task_id, session_id))
 
+    def test_ids_keep_other_characters(self):
+        """TASK-064 AC3: a session_id holding a NUL, a backslash, a colon or two dots is kept verbatim in the ids (only
+        whitespace and "/" are refused)."""
+        for sid in ('a\x00b', 'a\\b', 'a:b', '..'):
+            self.assertEqual(rs.record_ids('TASK-1', sid),
+                             ('observed-read-set/TASK-1/' + sid, 'observed-read-set/TASK-1/' + sid + '/record'), sid)
+
 
 class Build(unittest.TestCase):
     def test_the_record(self):
@@ -99,6 +106,19 @@ class Build(unittest.TestCase):
                      ('TASK-100', SID, [], ''), ('TASK-100', SID, [], 'rec without it'),
                      ('TASK-100', SID, [], None), ('TASK-100', SID, ('a.py',), 'rec ' + SID)):
             self.assertIsNone(rs.build(*args), args)
+
+    def test_subclasses_as_given(self):
+        """TASK-064 AC4: a list or str subclass is taken as given; read_paths is a plain list and its items keep their
+        type (outside the trusted-caller model)."""
+        class L(list):
+            pass
+
+        class S(str):
+            pass
+        r = rs.build('TASK-100', SID, L([S('a'), 'a']), 'rec ' + SID)
+        self.assertEqual(r['read_paths'], ['a'])
+        self.assertIs(type(r['read_paths']), list)
+        self.assertIs(type(r['read_paths'][0]), S)
 
 
 class Observe(unittest.TestCase):
@@ -174,6 +194,13 @@ class Observe(unittest.TestCase):
         result, _ = observe(ctx, paths + [''])
         self.assertNotIn(marker, repr(result))
         self.assertEqual((ctx, paths), (ctx_copy, paths_copy))
+
+    def test_the_token_object_is_passed(self):
+        """TASK-064 AC5: the context's fencing_token is passed to append as the same object (an append that changed it
+        would change the context: a stated limit)."""
+        ctx = context()
+        _, store = observe(ctx)
+        self.assertIs(store.calls[0][7], ctx['fencing_token'])
 
     def test_default_append_is_the_writer(self):
         """TASK-064 AC5, AC7: with no append given, observe calls writer.append_event, here refused by its own root

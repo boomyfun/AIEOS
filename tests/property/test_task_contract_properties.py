@@ -43,6 +43,7 @@ BYTES_MUTATIONS = [lambda t: t + '# \r\n', lambda t: '\ufeff' + t, lambda t: t +
 
 def objects(contract):
     tree = lambda *es: ''.join('%s %s %s\t%s\n' % e for e in es).encode('utf-8')  # noqa: E731
+    # "A <a> 1 +0000" is a placeholder author line, not an address
     return {COMMIT: ('tree %s\nauthor A <a> 1 +0000\ncommitter A <a> 1 +0000\n\nm\n' % TREE).encode('utf-8'),
             TREE: tree(('040000', 'tree', DOCS, 'docs')), DOCS: tree(('040000', 'tree', TASKS, 'tasks')),
             TASKS: tree(('100644', 'blob', BLOB, 'TASK-071.yaml')), BLOB: contract.encode('utf-8')}
@@ -55,8 +56,8 @@ def stand(objs):
 class AC8Properties(unittest.TestCase):
 
     def test_read_gives_the_template_lists(self):
-        """TASK-071 AC8: "read" implies write_set and forbidden equal to the template's lists; "unreadable" implies the
-        four fields None."""
+        """TASK-071 AC8: every template text gives "read", with write_set and forbidden equal to the template's lists;
+        the "unreadable" branch below is not reached by these texts."""
         rng = random.Random(71)
         for _ in range(CASES):
             ws, fb = items(rng), items(rng)
@@ -69,7 +70,8 @@ class AC8Properties(unittest.TestCase):
 
     def test_mutation_classes(self):
         """TASK-071 AC8: every parse-class mutation gives "parse", every task-class mutation "task", every
-        skipped-class mutation leaves the result unchanged, every bytes-class mutation gives "bytes"."""
+        skipped-class mutation leaves the result unchanged, every bytes-class mutation gives "bytes". The mutation
+        lists are a sample of AC3's rules, not all of them."""
         rng = random.Random(710)
         for _ in range(CASES):
             ws, fb = items(rng), items(rng)

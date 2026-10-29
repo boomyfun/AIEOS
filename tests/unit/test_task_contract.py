@@ -28,6 +28,7 @@ def other_task_ids(text):
 
 
 def commit_text(tree=TREE):
+    # "A <a> 1 +0000" is a placeholder author line, not an address
     return ('tree %s\nauthor A <a> 1 +0000\ncommitter A <a> 1 +0000\n\nmessage\n' % tree).encode('utf-8')
 
 
@@ -156,7 +157,8 @@ class AC2GitReads(unittest.TestCase):
     def test_result_faults_at_every_position(self):
         """TASK-071 AC2: each result-check fault, at each of the five call positions, gives its "git" finding."""
         faults = [(ValueError(MARKER), 'git: run raised ValueError'), ([MARKER], 'git: result shape'),
-                  (DictSub(ok(b'')), 'git: result shape'), ({'exit': 0, 'out': b''}, 'git: result shape'), (dict(ok(b''), extra=1), 'git: result shape'),
+                  (DictSub(ok(b'')), 'git: result shape'), ({'exit': 0, 'out': b''}, 'git: result shape'),
+                  (dict(ok(b''), extra=1), 'git: result shape'),
                   ({'exit': 0, 'out': b'', 'err': b'', 'error': MARKER}, 'git: error'),
                   ({'exit': 1, 'out': b'', 'err': MARKER.encode(), 'error': None}, 'git: exit 1'),
                   ({'exit': True, 'out': b'', 'err': b'', 'error': None}, 'git: exit not an int'),
@@ -286,8 +288,8 @@ class AC2NamesAndOrder(unittest.TestCase):
                 self.assertEqual(read(**{tid: full})['result'], 'read')
 
     def test_the_order_of_each_pair(self):
-        """TASK-071 AC2: for each adjacent pair of step (2)'s and step (3)'s order, a text with both faults gives the
-        first one's finding."""
+        """TASK-071 AC2: for adjacent pairs of step (2)'s and step (3)'s order, a text with both faults gives the
+        first one's finding. Not every pair is tried here; test_order_cases and test_bytes try others."""
         both = {'exit': 1, 'out': b'', 'err': b'', 'error': MARKER}
         r = tc.read_contract(ROOT, COMMIT, 'TASK-071', run=Stand(at=1, give=dict(both, extra=1)))
         self.assertEqual(r['findings'], ['git: result shape'])
@@ -310,6 +312,12 @@ class AC2NamesAndOrder(unittest.TestCase):
         self.assertEqual(tc.parse_contract(moved, 'TASK-071')['findings'], ['parse: base_commit missing'])
         first = VALID.replace('  paths:\n', '  paths: x\n')
         self.assertEqual(tc.parse_contract(first, 'TASK-071')['findings'], ['parse: write_set line out of form'])
+
+    def test_the_line_id_behaves_as_gitreads(self):
+        """TASK-071 AC2: a tree line's id is accepted exactly when gitread.OBJECT_ID fullmatches it."""
+        for oid in ('9' * 40, '9' * 64, '9' * 39, '9' * 41, '9' * 63, 'A' * 40, 'g' * 40):
+            self.assertEqual(tc._LINE.fullmatch('100644 blob %s\tx' % oid) is not None,
+                             gitread.OBJECT_ID.fullmatch(oid) is not None, oid)
 
     def test_the_line_id_is_gitreads(self):
         """TASK-071 AC2: the tree line's id group is gitread.OBJECT_ID's pattern."""

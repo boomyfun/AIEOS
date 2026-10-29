@@ -1,6 +1,6 @@
 """The bootstrap's command-line entry point and its commands, tasks, end, status, init, launch, approve, edit, reject,
 import and run (tasks TASK-091, TASK-092, TASK-093, TASK-095, TASK-094, TASK-096, TASK-097 and TASK-098;
-specification 7 revision 2, section 3 :26, :28, :29, :30, :31, :32, :33-35; section 4; section 5 :45, :48; section 10
+specification 7 revision 4, section 3 :26, :28, :29, :30, :31, :32, :33-35; section 4; section 5 :45, :48; section 10
 points 4, 5, 6, 10, 11 and 15).
 
 What it does:

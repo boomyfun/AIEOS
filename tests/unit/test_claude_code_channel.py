@@ -198,6 +198,14 @@ class Deliver(unittest.TestCase):
             self.assertEqual((r['result'], r['reason']), ('refused', reason), kw)
             self.assertEqual(store.calls, [])
 
+    def test_event_id_before_the_verdict(self):
+        """TASK-063 AC5: an event_id out of form is refused before the verdict's branches: with allow, uncovered or a
+        refusal without a record it gives event_id, and nothing is called."""
+        for h in (hook_result('allow'), hook_result('uncovered'), hook_result('refuse', None)):
+            r, store = deliver(hr=h, event_id='')
+            self.assertEqual((r['result'], r['reason']), ('refused', 'event_id'), h)
+            self.assertEqual(store.calls, [])
+
     def test_hook_result_form(self):
         """TASK-063 AC5: a hook_result of another form, a wrong exit code for its verdict, or a record beside a verdict
         other than refuse gives hook_result."""

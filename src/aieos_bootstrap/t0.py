@@ -45,8 +45,8 @@ Limits, stated (AC7):
 - No adapter declaration is read or written (specification 5 section 3), so check 7's STOP: runtime insufficient
   applies as the core decides it.
 - T0's conformance scenarios (section 11 point 11) are not in this task: a named follow-up fixture task.
-- The session is named only in the recorder's words, since records.py has no ``session`` key (specification 2
-  section 6.2's proposed key, for a later task).
+- The session is named only in the recorder's words: this module writes no ``session`` key, which records.py accepts
+  since TASK-077 (specification 2 section 6.2).
 - This module is called only by its tests; __init__.py is not changed, so __all__ does not name it.
 """
 

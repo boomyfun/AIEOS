@@ -74,7 +74,8 @@ What these functions show, and what they do not (AC9):
   record; redaction before a record is written is part CC-2's.
 - Open points left as limits: specification 5 section 11 points 4 (the read-set record's evidence_type), 6 (the
   allowlist's content), 10 (an abnormal session end) and 12 (a bound on repeated STOP: violation). A record names the
-  session only in the recorder's words (records.py has no ``session`` key). This module is called only by its tests;
+  session only in the recorder's words (this module writes no ``session`` key, which records.py accepts since TASK-077).
+  This module is called only by its tests;
   nothing is installed or measured.
 
 Purity: it imports only the standard library and aieos_bootstrap's records and governor; it starts no process, opens

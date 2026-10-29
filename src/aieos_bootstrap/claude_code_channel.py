@@ -15,8 +15,9 @@ Four functions, called only by their tests:
 The context (AC1, AC7): exactly root, task_id, session_id, fencing_token, write_set, allowlist and recorder.
 - root is one root, for judging and for the core's writer, which keeps its store under the root (writer.py:11).
 - The lease is tied by fencing_token, the token that adapter.start's grant returns.
-- The session is tied in words only, by a recorder that holds session_id verbatim: specification 2 revision 6 keeps
-  no session key on a record (section 6.2), and adapter.violation takes no session id. The core does not check it.
+- The session is tied in words only, by a recorder that holds session_id verbatim: records.py accepts a session key on
+  a record since specification 2 revision 10 (TASK-077), but the record judge gives has none, this module writes none,
+  and adapter.violation takes no session id. The core does not check it.
   The tie is a substring test, so a very short session_id ties weakly.
 - The write-set (proposed): the caller takes it from the lease's task contract at the base, the contract's
   write_set.paths, the same key the Resume Check reads from the contract it is given (resume_check.py:290, :405).
@@ -47,11 +48,17 @@ Redaction (DEF-0079; AC3, AC4):
 deliver (AC5, AC7):
 - entry's exit code and standard-error text are never changed: hook_result is not changed, and the caller keeps
   entry's exit code.
+- hook_result is checked only for its key set, its verdict, its exit code for that verdict (0 for "allow", else 2) and
+  that a record goes with "refuse" alone; its standard-error text, concern, reason and findings are not checked, nor the
+  record's evidence_type against the concern. now, append and release are not checked here: a fault in them surfaces
+  only through adapter.violation, as a "core" refusal, or as "deliver" when an exception escapes it.
 - Nothing is written for "allow", for "uncovered", or for a "refuse" without a record. The last (entry's reasons
   argument, allowlist_form and record) is a caller's error; it is a departure from specification 5 section 8, which
   records every refusal by a hook.
 - The result's findings hold only this module's own fixed words, an exception's type, and adapter.violation's findings
   for the redacted record; no text of hook_result's findings or of the original refers_to is copied into the result.
+  The original refers_to's text is read as the text that redaction removes: a root-relative path that AC4 keeps is part
+  of the redacted record, and so is in the result's record.
 - The result "written" means adapter.violation gave "done", which includes its "duplicate" for a repeated event_id:
   nothing new is appended then. After an exception, the result's record is the redacted record when adapter.violation
   was already called with it, and None otherwise; when adapter.violation itself raised, whether anything was written
@@ -76,6 +83,8 @@ What is not covered (AC7):
 - How a hook process obtains the context and how it is started are out of this task: they belong with placing the
   hook (part CC-3, the owner's act, A51 item (4)) and with INV-004.
 - No observed read-set record is made (specification 5 section 11 point 4's record needs state across hook calls).
+- Mapping or string subclasses that override their methods are outside the trusted-caller model: the checks read them as
+  their methods answer.
 - Every limit of aieos_bootstrap.claude_code and aieos_bootstrap.claude_code_hook holds here too; specification 5
   section 11 points 10 (an abnormal session end) and 12 (a bound on repeated STOP: violation) stay open. Nothing is
   installed or measured, and no test asserts anything about a running Claude Code.
@@ -191,6 +200,7 @@ def record_findings(record):
 
 
 def _root_relative(text):
+    # the leading "/" and empty-text tests are also caught by the empty-segment test below; kept as explicit forms
     if not text or ':' in text or '\\' in text or text.startswith('/'):
         return False
     return all(segment not in ('', '.', '..') for segment in text.split('/'))

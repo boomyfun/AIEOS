@@ -34,8 +34,10 @@ id, "adr:<id>", a repository path, the handoff's own ref); the layer and item sh
 
 Limits: the inputs' truth is the caller's; this module checks their form and their ties, not that they are what the
 base holds, and "the last" handoff is the caller's choice. Inputs nested more than MAX_DEPTH (200) deep, or holding
-more than MAX_NODES (1,000,000) values in all, a shared value counted at each place it appears, give findings. No
-reader of the inputs and no MCP tool are here: S3b waits for M7. Nothing calls build_work_order but its tests.
+more than MAX_NODES (1,000,000) values in all, a shared value counted at each place it appears, each give one finding,
+after which no further value is walked, so later values that are not JSON are not reported (a later key of an object
+already being walked is still checked). No reader of the inputs and no MCP tool are in this module (S3b waits for M7,
+as TASK-080 wrote it): base_inputs reads the inputs, and mcp_server calls build_work_order.
 """
 import hashlib
 import json
@@ -125,9 +127,11 @@ def _utf8(text):
 
 
 def _json_value(value, where, findings, depth, count=None):
-    """Appends a finding for each part of value that is not JSON: a float that is not finite, a str or key UTF-8
-    cannot encode, a key that is not a str, any other type, or nesting deeper than MAX_DEPTH; and one finding, after
-    which nothing more is walked, when more than MAX_NODES values are visited (count holds the visits so far)."""
+    """Appends a finding for each part of value that is not JSON and is met before the walk stops: a float that is not
+    finite, a str or key UTF-8 cannot encode, a key that is not a str, or any other type. The walk stops at the first
+    nesting deeper than MAX_DEPTH, or when more than MAX_NODES values are visited: each gives one finding, after which
+    no further value is walked, though a later key of an object already being walked is still checked (count holds the
+    visits so far)."""
     if count is None:
         count = [0]
     if count[0] > MAX_NODES:

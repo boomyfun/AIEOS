@@ -356,7 +356,7 @@ class R7Purity(unittest.TestCase):
                       "the lease's expiry releases it", 'No adapter declaration is read or written',
                       "check 7's STOP: runtime insufficient applies as the core decides it",
                       'conformance scenarios (section 11 point 11) are not in this task',
-                      'records.py has no ``session`` key', 'called only by its tests', '__init__.py is not changed',
+                      'this module writes no ``session`` key', 'called only by its tests', '__init__.py is not changed',
                       'INV-004'):
             self.assertIn(words.lower(), doc.lower(), words)
 

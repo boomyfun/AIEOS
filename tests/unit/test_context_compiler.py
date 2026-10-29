@@ -388,6 +388,15 @@ class TASK080AC3Layers(Base):
         inp['contract']['read_set']['schemas'] = []
         self.assertEqual(refs(self.built(inp), 'components'), ['component:core'])
 
+    def test_layer_2_slash_less_component_path_as_read_today(self):
+        """TASK-080 AC3: today's reading, pinned: a slash-less component path is read from the root as "<it>/**", so
+        "sub/Makefile" does not meet "Makefile" and "Makefile" does."""
+        for path, met in (('sub/Makefile', False), ('Makefile', True)):
+            inp = inputs()
+            inp['components'].append({'id': 'mk', 'paths': ['Makefile'], 'tags': []})
+            inp['contract']['read_set']['paths'].append(path)
+            self.assertEqual('component:mk' in refs(self.built(inp), 'components'), met, path)
+
     def test_layer_2_content(self):
         """TASK-080 AC3: a component item's content is the canonical JSON of its declaration and naming interfaces."""
         inp = inputs()

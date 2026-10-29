@@ -117,7 +117,8 @@ stored_reads, record (observe_gone with 'no fencing token given' and the recorde
 for session ", the session id and ", its lease row possibly unexpired") and the stored reads' removal, whose failure
 is named and does not stop the steps; then end (writer.end_session, which releases every lease of the session). It is
 the record before the release: a refusal or a raise before every task's record is present ends nothing, so no lease
-is released before its record. Its limits: it departs from specification 5 :125's "a session whose lease row is
+is released before its record. Its limits: it departs, and so does launch_outside where it calls it (TASK-094,
+below), from specification 5 :125's "a session whose lease row is
 still unexpired is not processed" (D-3047 (c1)), the recorder naming the possibly unexpired row; an expired row also
 gets "no fencing token given"; a session with no lease row left gets no record; the rows, the reads, the records and
 the end are read and written at separate moments, so a lease added to the session between them is released with no
