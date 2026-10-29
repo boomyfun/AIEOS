@@ -1,0 +1,342 @@
+# Task contract TASK-100 (revision 3), the native governor in shadow: a Go port of governor.evaluate under native/go/governor/,
+# compared byte for byte with the bootstrap over the frozen round-1 governor fixtures, deciding nothing (M8 plan,
+# docs/plan/m8-plan.md §1 item 1, §2 to §5; decisions D-3336, D-3405 and D-3408 to D-3416). Revision 3, drafted under
+# decisions D-3408 (the frame, C1 to C8), D-3409 (the workflow, C4), D-3416 (the trace table, C1 to C7), D-3427 (the
+# contract review c100-R1's findings) and D-3417
+# (r0's rulings R1 to R8, C1 to C5); brought for
+# approval in its own request; whether it is approved is recorded in the decision files, not here. Fields and value
+# forms follow specification 2 §5.1 and TASK-099's contract (the key list, checked by script, L-0031). Readings marked
+# "(reading)" are the worker's, for the decision agent's ruling.
+# Numbering (D-3347 C3): docs/plan/m8-plan.md :8 calls this task "TASK-099"; it is TASK-100.
+# The workflow (D-3408 F1 a, D-3409): .github/workflows/aieos-native.yml landed on main before this contract, as its
+# own commit cc283d35008fc0cf5afadd6b3d64d6a44ebfbc40 (parent bbb94609), SHA-256
+# c41b67f50c0335093be123e8ea677fcf147cf2b385f4417441c22ffc658f102a (decisions D-3409 to D-3411); on main it printed "no
+# port in native/go/governor" on both jobs (run 40798383923, D-3413). This task does not change it; its commands bind
+# this task's names: tests/unit/test_export_governor.py --root tests/conformance --check, one Go package in
+# native/go/governor built with `go vet .`, `gofmt -l .`, `go build -trimpath`, run with one argument (the fixture
+# document), and `go test -count=1 -v . -args <fixture document> <governor reference>` (D-3409 C4).
+# The copy (m8-plan.md §3): the code starts as a copy of bench/go's governor part (governor.go, records.go, json.go, the
+# governor half of export.go, main.go, port_test.go's governor tests; not resume.go), made in this task's write-set and
+# reviewed as new code; bench/go is not changed. The copy is brought to today's Python: the trace table (appendix A)
+# lists every function governor.evaluate reaches in governor.py and records.py at main cc283d35, its Go counterpart,
+# the verdict and each difference. It was drafted by a read-only agent (decision D-3416; agent a00245e6fd1f4c0a8 of
+# session 87e2584b; only Read, Grep, Glob and one Write, by a tool-use count of its transcript) and checked by the
+# worker (D-3416 C3 to C5: records.check_record and records.go read in full; the reached-function list checked by the
+# worker's own Grep of governor.py's calls; every "different" and "no counterpart" row and five "equivalent" rows,
+# evaluate, _sort_records, _entry, _approval and _candidate, checked at the cited lines on both sides). Its result: the
+# governor rows are equivalent; records.go matches records.py as it stood before TASK-064, TASK-077 and TASK-096, so the
+# port adds the four record keys read_paths, session, acs and text and the rules check_read_set and check_session_claim
+# (with _is_read_paths, _is_edit_claim and _is_intent_claim), in records.py's order (AC4). No round-1 governor fixture
+# holds those keys (a Grep of tests/conformance/fixtures/), so the byte compare cannot show this part; AC4's Go tests do.
+# The governor-only reference: tests/unit/test_export_governor.py (new). The CI's deterministic_rule lets a module
+# under tests/ import only the standard library and aieos_bootstrap (aieos-checks.yml :1465-1466, :1615; D-773), so it
+# cannot import tests/unit/test_export_reference.py; it repeats that module's reading of the fixture folders and its
+# document form for the governor folder only, with its own pin, and its tests compute the full round-1 document the
+# same way and check that its SHA-256 equals test_export_reference.REFERENCE_SHA256's value (copied as a constant and
+# compared with that module's text by a test that reads it as bytes) and that the governor document equals the full
+# document's "fixtures/" part, so the two cannot drift apart (D-3408 C6) (reading).
+# Isolation (D-3408 C7; D-800 C3's form, as tests/unit/test_bench_isolation.py): a new test reads every file under
+# src/ and tests/ and .github/workflows/aieos-checks.yml and fails if any names "native/" or imports a module named
+# native, except a closed allow-list of exactly two files, each with its reason (itself, and the frozen RISK-01
+# fixture of tests/conformance/, whose path the test builds from parts; D-3417 C1, D-3427 C3); and it checks that
+# aieos-native.yml is the only workflow that names "native/". The bootstrap never imports or runs the native code.
+# Closed name lists of existing tests (D-3427 C3; c100-R1 finding 2): tests/integration/test_conformance_rc_set.py
+# :37, :41-50, :164-169, test_conformance_risk_set.py :20, :24-34, :85-98, test_conformance_cb_set.py :19, :73-86 and
+# tests/unit/test_bench_isolation.py :16-17, :19-23, :32 refuse any other .py under src/ or tests/ whose bytes name
+# those fixture folders or bench/; so the bytes of neither new module, comments and docstrings included, name them
+# (AC1, AC2, AC7), and folder names are built from parts.
+# Risk: high. R13 matches native/** (high); R3 matches tests/** (high, read fail closed); no rule of class critical
+# (R5 to R11) matches the write-set; the highest wins (risk rules section 2 point 1); computed over the base by
+# script (risk_class100.py), its output in r1's approval request.
+# Profile (assurance-model.md §5, gov-AIEOS, high): unit_test, integration_test, deterministic_rule,
+# static_security_analysis, ai_review (cross-model); plus the evidence_required of the applicable articles, recorded
+# per article from the start (L-0034; D-3395): built at r1's approval request through records.check_record and the
+# governor shadow (gov99.py's form) before the reviews (D-3408 C7).
+# Change class: critical_cr (decision D-3417 C4, as TASK-060's): GOV-003's tool part over the base marks the two new
+# tests/unit/** modules as evaluator paths (aieos-checks.yml :427), computed by script (gov003_class100.py, the form
+# of gov003_class60.py; its output in r1's approval request); read fail closed, the class is critical_cr; the
+# approval form is ruled at acceptance. The risk class (high) and the profile do not change; the risk class is
+# computed by script too (risk_class100.py, the form of risk_class60.py, policy v5's rules R1 to R13).
+# Reviews (D-3408 C7; Master Plan :104, A59, A60): five way-2 reviews by a Claude model other than the implementer's,
+# each brief to the decision agent first, each reading the workflow text as well (D-3409 C4): architecture (the port
+# against today's governor.py and records.py, the trace table), security (no import beyond Go's standard library, no
+# file write, no network, no process; the Python modules' purity), governance (GOV-003: no existing test changed; the
+# shadow decides nothing), operational (the workflow's steps and the CI evidence of AC6), and the cross-model half; the
+# decision agent's reviews (architecture human_review; INV-003 and OPS-002 per article; the cross-model half).
+# Evaluation path (A61; as TASK-099): the approved contract is committed on main as its own commit C, which changes only
+# docs/tasks/TASK-100.yaml and has one parent equal to base_commit; the files are made in scratchpad clones (push URL
+# disabled, the no-reply identity set first); the Python modules' suite runs locally on a compiled tree (L-0018); the
+# Go code is not built or run on the owner's machine (m8-plan.md §4; D-3405): every Go build, vet, format check and test
+# runs only in CI, so each Go fix is a new push of task/TASK-100, and more than three pushes only for Go compile, vet,
+# format or test errors stop the task and go to the decision agent (D-3408 C8). The task's commits carry the trailer
+# "AIEOS-Task: TASK-100" and no e-mail address, go to task/TASK-100 each under its own push decision after a secret
+# scan and a dry run, never by force; the records commit lands on main by the fast-forward form of TASK-099 (D-3400).
+# Applicable articles (D-3427 C1; c100-R1 finding 1): besides INV-001 to INV-004, GOV-002, GOV-003, SEC-001, SEC-002,
+# OPS-002 and OPS-003, also INV-005 to INV-008 and INV-010, whose applicability is implementation and whose scope is
+# the governor (constitution.md :47-75; INV-005's rule names the native implementation): a Go governor
+# implementation is in their scope (fail closed). INV-005 to INV-008 require property_test (AC10); INV-010 is a
+# deterministic replay (the CI's INV-010 step) and is in G3, as in TASK-099's and TASK-059's contracts.
+# Not applicable (reading): GOV-002's refactoring clause; OPS-001 (no ref changed by the task's code); INV-009, INV-011,
+# GOV-001, GOV-004, GOV-005, GOV-006, SEC-003 (their scopes meet none of the write-set's paths).
+# Owner-kept acts: none. Nothing under .github/ (the workflow landed under A66 before this task), no setting, no hook,
+# no install (no local Go), no class lowered, no evidence requirement weakened. Approver of the acceptance (reading):
+# one delegated approval of the decision agent (Master Plan §6).
+# Uncovered and stated limits: the shadow runs over the round-1 governor fixtures only (m8-plan.md §2), not over any
+# acceptance's real records (that is a later decision); the record-form rules added by AC4 are exercised by Go tests,
+# not by any fixture; Python's lone-surrogate branch (governor.py :347-350) has no Go path, since the Go reader refuses
+# such input (appendix A, row 3); every review is by AI of one vendor. The property_test record that INV-005 to INV-008
+# count is the CI's Python property step, which this task does not change and which does not run the Go code; the
+# native side of those articles is carried by AC3, AC4 and AC6 (D-3427 C2).
+task: TASK-100
+contract_version: v1
+task_type: implementation
+objective: >-
+  Write the native governor in shadow: one Go package in native/go/governor/ (standard library only) whose program reads
+  the fixture document and prints, byte for byte, the governor-only reference document of the round-1 governor
+  fixtures, computing every case as governor.evaluate at main computes it, record forms included (records.check_record
+  as today); its Go tests; tests/unit/test_export_governor.py, the governor-only reference export with its own pin and
+  its tie to the full reference; and an isolation test that no bootstrap file names or runs native/. The native code
+  decides nothing: it writes no record and nothing reads its output but the advisory workflow aieos-native.yml.
+traces_to:
+  - docs/pre-genesis/governor-spec.md#5
+  - docs/pre-genesis/governor-spec.md#6
+  - docs/plan/m8-plan.md#2
+input_state:
+  # base_commit is filled by script from refs/heads/main just before commit C is made; it must be cc283d35 or a later
+  # main commit, so that the workflow is on main before the task's first commit.
+  base_commit: cc283d35008fc0cf5afadd6b3d64d6a44ebfbc40
+  depends_on: [TASK-004, TASK-041, TASK-044, TASK-099]
+  intent_versions:
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/spec-02-aieos-file-format.md: e7c427b06775069a43d5e6d317a61c1974e5be921aee08a581c1918572a37a61
+    docs/specs/conformance-files.md: 2abbd276efb09509a970838cdde803c9d68efdc48aa86463a448422feedbd7ff
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+write_set:
+  # All added; nothing is modified.
+  paths:
+    - native/go/governor/go.mod
+    - native/go/governor/main.go
+    - native/go/governor/export.go
+    - native/go/governor/governor.go
+    - native/go/governor/records.go
+    - native/go/governor/json.go
+    - native/go/governor/governor_test.go
+    - tests/unit/test_export_governor.py
+    - tests/unit/test_native_isolation.py
+read_set:
+  paths:
+    - src/aieos_bootstrap/governor.py
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/conformance.py
+    - src/aieos_bootstrap/resume_check.py
+    - tests/unit/test_export_reference.py
+    - tests/unit/test_export_fixtures.py
+    - tests/unit/test_bench_isolation.py
+    - tests/conformance/fixtures/
+    - tests/conformance/fixtures_rc/
+    - tests/run_tests.py
+    - tests/integration/test_conformance_rc_set.py
+    - tests/integration/test_conformance_risk_set.py
+    - tests/integration/test_conformance_cb_set.py
+    - bench/go/
+    - .github/workflows/
+    - docs/pre-genesis/governor-spec.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/conformance-files.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/plan/m8-plan.md
+  interfaces: [aieos_bootstrap.governor.evaluate, aieos_bootstrap.records.check_record, aieos_bootstrap.conformance.unwrap, aieos_bootstrap.conformance.canonical_text, aieos_bootstrap.resume_check.check]
+  schemas: [governor-spec decision record (5, 6), conformance-files fixture file (2, 4)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - bench/**
+  - src/**
+  - docs/**
+  - tests/conformance/**
+  - tests/integration/**
+  - tests/property/**
+  - tests/run_tests.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_bench_isolation.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-005, INV-006, INV-007, INV-008, INV-010, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The governor-only reference (tests/unit/test_export_governor.py). Run from the repository root as `python
+      tests/unit/test_export_governor.py --root tests/conformance [--check]`, it reads every .py file of
+      tests/conformance/fixtures (a __pycache__ folder passed over; any other entry fails closed), unwraps each with
+      aieos_bootstrap.conformance.unwrap, calls aieos_bootstrap.governor.evaluate(request, inputs, records) for each
+      case with deep copies, and prints the canonical text (conformance.canonical_text) of one object whose keys are
+      "fixtures/<file stem>" and whose values are the case records in case order; ASCII with LF only; `--check` fails
+      when the document's SHA-256 differs from its pin REFERENCE_GOVERNOR_SHA256 (one exact value, filled from the scratch
+      run and named in the approval of commit X); on any other argument form, a missing folder, a refused file, a call
+      that raises or a record that is not an object it exits non-zero and prints nothing to standard output. It runs no
+      process, reads no network, clock or environment, writes no file, reads files only with Path.read_bytes, and
+      imports only the standard library and aieos_bootstrap, within the import and pattern rules of
+      aieos-checks.yml :1464-1472 (decision D-3417 C5); so does tests/unit/test_native_isolation.py. The bytes of
+      neither module, comments and docstrings included, contain the names of the Resume Check, risk or Capability
+      Boundaries fixture folders or "bench/", and neither has a line matching `^\s*(?:import|from)\s+bench\b`; folder
+      names are built from parts ('fixtures_' + 'rc') (D-3427 C3).
+  - AC2: >-
+      The tie to the full reference (D-3408 C6). The module's tests compute the full round-1 document (the governor
+      and the Resume Check fixture folders, the second's name built from parts, the Resume Check's records with the closed placeholder engine_identity.python, as
+      test_export_reference.py does) and assert that its SHA-256 equals the constant FULL_REFERENCE_SHA256 =
+      01aeec8f12bcf11303e1ec08c1d87d866a7aa823066fe9c5f5eeace4c0ac6443, that this constant occurs once in
+      tests/unit/test_export_reference.py's bytes (read with Path.read_bytes, never open(); decision D-3417 C5) as
+      REFERENCE_SHA256's value, and that the governor document equals the
+      canonical text of the full document's keys beginning "fixtures/". The full document and its pin are unchanged.
+  - AC3: >-
+      The native program (native/go/governor). One Go package main, go.mod naming the module aieosnative and the Go version
+      of bench/go/go.mod (go 1.24), no require and no other file than the write-set's. Run with exactly one argument, the fixture
+      document (tests/unit/test_export_fixtures.py's output), it writes the governor-only document in one write and
+      exits 0, byte-equal to AC1's output; it accepts and passes over the fixtures_rc and fixtures_risk keys of the
+      fixture document, requires at least one "fixtures/" key, and fails closed as bench/go's program does (port_test.go's
+      TestFailClosed cases kept by name: no argument, an extra argument, a file that cannot be read, an empty file, not
+      JSON, a truncated document, not one object, the three not-canonical cases, a byte-order mark, not UTF-8, a repeated
+      key, a fixture that is a number, a number with a fraction, an integer of more than 4300 digits, no governor
+      fixture, an unknown folder, a key without a folder, an empty file stem, a fixture that is not an object, no cases,
+      a case that is not an object, a governor case without request, a governor case without records, the two
+      evaluate-raises cases and a record that is not ASCII; the Resume Check cases are dropped); with no
+      argument it exits non-zero and writes nothing to standard output. It imports only Go's standard library, opens
+      only the one file named by its argument, starts no process, uses no network and writes no file.
+  - AC4: >-
+      Today's record forms (appendix A rows 25, 26, 37 to 42). The Go checkRecord gives the rules of
+      records.check_record at main, in its order: recordKeys holds read_paths, session, acs and text; after the audit
+      copy rules come the read-set rules (6.2:read_set_key, read_set_fact_kind, read_set_source_class, read_set_subject,
+      read_set_value, read_set_forbidden, in records.py :386-414's order) and the session-claim rules (6.2:session,
+      6.2:text with the edit-claim and intent-claim exceptions, 6.2:acs, in :434-458's order). (a) Go tests call
+      checkRecord directly for every rule and compare its whole rule list with the list of rules of
+      records.check_record for the same input; and evaluate-level tests show the first finding's effect (the uncovered
+      note and the decision). (b) Go tests over the branches no fixture exercises (appendix A rows 15, 18, 19, 23, 24, 30,
+      36 and the error, cross-model, approval and rework parts of rows 1, 8, 12, 13, 20, 21): the error record, the
+      cross-model pair, the way-2 and decision-agent candidates, the approval at IN_REVIEW, rework and escalation, and
+      audit-copy values, each compared with governor.evaluate's record for the same input. The expected values of (a)
+      and (b) are constants taken from a scratch run of the Python; its script and unedited output are in the approval
+      request of commit X (D-3417 C3; c100-R1 findings 3 and 4).
+  - AC5: >-
+      The trace (D-3408 C5). Appendix A is the trace table at main cc283d35. Commit X's approval request carries the
+      table updated to native/go/governor (each row's Go function and line) as its own file, checked by a script that
+      every named Go function exists at the named line; every "different" and "no counterpart" row is brought to
+      today's Python by AC4; no row stays "different" (c100-R1 finding 5).
+  - AC6: >-
+      The CI evidence (D-3408 C4). On the aieos-native run of the accepted commit, both jobs, linux and windows, ran the
+      native steps, not the "no port" branch: the logs show "native governor: byte-equal to the governor reference" and
+      every go test result line PASS, read by a read-only script by run id (fetch_logw100.py's form), its output in the
+      accepting decision; and the aieos-checks run of the same commit succeeded.
+  - AC7: >-
+      Isolation (tests/unit/test_native_isolation.py; D-800 C3's form). It reads with read_bytes every file under src/
+      and tests/ (a __pycache__ folder passed over) and .github/workflows/aieos-checks.yml, and fails if any names
+      "native/" or has a line matching `^\s*(?:import|from)\s+native\b`, except the files of a closed allow-list of
+      exactly two entries, each with its reason: tests/unit/test_native_isolation.py itself (it names the folder it
+      guards) and RISK-01's frozen fixture under tests/conformance/, its path built from parts (a frozen risk-rules
+      fixture that names the R13 pattern "native/**" as data; decisions D-3417 C1 and D-3427 C3); a test asserts
+      the allow-list's exact set and that every reason is non-empty (test_bench_isolation.py :70-74's form); and it
+      fails unless aieos-native.yml is the only workflow under .github/workflows/ that names "native/". Every test's
+      docstring begins "TASK-100 AC<n>". It runs no process and writes no file.
+  - AC8: >-
+      Nothing else changes. Every test that tests/run_tests.py runs passes at the task's commit on a compiled tree; the
+      two new Python modules run under it; bench/go, test_export_reference.py and every existing test are unchanged.
+  - AC9: >-
+      Purity and the CI checks (INV-001, INV-002, INV-004). The Python modules import only the standard library and
+      aieos_bootstrap, use no exec, eval, compile, __import__ or importlib, start no process, open no network connection
+      and write no file; no Python file is added outside tests/unit; no non-Python file is added under src/ or tests/.
+      The CI steps at the task's commits report no finding (deterministic_rule, OPS-003, SEC-001, SEC-002, bandit).
+      Before each commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns and the
+      pre-push pattern, each count 0.
+  - AC10: >-
+      The records (L-0034; D-3395). The task's evidence records' forms are built and checked through
+      records.check_record and a governor shadow over a dry records list (rec100_dry.py, gov99.py's form), at r1's
+      approval request with their raw output (decision D-3417 C2): per-article records for INV-001, INV-002,
+      INV-004, GOV-002, GOV-003, SEC-001, SEC-002 and OPS-003 (whichever of them the constitution gives an
+      evidence_required) (way-2 copies naming the reviewer lines that address each
+      article), INV-005 to INV-008 (property_test copies of the CI's property step record, in TASK-099's form; that step
+      runs the Python property tests, unchanged by this task, and the native side of these articles is AC3, AC4 and AC6),
+      INV-010 under its replay check (the CI's INV-010 step; no property copy), INV-003 and OPS-002 (decision agent reviews with that dimension), and the profile entries of risk high;
+      the shadow gives NEEDS_REVIEW, row 5, no missing entry, before the reviews.
+  - AC11: >-
+      Tests, with this rule-to-test list: R1 AC1 and AC2 (test_export_governor.py's own tests); R2 AC3 (Go tests and the
+      workflow's compare, AC6); R3 AC4 (Go tests); R4 AC7 (test_native_isolation.py); R5 AC8 (tests/run_tests.py,
+      unchanged).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python tests/unit/test_export_governor.py --root tests/conformance < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1200k, wall_time: 6h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC7, AC8, AC11]}
+  - {gate: G3, check: constitution, args: [AC5, AC6, AC9, AC10, INV-001, INV-002, INV-004, INV-010, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts AND both aieos-native jobs show the byte-equal line and the go tests' PASS at the accepted commit
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
+# Appendix A: the trace table (decision D-3416), drafted by a read-only agent and checked by the worker (D-3416 C3 to
+# C5), at main cc283d35, carried here by script (mk_r1.py) as comment lines: its section 2 rows, verbatim (47 rows:
+# 39 equivalent, 2 different (25, 26), 6 no counterpart (37 to 42)). gov.py = src/aieos_bootstrap/governor.py,
+# rec.py = src/aieos_bootstrap/records.py, gov.go / rec.go / json.go / export.go = bench/go/*.go.
+# | # | Python name, file:line | Reached from | Go counterpart, file:line | Verdict | Differences / what was compared | Fixture coverage |
+# |---|---|---|---|---|---|---|
+# | 1 | evaluate, gov.py:413-502 | entry | evaluate, gov.go:586-770 | equivalent | Same ValueError/errNoTaskID test (gov.py:417-418, gov.go:588-590) and message; same error join "; " (gov.py:420-422, gov.go:592-598); same plan dedupe with G0 first (gov.py:426-427, gov.go:610-615); CI-only gate results, passed/failed_gates sorted set (gov.py:428-431, gov.go:616-636); same profile loop, cross-model first ordering, rests_on_ai rule, satisfied_by sorted set, missing_types in kinds order (gov.py:433-455, gov.go:638-700); same row 1-5 branches and human_only rule (gov.py:457-482, gov.go:702-747); same record keys (gov.py:484-501, gov.go:749-769). Python raises; Go returns an error that export.go:109-112 turns into errCannotCompute, failing the whole document (export side, not evaluate). | exercised (acc_01.py case 1, row 5 path); other rows not determined |
+# | 2 | _full, gov.py:85-86 | gov.py:417 | matches, rec.go:60-63 | equivalent | str test + fullmatch vs string type assert + `^...$` RE2 (RE2 `$` is end of text, same as fullmatch). | exercised (acc_01.py case 1) |
+# | 3 | _text, gov.py:70-78 | gov.py:224, 333, 347 | isStr, rec.go:40-43 | equivalent | Non-empty string. Python also rejects a string with a lone surrogate (gov.py:74-77); Go cannot hold one because parseJSON refuses "\ud800"-style escapes (json.go:354-366). So gov.py:347-350 ("its record_id cannot be written") is unreachable in Go; input that would expose it (a record_id with a lone surrogate) is outside the Go reader's domain. | not determined |
+# | 4 | _texts, gov.py:81-82 | gov.py:147, 175 | isStrList, rec.go:46-57 | equivalent | list and every item non-empty string (same surrogate caveat as row 3). | exercised (acc_01.py case 1) |
+# | 5 | _count, gov.py:89-90 | gov.py:150 | isCount, gov.go:47-50 | equivalent | int, not bool, >= 0 vs *big.Int with Sign >= 0 (bools are a separate Go type). | exercised (acc_01.py case 1) |
+# | 6 | canon, gov.py:93-121 | gov.py:126 | canon / canonObject / canonList / canonKey, json.go:457-491, 413-435, 437-455, 397-411 (via canonString json.go:389-395) | equivalent | Same layout (2-space indent, "{}"/"[]" for empty, ",\n" joins, ": "), keys sorted (Python code-point sort vs Go byte sort of UTF-8 = same order), same string escapes (`"`, `\`, < 0x20 as \u%04x, everything else literal), bool/null/int. Go also accepts Go int, []string, []map[string]any (json.go:469-486; extra, used for built records). Python str(int) would refuse > 4300 digits; no such int enters a decision record. | exercised (acc_01.py case 1) |
+# | 7 | _record_id, gov.py:124-127 | gov.py:243, 501 | govRecordID + sha256Hex, gov.go:81-93, 74-77 | equivalent | Record without record_id, canonical text + "\n", SHA-256 hex, "decision-" prefix. Python encode('utf-8') could raise on a lone surrogate; not reachable in Go (row 3). | exercised (acc_01.py case 1) |
+# | 8 | _request_errors, gov.py:133-152 | gov.py:420 | govRequestErrors, gov.go:98-127 | equivalent | Same key-set test (set(req) == REQUEST_KEYS vs keysAre; Obj keys are unique, json.go:193-195), same checks in same order, same messages. | exercised (acc_01.py case 1, no-error path); error branches not determined |
+# | 9 | _intent_versions, gov.py:155-156 | gov.py:141, 239 | isIntentVersions, rec.go:84-95 | equivalent | dict, every key non-empty, every value fullmatch v[0-9]+. | exercised (acc_01.py case 1) |
+# | 10 | _profile_form, gov.py:159-162 | gov.py:187 | profileForm, gov.go:129-142 | equivalent | list of objects with exactly dimension/evidence_types, non-empty dimension, list of non-empty strings. | exercised (acc_01.py case 1) |
+# | 11 | _articles_form, gov.py:165-168 | gov.py:189 | articlesForm, gov.go:144-157 | equivalent | Same as row 10 with id/evidence_required. | exercised (acc_01.py case 1, empty list) |
+# | 12 | _inputs_errors, gov.py:171-194 | gov.py:420 | govInputsErrors, gov.go:159-204 | equivalent | Same key-set test, same checks and order (traces_to, risk, four bools, verification_plan with G regex, evidence_profile, applicable_articles, three versions), same messages. | exercised (acc_01.py case 1, no-error path); error branches not determined |
+# | 13 | _records_errors, gov.py:197-208 | gov.py:420 | govRecordsErrors, gov.go:206-227 | equivalent | Same "not a list" message, same duplicate-id message, one message per repeat. | exercised (acc_01.py case 1, no-error path) |
+# | 14 | _base, gov.py:214-225 | gov.py:231, 484 | govBase, gov.go:232-250 | equivalent | Same six fixed keys; the three versions copied when inputs is an object and the value is a non-empty string, else null. | exercised (acc_01.py case 1) |
+# | 15 | _error_record, gov.py:228-244 | gov.py:422 | govErrorRecord (+ notesList), gov.go:263-294, 252-261 | equivalent | Same keys and values; task_content_hash, evaluated_commit, intent_versions, next_task_state copied under the same tests (STATE_NAMES vs stateNames rec.go:21-22, same 12 names). | not determined |
+# | 16 | _join, gov.py:250-261 | gov.py:435 | govJoin, gov.go:305-331 | equivalent | First-seen dimension order, profile then articles, each type once. | exercised (acc_01.py case 1) |
+# | 17 | _review_like, gov.py:264-267 | gov.py:296 | reviewLike, gov.go:333-335 | equivalent | suffix "review" or prefix "ai_review". | exercised (acc_01.py case 1, returns false for build/lint) |
+# | 18 | _is_way2, gov.py:270-275 | gov.py:295, 307 | isWay2, gov.go:337-341 | equivalent | Same four conditions; `!=` on models vs !pyEq (json.go:496-544). | not determined |
+# | 19 | _is_da_review, gov.py:278-282 | gov.py:293, 308 | isDAReview, gov.go:343-346 | equivalent | Same five conditions ('basis' in r vs Has). | not determined |
+# | 20 | _candidate, gov.py:285-298 | gov.py:316 | candidate (+ govInputs struct gov.go:348-352), gov.go:354-369 | equivalent | Same branch order: human types, ai_review, review-like, CI + evidence type. | exercised (acc_01.py case 1, CI branch); other branches not determined |
+# | 21 | _entry, gov.py:301-319 | gov.py:440 | entry, gov.go:374-435 | equivalent | Same dimension filter; cross-model gate on delegation and high/critical; failed (unsorted, way2 then da) / w, d sorted; reserve w[0]; non-cross candidates exclude reserved, sat and failed sorted. | exercised (acc_01.py case 1, non-cross path); cross-model not determined |
+# | 22 | _sort_records, gov.py:325-370 | gov.py:424 | sortRecords, gov.go:442-519 | equivalent (own logic) | Same label, other-subject skip, blocking kind fallback "other", note texts, authority, evidence_type/gate, commit binding, stale test (versions.get(k) != v vs pyEq), observation test, sorted set of stale. Its output still differs whenever check_record differs (row 25). | exercised (acc_01.py case 1, current path) |
+# | 23 | _approval, gov.py:373-402 | gov.py:480 | approval (+ counted gov.go:521-524), gov.go:526-564 | equivalent | Same binding test, outcome test, class branches, note texts, (rank, id) order, return (id, rank == 1). | not determined (re_evaluate cases exist: acc_12-15, not read) |
+# | 24 | _next_after_rework, gov.py:408-410 | gov.py:466, 473 | nextAfterRework, gov.go:569-575 | equivalent | used >= limit gives ESCALATED, else REWORK (big.Int Cmp). | not determined |
+# | 25 | record_forms.check_record, rec.py:301-335 | gov.py:337 | checkRecord, rec.go:98-149 | different | (a) RECORD_KEYS rec.py:106-109 includes read_paths, session, acs, text; recordKeys rec.go:30-32 does not, so Go emits "6.2:unknown_key" (rec.go:105-113) for any record carrying them. Input: a CI gate observation for the task with `"session": "s1"` (or `"acs": ["AC1"]`) - Python: no finding, record is current and passes its gate; Go: note "<id>: not used: 6.2:unknown_key", gate missing, row 3 instead of e.g. row 5; uncovered and record_id differ. (b) Python appends check_read_set and check_session_claim findings (rec.py:333-334); Go stops after checkAuditCopy (rec.go:147-148). Input: a task-subject record with evidence_type observed_read_set and no read_paths - Python first finding may differ / record refused with "6.2:read_set_*", Go may use the record. (c) Finding detail strings are dropped in Go (only rules kept, rec.go:3-5); governor reads only findings[0].rule (gov.py:342, 345), so this part is not an output difference. Order of the shared checks is the same. | exercised (acc_01.py case 1, no-finding path); the differing inputs not exercised (Grep: no fixture holds read_paths, session, acs or text) |
+# | 26 | RECORD_REQUIRED / RECORD_KEYS, rec.py:105-109 | rec.py:308, 310 | recordRequired / recordKeys, rec.go:29-32 | different | Go lacks 'read_paths', 'session', 'acs', 'text' (TASK-064, TASK-077 keys). Input: see row 25 (a). | not exercised (Grep as row 25) |
+# | 27 | _is_str, rec.py:223-224 | rec.py:314, 331 | isStr, rec.go:40-43 | equivalent | non-empty string. | exercised (acc_01.py case 1) |
+# | 28 | _matches, rec.py:231-232 | rec.py:321, 327 | matches, rec.go:60-63 | equivalent | as row 2. | exercised (acc_01.py case 1) |
+# | 29 | _in, rec.py:235-236 | rec.py:316, 318 | in, rec.go:66-77 | equivalent | string and member. | exercised (acc_01.py case 1) |
+# | 30 | _is_str_list, rec.py:239-240 | rec.py:345, 511 | isStrList, rec.go:46-57 | equivalent | list of non-empty strings. | not determined |
+# | 31 | _is_intent_versions, rec.py:475-476 | rec.py:323 | isIntentVersions, rec.go:84-95 | equivalent | as row 9. | exercised (acc_01.py case 1) |
+# | 32 | _check_outcome, rec.py:461-472 | rec.py:320 | checkOutcome, rec.go:215-232 | equivalent | Same four tests, same order, same rules. | exercised (acc_01.py case 1, pass outcome) |
+# | 33 | _check_binding, rec.py:479-489 | rec.py:325 | checkBinding, rec.go:234-247 | equivalent | Absent binding on authority gives finding; present binding exactly {kind, hash}, kind in BINDING_KINDS, 64-hex hash. | exercised (acc_01.py case 1, absent path) |
+# | 34 | _check_review_fields, rec.py:492-515 | rec.py:326 | checkReviewFields, rec.go:249-285 | equivalent | Same needs_ref, decision_ref, models, decision_agent_review basis/stands_for, basis form (string or non-empty list of strings), stands_for; same order. | exercised (acc_01.py case 1, no-review path) |
+# | 35 | check_audit_copy, rec.py:348-377 | rec.py:332 | checkAuditCopy, rec.go:172-213 | equivalent | Same non-audit-copy branch, other key, fact_kind, source class, own key/value, other key, binding, forbidden; same rules and order. | exercised (acc_01.py case 1, non-audit-copy path) |
+# | 36 | _is_audit_value, rec.py:338-345 | rec.py:367 | isAuditValue, rec.go:151-170 | equivalent | null; risk class member; list of {dimension, evidence_types} objects. | not determined |
+# | 37 | check_read_set, rec.py:386-414 | rec.py:333 | none | no counterpart | All "6.2:read_set_*" findings are absent in Go. Input: a record (subject = task) carrying read_paths with evidence_type other than observed_read_set: Python first finding "6.2:read_set_key", Go "6.2:unknown_key" (row 26) - note text differs. A record with evidence_type observed_read_set but wrong fact_kind / source_class / no read_paths and no unknown key: Python refuses it with "6.2:read_set_*", Go raises no finding. | not exercised (Grep: no read_paths in fixtures) |
+# | 38 | _is_read_paths, rec.py:380-383 | rec.py:407, 449 | none | no counterpart | Used by check_read_set and by the acs rule of check_session_claim. | not exercised |
+# | 39 | check_session_claim, rec.py:434-458 | rec.py:334 | none | no counterpart | "6.2:session", "6.2:text", "6.2:acs" findings absent; and the keys themselves are unknown in Go (row 26). Input: a gate record with `"acs": ["AC1"]` - Python accepts (gate set, rec.py:455), Go "6.2:unknown_key". A record with `"session": ""` - Python first finding "6.2:session", Go "6.2:unknown_key". | not exercised (Grep: no session/acs/text in fixtures) |
+# | 40 | _is_edit_claim, rec.py:417-421 (TASK-096) | rec.py:445 | none | no counterpart | Reachable from evaluate with subject = task: a claim with evidence_type contract_edit, text, no session - Python no text finding (record then dropped later, e.g. "not used: no commit binding" or "a claim, not an observation"), Go "not used: 6.2:unknown_key"; uncovered and record_id differ. | not exercised |
+# | 41 | _is_intent_claim + _INTENT, rec.py:424-431 (TASK-098) | rec.py:445 | none | no counterpart | Called from evaluate's path but always False there: it needs subject INT-<digits> (rec.py:431), and a record whose string subject differs from the task id (always TASK-<digits>, gov.py:417) is skipped before check_record (gov.py:334-336). So TASK-098's changed line (rec.py:445) cannot change evaluate's output; it is the missing TASK-064/077/096 rules (rows 25, 26, 37-40) that differ. | not exercised |
+# | 42 | READ_SET_TYPE / READ_SET_FORBIDDEN, rec.py:116-117 | rec.py:390, 410 | none | no counterpart | Part of row 37. | not exercised |
+# | 43 | Finding, rec.py:150-156 | gov.py:342, 345 (.rule) | rule strings only ([]string), rec.go:97-149 | equivalent | Only .rule is read by the governor; Go keeps rule strings in the same order. | exercised (acc_01.py case 1, empty list) |
+# | 44 | Constants STATE_NAMES, FACT_KINDS, SOURCE_CLASSES, OUTCOMES, BLOCKING_KINDS, BINDING_KINDS, AUDIT_COPY_*, RISK_CLASSES, rec.py:93-114 | gov.py:241, 340; rec.py:316-376 | stateNames ... riskClasses, rec.go:20-37 | equivalent | Same members (compared one by one). | exercised (acc_01.py case 1) |
+# | 45 | Regexes _HASH, _COMMIT, _VERSION, _TASK, _GATE, rec.py:141-146 | rec.py:321-327, 486 | reHex64, reCommit, reVersion, reTask, reGate, rec.go:12-18 | equivalent | Same patterns, anchored with ^...$ in Go. Go's single set serves both files. | exercised (acc_01.py case 1) |
+# | 46 | Governor constants, gov.py:35-49, 55-61 | gov.py:218, 177, 143, 290, 294, 304, 448, 457, 134, 172, 474, 234/498 | gov.go:15-42 | equivalent | Same values: module path, source class, CI, risks, states, human types, ai_review, cross-model, review record types, row 1 kinds, request keys, input keys, levelAtLeastL2 false, the three NOTES texts verbatim. | exercised (acc_01.py case 1) |
+# | 47 | Governor regexes _HEX64, _COMMIT, _TASK, _VERSION, _GATE, gov.py:63-67 | gov.py:137, 139, 156, 185, 417 | reHex64, reCommit, reVersion, reTask, reGate, rec.go:12-18 | equivalent | Same patterns. | exercised (acc_01.py case 1) |
