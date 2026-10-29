@@ -25,3 +25,5 @@ TASK-083 (the two tools), TASK-082 (base_inputs), TASK-080 (context_compiler); s
 
 ## Log
 - 2026-10-24: opened (session 3797498a; decisions D-2403, D-2409).
+- 2026-10-29: specification 6 revision 8 writes the departures (a) to (e) into section 4, section 5 and section 8 (DM F74; decisions D-3608 and the decision that approves the row), in the commit that adds DM F74; specification 7 :56 and section 10 item 8 and the stale line of context_compiler.py :38 remain.
+- 2026-10-29: specification 7 revision 4 corrects its section 6 first and second bullets and section 10 item 8 (DM F75; decisions D-3610 and the decision that approves the row), in the commit that adds DM F75; the stale line of context_compiler.py :38 remains, so the item stays open.

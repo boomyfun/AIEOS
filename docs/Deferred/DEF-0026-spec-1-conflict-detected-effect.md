@@ -1,6 +1,6 @@
 # DEF-0026: Specification 1's effect of `conflict.detected` and specification 3's STOP: scope invalid
 
-- Status: open
+- Status: done
 - Opened: 2026-10-10 (decision file D-255 Q4; review finding D1-5)
 - Deferred by: decision agent (A41), D-255 Q4: outside DEF-0025's list, so no change in specification 1 revision 2.
 - Decision group: A (a specification revision under A51, B9).
@@ -19,3 +19,4 @@ Specification 1 revision 2 (DM F25); specification 3 (DM F23).
 
 ## Log
 - 2026-10-10: opened (decision file D-255). ../History/2026-10/2026-10-10-0043-bootstrap-scope-and-m3-documents.md
+- 2026-10-29: done: specification 1 revision 4 records it in section 5.3 (DM F71; decisions D-3601 and the decision that approves the row), in the commit that adds DM F71.

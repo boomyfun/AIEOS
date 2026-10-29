@@ -1,6 +1,6 @@
 # DEF-0083: specification 3's source for the base branch and the module roots
 
-- Status: open
+- Status: done
 - Opened: 2026-10-18 (session 1c0ea663; decisions D-1325, D-1326 C7)
 - Deferred by: decision agent (A41, A51), D-1326 C7, after D-1325 found it outside the scope of specification 3 revision 5.
 - Decision group: A (a text change of specification 3, in its next revision).
@@ -15,3 +15,4 @@
 
 ## Log
 - 2026-10-18: opened (session 1c0ea663; D-1325, D-1326 C7).
+- 2026-10-29: done: specification 3 revision 6 cites spec 2 section 7's keys in section 1 and section 12 point 10 (DM F72; decisions D-3604 and the decision that approves the row), in the commit that adds DM F72.

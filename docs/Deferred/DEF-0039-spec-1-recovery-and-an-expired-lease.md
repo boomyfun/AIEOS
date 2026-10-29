@@ -1,6 +1,6 @@
 # DEF-0039: specification 1, recovery step 1 and a lease past its expiry
 
-- Status: open
+- Status: done
 - Opened: 2026-10-11 (decision file D-390)
 - Deferred by: decision agent (A41), D-390 (reading (t1) for TASK-009; the tension carried to the specification's next revision, as DEF-0026 carried an earlier one).
 - Decision group: A (a specification revision under A51).
@@ -22,3 +22,4 @@ TASK-009 (done, D-395); DEF-0026 (the same specification's other carried point).
 
 ## Log
 - 2026-10-11: opened (decision files D-390 and D-395).
+- 2026-10-29: done: specification 1 revision 4 records it in section 7 step 1 (DM F71; decisions D-3601 and the decision that approves the row), in the commit that adds DM F71.

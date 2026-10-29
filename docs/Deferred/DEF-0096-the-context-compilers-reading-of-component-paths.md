@@ -21,3 +21,4 @@ TASK-080 (context_compiler.py at 9c41ab22); specification 3 :55-57; specificatio
 
 ## Log
 - 2026-10-24: opened (session 308d8b07; TASK-080's acceptance, D-2206).
+- 2026-10-29: specification 6 revision 8 (DM F74) does not take up this item; it stays open for a later revision of specification 6 or for the next task that changes context_compiler.py or resume_check's pattern reading.
