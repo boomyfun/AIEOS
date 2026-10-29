@@ -24,8 +24,8 @@ The tools (AC2, AC3; specification 5 section 11 point 8, the read hook point's c
 - A partial read (tool_input.offset or limit present) counts as a read of the whole path: the over-inclusive side,
   which is the fail-safe side for a read-set.
 - A failed read is not seen: tool_response is not read, so the path is still returned (over-inclusive). The hooks
-  documentation (characters 0 to 200000 of the page, summarised by a web-reading tool on 2026-10-18: a summary, not the
-  page) says PostToolUse "Runs
+  documentation (characters 0 to 200000 of the page, as DEF-0082 gives it, summarised by a web-reading tool on
+  2026-10-18: a summary, not the page) says PostToolUse "Runs
   immediately after a tool completes successfully" and that failed calls go to a separate event,
   PostToolUseFailure, which this function is not meant for; placed there, it would return the path of a failed read.
 
@@ -40,12 +40,12 @@ What this shows, and what it does not (AC6):
   fields file_path, offset and limit are given in its PreToolUse section, and file-tool paths in PostToolUse arrive in
   the same format as for PreToolUse. That Read's file_path is in that input is so inferred from the documentation, not
   stated there for Read.
-- The covered name, Read, is one seen in this project's transcripts (not every uncovered name above was seen there);
-  hooks are supported live only for Bash; in session 1947b313 a
+- The covered name, Read, is one seen in this project's transcripts (not every uncovered name above was seen there); the
+  names are supported live only for Bash; in session 1947b313 a
   hook with matcher "*" did not refuse Read calls it was written to refuse (decisions D-1202 and D-1203), so whether a
   hook fires for Read is unknown and the live evidence is negative.
-- A result is a lower bound at best across calls (specification 5 line 73; within one call it is over-inclusive, as
-  above): the hook may not fire, may not cover a tool and cannot
+- A result is a lower bound at best across calls (specification 5 line 73; for a covered Read it is over-inclusive
+  within one call, as above): the hook may not fire, may not cover a tool and cannot
   show its own completeness; the record built from these paths is kept and not used (specification 5 line 72).
 - Gathering the paths across hook calls, the hook process and its context, placing the hook and choosing its matcher
   stay out (part CC-3, the owner's; specification 5 section 11 points 7 and 10).

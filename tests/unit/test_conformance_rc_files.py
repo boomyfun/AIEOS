@@ -350,7 +350,9 @@ def under(name, use, limit):
 
 
 def rule_risk(i):
-    """The task's risk as specification 3 section 3 decides it: the contract's, raised by every rule whose pattern meets the write-set."""
+    """The task's risk as specification 3 section 2, check 7, decides it, "meets" being section 3's: the contract's,
+    raised by every rule whose path pattern meets the write-set. Only rules that match by paths are read here; a rule by
+    component_tags is not."""
     ws = i['contract']['write_set']['paths']
     classes = [r['risk'] for r in i['risk_rules'] for p in r['match'].get('paths', []) if any(meets(p, w) for w in ws)]
     return max([i['contract']['risk']] + classes, key=RISKS.index)

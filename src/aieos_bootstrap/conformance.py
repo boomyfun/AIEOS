@@ -49,7 +49,7 @@ Limits of TASK-006 (its AC12):
   decision with the expected one; it never decides an execution or an acceptance, and it does not check how a Resume
   Check derives the inputs of specification 3 section 1, which the fixtures give as values.
 - The capability of an id is read from the bound scenario file's table and heading layout; a later revision of that
-  file whose layout no longer gives an id its capability makes it NOT_RUN, never PASS; one that keeps them changes nothing.
+  file whose layout no longer gives an id its capability makes it NOT_RUN, never PASS; one that keeps them changes nothing in this reading.
 - Running the Resume Check scenarios in the CI channel needs the set file's Resume Check entries and a later revision
   of the CI workflow, which are not part of this module.
 

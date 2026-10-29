@@ -165,7 +165,7 @@ class RcSetTest(unittest.TestCase):
         self.assertEqual([p.name for p in (ROOT / M2_FIXTURE_DIR).iterdir() if p.name.startswith('rc_')], [])
 
     def test_no_sub_folder_here_and_no_resume_check_scenario_in_the_m2_folder(self):
-        """The folder holds no sub-folder (a __pycache__ aside), and no file of the earlier folder holds a Resume Check scenario."""
+        """The folder holds no sub-folder (a __pycache__ aside), and no .py file of the earlier folder holds a Resume Check scenario."""
         self.assertEqual([p.name for p in (ROOT / FIXTURE_DIR).iterdir() if p.is_dir() and p.name != '__pycache__'], [])
         scenarios = [unwrap(read(M2_FIXTURE_DIR + '/' + p.name))['scenario'] for p in (ROOT / M2_FIXTURE_DIR).iterdir()
                      if p.is_file() and p.name.endswith('.py')]

@@ -186,7 +186,7 @@ def append(log, event_type, payload, event_id, appended_at, task_id=None, fencin
     # A "duplicate" above is decided before the lease is looked at, so for a retried submission it says nothing about
     # the lease now.
     # AC3: the new event's own form. It calls records' private helpers _is_str, _matches and _check_fence, so a change
-    # to records.py re-runs these checks and their tests.
+    # to records.py changes these checks.
     findings = []
     if not records._is_str(event_id):
         findings.append('6.1:event_id: event_id is not a non-empty string')
@@ -213,8 +213,8 @@ def append(log, event_type, payload, event_id, appended_at, task_id=None, fencin
     # AC6, AC7: the fence (TASK-015 AC3). An event that needs a lease and names no task_id cannot hold "a lease on the
     # event's task_id", so it is refused by the fence (reading). The record's subject is the task id and its recorder
     # and record_id are the caller's, so the record is built only when all three exist (choice (r1)).
-    # The lease's expiry is judged against appended_at, the caller's time. The refusal record's refers_to names the
-    # refused event, which is never on the log, and its evidence_type is refused_submission for any fenced event.
+    # The lease's expiry is judged against appended_at, the caller's time. The refusal record's refers_to names the refused
+    # event, which is not on the log at that moment, and its evidence_type is refused_submission for any fenced event.
     if _needs_lease(event_type, fencing_token):
         if task_id is None:
             fence = ['fence: the event names no task_id, so no lease can be on its task']

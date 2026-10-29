@@ -96,8 +96,9 @@ class Properties(unittest.TestCase):
                         self.assertNotIn(marker, repr(r))
 
     def test_both_branches_occur(self):
-        """TASK-063 AC10 and TASK-063 AC5: over the samples of the property above, some refusals are passed to the core
-        and some calls write nothing, so that property is not vacuous."""
+        """TASK-063 AC10 and TASK-063 AC5: over the 500 samples of seed 6302 (those of
+        test_at_most_once_and_only_for_a_refusal_with_a_record), some refusals are passed to the core and some calls write
+        nothing, so that property is not vacuous."""
         rng = random.Random(6302)
         passed = sum(1 for _ in range(500) if run(sample(rng))[3].violations)
         self.assertTrue(0 < passed < 500, passed)

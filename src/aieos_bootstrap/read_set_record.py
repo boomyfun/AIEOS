@@ -28,9 +28,9 @@ The interface (specification 5 section 11 point 7), as task TASK-064 states it (
   adapter.end, before adapter.submit (a submission may release the lease, as the description of adapter.end says), and
   before a violation releases it.
 - The ids are derived, not given: event_id "observed-read-set/<task_id>/<session_id>", record_id that text followed by
-  "/record". A second observe for the same task and session gives eventlog's "duplicate" with the same list and the same
-  fencing token (nothing appended, no error) and eventlog's refusal "conflict" with another list or another token
-  (eventlog.py:180-184). So the log holds at
+  "/record". A second observe for the same task and session gives eventlog's "duplicate" with the same record (the same list
+  and recorder text) and the same fencing token (nothing appended, no error) and eventlog's refusal "conflict" with
+  another record or another token (eventlog.py:180-184). So the log holds at
   most one such record per task and session_id; two session_ids for one session, or one session_id over two tasks,
   are not found (a limit). A session_id that holds "/" is refused, so the ids can be read back.
 - The paths are the caller's list. Repeats are removed by exact string equality, the first occurrence's order kept,
@@ -207,7 +207,7 @@ def observe(context, read_paths, now, append=None):
     try:
         return _observe(context, read_paths, now, append, state)
     except Exception as e:  # noqa: BLE001 - any exception becomes a result, its type only
-        # AC5: the record passed, when append was already called with it, else None
+        # AC5: the record passed: set just before the append call (also when append is not callable), else None
         return _result('refused', 'observe', ['%s raised inside observe' % type(e).__name__], state.get('passed'))
 
 

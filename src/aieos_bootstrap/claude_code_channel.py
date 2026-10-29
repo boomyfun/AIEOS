@@ -50,7 +50,8 @@ deliver (AC5, AC7):
   entry's exit code.
 - hook_result is checked only for its key set, its verdict, its exit code for that verdict (0 for "allow", else 2) and
   that a record goes with "refuse" alone; its standard-error text, concern, reason and findings are not checked, nor the
-  record's evidence_type against the concern. now, append and release are not checked here: a fault in them surfaces
+  record's evidence_type against the concern; the record inside it is checked further in _deliver (record_findings, its
+  subject against the task_id, its recorder against the context's). now, append and release are not checked here: a fault in them surfaces
   only through adapter.violation, as a "core" refusal, or as "deliver" when an exception escapes it.
 - Nothing is written for "allow", for "uncovered", or for a "refuse" without a record. The last (entry's reasons
   argument, allowlist_form and record) is a caller's error; it is a departure from specification 5 section 8, which

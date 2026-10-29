@@ -1,5 +1,6 @@
 """Unit tests of aieos_bootstrap.eventlog (TASK-007 AC12, rules R1 to R7; R8 is TASK-015's and R9 the module
-docstring's stated limits), all in memory; every rule has at least one passing case and one failing case."""
+docstring's stated limits), all in memory; every rule of R1 to R8 has at least one passing case and one failing case;
+R9 has passing checks only."""
 
 import datetime
 import json
