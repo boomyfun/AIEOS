@@ -21,6 +21,12 @@ One, in session ea6ea0a3 (2026-10-29, TASK-098):
   it (twelve failures and one error in test_cli_run.py). The fix cost a contract revision r3 (commit C2), a push, a new
   clone and the code redone.
 
+One, in session 87e2584b (2026-10-29, TASK-099):
+- **D-3395.** The records were first drafted without per-article records, so the governor shadow gave
+  INSUFFICIENT_EVIDENCE, row 3, twelve missing entries: the governor counts an article's evidence only through records
+  whose dimension is the article's id. Per-article copies were added (D-3395, D-3396); TASK-100's contract named them
+  from r0 (AC10).
+
 ## Why it happens
 The record's form is written from the specification's words, and the checker's own rules sit in code that no review
 of the contract is asked to read.

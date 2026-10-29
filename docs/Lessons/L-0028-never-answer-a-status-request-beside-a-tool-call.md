@@ -75,6 +75,15 @@ Session ea6ea0a3 (2026-10-28 to 2026-10-29; TASK-098, the list of the acceptance
 - A Grep or a partial read before the full read of an output: D-3294 (n) and (o), D-3309 (w); each output was then
   read in full before anything acted on it.
 
+Session 87e2584b (2026-10-29; M8's start, TASK-099 and TASK-100; the lists in TASK-099's and TASK-100's acceptance
+texts):
+- Messages holding more than one call: D-3339 (a checkpoint Edit with a Glob), D-3352 and D-3353 (an Edit with the
+  Agent call), D-3372 (two Writes), D-3395 (two Edits), D-3406 and D-3412 (a Write beside the request), D-3417 (a
+  Write and an Edit), D-3418 (two Writes), D-3422 and D-3426 (a Write beside the request), D-3428 (an Edit beside the
+  request), D-3436 (two Writes), D-3441 (two Edits), D-3455 (two Edits of the acceptance text), D-3466 (two Greps).
+- Text beside a call: after the first compaction, a label beside the checkpoint Grep, refused by the guard (D-3393).
+  No text was written beside a call after the second compaction.
+
 ## Why it happens
 The app's request reads as asking for words now, and the worker adds them to the call it is about to send.
 

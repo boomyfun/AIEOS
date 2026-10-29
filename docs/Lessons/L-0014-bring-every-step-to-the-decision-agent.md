@@ -43,6 +43,9 @@ One occurrence in session 3797498a (../History/2026-10/2026-10-24-0319-the-later
 One occurrence in session ea6ea0a3 (../History/2026-10/2026-10-25-0526-the-later-part-tasks-087-and-091-to-098-and-m7s-exit.md):
 - **2026-10-29 (D-3323 (aa)).** After TASK-098's CI watch had exited, the turn ended with nothing to wait on; the owner asked "M7 đã xong chưa? Tại sao lại dừng" and the work resumed.
 
+One occurrence in session 87e2584b (../History/2026-10/2026-10-29-0446-m8-starts-task-099-task-100-and-the-def-triage.md):
+- **D-3466.** The DEF triage table was brought for ruling without checking it against the approved plan (m8-plan.md section 7), so three rows the plan already schedules (DEF-0095, DEF-0101, DEF-0105) sat in other buckets, a departure from an approved plan that the request did not flag; the decision agent caught it and corrected nine rows.
+
 ## Why it happens
 - Claude treats a step as mechanical (a display, a change of order, a turn end) and does not see it as a decision.
 - The request checklist of the decision agent's definition was not applied before sending.

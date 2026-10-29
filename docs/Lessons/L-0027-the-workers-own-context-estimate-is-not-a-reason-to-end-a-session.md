@@ -22,6 +22,8 @@ The worker cannot see the context level; its estimate, counted from the conversa
   D-3219 had named, sent before the lessons and the checkpoint were reread; nothing depended on the order.
 - **2026-10-28 (session ea6ea0a3, D-3256 (a)).** After a compaction, the first call was a Read of a test file that
   decision D-3255 had named, sent before the lessons and the checkpoint were reread; nothing depended on the order.
+- **2026-10-29 (session 87e2584b, D-3393).** After a compaction, two Globs went out before the checkpoint was reread;
+  nothing depended on the order.
 
 ## Why it happens
 The level is shown to the owner by the app, not to the worker. The worker counts what it has read and written, and that count runs high (long tool outputs and agent reports weigh less than they seem, or the window is larger than assumed). Which of these holds is a guess.

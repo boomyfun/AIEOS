@@ -284,6 +284,9 @@ Occurrence in session 2026-10-17-1525 (../History/2026-10/2026-10-17-1525-the-la
 Occurrence in session 2026-10-17-1653 (../History/2026-10/2026-10-17-1653-def-0074-done-and-the-t0-adapter-contracted.md):
 - **2026-10-17.** Three text blocks before tool calls, in English, each at a step change: :226 ("Now the launch message: tbq-first Bash and the Agent call.", in the message that launched the decision agent), :407 ("Now edit the writer files.") and :1816 ("Now the edits to the copies."); the second and third came after the harness asked what Claude was doing. The quick check stopped the next command each time, and each line was listed by its own decision (D-1165, D-1166, D-1183); none changed anything outside the scratchpad. The third slip of session c52ac282 (:2404) is recorded here too (D-1162 Q1). The mechanical guard is DEF-0073's fixed hook, to be prepared and replay-tested next session (D-1183).
 
+Occurrences in session 2026-10-29-0446 (../History/2026-10/2026-10-29-0446-m8-starts-task-099-task-100-and-the-def-triage.md):
+- **2026-10-29 (D-3458).** After the first compaction, several turn-final replies were in English, against the start message; the owner wrote at :7450 "hãy Trả lời tôi bằng tiếng Việt, không dùng từ kỹ thuật"; replies were in Vietnamese from the next one.
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 
@@ -291,3 +294,4 @@ The working language of the requests and documents is English, and short lines w
 - Before every line meant for the owner, including one-line progress notes, write it in Vietnamese first; never translate afterwards.
 - Before each turn-final reply, check its text for English words; English belongs only in quoted file names, commands the owner may run, and proper names.
 - Requests to the decision agent and repository documents stay in English (A7).
+- After a compaction, reread the start message's reply rule with the lessons, before the first reply.

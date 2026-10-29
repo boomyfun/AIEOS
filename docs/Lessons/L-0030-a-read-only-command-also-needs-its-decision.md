@@ -27,6 +27,10 @@ One, in session ea6ea0a3 (2026-10-25, D-3141):
 One, in session ea6ea0a3 (the specification revisions, D-3185):
 - mkdraft6 was run without a decision naming it; it wrote only to the scratchpad; recorded with TASK-096's records.
 
+Two, in session 87e2584b (2026-10-29):
+- **D-3342.** The sed that made exec8p_r.sh was run without a decision naming it; it wrote only to the scratchpad.
+- **D-3432.** A diff command run before commit C without its own decision; it only read.
+
 ## Why it happens
 A read is not felt as an act, and right after a compaction the habits of the call form are weakest.
 
