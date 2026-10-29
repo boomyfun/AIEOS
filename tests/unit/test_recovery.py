@@ -1,5 +1,5 @@
-"""Unit tests of aieos_bootstrap.recovery (TASK-009 AC12, rules R1 to R8), all in memory; every rule has at least one
-passing case and one failing case."""
+"""Unit tests of aieos_bootstrap.recovery (TASK-009 AC12, rules R1 to R8), all in memory except the import check,
+which reads the module's own source; every rule has at least one passing case and one failing case."""
 
 import ast
 import copy
@@ -85,6 +85,11 @@ class EntryTest(unittest.TestCase):  # R1 AC1
             dict(leases='x'), dict(leases=[{'task_id': TASK}]),
             dict(leases=[lease(expires_at=datetime.datetime(2026, 10, 11))]),
             dict(now=datetime.datetime(2026, 10, 11)), dict(recorder=''),
+            dict(now=T0.astimezone(datetime.timezone(datetime.timedelta(hours=7)))),
+            dict(leases=[lease(expires_at=(T0 + datetime.timedelta(hours=1)).astimezone(
+                datetime.timezone(datetime.timedelta(hours=7))))]),
+            dict(commits=[{'commit': C1, 'message': '', 'x': 1}]), dict(leases=[dict(lease(), extra=1)]),
+            dict(recorder=7), dict(commits=(commit(C1),)),
         ]
         for b in bad:
             args = dict(log=base_log(), commits=[], leases=[], now=T0, recorder=REC)
@@ -200,7 +205,7 @@ class StepOneTest(unittest.TestCase):  # R3 AC3
         self.assertEqual(r.events, ())
         self.assertTrue(any(C1 in f for f in r.findings))
 
-    def test_a_misplaced_or_miscased_key_gives_a_finding_and_no_event(self):  # D-393 C3
+    def test_a_misplaced_or_miscased_key_gives_a_finding_and_no_event(self):  # D-393 C2
         for m in ('Work\n\nAIEOS-Task: TASK-009\nAIEOS-Fence: store-1:3\n\nCo-Authored-By: someone\n',
                   'Work\n\naieos-task: TASK-009\nAIEOS-Fence: store-1:3\n'):
             with self.subTest(m=m):
@@ -283,6 +288,14 @@ class StepFiveAndAppendTest(unittest.TestCase):  # R5 AC5
         r = run(log=log, commits=[commit(cid)], leases=[])
         self.assertEqual((r.log, r.events), (log, ()))
         self.assertTrue(any('refused' in f and 'conflict' in f for f in r.findings))
+
+    def test_no_append_is_refused_by_the_fence(self):
+        # Only a counting lease gives a task.submitted, so the fence has nothing to refuse.
+        for leases in ([lease()], [lease(expires_at=T0)], [lease(token={'epoch': 'store-1', 'counter': 4})], []):
+            with self.subTest(leases=len(leases)):
+                r = run(commits=[commit(C1)], leases=leases)
+                self.assertEqual(r.findings, ())
+                self.assertEqual(len(r.events), 1)
 
 
 class IdsTest(unittest.TestCase):  # R6 AC6

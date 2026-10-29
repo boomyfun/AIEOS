@@ -212,6 +212,14 @@ class R4Store(Case):
         finally:
             con.close()
 
+    def test_the_tables_are_the_specified_ones(self):
+        self.assertEqual(writer.TABLES, {
+            'store': ('epoch', 'counter'),
+            'leases': ('task_id', 'holder', 'session_id', 'fencing_epoch', 'fencing_counter', 'granted_at',
+                       'expires_at'),
+            'sessions': ('session_id', 'holder', 'started_at', 'ended_at'),
+            'reads': ('session_id', 'task_id', 'seq', 'path')})
+
     def test_a_random_epoch(self):
         epoch = writer.open_store(self.root)['epoch']
         self.assertEqual(len(epoch), 32)
@@ -342,6 +350,15 @@ class R6ReleaseExpiryLookup(Case):
             self.assertEqual(set(lease), eventlog.LEASE_KEYS)
             self.assertEqual(lease['expires_at'].tzinfo, UTC)
 
+    def test_an_expired_lease_that_is_not_removed_still_counts_as_held(self):
+        lease = self.grant().value
+        later = T0 + 2 * H1
+        r = self.grant(at=later, until=later + H1)
+        self.assertEqual((r.result, r.reason), ('refused', 'held'))
+        self.assertEqual(writer.held_lease(self.root, TASK), lease)
+        self.assertEqual(writer.expire_leases(self.root, later), [lease])
+        self.assertEqual(self.grant(at=later, until=later + H1).result, 'done')
+
     def test_a_missing_store_is_not_created(self):
         with tempfile.TemporaryDirectory() as empty:
             self.assertIsNone(writer.held_lease(empty, TASK))
@@ -356,6 +373,14 @@ class R7Sessions(Case):
     def setUp(self):
         super().setUp()
         self.store()
+
+    def test_start_and_end_need_a_store(self):
+        with tempfile.TemporaryDirectory() as empty:
+            with self.assertRaises(ValueError):
+                writer.start_session(empty, 's-1', 'agent-1', T0)
+            with self.assertRaises(ValueError):
+                writer.end_session(empty, 's-1', T0)
+            self.assertEqual(files_under(empty), [])
 
     def test_start_once(self):
         self.session()
@@ -416,6 +441,10 @@ class R8SingleWriter(unittest.TestCase):
         allowed = {'datetime', 'hashlib', 'json', 'os', 're', 'secrets', 'sqlite3', 'aieos_bootstrap'}
         self.assertLessEqual(imports, allowed)
         self.assertIn('sqlite3', imports)
+
+    def test_the_writers_imports_are_exactly_these(self):
+        _, _, imports = opens_and_strings(os.path.join(SRC, 'writer.py'))
+        self.assertEqual(imports, {'datetime', 'hashlib', 'os', 're', 'secrets', 'sqlite3', 'aieos_bootstrap'})
 
     def test_the_check_finds_an_open_elsewhere(self):
         with tempfile.TemporaryDirectory() as d:
@@ -1143,6 +1172,7 @@ class R16AddReads(ReadsCase):
         self.grant(task='TASK-003', until=T0 + datetime.timedelta(minutes=5))
         self.grant(task='TASK-004')
         self.refused(self.add(['a']), 'leases')
+        self.assertEqual(self.add(['a']).findings, ('leases: not exactly one unexpired lease of the session (2)',))
         self.assertEqual(self.add(['a'], now=T0 + datetime.timedelta(minutes=5)).value, 1)
         writer.end_session(self.root, 's-2', T0)
         self.refused(self.add(['a'], sid='s-2'), 'ended')
@@ -1916,6 +1946,8 @@ class R21TheReviewPoints(ReadsCase):
         self.assertEqual(writer.stored_reads(self.root, 's-1', 'TASK-067').value, ['a'])
         self.assertEqual(writer.remove_reads(self.root, 's-1', 'TASK-067').value, 1)
         self.assertEqual(writer.held_lease(self.root, 'TASK-067')['task_id'], 'TASK-067')
+        self.assertEqual(writer.append_event(self.root, 'task.drafted', DRAFTED, 'ev-m', T0, REC,
+                                             task_id='TASK-067').result, 'appended')
         self.assertEqual([x['task_id'] for x in writer.held_leases(self.root)], ['TASK-067'])
         self.session('s-2', 'agent-2')
         token = self.grant(task='TASK-002', holder='agent-2', sid='s-2').value['fencing_token']
@@ -1951,6 +1983,7 @@ class R21TheReviewPoints(ReadsCase):
                          ('refused', 'bound', ('bound: more than 10000 paths are stored for the session and its task',)))
         self.assertTrue(any(s.startswith('SELECT COUNT(*) FROM reads') for s in seen), seen)
         self.assertFalse(any(s.lstrip().startswith('SELECT path FROM reads') for s in seen), seen)
+        self.assertFalse(any('SELECT path FROM reads' in s for s in seen), seen)
 
 
 class R22SessionLeases(Case):

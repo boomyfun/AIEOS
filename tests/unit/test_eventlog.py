@@ -1,5 +1,5 @@
-"""Unit tests of aieos_bootstrap.eventlog (TASK-007 AC12, rules R1 to R7), all in memory; every rule has at least one
-passing case and one failing case."""
+"""Unit tests of aieos_bootstrap.eventlog (TASK-007 AC12, rules R1 to R7; R8 is TASK-015's and R9 the module
+docstring's stated limits), all in memory; every rule has at least one passing case and one failing case."""
 
 import datetime
 import json
@@ -188,7 +188,7 @@ class R3TheLine(unittest.TestCase):
         self.assertTrue(any(f.startswith('6.1:json') for f in r.findings))
 
     def test_ascii_only_escapes(self):
-        reason = chr(0x111) + chr(0xe3) + ' xong'  # Vietnamese text, built from code points so this source stays ASCII
+        reason = chr(0x111) + chr(0xe3) + ' xong'  # non-ASCII text, built from code points so this source stays ASCII
         r = eventlog.append(b'', 'task.unblocked', {'reason': reason}, 'ev-1', T0, task_id=TASK)
         self.assertEqual(r.result, 'appended')
         self.assertTrue(all(b < 128 for b in r.line))
@@ -295,9 +295,26 @@ class R6Fencing(unittest.TestCase):
                             lease=lease(), recorder='aieos-core', record_id='rec-r')
         self.assertEqual((r.result, r.reason, r.record, r.log), ('refused', 'fence', None, None))
         self.assertEqual(list(r.findings), ['fence: the event names no task_id, so no lease can be on its task',
-                                      'fence: no refusal record, the event names no task_id'])
+                                            'fence: no refusal record, the event names no task_id'])
 
-    def test_recorder_and_record_id_are_required_for_a_lease_event(self):
+    def test_a_lease_event_naming_no_task_gives_the_same_findings_with_or_without_the_recorder(self):
+        # The task_id check comes first, so a missing recorder or record_id adds no finding of its own.
+        for kw in ({}, {'recorder': None}, {'record_id': None}, {'recorder': None, 'record_id': None}):
+            with self.subTest(kw=sorted(kw)):
+                r = eventlog.append(self.log, 'task.submitted', SUBMITTED, 'ev-2', T0, fencing_token=dict(TOKEN),
+                                    lease=lease(), **kw)
+                self.assertEqual((r.result, r.reason, r.record, r.log), ('refused', 'fence', None, None))
+                self.assertEqual(list(r.findings), ['fence: the event names no task_id, so no lease can be on its task',
+                                                    'fence: no refusal record, the event names no task_id'])
+
+    def test_another_lease_event_naming_no_task_is_a_fence_refusal(self):
+        r = eventlog.append(self.log, 'task.blocked', {'reason': 'r', 'blocked_by': ['TASK-001']}, 'ev-2', T0,
+                            fencing_token=dict(TOKEN), lease=lease(), recorder='aieos-core', record_id='rec-r')
+        self.assertEqual((r.result, r.reason, r.record, r.log), ('refused', 'fence', None, None))
+        self.assertEqual(list(r.findings), ['fence: the event names no task_id, so no lease can be on its task',
+                                            'fence: no refusal record, the event names no task_id'])
+
+    def test_a_fence_refusal_without_recorder_or_record_id_carries_no_record(self):
         # TASK-015 AC4: a fence refusal without them gives "fence" with no record and a finding; a lease-holding
         # submission without them is appended.
         for kw in ({'recorder': None}, {'record_id': ''}, {'recorder': 7}, {'recorder': None, 'record_id': None}):
@@ -364,6 +381,7 @@ class R8Task015(unittest.TestCase):
             with_record = submit(self.log, lease=bad)
             self.assertEqual((with_record.result, with_record.reason), ('refused', 'fence'))
             self.assertEqual(with_record.record['subject'], TASK)
+            self.assertEqual(with_record.record, eventlog.refusal_record('ev-s', TASK, 'aieos-core', 'rec-refusal-1'))
             without = submit(self.log, lease=bad, recorder=None)
             self.assertEqual((without.result, without.reason, without.record), ('refused', 'fence', None))
             self.assertEqual(list(without.findings), list(with_record.findings) +
@@ -398,6 +416,31 @@ class R8Task015(unittest.TestCase):
     def test_a_retry_after_the_lease_expired_is_a_duplicate(self):
         r = submit(self.logged, 'ev-s', at=T0 + datetime.timedelta(hours=2))
         self.assertEqual((r.result, r.seq), ('duplicate', 2))
+
+
+class R9TheStatedLimits(unittest.TestCase):
+    """The module docstring's limits, as far as a test shows them: the modules it holds, no Git check, bytes only."""
+
+    def test_the_module_holds_only_datetime_json_re_and_records(self):
+        modules = sorted(name for name, value in vars(eventlog).items() if isinstance(value, type(eventlog)))
+        self.assertEqual(modules, ['datetime', 'json', 're', 'records'])
+
+    def test_a_submitted_commit_is_not_checked_against_git(self):
+        log = ok(b'', 'ev-1')
+        r = submit(log, 'ev-s2')
+        self.assertEqual(r.result, 'appended')
+        other = eventlog.append(log, 'task.submitted', {'commit': 'f' * 40, 'compensating': False}, 'ev-s3', T0,
+                                task_id=TASK, fencing_token=dict(TOKEN), lease=lease())
+        self.assertEqual((other.result, other.seq), ('appended', 2))
+
+    def test_equal_calls_give_equal_bytes_and_nothing_else_is_returned(self):
+        log = ok(b'', 'ev-1')
+        a = submit(log)
+        b = submit(log)
+        self.assertEqual((a.line, a.log), (b.line, b.log))
+        self.assertIsInstance(a.line, bytes)
+        self.assertIsInstance(a.log, bytes)
+        self.assertEqual(a.log, log + a.line)
 
 
 if __name__ == '__main__':

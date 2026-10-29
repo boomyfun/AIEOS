@@ -457,5 +457,89 @@ class R9Helpers(unittest.TestCase):
         self.assertEqual(rc.direct_imports('import (', ['src'], paths), 'unanalysed')
 
 
+class R10CarriedGaps(unittest.TestCase):
+    """Cases the reviews of the Resume Check found missing; every expected value follows resume_check.py."""
+
+    def test_a_budget_used_exactly_to_its_limit_passes(self):
+        use = inputs()['budget_use']
+        for name, used in (('retries', 2), ('tokens', '400k'), ('wall_time', '2h'), ('human_attention', '10m')):
+            rec = rc.check(inputs(budget_use=dict(use, **{name: {'used': used, 'reported': True}})))
+            self.assertEqual(status(rec, 8), ('passed', None), name)
+
+    def test_the_payloads_of_the_state_effect_events(self):
+        replan = rc.check(all_decisions()['REPLAN'])['state_effect']
+        self.assertEqual(replan[0]['payload'], {'tasks': [], 'paths': [], 'interfaces': ['load_policy']})
+        blocked = rc.check(all_decisions()['BLOCKED'])['state_effect']
+        self.assertEqual(blocked[0]['payload'], {'reason': 'dependency', 'blocked_by': ['TASK-099']})
+        stop = rc.check(all_decisions()['STOP: scope invalid'])['state_effect']
+        self.assertEqual(stop[0]['payload'], {'tasks': [], 'paths': ['src/app/core/x.py']})
+        self.assertEqual(stop[1]['payload']['reason'], 'scope_invalid')
+
+    def test_a_check_3_replan_is_taken_over_a_check_4_replan(self):
+        syms = [{'interface': 'load_policy', 'base': 'F(a)', 'head': 'F(a, b)'}]
+        rec = rc.check(inputs(commits=changed('src/app/api/policy.py'), symbols=syms,
+                              intent_current={'SPEC-003': 'v5'}))
+        self.assertEqual((status(rec, 3), status(rec, 4)), (('fired', 'REPLAN'), ('fired', 'REPLAN')))
+        self.assertEqual([e['type'] for e in rec['state_effect']], ['conflict.detected', 'task.stale'])
+        self.assertFalse(any('check 4' in u for u in rec['uncovered']))
+
+    def test_the_conflict_detected_line_of_the_uncovered_list(self):
+        line = "conflict.detected tasks: the commits' trailers are not an input"
+        for want in ('REPLAN', 'STOP: scope invalid'):
+            self.assertIn(line, rc.check(all_decisions()[want])['uncovered'], want)
+        self.assertNotIn(line, rc.check(inputs())['uncovered'])
+
+    def test_the_event_ids_of_the_events(self):
+        for want in ('REPLAN', 'BLOCKED', 'ESCALATE', 'STOP: scope invalid'):
+            for code in (None, 'f' * 64):
+                rec = rc.check(all_decisions()[want], code_sha256=code)
+                self.assertTrue(rec['state_effect'], want)
+                for e in rec['state_effect']:
+                    text = '\n'.join(['TASK-100', '7', HEAD, code or '', e['type']])
+                    self.assertEqual(e['event_id'], hashlib.sha256(text.encode('utf-8')).hexdigest(), (want, e['type']))
+                    self.assertEqual(e['task_id'], 'TASK-100')
+
+    def test_the_reasons_of_the_verdicts(self):
+        def reasons(rec):
+            return {s['entry']: s['reason'] for s in rec['signatures']}
+        self.assertEqual(reasons(rc.check(inputs(commits=changed('src/app/util/helpers.py'))))['src/app/util/helpers.py'],
+                         'a path entry has no signature; its change is non-breaking')
+        api = changed('src/app/api/policy.py')
+        for sym, want in ((('F', 'G'), 'the signature differs between base_commit and HEAD'),
+                          (('F', 'F'), 'the signature is equal at base_commit and HEAD'),
+                          ((None, 'F'), 'the symbol is in no file at one commit'),
+                          (('F', None), 'the symbol is in no file at one commit'),
+                          (('ambiguous', 'F'), 'the symbol is defined more than once at one commit')):
+            rec = rc.check(inputs(commits=api, symbols=[{'interface': 'load_policy', 'base': sym[0], 'head': sym[1]}]))
+            self.assertEqual(reasons(rec)['load_policy'], want, sym)
+        rec = rc.check(inputs(commits=api, symbols=[]))
+        self.assertEqual(reasons(rec)['load_policy'], 'no single symbol entry for the interface (fail closed)')
+        same = {'path': 'src/app/api/record.json', 'sha256': 'b' * 64}
+        for head, want in ((same, 'the schema file is the same path with the same content hash'),
+                           (dict(same, sha256='c' * 64), 'the schema file or its content hash differs')):
+            rec = rc.check(inputs(commits=changed('src/app/api/record.json'),
+                                  schemas=[{'name': 'record', 'base': same, 'head': head}]))
+            self.assertEqual(reasons(rec)['record'], want)
+        rec = rc.check(inputs(interfaces=[], schemas=[]))
+        self.assertEqual(reasons(rec)['load_policy'], 'the interface or its component cannot be resolved (fail closed)')
+        self.assertEqual(reasons(rec)['record'],
+                         'the schema resolves to no file or to more than one at one commit (fail closed)')
+
+    def test_a_schema_side_that_is_null_or_ambiguous(self):
+        head = {'path': 'src/app/api/record.json', 'sha256': 'b' * 64}
+        for side in (None, 'ambiguous'):
+            rec = rc.check(inputs(schemas=[{'name': 'record', 'base': side, 'head': head}]))
+            self.assertIn('record', rec['read_set']['unresolved'], side)
+            self.assertEqual([s['reason'] for s in rec['signatures'] if s['entry'] == 'record'],
+                             ['the schema resolves to no file or to more than one at one commit (fail closed)'], side)
+            self.assertEqual(rec['decision'], 'REPLAN', side)
+
+    def test_a_malformed_approved_contract_hash(self):
+        rec = rc.check(inputs(approved_contract_hash='x'))
+        self.assertIsNone(rec['decision'])
+        self.assertIn('approved_contract_hash is not 64 lowercase hex digits', rec['error'])
+        self.assertEqual(records.check_decision('decision.execution', rec), [])
+
+
 if __name__ == '__main__':
     unittest.main()

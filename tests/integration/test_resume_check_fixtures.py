@@ -1,7 +1,8 @@
 """Integration tests of the Resume Check (TASK-008 AC9 and AC14, rule R8): the conformance runner runs the eleven frozen
 Resume Check fixtures with check, the set value built in memory with RC-01 to RC-11 pointing at the frozen files and
 every path taken from conformance.expected_path; and the module's import list is read from its syntax tree. Files are
-only read, through the runner's own readers; nothing is written.
+only read: the conformance run reads through the read and listing functions the test gives it, and the test itself reads
+the set file, the frozen fixtures and the module's source with pathlib; nothing is written.
 """
 import ast
 import json

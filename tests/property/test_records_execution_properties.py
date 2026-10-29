@@ -133,6 +133,37 @@ class Properties(unittest.TestCase):
                 rec2[key] = 1
                 self.assertIn('6.2:unknown_key', [f.rule for f in records.check_payload(etype, rec2)], key)
 
+    def test_the_execution_vocabularies_are_the_specified_ones(self):
+        self.assertEqual(records.EXECUTION_KEYS, frozenset({
+            'contract_hash', 'contract_version', 'base_commit', 'head_commit', 'log_seq', 'delta', 'checks',
+            'outcomes_fired', 'read_set', 'signatures', 'intent_versions', 'dependencies', 'constitution', 'runtime',
+            'budgets', 'policy_version', 'engine_identity', 'uncovered', 'state_effect'}))
+        self.assertEqual(records.EXECUTION_DECISIONS, frozenset({
+            'CONTINUE', 'CONTINUE_WITH', 'REPLAN', 'STOP: scope invalid', 'STOP: runtime insufficient',
+            'STOP: violation', 'BLOCKED', 'ESCALATE'}))
+        self.assertEqual(records.EXECUTION_ORDER, (
+            'STOP: violation', 'STOP: scope invalid', 'STOP: runtime insufficient', 'ESCALATE', 'BLOCKED', 'REPLAN',
+            'CONTINUE_WITH'))
+        self.assertEqual(records.CHECK_STATUSES, frozenset({'passed', 'fired', 'skipped', 'not_run'}))
+
+    def test_a_fine_corruption_of_a_checked_key_is_named(self):
+        valid = [{'check': n, 'status': 'passed', 'outcome': None, 'detail': ''} for n in range(1, 9)]
+        cases = [
+            ('checks', valid[:7]), ('checks', [dict(valid[0], check=9)] + valid[1:]),
+            ('checks', [dict(valid[0], check=0)] + valid[1:]), ('checks', [dict(valid[0], check=2)] + valid[1:]),
+            ('checks', [dict(valid[0], extra=1)] + valid[1:]), ('checks', [dict(valid[0], status='done')] + valid[1:]),
+            ('checks', [dict(valid[0], status='fired')] + valid[1:]),
+            ('checks', [dict(valid[0], outcome='REPLAN')] + valid[1:]), ('checks', [dict(valid[0], detail=7)] + valid[1:]),
+            ('engine_identity', {'code_sha256': None, 'python': '3.11'}),
+            ('engine_identity', {'code_sha256': 'a' * 63, 'python': '3.11.0'}),
+            ('outcomes_fired', ['REPLAN', 'REPLAN']), ('outcomes_fired', ['CONTINUE_WITH', 'REPLAN']),
+        ]
+        for key, value in cases:
+            p = well_formed(random.Random(1))
+            p[key] = value
+            found = [f.rule for f in records.check_decision('decision.execution', p)]
+            self.assertIn('6.4:' + key, found, (key, value))
+
 
 if __name__ == '__main__':
     unittest.main()

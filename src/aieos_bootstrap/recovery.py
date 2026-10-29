@@ -5,7 +5,9 @@ leases the local store holds and the recovery time, and returns a ``RecoveryResu
 recovery appends, the events it built, the leases whose expiry has passed, and findings that change no state.
 
 - Step 1: for every commit whose trailer names a task and that no task.submitted event names, a compensating
-  task.submitted when a lease counts (AC3), else a record.added event with the observation of an unfenced write.
+  task.submitted when a lease counts (AC3), else a record.added event with the observation of an unfenced write. A commit
+  whose message names AIEOS-Task or AIEOS-Fence outside the last paragraph, in another letter case, or twice gives
+  findings and no event (AC2; decision D-393 C2).
 - Step 2: a task.submitted event whose commit is not among the given commits is reported; Git wins, and the log is
   never rewritten (AC4).
 - Step 3 (an intent file against a projection) has nothing to act on: no projection exists in the bootstrap (AC10).

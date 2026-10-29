@@ -9,7 +9,8 @@ the caller gives, it touches exactly two files (AC1):
   file back (AC2); a fence refusal is recorded as its own ``record.added`` event (AC3); ``read_log`` returns the
   log's bytes, or empty bytes when it is absent, and creates nothing (TASK-026);
 - ``<root>/.aieos/local/state.sqlite``, the local store of the fence's epoch and counter, the leases, the sessions
-  (AC4 to AC7) and, from task TASK-067, the reads kept for a session's observed read-set record, with SQLite's own rollback journal ``state.sqlite-journal`` beside it, which SQLite creates and removes
+  (AC4 to AC7) and, from task TASK-067, the reads kept for a session's observed read-set record, with SQLite's own
+  rollback journal ``state.sqlite-journal`` beside it, which SQLite creates and removes
   during a transaction (the default rollback journal mode; no WAL); ``release_lease_token`` releases a lease only for
   its own fencing token (TASK-028).
 
@@ -262,6 +263,11 @@ def append_event(root, event_type, payload, event_id, appended_at, recorder, tas
     The lease ``eventlog.append`` needs is the store's held lease on ``task_id`` (None when the store or the lease is
     absent). ``recorder`` is required, so that a fence refusal's record can always be built for an event that names a
     task (DEF-0030; decision D-405, disposition (h)).
+
+    The project-state directory is created before ``eventlog.append`` decides, so a first append that is refused, or
+    that raises, can leave that directory created without an event log (a fence refusal's record, when built, is
+    still appended); a store that does not hold exactly the writer's tables and one store row raises ValueError,
+    through ``held_lease``, for an event that names a task in the writer's form.
     """
     _check_root(root)
     if not _is_str(recorder):
@@ -346,7 +352,11 @@ def _lease(row):
 def open_store(root, epoch=None):
     """Create the store when it does not exist, with its tables and one store row (the given epoch, or a new random
     one, and counter 0); open an existing store unchanged, and raise if a given epoch differs from its own (AC4).
-    Returns the store's epoch and counter as a mapping."""
+    Returns the store's epoch and counter as a mapping. A given epoch that an earlier store used, given to a recreated
+    store, would repeat the fence's tokens, since the counter starts again at 0; the caller must not do that
+    (DEF-0041 (c)). A stop between the creation of the store file and its first COMMIT leaves a file without the
+    tables, which ``open_store`` and every function that checks the schema then refuse or raise on; nothing repairs
+    it (DEF-0041 (j))."""
     _check_root(root)
     if epoch is not None and not _is_str(epoch):
         raise ValueError('the epoch is not a non-empty string')
@@ -526,8 +536,9 @@ def expire_leases(root, now):
 
 
 def held_lease(root, task_id):
-    """The held lease on ``task_id`` in eventlog.LEASE_KEYS' form, or None (AC6). It reads only; a missing store is
-    not created."""
+    """The held lease on ``task_id`` in eventlog.LEASE_KEYS' form, or None (AC6). It changes nothing, though its read
+    runs in a BEGIN IMMEDIATE transaction, so it takes SQLite's write lock; a lease row past its expiry that
+    ``expire_leases`` has not removed is returned as held; a missing store is not created."""
     _check_task(task_id)
     path = _existing_store(root)
     if path is None:
@@ -629,7 +640,7 @@ def _write_store(real, timeout, work, check=True):
     "?mode=rw" (SQLite's rw mode opens an existing file only, so a store removed after the check is never created);
     the connection takes the given timeout and no implicit transaction; BEGIN IMMEDIATE; the table check when ``check``
     is True ("tables"); the work. A "done" result is committed; a refused result is rolled back and returned; any other
-    result, any exception (inside the work too), a lock held past the timeout, a damaged file, any sqlite error and a
+    result gives "unreadable: the work gave no store result"; any exception (inside the work too), a lock held past the timeout, a damaged file, any sqlite error and a
     failing COMMIT give "unreadable: <exception type name>" after a rollback. ROLLBACK runs only while a transaction is
     open; a failing ROLLBACK, or a failing close before a successful COMMIT, gives "unreadable"; after a successful
     COMMIT a failing close changes nothing. No exception escapes."""
@@ -824,7 +835,8 @@ def stored_reads(root, session_id, task_id, timeout=5.0):
     in the order "argument" (session_id as add_reads'; task_id exactly a str in the writer's form; timeout), "root",
     "no_store", "unreadable" or "link", "unreadable" (the open or a read, a lock past the timeout included), "tables";
     a stored path that is not text gives "unreadable". It connects through SQLite's read-only mode, runs one BEGIN
-    DEFERRED, and ends the transaction and closes the connection on every path; it writes and creates nothing. It has
+    DEFERRED, and ends the transaction and closes the connection on every path; it writes and creates nothing (on a store in WAL mode, which the writer never makes, a read-only open may create
+    its -shm and -wal files; see the module docstring). It has
     no row cap: a store written outside the writer can hold more than 10000 rows of a session and task. No exception
     escapes."""
     try:

@@ -77,6 +77,43 @@ class RecoveryPropertiesTest(unittest.TestCase):
                 self.assertEqual(len(subs), len(set(subs)))
                 self.assertEqual(list(r.expired), [x for x in leases if not x['expires_at'] > now])
 
+    def test_every_counting_lease_gives_a_submission(self):
+        rng = random.Random(9009)
+        for i in range(RUNS):
+            log, commits, leases, now = build(rng)
+            r = recovery.reconcile(log, commits, leases, now, REC)
+            submitted = {e['event_id'] for e in r.events if e['type'] == 'task.submitted'}
+            used = set()
+            for c in commits:
+                trailer = recovery.trailers(c['message'])[0]
+                if trailer['task'] is None:
+                    continue
+                token = None if trailer['fence'] is None else (trailer['fence']['epoch'], trailer['fence']['counter'])
+                counts = token is not None and (trailer['task'], token) not in used and any(
+                    x['task_id'] == trailer['task']
+                    and (x['fencing_token']['epoch'], x['fencing_token']['counter']) == token
+                    and x['expires_at'] > now for x in leases)
+                if counts:
+                    used.add((trailer['task'], token))
+                with self.subTest(run=i, commit=c['commit']):
+                    self.assertEqual(recovery._id(c['commit'], 'task.submitted') in submitted, counts)
+
+    def test_logs_that_already_hold_submissions(self):
+        rng = random.Random(9010)
+        for i in range(RUNS // 2):
+            log, commits, leases, now = build(rng)
+            first = recovery.reconcile(log, commits[:rng.randint(0, len(commits))], leases, now, REC)
+            r = recovery.reconcile(first.log, commits, leases, now, REC)
+            with self.subTest(run=i):
+                self.assertEqual(r.findings, ())
+                self.assertTrue(r.log.startswith(first.log))
+                self.assertEqual(records.check_log(r.log).findings(), [])
+                done = {e['event_id'] for e in first.events}
+                self.assertTrue(all(e['result'] == 'duplicate' for e in r.events if e['event_id'] in done))
+                subs = [(l.event['task_id'], repr(sorted(l.event['fencing_token'].items())))
+                        for l in records.check_log(r.log).lines if l.event['type'] == 'task.submitted']
+                self.assertEqual(len(subs), len(set(subs)))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -45,8 +45,8 @@ Readings (the implementer's, not the contract's own words; approved by the decis
   nothing is released or expired, since the release is decided on that log.
 
 Limits (AC13):
-- The PATH git is found by is the caller's precondition (DEF-0052 G1): gitread refuses an empty or relative entry, and
-  an absolute entry is trusted as given.
+- The PATH git is found by is the caller's precondition (DEF-0052 G1): gitread refuses an empty or relative entry,
+  which closes that route on POSIX only, and an absolute entry is trusted as given.
 - The tests use stand-ins for the writer except read_log's own unit test, so the real store's path is covered by the
   writer's tests and not end to end with recover.
 - v0.1 runs one task at a time and recovery runs at start, before any new event, so nothing else writes the log or
