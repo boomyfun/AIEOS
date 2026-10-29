@@ -84,6 +84,11 @@ texts):
 - Text beside a call: after the first compaction, a label beside the checkpoint Grep, refused by the guard (D-3393).
   No text was written beside a call after the second compaction.
 
+Session 87e2584b, later part (2026-10-29; TASK-101):
+- Messages holding more than one call: D-3477 (a Glob and a Grep during the scope reads), D-3483 (two Reads), D-3490
+  (two Reads), D-3506 (three Reads; then three Edits), D-3531 (two calls), D-3542 (two Edits), D-3554 (two Edits of
+  the lessons draft, noted in D-3555), D-3556 (a checkpoint Edit with a Read; two Greps).
+
 ## Why it happens
 The app's request reads as asking for words now, and the worker adds them to the call it is about to send.
 

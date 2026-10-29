@@ -75,6 +75,9 @@ Occurrences in session 2026-10-15-0028 (../History/2026-10/2026-10-15-0028-the-p
 One occurrence in session ea6ea0a3 (the History of that session):
 - **2026-10-25 (D-2981, D-2982).** Escape sequences for U+2028 and U+2029 typed into an Edit of TASK-087's contract draft were written as the literal characters; review rv87c found them, and task_contract.py would have refused the YAML. Fixed by a script (fix87.py) with chr() codes and checked by an ASCII Grep. Drafts are checked for non-ASCII bytes before a review; special characters are written in code by chr(), never typed into tool text.
 
+One, in session 87e2584b's later part (../History/2026-10/2026-10-29-0446-the-later-part-task-101-the-native-resume-check-in-shadow.md):
+- **D-3496, D-3548.** A heredoc ("<<") append to the checkpoint was refused by the guard before it ran (ruled in D-3497, and as a guard stop in D-3549); the append was then done by Read and Edit, and the "<<" form was not retried.
+
 ## Why it happens
 - Git Bash heredocs interpret quotes and backslashes.
 - Python text mode on Windows writes CRLF.

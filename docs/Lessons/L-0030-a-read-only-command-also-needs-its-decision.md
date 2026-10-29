@@ -31,6 +31,15 @@ Two, in session 87e2584b (2026-10-29):
 - **D-3342.** The sed that made exec8p_r.sh was run without a decision naming it; it wrote only to the scratchpad.
 - **D-3432.** A diff command run before commit C without its own decision; it only read.
 
+Seven, in session 87e2584b's later part (../History/2026-10/2026-10-29-0446-the-later-part-task-101-the-native-resume-check-in-shadow.md):
+- **D-3501.** A Grep for "4300" over the whole bench/go folder, outside the named files; it only read.
+- **D-3505.** A sha256sum run without a decision naming it; hash commands since only when a decision names them.
+- **D-3527.** Reads of chkx100.py not named by the decision; no rework.
+- **D-3549.** A `wc -l` and a Read of the checkpoint before a checkpoint Edit, not named.
+- **D-3553.** A Read at a wrong path and a Glob to find copy_3473.sh, needed by D-3552 C4 but not named.
+- **D-3554.** Reads to draft the end records (calls 4 to 13 after D-3553), not named by a decision; one Glob listed the whole scratchpad, broader than needed.
+- **D-3556.** A Read of place_end.py, a Glob of the five lesson files and two Greps of them, to write the placement script, not named by a decision; they only read.
+
 ## Why it happens
 A read is not felt as an act, and right after a compaction the habits of the call form are weakest.
 

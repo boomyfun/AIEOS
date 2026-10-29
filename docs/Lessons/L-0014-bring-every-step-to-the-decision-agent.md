@@ -46,6 +46,15 @@ One occurrence in session ea6ea0a3 (../History/2026-10/2026-10-25-0526-the-later
 One occurrence in session 87e2584b (../History/2026-10/2026-10-29-0446-m8-starts-task-099-task-100-and-the-def-triage.md):
 - **D-3466.** The DEF triage table was brought for ruling without checking it against the approved plan (m8-plan.md section 7), so three rows the plan already schedules (DEF-0095, DEF-0101, DEF-0105) sat in other buckets, a departure from an approved plan that the request did not flag; the decision agent caught it and corrected nine rows.
 
+Seven, in session 87e2584b's later part (../History/2026-10/2026-10-29-0446-the-later-part-task-101-the-native-resume-check-in-shadow.md):
+- **D-3476.** A checkpoint section appended before D-3475's ruling on it.
+- **D-3498.** The push request said "a script" where the push was made by commands.
+- **D-3512.** Scripts written before the previous output was brought back.
+- **D-3529.** fetch_logx101.py written before its condition had passed; a 60-second wait not measured.
+- **D-3547.** Scratch files made by calls 4 to 11 before the decision on them.
+- **D-3553.** copy_3530.sh written before its decision (ruled acceptable; nothing redone).
+- **D-3527 (a).** `set -o noclobber;` dropped from a decision's command on the worker's own judgment, since the owner's rule forbids ';'; the conflict should have come to the decision agent before the run.
+
 ## Why it happens
 - Claude treats a step as mechanical (a display, a change of order, a turn end) and does not see it as a decision.
 - The request checklist of the decision agent's definition was not applied before sending.
