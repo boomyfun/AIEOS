@@ -1,0 +1,440 @@
+# Task contract TASK-101 (revision 2), the native Resume Check in shadow: a Go port of resume_check.check under
+# native/go/resume/, compared byte for byte with the bootstrap over the frozen round-1 Resume Check fixtures, deciding
+# nothing (M8 plan, docs/plan/m8-plan.md §1 item 2, §2 to §5; decisions D-3336, D-3476, D-3478 to D-3484). Revision 2,
+# drafted under decision D-3492 (the contract review c101-R1's findings F1 to F14 and D-3491 C6), after D-3485 (r0's
+# rulings C1 to C3), D-3487 (the classes), D-3488 (the records' dry run), D-3478 (the frame F1 to F6, C1 to C8),
+# D-3480 (the workflow's text), D-3483 (the trace table's drafting) and D-3484 (the table's rulings, C1 to C6);
+# brought for approval in its own request; whether it is approved is recorded in the decision files, not here. Fields
+# and value forms follow specification 2 §5.1 and TASK-100's contract (the key list, checked by script, L-0031).
+# Readings marked "(reading)" are the worker's, for the decision agent's ruling.
+# The workflow (D-3478 F1, D-3479 to D-3482): .github/workflows/aieos-native.yml revision 2 landed on main before this
+# contract, as its own commit 1198ec41de8cd488eb5f4a9db4dadb0d96a17452 (parent 7668702f), SHA-256
+# f72b41e39ed6a5f6c884036b478bc66eca45e5652f2d5c0d3e06070facd05e1a (decision D-3480); on main it printed "no port in
+# native/go/resume" on both jobs, with the governor step's compare line and its 8 tests PASS unchanged (run
+# 40819527862, decisions D-3482, D-3483). This task does not change it; its commands bind this task's names, inside
+# the guard "only if native/go/resume exists": tests/unit/test_export_resume.py --root tests/conformance --check, one
+# Go package in native/go/resume built with `go vet .`, `gofmt -l .`, `go build -trimpath`, run with one argument (the
+# fixture document), and `go test -count=1 -v . -args <fixture document> <Resume Check reference>`, in its own
+# temporary folder $RUNNER_TEMP/native-rc (D-3478 C2). test_export_resume.py lands in the same commit as
+# native/go/resume (D-3480 C4).
+# The copy (m8-plan.md §3): the code starts as a copy of bench/go's Resume Check part (resume.go, json.go, the helpers
+# it uses from records.go and governor.go, the Resume Check half of export.go, main.go, port_test.go's Resume Check
+# tests), made in this task's write-set and reviewed as new code; bench/go is not changed, and native/go/governor is
+# not changed (both checked by SHA-256 in AC8, D-3478 C5). The copy keeps bench export.go's reading of the fixture
+# document as it is: the shared key and fixture-object checks run for every key of the document, and only the Resume
+# Check keys get the per-case checks and are computed; the other folders' keys are passed over after those shared
+# checks (D-3492 F3; copy fidelity, fail closed). The trace table (appendix A; t101/trace/trace-table.md, SHA-256
+# e8770d76ba0b06fc047773a28facef0b395355bee44e062564f92222e78eccf7) lists every function, constant and regular
+# expression resume_check.check reaches in resume_check.py at main (52 rows), its Go counterpart, the verdict and each
+# difference; signature_form and direct_imports and the helpers only they use are out of scope, since check does not
+# call them. It was drafted by a read-only agent (decision D-3483; agent a32ba7e48b157764e of session 87e2584b, model
+# claude-opus-5-5; only Read, Grep, Glob and one Write, by a tool-use count of its transcript) and checked by the
+# worker (D-3484: the three "different" rows confirmed at the cited lines; five "equivalent" rows, 3, 27, 28, 50 and
+# 51, read on both sides, _decide against decide among them; completeness by the worker's own Grep of every call in
+# resume_check.py :81-738, none missing). The other 43 "equivalent" rows were not read line by line by the worker
+# (a recount of the worker's "41", D-3484 C5); the contract review c101-R1 read them against both files and found no
+# mismatch (D-3492). Its result: the Go copy follows today's resume_check.py on every reached path except three
+# differences, which this task settles (AC4, AC5): (a) rows 7 and 12, engine_identity.python: different in check(),
+# equal in the document, since the reference writes the closed placeholder "<engine>" (test_export_reference.py
+# :14-15, :55-56, :78-89) and the Go copy writes the same text (D-3484 C1, C2); (b) row 1, the two error records that
+# name a Python exception type ("an input could not be read: <type>", "the check could not complete: <type>",
+# resume_check.py :527-528, :533-534): the type name depends on the interpreter, so the Go program fails closed where
+# its own computation cannot go on, and this is a named limit (D-3484 C3); a RecursionError of the deepcopy at :532 on
+# deeply nested input has no Go path at all (the Go reader's depth bound is json.go :86), a second named limit (D-3492
+# F5); (c) row 45, a budget amount of more than 4300 digits: reproduced as the Python's error record "the check could
+# not complete: ValueError", the boundary taken from Python-computed constants (D-3484 C4).
+# The Resume Check-only reference: tests/unit/test_export_resume.py (new). The CI's deterministic_rule lets a module
+# under tests/ import only the standard library and aieos_bootstrap (aieos-checks.yml :1456-1665; D-773), so it
+# cannot import tests/unit/test_export_reference.py; it repeats that module's reading of the Resume Check folder, its
+# closed placeholder list (PLACEHOLDER "<engine>" at engine_identity.python only), its document form for that folder
+# only and its main's handlers (ReferenceError and OSError only, test_export_reference.py :188-196), with its own pin;
+# its tests compute the full round-1 document the same way (with governor.evaluate over the governor fixture folder)
+# and check that its SHA-256 equals test_export_reference.REFERENCE_SHA256's value (copied as a constant and compared
+# with that module's text read as bytes) and that the Resume Check document equals the full document's Resume Check
+# part, so the two cannot drift apart (D-3478 C4) (reading: TASK-100's tie form).
+# Isolation: tests/unit/test_native_isolation.py stays unchanged; its checks of the name "native/" and of any import of
+# a module named native (:16-17, :44-67) already cover native/go/resume (D-3478 C5); the native code lies outside the
+# folders it scans (src/, tests/, aieos-checks.yml; :32-40). The bootstrap never imports or runs the native code.
+# Closed name lists of existing tests (TASK-100's D-3427 C3 form): tests/integration/test_conformance_rc_set.py, the
+# risk and Capability Boundaries set tests and tests/unit/test_bench_isolation.py refuse any other .py under src/ or
+# tests/ whose bytes contain their folder names or "bench/"; so the bytes of test_export_resume.py, comments and
+# docstrings included, contain none of the byte strings 'fixtures_rc', 'fixtures_risk', 'fixtures_cb' and 'bench/', and
+# those folder names are built from parts ('fixtures_' + 'rc') (D-3492 F7).
+# Risk: high. R13 matches native/** (high); R3 matches tests/** (high, read fail closed); no rule of class critical
+# (R5 to R11) matches the write-set; the highest wins; computed over the base by script (risk_class101.py, the form of
+# risk_class100.py), its output in decision D-3487's request.
+# Profile (assurance-model.md §5, gov-AIEOS, high): unit_test, integration_test, deterministic_rule,
+# static_security_analysis, ai_review (cross-model); plus the evidence_required of the applicable articles, recorded per
+# article from the start (L-0034; D-3395): built at r0's approval request through records.check_record and the governor
+# shadow (gov100.py's form) before the reviews (rec101_dry.py, decision D-3488: 30 records, no finding, NEEDS_REVIEW
+# at row 5, no missing entry).
+# Change class: critical_cr (decision D-3487, D-3417 C4's reading, as TASK-100's): GOV-003 marks
+# tests/unit/test_export_resume.py (1 of 8 paths); risk class high (gov003_class101.py and risk_class101.py over the
+# base 1198ec41, their outputs in decision D-3487's request).
+# Reviews (D-3478 C6; Master Plan :104, A59, A60): five way-2 reviews by a Claude model other than the implementer's,
+# each brief to the decision agent first, each reading the workflow text: architecture (the port against today's
+# resume_check.py and specification 3, the trace table, the 43 rows the worker did not read), security (no import
+# beyond Go's standard library, no file write, no network, no process; the Python module's purity), governance (GOV-003:
+# no existing test changed; the shadow decides nothing), operational (the workflow's Resume Check step and the CI
+# evidence of AC6), and the cross-model half; the decision agent's reviews (architecture and operational, standing for
+# human_review; INV-003 and OPS-002 per article; the cross-model half). The contract's own review: c101-R1 at r1
+# (decision D-3491), its findings applied in this revision (D-3492); r2 is line-checked by the decision agent.
+# Evaluation path (as TASK-100): the approved contract is committed on main as its own commit C, which changes only
+# docs/tasks/TASK-101.yaml and has one parent equal to base_commit; the files are made in a scratchpad clone (push URL
+# disabled, the no-reply identity); the Python module's suite runs locally on a compiled tree (L-0018); the Go code is
+# not built or run on the owner's machine (m8-plan.md §4): every Go build, vet, format check and test runs only in CI,
+# so each Go fix is a new push of task/TASK-101, and more than three pushes only for Go compile, vet, format or test
+# errors stop the task and go to the decision agent (D-3478 C6). The task's commits carry the trailer
+# "AIEOS-Task: TASK-101" and no e-mail address, go to task/TASK-101 each under its own push decision after a secret
+# scan and a dry run, never by force; the records commit lands on main by the fast-forward form of TASK-099 (D-3400).
+# Applicable articles: as TASK-100 (D-3427 C1): INV-001 to INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002,
+# OPS-003; INV-005, whose scope is the decision engine and the governor (constitution.md :50), which the Resume
+# Check is (specification 3), so it applies directly; and INV-006 to INV-008 and INV-010, whose scope is the governor
+# (constitution.md :55, :60, :65, :75), applied fail closed to a native successor of the Resume Check (decision
+# D-3485 C1). INV-005 to INV-008 require property_test (AC10); INV-010 is a deterministic replay (the CI's INV-010
+# step).
+# Not applicable (reading): GOV-002's refactoring clause; OPS-001 (no ref changed by the task's code; the task's
+# branch and the fast-forward of main are each a push decision); INV-009, INV-011, GOV-001, GOV-004 to GOV-006,
+# SEC-003.
+# Owner-kept acts: none. Nothing under .github/ (the workflow landed under A66 before this task), no setting, no hook,
+# no install (no local Go), no class lowered, no evidence requirement weakened. Approver of the acceptance (reading):
+# one delegated approval of the decision agent (Master Plan §6).
+# Uncovered and stated limits: the shadow runs over the round-1 Resume Check fixtures only (m8-plan.md §2, :19), not
+# over any session's real inputs, which have no full source yet (DEF-0100); the branches no fixture reaches (every
+# branch appendix A column 8 marks as not reached, AC4 (d)) are exercised by Go tests from Python-computed constants,
+# not by any fixture; for rows 13, 14, 15 and 19 (the input and contract checks) one failing message of each function
+# is tested, and the other message sites are equal by reading (the trace table and c101-R1), not by test (D-3492 F2);
+# difference (b)'s two limits (the exception-type error records fail closed in Go; the deepcopy RecursionError has no
+# Go path); the Python boundary test of AC4 (c) and the Go tests are tied only by the same literals written in both
+# files, since test_export_resume.py may not read native/ (D-3492 F11); every review is by AI of one vendor; the
+# property_test record that INV-005 to INV-008 count is the CI's Python property step, which this task does not change
+# and which does not run the Go code; the Python-versus-specification-3 findings 1 to 21 (appendix B) are listed and
+# not fixed by this task.
+task: TASK-101
+contract_version: v1
+task_type: implementation
+objective: >-
+  Write the native Resume Check in shadow: one Go package in native/go/resume/ (standard library only) whose program
+  reads the fixture document and prints, byte for byte, the Resume Check-only reference document of the round-1 Resume
+  Check fixtures, computing every case as resume_check.check at main computes it; its Go tests; and
+  tests/unit/test_export_resume.py, the Resume Check-only reference export with its own pin and its tie to the full
+  reference. The native code decides nothing: it writes no record and nothing reads its output but the advisory
+  workflow aieos-native.yml.
+traces_to:
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#1
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#2
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#3
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#4
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#5
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#7
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#9
+  - docs/specs/spec-03-resume-check-and-decision-engine.md#10
+  - docs/plan/m8-plan.md#2
+input_state:
+  # base_commit is filled by script from refs/heads/main just before commit C is made; it must be 1198ec41 or a later
+  # main commit, so that the workflow's revision 2 is on main before the task's first commit.
+  base_commit: 1198ec41de8cd488eb5f4a9db4dadb0d96a17452
+  depends_on: [TASK-008, TASK-041, TASK-044, TASK-100]
+  intent_versions:
+    docs/specs/spec-03-resume-check-and-decision-engine.md: 50fa28795bb4145266d76bf345a7d8de28cdecbda2a20b18fdd32c324f86c92e
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/spec-02-aieos-file-format.md: e7c427b06775069a43d5e6d317a61c1974e5be921aee08a581c1918572a37a61
+    docs/specs/conformance-files.md: 2abbd276efb09509a970838cdde803c9d68efdc48aa86463a448422feedbd7ff
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+write_set:
+  # All added; nothing is modified.
+  paths:
+    - native/go/resume/go.mod
+    - native/go/resume/main.go
+    - native/go/resume/export.go
+    - native/go/resume/resume.go
+    - native/go/resume/helpers.go
+    - native/go/resume/json.go
+    - native/go/resume/resume_test.go
+    - tests/unit/test_export_resume.py
+read_set:
+  paths:
+    - src/aieos_bootstrap/resume_check.py
+    - src/aieos_bootstrap/governor.py
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/conformance.py
+    - tests/unit/test_export_reference.py
+    - tests/unit/test_export_fixtures.py
+    - tests/unit/test_export_governor.py
+    - tests/unit/test_native_isolation.py
+    - tests/unit/test_bench_isolation.py
+    - tests/conformance/fixtures/
+    - tests/conformance/fixtures_rc/
+    - tests/run_tests.py
+    - tests/integration/test_conformance_rc_set.py
+    - tests/integration/test_conformance_risk_set.py
+    - tests/integration/test_conformance_cb_set.py
+    - bench/go/
+    - native/go/governor/
+    - .github/workflows/
+    - docs/specs/spec-03-resume-check-and-decision-engine.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/conformance-files.md
+    - docs/specs/spec-02-aieos-file-format.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/plan/m8-plan.md
+  interfaces: [aieos_bootstrap.resume_check.check, aieos_bootstrap.governor.evaluate, aieos_bootstrap.conformance.unwrap, aieos_bootstrap.conformance.canonical_text]
+  schemas: [specification 3 execution decision record (9), conformance-files fixture file (2, 4)]
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - bench/**
+  - native/go/governor/**
+  - src/**
+  - docs/**
+  - tests/conformance/**
+  - tests/integration/**
+  - tests/property/**
+  - tests/run_tests.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_governor.py
+  - tests/unit/test_native_isolation.py
+  - tests/unit/test_bench_isolation.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-005, INV-006, INV-007, INV-008, INV-010, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The Resume Check-only reference (tests/unit/test_export_resume.py). Run from the repository root as `python
+      tests/unit/test_export_resume.py --root tests/conformance [--check]`, it reads every .py file of the Resume Check
+      fixture folder ('fixtures_' + 'rc'; a __pycache__ folder passed over; any other entry fails closed), unwraps each
+      with aieos_bootstrap.conformance.unwrap, calls aieos_bootstrap.resume_check.check(inputs) for each case with a deep
+      copy, applies the closed placeholder list of test_export_reference.py (engine_identity.python written as
+      "<engine>", nothing else), and prints the canonical text (conformance.canonical_text) of one object whose keys are
+      "<folder>/<file stem>" and whose values are the case records in case order; ASCII with LF only; `--check` fails
+      when the document's SHA-256 differs from its pin REFERENCE_RC_SHA256 (one exact value, filled from the scratch run
+      and named in the approval of commit X); for any other argument form main returns 2, and on a missing folder, a
+      refused file, a call that raises or a record that is not an object it returns non-zero, in each case printing
+      nothing to standard output (D-3492 F12). It runs no process, reads no network, clock or environment, writes no
+      file, reads files only with Path.read_bytes, and imports only the standard library and aieos_bootstrap, within the
+      import and pattern rules of aieos-checks.yml :1456-1665. Its bytes, comments and docstrings included, contain none
+      of the byte strings 'fixtures_rc', 'fixtures_risk', 'fixtures_cb' and 'bench/', and it has no line matching
+      `^\s*(?:import|from)\s+bench\b`; those folder names are built from parts (D-3492 F7).
+  - AC2: >-
+      The tie to the full reference (D-3478 C4). The module's tests compute the full round-1 document (the governor
+      fixture folder with aieos_bootstrap.governor.evaluate and the Resume Check fixture folder with
+      resume_check.check, names built from parts, the Resume Check's records with the closed placeholder, as
+      test_export_reference.py does) and assert that its SHA-256 equals the constant FULL_REFERENCE_SHA256 =
+      01aeec8f12bcf11303e1ec08c1d87d866a7aa823066fe9c5f5eeace4c0ac6443, that this constant occurs once in
+      tests/unit/test_export_reference.py's bytes (read with Path.read_bytes) as REFERENCE_SHA256's value, and that the
+      Resume Check document equals the canonical text of the full document's keys of the Resume Check folder. The full
+      document and its pin are unchanged.
+  - AC3: >-
+      The native program (native/go/resume). One Go package main, go.mod naming the module aieosresume and the Go version
+      of bench/go/go.mod (go 1.24), no require and no other file than the write-set's. Run with exactly one argument, the
+      fixture document (tests/unit/test_export_fixtures.py's output), it writes the Resume Check-only document in one
+      write and exits 0, byte-equal to AC1's output; it reads the fixture document as bench export.go does (the shared
+      key and fixture-object checks for every key, the per-case checks and the computation for the Resume Check keys
+      only, the governor and risk keys passed over after the shared checks), requires at least one Resume Check key,
+      and fails closed as bench/go's program does for the Resume Check part (bench/go port_test.go's TestFailClosed
+      cases that apply to it, kept by name: no argument, an extra argument, a file that cannot be read, an empty file,
+      not JSON, a truncated document, not one object, the three not-canonical cases, a byte-order mark, not UTF-8, a
+      repeated key, a fixture that is a number, a number with a fraction, an integer of more than 4300 digits, no Resume
+      Check fixture, an unknown folder, a key without a folder, an empty file stem, a fixture that is not an object, no
+      cases, cases not a list, a case that is not an object, a Resume Check case without inputs and a record that is
+      not ASCII; plus difference (b)'s cases; every case whose bench form changes a governor fixture changes
+      fixtures_rc/rc_01 instead, and "a record that is not ASCII" changes a value that appears in the Resume Check
+      record, so shown by the Python scratch run (D-3492 F3); the governor-only cases are dropped, and port_test.go's "a
+      budget amount Python's int() refuses" case becomes the error record of AC4 (c), not a refusal); with no argument
+      it exits non-zero and writes nothing to standard output. port_test.go's other tests: TestWholeDocumentByteEqual,
+      TestRunWritesTheDocumentOnce, TestResumeCheckCaseFieldByField and TestBigIntegersKept are kept; TestPlaceholder
+      becomes Resume Check-only (its governor branch dropped); TestUnexpectedErrorsFailClosed keeps its guarded-panic
+      half, and its budget half changes under AC4 (c); TestGovernorCaseFieldByField is dropped (D-3492 F9). It imports
+      only Go's standard library, opens only the one file named by its argument, starts no process, uses no network and
+      writes no file.
+  - AC4: >-
+      Today's Resume Check (appendix A). (a) Difference (a), rows 7 and 12: engine_identity.python is "<engine>" in the
+      Go record, equal to the reference document (no change from the copy). (b) Difference (b), row 1: where
+      resume_check.check would return an error record naming a Python exception type, the Go program fails closed
+      where its own computation cannot go on (no record, exit 1, nothing on standard output); a Go test shows that path;
+      a RecursionError of the deepcopy at resume_check.py :532 has no Go path, a named limit (D-3492 F5). The deepcopy
+      has no other effect on the output: check copies the inputs before _decide so that _decide's work cannot change
+      the caller's object; _decide reads the copy and builds the record from its values, which equal the inputs', so
+      the record is the same with or without the copy; the Go decide reads its input and changes nothing in it.
+      (c) Difference (c), row 45: a budget amount above Python's digit limit gives the Go record rcError(inputs, code,
+      "the check could not complete: ValueError"), and the boundary is not assumed: Python-computed constants give at
+      least the largest accepted digit count, the smallest refused one and a refused case made of leading zeros, and a
+      Python test in tests/unit/test_export_resume.py recomputes them, so that another interpreter limit fails that
+      test; the Python and Go sides are tied only by the same literals written in both files (D-3492 F11). An integer
+      literal of more than 4300 digits in a fixture is another case: the Python fixture reader (conformance.unwrap, its
+      _loads, json.loads with hooks) raises a ValueError that unwrap does not turn into Malformed (it catches only
+      UnicodeDecodeError and JSONDecodeError, conformance.py :249-253), and the export's main catches only
+      ReferenceError and OSError (test_export_reference.py :192-196; the new module's main has the same handlers), so
+      the ValueError propagates out of main and nothing is written to standard output; the module's test asserts it
+      with assertRaises(ValueError) and an empty output buffer, since no process may be started (D-3492 F4). The Go
+      reader refuses such a literal as "an integer of more than 4300 digits" (bench/go json.go :279-280) and the
+      program exits 1 (AC3); no record either way. A budget amount of more than 4300 digits is a JSON string, which
+      both readers read, so it reaches _amount and gives the error record above (D-3484 C4). (d) Go tests over every
+      branch that appendix A column 8 marks as not reached by a fixture: a branch is in scope when column 8 says
+      "none", "not exercised" or "not determined" for it, or names the reached branch with "only" or a parenthesised
+      value list, in which case the row's other branches are in scope (D-3492 F2). A branch with no Go form (row 31's
+      non-string branch, which check cannot reach since it passes only strings) is named in commit X's map with that
+      reason instead of a test (D-3493). At least: the error records of
+      check (code_sha256 malformed, an input missing or malformed, a failing input of _check_contract, check 0) and a
+      valid non-null code_sha256; NO_TASK (rows 10, 11); check 1 with base_commit not an ancestor (ESCALATE, checks 2
+      and 3 not_run; rows 27, 28); _star_match and _names_meet's star branches (rows 33, 34); _parts' no-"/" branch
+      (row 32); _verdicts' null, ambiguous, no-single-symbol and schema-met branches (row 35); the other branches of
+      rows 36 to 39 (the unresolved ones, and row 38's non-wildcard one); the "**" entry of _task_patterns (row 40);
+      _applicable's task_types
+      filter and scope fallback (row 41); _scope_patterns (row 42); _task_risk's invalid class and its unmatched
+      pattern (row 43); _rule_patterns' non-match.paths branch (row 44); added and deleted changes (row 24); a 64-hex
+      commit (row 18); budget units s, d and m (rows 47, 48) and an unparsable budget form; _meets_entry (row 52); the
+      task.stale branch (task_state not READY); two checks firing at once. Each test is compared with
+      resume_check.check's whole record for the same input. The expected values of (c) and (d) are constants taken
+      from a scratch run of the Python (TASK-100's cases.json form); its script and unedited output are in the
+      approval request of commit X, with a map from each in-scope row and branch to its Go test's name and a script
+      check that each named test exists.
+  - AC5: >-
+      The trace (D-3478 C3). Appendix A is the trace table at main 1198ec41. Commit X's approval request carries the
+      table updated to native/go/resume (each row's Go function and line) as its own file, checked by a script that every
+      named Go function exists at the named line; the "different" and "no counterpart" rows are settled by AC4: row 1 by
+      (b), rows 7 and 12 by (a), row 45 by (c) (D-3492 F10).
+  - AC6: >-
+      The CI evidence (D-3478 C7). On the aieos-native run of the accepted commit, both jobs, linux and windows, ran the
+      Resume Check step, not its "no port" branch: the logs show "native resume check: byte-equal to the resume check
+      reference" and every go test result line PASS of native/go/resume, and the governor step's compare line and its 8
+      tests PASS unchanged, read by a read-only script by run id (fetch_logw101.py's form), its output in the accepting
+      decision; and the aieos-checks run of the same commit succeeded.
+  - AC7: >-
+      Isolation. tests/unit/test_native_isolation.py is unchanged and still passes with native/go/resume in the tree;
+      test_export_resume.py names no "native/" and imports no module named native; aieos-native.yml stays the only
+      workflow that names "native/".
+  - AC8: >-
+      Nothing else changes. Every test that tests/run_tests.py runs passes at the task's commit on a compiled tree; the
+      new Python module runs under it; bench/go, native/go/governor, test_export_reference.py and every existing test are
+      unchanged, each file of bench/go and native/go/governor checked by SHA-256 against main (D-3478 C5).
+  - AC9: >-
+      Purity and the CI checks (INV-001, INV-002, INV-004). The Python module imports only the standard library and
+      aieos_bootstrap, uses no exec, eval, builtin compile, __import__ or importlib (an attribute call such as
+      re.compile is allowed, as D-3451's ruling R-a reads it), starts no process, opens no network connection and writes
+      no file; no Python file is added outside tests/unit; no non-Python file is added under src/ or tests/. The CI steps
+      at the task's commits report no finding (deterministic_rule, OPS-003, SEC-001, SEC-002, bandit). Before each
+      commit, the added text is scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns and the pre-push
+      pattern, each count 0.
+  - AC10: >-
+      The records (L-0034; D-3395). The task's evidence records' forms are built and checked through
+      records.check_record and a governor shadow over a dry records list (rec101_dry.py, rec100_dry.py's form), at r0's
+      approval request with their raw output: per-article records for INV-001, INV-002, INV-004, GOV-002, GOV-003,
+      SEC-001, SEC-002 and OPS-003 (whichever of them the constitution gives an evidence_required) (way-2 copies naming
+      the reviewer lines that address each article), INV-005 to INV-008 (property_test copies of the CI's property step
+      record), INV-010 under its replay check, INV-003 and OPS-002 (decision agent reviews with that dimension), and the
+      profile entries of risk high; the shadow gives NEEDS_REVIEW, row 5, no missing entry, before the reviews.
+  - AC11: >-
+      Tests, with this rule-to-test list: R1 AC1 and AC2 (test_export_resume.py's own tests); R2 AC3 (Go tests and the
+      workflow's compare, AC6); R3 AC4 (Go tests and the Python boundary test); R4 AC7 (test_native_isolation.py,
+      unchanged); R5 AC8 (tests/run_tests.py, unchanged).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python tests/unit/test_export_resume.py --root tests/conformance < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1200k, wall_time: 6h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC7, AC8, AC11]}
+  - {gate: G3, check: constitution, args: [AC5, AC6, AC9, AC10, INV-001, INV-002, INV-004, INV-010, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts AND both aieos-native jobs show the Resume Check byte-equal line and its go tests' PASS at the accepted commit
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
+# Appendix A: the trace table at main 1198ec41 (t101/trace/trace-table.md section 2, SHA-256 e8770d76…, drafted by a
+# read-only agent, decision D-3483), unchanged; the note of decision D-3484 C1 follows row 7. Rows read by the worker on
+# both sides: 1, 3, 7, 12, 27, 28, 45, 50, 51. Not read line by line by the worker: the 43 "equivalent" rows 2, 4 to 6,
+# 8 to 11, 13 to 26, 29 to 44, 46 to 49 and 52 (D-3484 C5).
+# | # | Python name, file:lines | called at (resume_check.py) | Go counterpart | verdict | why | spec 3 section | exercised by a fixture? |
+# |---|---|---|---|---|---|---|---|
+# | 1 | check, resume_check.py:518-534 | entry point | check resume.go:889-908; guarded :910-917 | different | (a) "an input could not be read: <type>" (:527-528) and "the check could not complete: <type>" (:533-534) are error records in Python, errCannotCompute with no record in Go (resume.go:893-894, :902-906); (b) Python deep-copies inputs (:532), Go does not (:907), so a RecursionError of copy.deepcopy on deep nesting has no Go path (Go reader bound maxDepth 512, json.go:86; reachability not verified); (c) code_sha256 is any value in Python (:521), *string in Go (:889) | §2 :36 (check 0); §7 :86 | rc_01-rc_11: normal path only; code_sha256 branch, check-0 mismatch and both exception branches not exercised |
+# | 2 | _HEX64, :65 | :208, :274, :521 | reHex64 records.go:13 (used resume.go:210, :388, :890) | equivalent | fullmatch = ^...$ (RE2 $ is end of text) | §9 :119, :133 | all (contract hashes, schema sha256); code_sha256 not determined |
+# | 3 | _error, :506-515 | :522, :526, :528, :530, :534 | rcError resume.go:867-885 | equivalent | same ids, uncovered order and keys; inherits row 7's engine_identity difference | §7 :86; §9 :118, :136 | none (no rc_NN gives an error record) |
+# | 4 | _ids (with nested event_id), :103-110 | :508, :540 | idsFunc resume.go:58-75; sha256Hex governor.go:74-77 | equivalent | same five LF-joined parts; log_seq text only for 0 <= n < 2**63; code or "" | §9 :139 | all |
+# | 5 | _int, :85-86 | :106, :204, :267, :300, :483, :653 (x2) | rcInt resume.go:47 / isCount governor.go:47-50 | equivalent | bool is a separate Go type; ints are *big.Int >= 0 | none (value form) | all (log_seq 7; retries ints) |
+# | 6 | MAX_LOG_SEQ, :63 | :106, :204 | maxLogSeq resume.go:34 | equivalent | 2**63 both | §9 :121 (bound not in spec) | all; bound not reached |
+# | 7 | _base, :499-503 | :509, :672 | rcBase resume.go:846-865 | different | engine_identity.python is _python_version() in Python (:503), the fixed text "<engine>" in Go (resume.go:21, :863) | §9 :113, :133 | all |
+#   note (D-3484 C1): row 7 is different in check(), equal in the document: the reference writes the closed
+#   placeholder "<engine>" at engine_identity.python, and the Go copy writes the same text.
+# | 8 | SOURCE_CLASS, :56 | :500 | rcSourceClass resume.go:16 | equivalent | same text | §9 :113 | all |
+# | 9 | RECORDER, :55 | :501 | rcRecorder resume.go:15 | equivalent | same text | §9 :113 | all |
+# | 10 | _TASK, :67 | :203, :502 | reTask records.go:15 | equivalent | same pattern, full match | §9 :113 | all (TASK-100); NO_TASK branch none |
+# | 11 | NO_TASK, :61 | :502, :513, :514 | noTask resume.go:18 | equivalent | same "TASK-0"; same quirk for a well-formed TASK-0 (resume.go:877) | none (D-359) | none |
+# | 12 | _python_version, :98-100 | :503 | none (enginePlaceholder resume.go:21 stands in) | no counterpart | Go never reads an interpreter version | §5 :70; §9 :133 | all (Python side) |
+# | 13 | _check_inputs, :197-267 | :524 | checkInputs resume.go:176-381 | equivalent | same checks, same order, same messages | §1 :15-32; §7 :86 | all, passing branch only |
+# | 14 | _need, :93-95 | :198-:266 (35 sites), :278-:300 (13 sites) | the `return "<msg>"` statements of checkInputs/checkContract | equivalent | first failing message wins in both | §7 :86 | all, non-raising branch only |
+# | 15 | _Bad, :74-75 | raised :95; caught :525 | non-empty message of checkInputs, resume.go:895-896 | equivalent | "an input is missing or malformed: " + message both | §7 :86 | none |
+# | 16 | INPUT_KEYS, :44-48 | :199, :201 | rcInputKeys resume.go:25-28 | equivalent | same 22 keys; missing and extra sorted | §1 :17-32 | all |
+# | 17 | TASK_STATES, :49 | :205 | rcTaskStates resume.go:29 | equivalent | same three | §1 :12; §10 :156 | all (READY only) |
+# | 18 | _COMMIT, :66 | :209, :217, :284 | reCommit records.go:14 | equivalent | 40 or 64 hex, full match | §9 :120 | all (40-hex only) |
+# | 19 | _check_contract, :277-301 | :212 | checkContract resume.go:391-466 | equivalent | same checks, order, messages; read_set key present with null fails in both | §1 :19; §7 :86 | all, passing branch only |
+# | 20 | _strs, :89-90 | :226, :239, :240, :286, :290, :292, :294, :430, :446, :458 | isStrList records.go:46-57 (+ strsOf resume.go:167-174) | equivalent | list of non-empty strings | none | all |
+# | 21 | _str, :81-82 | :90, :221, :226, :229, :232, :237, :243, :248, :253, :257, :262, :266, :273, :288, :295, :300 | isStr records.go:40-43 | equivalent | non-empty string | none | all |
+# | 22 | RISKS, :51 | :258, :296, :471, :474, :633 | rcRisks resume.go:31; riskIndex :49-56 | equivalent | same order; riskIndex panics only on a value validation excludes | §2 :46 | all; rc_09 (low < medium) |
+# | 23 | _VERSION, :68 | :297 | reVersion records.go:16 | equivalent | v<digits>, full match | §9 :119 | all (v1) |
+# | 24 | CHANGES, :50 | :222 | rcChanges resume.go:30 | equivalent | same three | §9 :122 | rc_02-rc_06 (modified only) |
+# | 25 | _schema_side, :270-274 | :238 | schemaSide resume.go:383-389 | equivalent | null, "ambiguous" or {path, sha256} | §5 :71 | all (object sides only) |
+# | 26 | AMBIGUOUS, :57 | :271, :377 | ambiguous resume.go:17 | equivalent | same text | §5 :73 | all at :271 (false); :377 branch none |
+# | 27 | _decide, :537-696 | :532 | decide resume.go:925-1261 | equivalent | checks 1-8, decision, uncovered order and record keys match; Go computes the write-set hit before the switch (:969-974) over an empty delta when not computed, same result | §2 :36-47; §7 :83-85; §9 :114-136 | all; check 1 base=HEAD rc_01, rc_07-rc_11; delta rc_02-rc_06; not-ancestor branch none |
+# | 28 | put (nested in _decide), :544-545 | :551, :553, :561, :566, :567, :569, :570, :574, :576, :579, :581, :583, :593, :595, :606, :608, :627, :629, :634, :637, :639, :660, :662 | put closure resume.go:933-935; checkResult :919-923; output :1225-1230 | equivalent | {check, status, outcome, detail}, outcome null when not given | §2 :36; §9 :123 | all; not_run branch none |
+# | 29 | _read_set, :307-319 | :562 | readSet resume.go:512-544; listOr :505-510 | equivalent | sorted path entries with declared/derived/observed in that order; sorted unique interfaces and schemas | §4 :61-65 | all (declared sources only) |
+# | 30 | matches, :182-184 | :356, :368, :392, :572, :726, :736, :738 | pathMatches resume.go:155; anyMatch :603-612 | equivalent | meet(pattern, path) | §3 :56-57 | rc_02-rc_06 |
+# | 31 | meet (with nested go), :154-179 | :184, :453, :472 | meet resume.go:127-153 | equivalent | same memoised walk; Python's non-string branch (:158-159) has no Go form but check passes only strings | §3 :55 | all (via _task_risk; via matches rc_02-rc_06); non-string branch none |
+# | 32 | _parts, :148-151 | :160 | patternParts resume.go:119-124 | equivalent | "**/" prefix when no "/"; split on "/" | §3 :55 | all; no-"/" branch none |
+# | 33 | _names_meet, :116-122 | :174 | namesMeet resume.go:105-117 | equivalent | same three cases | §3 :55 | literal-literal only; star branches none |
+# | 34 | _star_match, :125-145 | :122 | starMatch resume.go:80-103 | equivalent | same two-index match over code points (Go runes) | §3 :55 | none |
+# | 35 | _verdicts, :350-400 | :577 | verdicts resume.go:614-681 | equivalent | same branches, verdicts and reason texts; == via pyEq json.go:496-544 | §3 :57; §5 :69-74 | rc_02-rc_06; path met rc_04; interface breaking (signature differs) rc_05; unresolved, ambiguous, null-symbol, schema-met branches none |
+# | 36 | _interface_component, :333-337 | :361, :410 | interfaceComponent resume.go:564-575 | equivalent | exactly one interface, then its component | §3 :57; §5 :73 | all (via _task_patterns); resolved branch only |
+# | 37 | _component_paths, :322-330 | :337, :434 | componentPaths resume.go:547-562 | equivalent | exactly one component; empty paths give [] (not unresolved) in both | §3 :57; §2 :45 | all; single-found branch only |
+# | 38 | _folder, :187-191 | :329 | folder resume.go:157-162 | equivalent | rstrip("/") = TrimRight(path, "/") | §3 :57 | all; wildcard branch only |
+# | 39 | _schema_paths, :340-347 | :385, :413, :737 | schemaPaths resume.go:587-601; schemaByName :577-585 | equivalent | one schema, both sides objects, sorted unique paths | §5 :71, :73 | all; resolved branch only |
+# | 40 | _task_patterns, :403-415 | :610 | taskPatterns resume.go:683-704 | equivalent | write-set + entries; "**" for unresolved | §2 :45 | all; "**" branch none |
+# | 41 | _applicable, :441-453 | :613 | applicable resume.go:740-767 | equivalent | same task_types filter, listed shortcut, scope fallback | §2 :45 | all; listed branch only (INV-001 listed) |
+# | 42 | _scope_patterns, :421-438 | :450 | scopePatterns resume.go:710-738 | equivalent | [] for null, unevaluable for non-object or non-list paths/components or unknown component | §2 :45 | none (listed article returns at :449) |
+# | 43 | _task_risk, :463-478 | :631 | taskRisk resume.go:777-807 | equivalent | same rule loop; invalid class = critical; unevaluable rule meets all | §2 :46 | all; rule hit, risk kept medium; unmatched branch none |
+# | 44 | _rule_patterns, :456-460 | :470 | rulePatterns resume.go:769-775 | equivalent | match.paths list or unevaluable; [] stays [] | §2 :46 | all; match.paths branch only |
+# | 45 | _amount, :481-493 | :651 (x2) | amount resume.go:811-841 | different | digit text over 4300 digits: Python int() raises ValueError, check returns an error record (:534); Go panics (resume.go:836-838) and check returns errCannotCompute (:902-906); the 4300 bound is Python's int_max_str_digits default, interpreter-dependent; Go skips amount for retries (:1115-1121), Python calls it then overrides (:651-653), same result | §2 :47 | all (tokens "k", wall_time "m"/"h", human_attention "m"); retries override rc_10 (3 > 2); unparsable branch none |
+# | 46 | _AMOUNT, :69 | :487 | reAmount resume.go:35 | equivalent | ([0-9]+)([a-z]*), full match | §2 :47 | all |
+# | 47 | _TOKEN_UNITS, :70 | :490 | tokenUnits resume.go:36 | equivalent | "", k, m | §2 :47 | all ("k") |
+# | 48 | _TIME_UNITS, :71 | :490 | timeUnits resume.go:37 | equivalent | s, m, h, d | §2 :47 | all ("m", "h") |
+# | 49 | ORDER, :53-54 | :665 | rcOrder resume.go:32-33 | equivalent | same seven, same order | §7 :84 | all; one fired outcome per fixture, multi-fire none |
+# | 50 | _effect, :703-731 | :673 | inline in decide resume.go:1170-1219 | equivalent | same events per decision, same uncovered lines; first REPLAN check found the same way (:1173-1176) | §10 :145-156 | REPLAN check 3 rc_05 (READY branch); REPLAN check 4 rc_06; BLOCKED rc_07; ESCALATE rc_08, rc_10; STOP: scope invalid rc_03; [] rc_01, rc_02, rc_04, rc_09, rc_11; task.stale branch none |
+# | 51 | _event, :699-700 | :713, :718, :722, :724, :727, :729 | event closure resume.go:1166-1168 | equivalent | {event_id, type, payload, task_id} | §9 :139; §10 | rc_03, rc_05, rc_07, rc_08, rc_10 |
+# | 52 | _meets_entry, :734-738 | :712 | meetsEntry resume.go:1269-1278 | equivalent | path match, schema files, unresolved = true | §10 :149 | none (rc_05's only met entry is an interface) |
+# Appendix B: the Python-versus-specification-3 findings (t101/trace/trace-table.md section 3, unchanged) and finding
+# 21, added by the worker (D-3484 C4); findings only, not fixed by this task.
+# 1. An unparsable signature is not breaking: _verdicts tests only null and "ambiguous" (resume_check.py:375-382; UNPARSABLE :58 is never compared), so "unparsable" at both commits is equal and non_breaking; spec §5 :73 says a file that cannot be parsed at either commit gives breaking.
+# 2. Ids omit the interpreter's version: _ids joins code_sha256 only (resume_check.py:108), while spec §9 :139 names "the `engine_identity`", which is {code_sha256, python} (:503; spec §9 :133).
+# 3. Subject "TASK-0" for a malformed task_id (resume_check.py:61, :502); spec §9 :113 says the subject is the task id.
+# 4. A well-formed task_id "TASK-0" still gets the "task_id is malformed" uncovered line in an error record (resume_check.py:513-514); spec says nothing of it.
+# 5. Error records for a malformed code_sha256 (resume_check.py:521-522) and for any exception (:527-528, :533-534); spec §7 :86 lists the inputs that give `error` and names neither.
+# 6. Every one of the 22 input keys gives `error` when malformed (resume_check.py:197-267), among them budget_use, intent_current, dependencies; spec §7 :86's list does not name budget telemetry, intent artefacts or task states.
+# 7. An error record carries only the _base keys plus decision, error, uncovered, state_effect (resume_check.py:510); spec §9 :114-136 gives no reduced key set for it.
+# 8. Check 1 has no separate "not a commit of the repository" case: only base_is_ancestor (resume_check.py:552); spec §2 :40 names both conditions.
+# 9. A path changed by several commits takes the last commit's change (resume_check.py:559; docstring :15-16); spec §2 :40 and §9 :122 do not say which change.
+# 10. A contract-listed article absent from the articles is made applicable with no result (resume_check.py:619-623); spec §2 :45 does not say this.
+# 11. An applicability without a string-list task_types does not filter (resume_check.py:444-447); spec §2 :45 says the applicability, if present, names the task_type.
+# 12. A risk rule with a missing or invalid class counts as critical (resume_check.py:471); spec §2 :46 does not say this.
+# 13. Within check 7, STOP: runtime insufficient wins over the unmatched-pattern ESCALATE, and the ESCALATE is then not recorded (resume_check.py:633-637); spec §2 :46 gives both conditions without precedence, and §7 :84 says every fired outcome is listed.
+# 14. Budget forms: a fixed parse (tokens k/m, times s/m/h/d), an unparsable form uncovered, retries integers only, any budget name compared when both values are integers (resume_check.py:481-493, :651-656); spec §2 :47 does not say how forms are compared.
+# 15. read_set.unanalysed is always [] and unresolved holds only interface and schema names (resume_check.py:363, :387, :685); spec §4 :63 lists unparsable files as unanalysed and unresolved imports as unresolved.
+# 16. A check-4 REPLAN never appends task.stale (resume_check.py:708-711); spec §10 :149 gives task.stale with cause intent_change, and §12 :172 leaves open only the case where the log holds no intent.changed.
+# 17. conflict.detected tasks is always [] (resume_check.py:714, :727); spec §10 :149 and :152 say the tasks named by the commits' trailers.
+# 18. engine_identity.code_sha256 may be null, listed uncovered (resume_check.py:503, :511-512, :669-670); spec §9 :133 says the content hash of the code that decided.
+# 19. log_seq must be below 2**63 (resume_check.py:63, :204); spec §9 :121 gives no bound.
+# 20. A REPLAN's conflict.detected paths include every delta path for an unresolvable schema entry (resume_check.py:712, :737-738); spec §10 :149 says only "the `interfaces` or `paths` met".
+# 21. _amount's int() limit is the interpreter's int_max_str_digits (4300 by default; resume_check.py :493), not a rule
+#     of specification 3 §2 :47; added by the worker (decision D-3484 C4).
