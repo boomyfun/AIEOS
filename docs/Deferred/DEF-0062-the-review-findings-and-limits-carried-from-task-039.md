@@ -21,3 +21,4 @@ A task that touches the export module, the workflow, the risk set's test or a po
 
 ## Log
 - 2026-10-15 (session d8eb2eb5): opened with TASK-039's acceptance (D-782) and its first run (D-784). ../History/2026-10/2026-10-15-0830-the-benchmark-workflow-accepted-and-on-main.md
+- 2026-10-29: the workflow wording points F4, F7 and F8 are addressed by the benchmark workflow's revision 10 (decision D-3613, under DM A66), in the commit that changes .github/workflows/aieos-bench.yml (F4: the header names the decisions of revisions 6 to 9 and of revision 10; F7: "It does not change the repository"; F8: "for the owner only, by the agent's own rule and not a GitHub restriction", keeping the phrase tests/unit/test_export_fixtures.py :245 asserts); the export limits F1 to F3, F11 and F13, the toolchain step, the ports' caches, F5 and the branch task/TASK-038 remain; Status stays open.

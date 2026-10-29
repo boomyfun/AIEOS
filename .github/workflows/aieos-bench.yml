@@ -1,4 +1,4 @@
-# AIEOS: the stack benchmark (TASK-039; Master Plan revision 4 §4; docs/plan/m4-exit-review.md §6), revision 9
+# AIEOS: the stack benchmark (TASK-039; Master Plan revision 4 §4; docs/plan/m4-exit-review.md §6), revision 10
 # (decisions D-765 to D-767, with erratum E1 of decision D-773; the reference export of TASK-041; the TypeScript
 # port's type check and run of TASK-043; the Go port's vet, format check, build, run, compare and tests of TASK-044,
 # with GOTOOLCHAIN=local, GOPROXY=off and CGO_ENABLED=0; the Rust port's format check, lint, build, run, compare and
@@ -6,7 +6,7 @@
 # the port's program with no argument that must exit non-zero and print nothing). Every port's own toolchain (node, go,
 # cargo and rustc) is the runners', not downloaded. It runs, on GitHub's hosted Linux and Windows runners, the export
 # of the frozen fixtures and the reference export into the job's temporary folder, prints the toolchain versions, and
-# runs each language port only when its folder bench/<language>/ exists. It reads only: it checks
+# runs each language port only when its folder bench/<language>/ exists. It does not change the repository: it checks
 # out the pushed commit from the repository's public address, built from the runner's server and repository variables,
 # with no credential, and each job makes one download, the pinned type checker (TypeScript 6.0.3) from the npm
 # registry, checked by its integrity value before it is used; it uses no action, no secret and no token, writes
@@ -27,6 +27,10 @@
 # each change its own decision; a change that grants write access, uses a secret or token, or changes a repository or
 # security setting stays the owner's. The port steps' commands are proposed here and may be changed only by the port
 # tasks' own decisions (decision D-767 C1).
+# Revisions 6 to 9 are the changes of TASK-047 to TASK-050 described above (decisions D-909, D-932, D-948 and D-967,
+# each under DM A66). Revision 10 (decision D-3613, under DM A66; DEF-0062 F4, F7 and F8) changes comments only:
+# these source lines, "It does not change the repository" and the comment on starting the run by hand. It changes
+# no trigger, step, permission or setting.
 name: aieos-bench
 
 on:
@@ -36,7 +40,7 @@ on:
       - 'bench/**'
       - '.github/workflows/aieos-bench.yml'
       - 'tests/unit/test_export_fixtures.py'
-  # for the owner only: the agent never starts it without its own decision (decision D-766 C1)
+  # for the owner only, by the agent's own rule and not a GitHub restriction: the agent never starts it without its own decision (decision D-766 C1)
   workflow_dispatch:
 
 permissions:
