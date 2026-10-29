@@ -1,6 +1,9 @@
 """Integration test of the Resume Check fixtures of TASK-005 (docs/specs/conformance-files.md revision 4, sections 2, 3,
 7 and 9; docs/tasks/TASK-005.yaml AC6 and AC8): the 11 files end to end against the bound scenario file and the set
-file, and what the task leaves unchanged.
+file, the set file's freeze records, and the modules allowed to name the folder.
+
+Limits (TASK-010): the name check sees only .py files under src/ and tests/ that hold the folder's name literally; a
+module that reaches the fixtures through another module, or a file of another kind, is not seen.
 
 Files are read as bytes with pathlib; no fixture or set module is ever imported or executed.
 """
@@ -100,7 +103,7 @@ class RcSetTest(unittest.TestCase):
             self.assertEqual(value['cases'][0]['expected'], {'decision': [cell], 'not_fixed': []}, sid)
             self.assertEqual(value['cases'][0]['when'], 'resume', sid)
 
-    def test_the_set_file_is_unchanged_and_frozen(self):
+    def test_the_set_file_is_bound_by_its_freeze_records(self):
         """TASK-099 AC4 (in place of TASK-059 AC4, which was in place of TASK-040 AC4, TASK-020 AC4 and TASK-014 AC4): the
         set file is bound by exactly one freeze approval of TASK-099, TASK-059's freeze of the set file it replaces is
         still recorded, and so are TASK-040's, TASK-020's, TASK-014's and TASK-002's freezes of the earlier set files."""
@@ -148,7 +151,7 @@ class RcSetTest(unittest.TestCase):
                     earlier.append(rec['record_id'])
         self.assertEqual(earlier, ['TASK-002-freeze-set'])
 
-    def test_the_set_names_no_resume_check_fixture(self):
+    def test_the_set_names_each_resume_check_fixture(self):
         value = unwrap(read(SET_FILE))
         rc = [e for e in value['scenarios'] if e['capability'] == 'Resume Check']
         self.assertEqual(sorted(e['id'] for e in rc), sorted(rc_rows()))
@@ -163,9 +166,10 @@ class RcSetTest(unittest.TestCase):
 
     def test_only_this_task_s_modules_name_the_folder(self):
         name = FIXTURE_DIR.rsplit('/', 1)[1].encode('ascii')
-        found = sorted(str(p.relative_to(ROOT)).replace('\\', '/') for d in ('src', 'tests') for p in (ROOT / d).rglob('*.py')
+        found = sorted(p.relative_to(ROOT).as_posix() for d in ('src', 'tests') for p in (ROOT / d).rglob('*.py')
                        if name in p.read_bytes())
         self.assertEqual(not_allowed(found), [])
+        self.assertEqual(sorted(set(OWN) - set(found)), [], 'an own module does not name the folder')
         self.assertTrue(set(OWN) <= set(found))
 
     def test_a_module_that_is_not_allowed_is_named(self):

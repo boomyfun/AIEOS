@@ -314,6 +314,8 @@ class R7RepositoryTree(Isolated):
             rc_state(wrong)
 
     def test_the_eleven_frozen_fixtures_pass_with_a_stand_in(self):
+        """With a stand-in answering each frozen case from its own expected decision, the eleven are PASS; this shows the form
+        check and the runner's wiring, not that the fixtures are right."""
         read, listing = overlay(set_with_rc())
         r = conformance.run(ROOT, COMMIT, TASK, read=read, listing=listing, check=stand_in())
         for sid in RC_IDS:

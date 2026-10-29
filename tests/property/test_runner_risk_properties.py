@@ -150,7 +150,8 @@ class RiskEntryProperties(unittest.TestCase):
 
     def test_a_rehashed_one_byte_change(self):
         # The fixture's bytes changed and the set entry re-frozen over them, so the form checks are what decide:
-        # the unchanged fixture passes; any change runs to one of the three results without an exception; a change
+        # the unchanged fixture passes; any change runs to one of the three results without an exception (this random half is a smoke check only: it asserts no
+        # particular result); a change
         # inside a key of the fixture's object never passes.
         rng = random.Random(18)
         base = real_files()

@@ -376,7 +376,8 @@ class ConformanceSetEndToEndTest(unittest.TestCase):
             data = files[entry['fixture']['path']]
             self.assertEqual(sha256(data), entry['fixture']['sha256'])
             if capability == 'Resume Check':
-                # TASK-014: a Resume Check fixture is checked in its own form by test_conformance_rc_set.py
+                # TASK-014: a Resume Check fixture is checked in its own form by test_conformance_rc_files.py, and its set entry by
+                # test_conformance_rc_set.py
                 self.assertEqual(entry['fixture']['path'], module_path(sid, capability))
                 results[sid] = 'fixture'
                 continue

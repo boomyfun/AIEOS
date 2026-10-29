@@ -623,7 +623,7 @@ class SetFileTest(unittest.TestCase):
             'a fixture hash': lambda v: v['scenarios'][first]['fixture'].update(sha256='0' * 64),
             'a fixture path': lambda v: v['scenarios'][first]['fixture'].update(path='tests/conformance/x.py'),
             'a fixture dropped': lambda v: v['scenarios'][first].update(fixture=None),
-            'a fixture outside Verification': lambda v: v['scenarios'][17].update(
+            'a Verification fixture given to RISK-01': lambda v: v['scenarios'][17].update(
                 fixture=dict(v['scenarios'][first]['fixture'])),
             'an entry with an extra key': lambda v: v['scenarios'][0].update(note='x'),
             'a fixture that is not {path, sha256}': lambda v: v['scenarios'][first]['fixture'].pop('sha256'),

@@ -163,8 +163,8 @@ def tree_reader(files):
 
 class RunnerRiskEndToEndTest(unittest.TestCase):
     def test_the_tree_as_it_is(self):
-        """AC10: RISK-01's entry is null, so it is NOT_RUN for "no fixture"; the run record keeps its keys, counts and
-        every other result, and its outcome is pass."""
+        """AC10: in each state of the RISK-01 and ADV-02 entries the run over the tree keeps its keys, counts and results, and
+        its outcome is pass; with RISK-01's entry null it is NOT_RUN for "no fixture"."""
         # In the present state of RISK-01's entry (TASK-019 AC5) it runs with the root's governor and is PASS, ADV-02
         # stays NOT_RUN for "no fixture", and every other result passes.
         # In the present state of ADV-02's entry (TASK-058 AC4) it runs with the root's core and is PASS too, and the run
@@ -192,6 +192,7 @@ class RunnerRiskEndToEndTest(unittest.TestCase):
                     self.assertEqual((result, r.reasons[sid]), (conformance.NOT_RUN, 'no fixture'))
                 else:
                     self.assertEqual((result, r.reasons[sid]), (conformance.PASS, ''), sid)
+            self.assertEqual(len(r.results), 32)
             self.assertEqual(r.record['outcome'], 'pass')
             return
         r = conformance.run(ROOT, COMMIT, TASK)
@@ -203,6 +204,7 @@ class RunnerRiskEndToEndTest(unittest.TestCase):
                 self.assertEqual((result, r.reasons[sid]), (conformance.NOT_RUN, 'no fixture'))
             else:
                 self.assertEqual(result, conformance.PASS, (sid, r.reasons[sid]))
+        self.assertEqual(len(r.results), 32)
         self.assertEqual(r.record['outcome'], 'pass')
 
     def run_fixture(self, derive=None):

@@ -87,7 +87,8 @@ def matches(pattern, path):
 
 
 def reference(pattern, path):
-    """A second reading of point 6, by names and not by one regular expression, to check the tests' matcher."""
+    """A second reading of point 6, by names and not by one regular expression, to check the tests' matcher. It shares three
+    readings with matches (an empty '*', a zero-name middle '**', a one-name trailing '**'), which the unit module pins by cases."""
     if '/' not in pattern:
         pattern = '**/' + pattern
     parts, names = pattern.split('/'), path.split('/')

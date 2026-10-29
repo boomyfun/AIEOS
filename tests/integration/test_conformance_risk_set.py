@@ -3,8 +3,8 @@ and 10; docs/tasks/TASK-018.yaml AC6, AC7 and AC9): the file end to end against 
 the set file, and what the task leaves unchanged.
 
 Files are read as bytes with pathlib's read_bytes and listed with pathlib's glob; no fixture or set module is ever
-imported or executed. Each test holds in both states of RISK-01's set entry: null until TASK-020, or naming this file
-with its SHA-256 after it (decision D-461 E2).
+imported or executed. Each test holds in both states of RISK-01's set entry: null (before TASK-020), or naming this file
+with its SHA-256 (from TASK-020 on, the present state; decision D-461 E2).
 """
 import hashlib
 import json
@@ -26,10 +26,10 @@ OWN = ('tests/unit/test_conformance_risk_files.py', 'tests/integration/test_conf
 # The other modules that may name the folder (AC7): the runner, which section 10 has expect the folder for the Risk
 # Engine, and the runner's test modules named test_runner_risk*.py, which name the path for in-memory bytes (in this
 # form the test holds when TASK-019 changes them); and the set file, whose RISK-01 entry names this file's path as data
-# once TASK-020 sets it (so the test holds in both states, as TASK-005's module allows the set file).
+# as TASK-020 set it (so the test holds in both states, as TASK-005's module allows the set file).
 RUNNER = 'src/aieos_bootstrap/conformance.py'
 RUNNER_TESTS = re.compile(r'tests/(?:unit|integration|property)/test_runner_risk[A-Za-z0-9_]*\.py')
-# TASK-020 AC5: the three modules whose set check names the folder for RISK-01's path (sections 2 and 10), each by name.
+# TASK-020 AC5: the modules (TASK-020's three and TASK-039's export test) whose set check names the folder for RISK-01's path (sections 2 and 10), each by name.
 SET_CHECKS = ('tests/unit/test_conformance_files.py', 'tests/integration/test_conformance_set.py',
               'tests/property/test_conformance_properties.py', 'tests/unit/test_export_fixtures.py')
 
@@ -89,7 +89,8 @@ def not_allowed(paths):
 
 
 def naming(name):
-    """The .py files under src/ and tests/ whose bytes name the given folder name, listed with pathlib's glob."""
+    """The .py files under src/ and tests/ whose bytes name the given folder name, listed with pathlib's glob. It reads every such
+    file on each call (one call per run)."""
     found = []
     for d in ('src', 'tests'):
         for p in (ROOT / d).glob('**/*.py'):

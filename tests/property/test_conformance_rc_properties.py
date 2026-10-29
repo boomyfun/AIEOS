@@ -35,6 +35,8 @@ def canon(value, indent=0):
         return 'null'
     if isinstance(value, int):
         return str(value)
+    if not isinstance(value, str):
+        raise ValueError('a value of type %s has no canonical form' % type(value).__name__)
     out = []
     for ch in value:
         out.append('\\' + ch if ch in '"\\' else '\\u%04x' % ord(ch) if ord(ch) < 0x20 else ch)
@@ -117,19 +119,19 @@ class FileProperties(unittest.TestCase):
 
 class InvariantProperties(unittest.TestCase):
 
-    def test_inv_005_each_expected_decision_is_exactly_one_a15_value(self):
+    def test_inv_005_in_the_fixture_data_each_expected_decision_is_exactly_one_a15_value(self):
         for name, data in files().items():
             for case in unwrap(data)['cases']:
                 d = case['expected']['decision']
                 self.assertEqual(len(d), 1, name)
                 self.assertIn(d[0], EXECUTION, name)
 
-    def test_inv_006_no_expected_decision_is_an_acceptance_value(self):
+    def test_inv_006_in_the_fixture_data_no_expected_decision_is_an_acceptance_value(self):
         for name, data in files().items():
             for case in unwrap(data)['cases']:
                 self.assertFalse(set(case['expected']['decision']) & set(ACCEPTANCE), name)
 
-    def test_inv_007_inputs_are_bound_to_a_commit_and_intent_versions(self):
+    def test_inv_007_in_the_fixture_data_inputs_are_bound_to_a_commit_and_intent_versions(self):
         by_id = {}
         for name, data in files().items():
             v = unwrap(data)
@@ -141,7 +143,7 @@ class InvariantProperties(unittest.TestCase):
         self.assertNotEqual(rc06['inputs']['intent_current'], st['intent_versions'])
         self.assertEqual(rc06['expected']['decision'], ['REPLAN'])
 
-    def test_inv_008_no_input_holds_a_record_or_a_source_class(self):
+    def test_inv_008_in_the_fixture_data_no_input_holds_a_record_or_a_source_class(self):
         for name, data in files().items():
             keys = set(keys_anywhere(unwrap(data)['cases'][0]['inputs']))
             self.assertFalse(keys & {'records', 'record_id', 'source_class', 'fact_kind'}, name)

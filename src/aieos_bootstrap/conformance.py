@@ -49,7 +49,7 @@ Limits of TASK-006 (its AC12):
   decision with the expected one; it never decides an execution or an acceptance, and it does not check how a Resume
   Check derives the inputs of specification 3 section 1, which the fixtures give as values.
 - The capability of an id is read from the bound scenario file's table and heading layout; a later revision of that
-  file that changes the layout makes its scenarios NOT_RUN, never PASS.
+  file whose layout no longer gives an id its capability makes it NOT_RUN, never PASS; one that keeps them changes nothing.
 - Running the Resume Check scenarios in the CI channel needs the set file's Resume Check entries and a later revision
   of the CI workflow, which are not part of this module.
 
@@ -971,7 +971,7 @@ def run_scenario(tree, entry, rows, evaluate, caps=None, check=None, derive=None
     if rows.get(sid) is None or rows[sid] != entry['row_hash']:
         return NOT_RUN, 'the row hash differs from the bound scenario file'
     # TASK-006 AC3 (as read in decision D-287): the entry's capability against the bound file's, after the row hash
-    # and before the file is read.
+    # and before the file is read; the reason also covers an id to which the bound file gives no capability.
     if (caps or {}).get(sid) != capability:
         return NOT_RUN, 'the capability differs from the bound scenario file'
     data = tree.read(fixture['path'])
@@ -1493,7 +1493,7 @@ def run(root, commit, task, read=None, listing=None, evaluate=None, check=None, 
     """One conformance run over the tree at ``root``, the base (AC1). ``commit`` and ``task`` are only recorded.
     ``read`` and ``listing`` replace the default byte reader and records listing; ``evaluate`` is a test seam: a run
     with it never counts and its governor_identity is null (AC6). ``check`` is the Resume Check's test seam (TASK-006
-    AC4, reading): a run with it never counts, and the run record's resume_check sha256 is null. ``derive`` is the
+    AC4, reading): a run with it never counts; the record's resume_check sha256, when present, is null. ``derive`` is the
     Risk Engine derivation's test seam (TASK-017 AC3, reading): a run with it never counts. ``cb`` is the Capability
     Boundaries entry's test seam, a mapping in load_cb's form (TASK-056 AC3, reading): a run with it never counts, and
     the sha256 values of the run record's capability_boundaries are null. Raises ValueError for a commit or task id of

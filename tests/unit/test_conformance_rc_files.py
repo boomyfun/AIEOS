@@ -350,7 +350,7 @@ def under(name, use, limit):
 
 
 def rule_risk(i):
-    """The task's risk as check 7 computes it: the contract's, raised by every rule whose pattern meets the write-set."""
+    """The task's risk as specification 3 section 3 decides it: the contract's, raised by every rule whose pattern meets the write-set."""
     ws = i['contract']['write_set']['paths']
     classes = [r['risk'] for r in i['risk_rules'] for p in r['match'].get('paths', []) if any(meets(p, w) for w in ws)]
     return max([i['contract']['risk']] + classes, key=RISKS.index)
@@ -390,10 +390,10 @@ def check_placeholders(value, sid):
     for s in i['symbols'] + i['schemas']:
         if s['base'] in (None, 'ambiguous') or s['head'] in (None, 'ambiguous'):
             errors.append('an interface or schema entry does not resolve at both commits')
-    if sid not in ('RC-03', 'RC-04', 'RC-05') and read_set_met(i, d):
+    if sid not in ('RC-04', 'RC-05') and read_set_met(i, d):
         errors.append('Δ meets the read-set where the scenario needs it to miss')
     for t, dep in i['dependencies'].items():
-        if sid == 'RC-07' and dep['state'] == 'STALE' or sid == 'RC-11' and dep['stale_evidence']:
+        if sid == 'RC-07' and dep['state'] == 'STALE' or sid == 'RC-11' and dep['state'] == 'DONE' and dep['stale_evidence']:
             continue
         if dep['state'] != 'DONE' or dep['stale_evidence']:
             errors.append('dependency %s is not DONE with current evidence' % t)
