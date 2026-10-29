@@ -1,0 +1,112 @@
+# AIEOS: the native shadow ports (M8; docs/plan/m8-plan.md §2, §4, §5; decisions D-3336, D-3408 and the decision that
+# approves this text), revision 1. It runs, on GitHub's hosted Linux and Windows runners, the export of the frozen
+# fixtures into the job's temporary folder and prints the toolchain versions; then, only when the folder
+# native/go/governor exists (TASK-100), the governor-only reference export (tests/unit/test_export_governor.py, with
+# its --check against its pin) and the native governor's steps, with GOTOOLCHAIN=local, GOPROXY=off and
+# CGO_ENABLED=0: vet, the format check (gofmt's own exit kept), build, its run over the fixtures, the byte compare of
+# its output with the governor reference, one run with no argument that must exit non-zero and print nothing to
+# standard output, and its tests. Go is the runners' own, not downloaded; standard library only, no module download.
+# It reads only: it checks out the pushed commit from the repository's public address, built from the runner's server
+# and repository variables, with no credential; it uses no action, no secret and no token, makes no download, writes
+# nothing to the repository and calls no API. It runs on every push to main and to task branches, with no paths
+# filter, so that a change of the bootstrap governor, of records.py or of a fixture also reruns the shadow.
+# Its results are advisory: a native port decides nothing (Master Plan :84; m8-plan.md §2); they are this run's job
+# logs only, and no record of the governor and no step of the CI workflow aieos-checks.yml reads them. It is not a
+# trust-boundary measurement. Who decides a change to this file: the decision agent under DM A66, each change its own
+# decision; a change that grants write access, uses a secret or token, or changes a repository or security setting
+# stays the owner's.
+name: aieos-native
+
+on:
+  push:
+    branches: [main, 'task/**']
+  # for the owner only: the agent never starts it without its own decision
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    env:
+      PY: python3
+    steps:
+      - name: checkout (the pushed commit only, from the public address, no credential)
+        run: |
+          git init -q .
+          git fetch -q --depth 1 "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" "$GITHUB_SHA"
+          git checkout -q --detach FETCH_HEAD
+      - name: checkout check (HEAD is the pushed commit)
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: export the frozen fixtures into the temporary folder
+        run: |
+          $PY tests/unit/test_export_fixtures.py --root tests/conformance > "$RUNNER_TEMP/fixtures.json"
+          wc -c "$RUNNER_TEMP/fixtures.json"
+      - name: toolchain versions
+        run: |
+          $PY --version
+          go version
+      - name: native governor (only if native/go/governor exists)
+        run: |
+          if [ -d native/go/governor ]; then
+            export GOTOOLCHAIN=local GOPROXY=off CGO_ENABLED=0
+            $PY tests/unit/test_export_governor.py --root tests/conformance --check > "$RUNNER_TEMP/governor-reference.json"
+            wc -c "$RUNNER_TEMP/governor-reference.json"
+            mkdir "$RUNNER_TEMP/native"
+            (cd native/go/governor && go vet . && out="$(gofmt -l .)" && test -z "$out" && go build -trimpath -o "$RUNNER_TEMP/native/governor.exe" .)
+            "$RUNNER_TEMP/native/governor.exe" "$RUNNER_TEMP/fixtures.json" > "$RUNNER_TEMP/native-governor.json"
+            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/governor-reference.json" "$RUNNER_TEMP/native-governor.json"
+            echo "native governor: byte-equal to the governor reference"
+            if "$RUNNER_TEMP/native/governor.exe" > "$RUNNER_TEMP/native-noarg.txt"; then echo "native governor: exits 0 with no argument"; false; fi
+            test ! -s "$RUNNER_TEMP/native-noarg.txt"
+            (cd native/go/governor && go test -count=1 -v . -args "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/governor-reference.json")
+          else
+            echo "no port in native/go/governor"
+          fi
+
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    env:
+      PY: python
+    steps:
+      - name: checkout (the pushed commit only, from the public address, no credential)
+        run: |
+          git init -q .
+          git fetch -q --depth 1 "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" "$GITHUB_SHA"
+          git checkout -q --detach FETCH_HEAD
+      - name: checkout check (HEAD is the pushed commit)
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: export the frozen fixtures into the temporary folder
+        run: |
+          $PY tests/unit/test_export_fixtures.py --root tests/conformance > "$RUNNER_TEMP/fixtures.json"
+          wc -c "$RUNNER_TEMP/fixtures.json"
+      - name: toolchain versions
+        run: |
+          $PY --version
+          go version
+      - name: native governor (only if native/go/governor exists)
+        run: |
+          if [ -d native/go/governor ]; then
+            export GOTOOLCHAIN=local GOPROXY=off CGO_ENABLED=0
+            $PY tests/unit/test_export_governor.py --root tests/conformance --check > "$RUNNER_TEMP/governor-reference.json"
+            wc -c "$RUNNER_TEMP/governor-reference.json"
+            mkdir "$RUNNER_TEMP/native"
+            (cd native/go/governor && go vet . && out="$(gofmt -l .)" && test -z "$out" && go build -trimpath -o "$RUNNER_TEMP/native/governor.exe" .)
+            "$RUNNER_TEMP/native/governor.exe" "$RUNNER_TEMP/fixtures.json" > "$RUNNER_TEMP/native-governor.json"
+            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/governor-reference.json" "$RUNNER_TEMP/native-governor.json"
+            echo "native governor: byte-equal to the governor reference"
+            if "$RUNNER_TEMP/native/governor.exe" > "$RUNNER_TEMP/native-noarg.txt"; then echo "native governor: exits 0 with no argument"; false; fi
+            test ! -s "$RUNNER_TEMP/native-noarg.txt"
+            (cd native/go/governor && go test -count=1 -v . -args "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/governor-reference.json")
+          else
+            echo "no port in native/go/governor"
+          fi
