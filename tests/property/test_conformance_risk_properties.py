@@ -167,6 +167,17 @@ class CanonicalFormProperties(unittest.TestCase):
             b[i] = (b[i] + rng.randrange(1, 256)) % 256
             self.assertNotEqual(sha256(bytes(b)), base)
 
+    def test_any_one_byte_change_breaks_the_form_or_the_value(self):
+        """A one-byte change either leaves the canonical form or changes the value, so the hash property is not trivial."""
+        rng = random.Random(18003)
+        value = json.loads(text_of(self.data))
+        for _ in range(ROUNDS):
+            i = rng.randrange(len(self.data))
+            b = bytearray(self.data)
+            b[i] = (b[i] + rng.randrange(1, 256)) % 256
+            altered = bytes(b)
+            self.assertTrue(not is_canonical(altered) or json.loads(text_of(altered)) != value, i)
+
     def test_any_reordering_of_keys_is_not_canonical(self):
         rng = random.Random(18002)
         self.assertTrue(is_canonical(self.data))
@@ -213,6 +224,13 @@ class InvariantProperties(unittest.TestCase):
         for case in self.value['cases']:
             self.assertIn('decision', case['expected']['not_fixed'])
             self.assertNotIn('decision', case['expected'])
+
+    def test_inv_005_006_expected_has_only_the_risk_keys(self):
+        """The expected element holds exactly risk_not, profile_excludes and not_fixed, and not_fixed names exactly the
+        decision and the next state."""
+        for case in self.value['cases']:
+            self.assertEqual(set(case['expected']), {'risk_not', 'profile_excludes', 'not_fixed'})
+            self.assertEqual(sorted(case['expected']['not_fixed']), ['decision', 'next_state'])
 
     def test_inv_006_no_expected_element_is_an_acceptance_value(self):
         def strings(v):

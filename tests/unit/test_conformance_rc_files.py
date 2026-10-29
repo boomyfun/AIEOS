@@ -486,11 +486,27 @@ class FileKindTest(unittest.TestCase):
         self.assertEqual(module_path('RC-01'), 'tests/conformance/fixtures_rc/rc_01.py')
         self.assertNotEqual(module_path('RC-10'), 'tests/conformance/fixtures/rc_10.py')
 
+    def test_the_folder_holds_the_eleven_files_by_their_literal_names(self):
+        """The names are written out here, not built by module_path, so a wrong module_path cannot hide a wrong folder."""
+        self.assertEqual(sorted(p.name for p in (ROOT / FIXTURE_DIR).iterdir() if p.is_file()),
+                         ['rc_%02d.py' % n for n in range(1, 12)])
+
     def test_altered_files_are_malformed(self):
         data = read(module_path('RC-01'))
         bad = [data[1:], data[:-1], data.replace(b'\n', b'\r\n'), data.replace(b'  "cases"', b'"cases"', 1),
                FIRST + b'{"a": 1.5}\n' + LAST, FIRST + b"{\n  \"a\": \"'''\"\n}\n" + LAST,
                FIRST + b'{\n  "a": 1,\n  "a": 2\n}\n' + LAST, FIRST + b'\xef\xbb\xbf{}\n' + LAST]
+        for n, b in enumerate(bad):
+            with self.assertRaises(Malformed, msg=str(n)):
+                unwrap(b)
+
+    def test_non_canonical_texts_are_malformed(self):
+        """Valid JSON that is not in the canonical form is Malformed: unsorted keys, an extra final LF, an upper-case
+        escape, a needless escape."""
+        data = read(module_path('RC-01'))
+        bad = [FIRST + b'{\n  "b": 1,\n  "a": 2\n}\n' + LAST, data[:-len(LAST)] + b'\n' + LAST,
+               FIRST + b'{\n  "a": "\\u001F"\n}\n' + LAST, FIRST + b'{\n  "a": "\\u0041"\n}\n' + LAST,
+               FIRST + b'{\n  "a": "\\/"\n}\n' + LAST]
         for n, b in enumerate(bad):
             with self.assertRaises(Malformed, msg=str(n)):
                 unwrap(b)
@@ -610,6 +626,24 @@ class PlaceholderTest(unittest.TestCase):
         }
         for name, change in cases.items():
             self.assertNotEqual(self.failing('RC-01', change), [], name)
+
+    def test_the_read_set_and_dependency_exceptions_are_no_wider_than_their_scenarios(self):
+        """RC-03 is no exception to the read-set rule, and RC-11's exception needs a DONE dependency."""
+        def meets(i):
+            i.update(head_commit='b' * 40, commits=[{'id': 'c' * 40, 'paths': [
+                {'path': 'src/app/util/helpers.py', 'change': 'modified'}], 'submitted': False}])
+        self.assertIn('Δ meets the read-set where the scenario needs it to miss', self.failing('RC-03', meets))
+        self.assertNotEqual(self.failing('RC-11', lambda i: i['dependencies']['TASK-099'].update(state='IN_PROGRESS')), [])
+
+    def test_delta_meeting_an_interface_or_a_schema_is_found(self):
+        """Δ meets the declared read-set through an interface's component, or through a schema's file, each alone."""
+        i = copy.deepcopy(real('RC-01')['cases'][0]['inputs'])
+        rs = i['contract']['read_set']
+        self.assertIn(('interface', rs['interfaces'][0]), read_set_met(i, ['src/app/api/x.py']))
+        for s in i['schemas']:
+            if s['name'] == rs['schemas'][0]:
+                s['base'] = s['head'] = {'path': 'data/record.json'}
+        self.assertIn(('schema', rs['schemas'][0]), read_set_met(i, ['data/record.json']))
 
     def test_the_derived_read_set_must_miss_delta(self):
         self.assertNotEqual(self.failing('RC-02', lambda i: i.update(derived_read_set=['docs/notes.md'])), [])

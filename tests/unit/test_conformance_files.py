@@ -655,6 +655,20 @@ class SetFileTest(unittest.TestCase):
             with self.subTest(case=name):
                 self.assertNotEqual(changed(edit), [])
 
+    def test_a_moved_fixture_errs_by_the_path_rule_alone(self):
+        """A fixture moved to the other capability's folder with its bytes moved too errs by the path rule and by nothing else."""
+        value, files, rows = load_tree()
+        first = next(i for i, e in enumerate(value['scenarios']) if e['fixture'])
+        rc = next(i for i, e in enumerate(value['scenarios']) if e['capability'] == 'Resume Check')
+        for index, new in ((rc, FIXTURE_DIR + '/rc_01.py'), (first, RC_FIXTURE_DIR + '/acc_01.py')):
+            entry = value['scenarios'][index]
+            v = json.loads(json.dumps(value))
+            v['scenarios'][index]['fixture']['path'] = new
+            moved = dict(files)
+            moved[new] = moved.pop(entry['fixture']['path'])
+            self.assertEqual(check_set(v, rows, moved), ['set: the fixture path of %s is not %s'
+                                                         % (entry['id'], module_path(entry['id'], entry['capability']))])
+
     def test_an_unnamed_fixture_file_gives_an_error(self):
         value, files, rows = load_tree()
         more = dict(files)

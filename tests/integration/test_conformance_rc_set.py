@@ -164,6 +164,13 @@ class RcSetTest(unittest.TestCase):
     def test_no_resume_check_file_in_the_m2_folder(self):
         self.assertEqual([p.name for p in (ROOT / M2_FIXTURE_DIR).iterdir() if p.name.startswith('rc_')], [])
 
+    def test_no_sub_folder_here_and_no_resume_check_scenario_in_the_m2_folder(self):
+        """The folder holds no sub-folder (a __pycache__ aside), and no file of the earlier folder holds a Resume Check scenario."""
+        self.assertEqual([p.name for p in (ROOT / FIXTURE_DIR).iterdir() if p.is_dir() and p.name != '__pycache__'], [])
+        scenarios = [unwrap(read(M2_FIXTURE_DIR + '/' + p.name))['scenario'] for p in (ROOT / M2_FIXTURE_DIR).iterdir()
+                     if p.is_file() and p.name.endswith('.py')]
+        self.assertEqual([s for s in scenarios if s.startswith('RC-')], [])
+
     def test_only_this_task_s_modules_name_the_folder(self):
         name = FIXTURE_DIR.rsplit('/', 1)[1].encode('ascii')
         found = sorted(p.relative_to(ROOT).as_posix() for d in ('src', 'tests') for p in (ROOT / d).rglob('*.py')
@@ -180,6 +187,12 @@ class RcSetTest(unittest.TestCase):
 
     def test_the_allowed_modules_are_all_allowed(self):
         self.assertEqual(not_allowed(OWN + OTHERS), [])
+
+    def test_the_list_is_sorted_and_an_allowed_name_in_another_folder_is_not_allowed(self):
+        """not_allowed returns its paths sorted, and a file name that is allowed in one folder is not allowed in another."""
+        self.assertEqual(not_allowed(['tests/unit/z.py', 'src/a.py']), ['src/a.py', 'tests/unit/z.py'])
+        self.assertEqual(not_allowed(['tests/integration/test_conformance_rc_files.py']),
+                         ['tests/integration/test_conformance_rc_files.py'])
 
 
 if __name__ == '__main__':

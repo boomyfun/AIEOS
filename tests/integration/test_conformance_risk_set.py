@@ -129,6 +129,16 @@ class RiskSetTest(unittest.TestCase):
                 self.assertEqual([p for p in patterns if matches(p, path)], [], path)
             self.assertEqual(case['request']['changed_paths'], case['values']['changed_paths'])
 
+    def test_every_policy_rule_is_read_or_replaced(self):
+        """Every rule of the policy's section 3 is a paths rule, read above, or the one component_tags rule that the
+        fail-closed reading of the tests and src folders replaces."""
+        text = read(RULES_FILE).decode('utf-8')
+        block = text.split('## 3. The rules')[1].split('```yaml')[1].split('```')[0]
+        paths_rules = len(re.findall(r'- match: \{ paths: \[', block))
+        tag_rules = len(re.findall(r'- match: \{ component_tags: \[', block))
+        self.assertEqual(paths_rules + tag_rules, block.count('- match:'))
+        self.assertEqual(tag_rules, 1)
+
     def test_the_set_file_is_frozen_and_risk_01_is_null_or_this_file(self):
         """AC6, in both states: the set file has a SHA-256 that a freeze approval in docs/records/ binds (at TASK-018,
         TASK-014-freeze-set), and RISK-01's entry is null or names this file's path with its SHA-256."""

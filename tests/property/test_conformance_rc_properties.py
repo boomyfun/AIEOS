@@ -143,6 +143,16 @@ class InvariantProperties(unittest.TestCase):
         self.assertNotEqual(rc06['inputs']['intent_current'], st['intent_versions'])
         self.assertEqual(rc06['expected']['decision'], ['REPLAN'])
 
+    def test_inv_007_only_rc_06_has_an_intent_that_is_not_current(self):
+        """In the fixture data, RC-06's intent_current is the only one that differs from the contract's intent_versions."""
+        differing = []
+        for name, data in files().items():
+            v = unwrap(data)
+            inputs = v['cases'][0]['inputs']
+            if inputs['intent_current'] != inputs['contract']['input_state']['intent_versions']:
+                differing.append(v['scenario'])
+        self.assertEqual(differing, ['RC-06'])
+
     def test_inv_008_in_the_fixture_data_no_input_holds_a_record_or_a_source_class(self):
         for name, data in files().items():
             keys = set(keys_anywhere(unwrap(data)['cases'][0]['inputs']))

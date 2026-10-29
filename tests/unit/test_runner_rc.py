@@ -305,6 +305,28 @@ class R2EntryAndPath(Isolated):
         self.assertEqual((result, reason), (conformance.NOT_RUN, 'the fixture path is not ' + rc_path('RC-01')))
         self.assertNotIn(conformance.module_path('RC-01'), asked)
 
+    def test_the_row_hash_comes_before_the_capability(self):
+        """With a wrong row hash and a wrong capability at once, the row hash is the reason given."""
+        files = with_rc(real_files(), ['RC-01'])
+        value = set_value(files)
+        entry = next(e for e in value['scenarios'] if e['id'] == 'RC-01')
+        files[conformance.module_path('RC-01')] = files[rc_path('RC-01')]
+        entry.update(capability='Verification', row_hash='0' * 64,
+                     fixture={'path': conformance.module_path('RC-01'), 'sha256': conformance.sha256(files[rc_path('RC-01')])})
+        put_set(files, value)
+        result, reason, asked = self.result(files, 'RC-01')
+        self.assertEqual((result, reason), (conformance.NOT_RUN, 'the row hash differs from the bound scenario file'))
+
+    def test_the_path_comes_before_the_capability(self):
+        """With a wrong fixture path and a wrong capability at once, the path is the reason given."""
+        files = with_rc(real_files(), ['RC-01'])
+        value = set_value(files)
+        next(e for e in value['scenarios'] if e['id'] == 'RC-01').update(capability='Verification')
+        put_set(files, value)
+        result, reason, asked = self.result(files, 'RC-01')
+        self.assertEqual((result, reason), (conformance.NOT_RUN, 'the fixture path is not ' + conformance.module_path('RC-01')))
+        self.assertNotIn(rc_path('RC-01'), asked)
+
     def test_an_unrouted_capability(self):
         files = real_files()
         value = set_value(files)
@@ -350,6 +372,13 @@ class R3EntryPoint(Isolated):
         self.failed(go(with_rc(real_files())))
         sys.meta_path[0] = Failing(ModuleNotFoundError('No module named x', name='x'))
         self.assertEqual(conformance.load_resume_check(ROOT), (None, conformance.FAILED))
+
+    def test_a_failing_import_with_the_file_present(self):
+        """A Resume Check file present at the root whose import fails is a failed load, not an absent one."""
+        sys.meta_path.insert(0, Failing(ImportError('broken')))
+        files = with_rc(real_files())
+        files[conformance.RESUME_CHECK_PATH] = b'# the Resume Check at the root\n'
+        self.failed(go(files))
 
     def test_a_module_from_elsewhere(self):
         self.install(check=stand_in(), file=str(ROOT / 'elsewhere' / 'resume_check.py'))
@@ -484,6 +513,15 @@ class R5CallAndComparison(Isolated):
             out['recorder'] = 'any wording at all'
             return out
         self.assertEqual(self.run_rc(stand_in(worded)), (conformance.PASS, ''))
+
+    def test_an_unknown_key_is_the_only_finding(self):
+        """An answer whose only fault is a key that check_decision does not know has exactly that one finding."""
+        inputs = rc_value(with_rc(real_files(), ['RC-01']), 'RC-01')['cases'][0]['inputs']
+        out = stand_in()(inputs)
+        self.assertEqual(conformance.records.check_decision('decision.execution', out), [])
+        out['next_task_state'] = 'DONE'
+        self.assertEqual([f.rule for f in conformance.records.check_decision('decision.execution', out)],
+                         ['6.4:unknown_key'])
 
     def test_each_not_run_rule(self):
         def raises(inputs):

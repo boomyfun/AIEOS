@@ -448,6 +448,19 @@ class Ac2FormTest(unittest.TestCase):
         self.bad(lambda v: case(v)['expected'].pop('not_fixed'),
                  'expected is not exactly risk_not, profile_excludes and not_fixed')
 
+    def test_each_further_malformed_condition(self):
+        """The request, record and contract conditions that test_each_malformed_condition leaves out, each alone."""
+        case = lambda v: v['cases'][0]
+        self.bad(lambda v: case(v)['request'].update(retry_count={'limit': -1, 'used': 0}), 'the request retry_count is malformed')
+        self.bad(lambda v: case(v)['request'].update(intent_versions={'X': '1'}), 'the request intent_versions is malformed')
+        self.bad(lambda v: case(v)['request'].update(task_content_hash='0' * 63), 'the request task_content_hash is malformed')
+        self.bad(lambda v: case(v)['request'].update(extra=1), 'the request is not exactly the keys of an evaluation request')
+        self.bad(lambda v: case(v)['records'][0].update(gate='0'), 'a record gate is not G followed by digits')
+        self.bad(lambda v: case(v)['records'][0].update(outcome='ok'), 'a record outcome is not pass, fail or blocking')
+        self.bad(lambda v: case(v)['records'][0].update(intent_versions={'X': '1'}), 'a record intent_versions is malformed')
+        self.bad(lambda v: case(v)['records'][0].update(extra=1), 'a record is not exactly the keys of an observation record')
+        self.bad(lambda v: case(v)['values']['contract'].update(extra=1), 'values contract is malformed')
+
     def test_the_request_and_records_forms(self):
         case = self.value['cases'][0]
         self.assertEqual(request_problems(case['request']), [])
@@ -467,6 +480,7 @@ class Ac3FaithfulnessTest(unittest.TestCase):
         self.assertEqual(cells[0], 'RISK-01')
         self.assertEqual(cells[4], EXPECTED_CELL)
         self.assertEqual(cells[2], 'a change that matches no risk rule')
+        self.assertEqual(len(cells), 6)
 
     def test_expected_comes_only_from_the_cell(self):
         self.assertEqual(faithfulness_problems(self.value), [])
@@ -491,6 +505,16 @@ class Ac3FaithfulnessTest(unittest.TestCase):
             v['cases'][0]['expected'][key] = val
             self.assertIn(why, faithfulness_problems(v))
             self.assertIn(why, all_problems(wrap(v)))
+
+    def test_no_expected_element_names_a_value_of_the_case(self):
+        """No string of the request or the records appears in the expected element, so it does not depend on them."""
+        case = self.value['cases'][0]
+        req = case['request']
+        taken = [req['task_id'], req['task_content_hash'], req['evaluated_commit']] + sorted(req['intent_versions'].values())
+        taken += [r['record_id'] for r in case['records']]
+        text = canon(case['expected'])
+        for s in taken:
+            self.assertNotIn(s, text, s)
 
     def test_no_expected_element_depends_on_a_placeholder(self):
         exp = self.value['cases'][0]['expected']
@@ -582,6 +606,13 @@ class Ac5RulesTest(unittest.TestCase):
             v['cases'][0]['request']['changed_paths'] = [path]
             self.assertIn('a rule matches the changed path %s' % path, rules_problems(v, self.rules), path)
 
+    def test_an_article_scope_that_matches_breaks_the_given(self):
+        """An article whose scope meets a changed path is named by the rules check, for each changed path."""
+        for path in self.value['cases'][0]['values']['changed_paths']:
+            v = copy.deepcopy(self.value)
+            v['cases'][0]['values']['articles'] = [{'id': 'X', 'scope': ['**'], 'evidence_required': ['x']}]
+            self.assertIn("an article's scope matches the changed path %s" % path, rules_problems(v, self.rules), path)
+
     def test_the_matcher_follows_point_6(self):
         for pattern, path, want in (
                 ('docs/**', 'docs/a.md', True), ('docs/**', 'docs', False), ('docs/**', 'docs/x/y.md', True),
@@ -591,6 +622,13 @@ class Ac5RulesTest(unittest.TestCase):
                 ('docs/pre-genesis/CR-*.md', 'docs/pre-genesis/x/CR-001.md', False), ('CLAUDE.md', 'x/CLAUDE.md', True),
                 ('.gitignore', '.gitignore', True), ('src/**', 'unmatched/file.txt', False),
                 ('Docs/**', 'docs/a.md', False)):
+            self.assertEqual(matches(pattern, path), want, (pattern, path))
+
+    def test_the_three_readings_and_case(self):
+        """The readings of point 6 that the property module's second reading shares, and case, each pinned by a case."""
+        for pattern, path, want in (
+                ('a*.md', 'a.md', True), ('a/**/b', 'a/b', True), ('a/**', 'a/b', True), ('a/**', 'a', False),
+                ('*.MD', 'a.md', False), ('docs/**', 'DOCS/a.md', False), ('CLAUDE.md', 'x/claude.md', False)):
             self.assertEqual(matches(pattern, path), want, (pattern, path))
 
     def test_ill_formed_patterns_and_paths(self):

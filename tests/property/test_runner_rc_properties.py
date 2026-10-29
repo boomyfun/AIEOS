@@ -137,12 +137,15 @@ class Properties(Isolated):
             i = rng.randrange(len(data))
             data[i] = (data[i] + rng.randrange(1, 256)) % 256
             files[rc_path(sid)] = bytes(data)
-            if rng.random() < 0.5:
+            rehashed = rng.random() < 0.5
+            if rehashed:
                 value = conformance.unwrap(files[conformance.SET_FILE])
                 next(e for e in value['scenarios'] if e['id'] == sid)['fixture']['sha256'] = conformance.sha256(bytes(data))
                 put_set(files, value)
             r = go(files, check=stand_in())
             self.assertNotEqual(r.results[sid], conformance.PASS, (sid, i))
+            if not rehashed:
+                self.assertEqual(r.reasons[sid], "the fixture's SHA-256 differs from its set entry", (sid, i))
 
     def test_another_capability_never_passes(self):
         rng = random.Random(SEED + 1)
@@ -178,6 +181,24 @@ class Properties(Isolated):
                     self.assertEqual((r.results[sid], r.reasons[sid]),
                                      (conformance.NOT_RUN, 'case 1: the call returned no JSON object'))
 
+    def test_inv_005_a_returned_record_gives_its_exact_result(self):
+        """A returned execution record gives PASS when its decision is the fixture's, FAIL when it is another decision of
+        the list, and NOT_RUN with the finding reason when it is not a decision of the list."""
+        right = stand_in()
+        for pick in sorted(conformance.EXECUTION) + ['ACCEPT', 'continue', '']:
+            def check(inputs, pick=pick):
+                return dict(right(inputs), decision=pick)
+            r = go(base_files(), check=check)
+            for sid in RC_IDS:
+                wanted = conformance.unwrap(base_files()[rc_path(sid)])['cases'][0]['expected']['decision'][0]
+                if pick == wanted:
+                    want = (conformance.PASS, '')
+                elif pick in conformance.EXECUTION:
+                    want = (conformance.FAIL, 'not met: case 1: decision')
+                else:
+                    want = (conformance.NOT_RUN, 'case 1: the call returned a value with a check_decision finding')
+                self.assertEqual((r.results[sid], r.reasons[sid]), want, (sid, pick))
+
     def test_inv_006_with_no_resume_check_no_scenario_passes(self):
         r = go(base_files())
         for sid in RC_IDS:
@@ -193,6 +214,7 @@ class Properties(Isolated):
             r = go(files, check=stand_in(calls), asked=asked)
             task_id = conformance.unwrap(base_files()[rc_path(sid)])['cases'][0]['inputs']['task_id']
             self.assertEqual(r.reasons[sid], 'the fixture\'s SHA-256 differs from its set entry')
+            self.assertIn(rc_path(sid), asked, sid)
             self.assertEqual(calls.count(task_id), sum(
                 conformance.unwrap(files[rc_path(o)])['cases'][0]['inputs']['task_id'] == task_id
                 for o in RC_IDS if o != sid))

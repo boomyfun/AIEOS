@@ -203,6 +203,13 @@ class R2EntryPoint(Base):
         self.stub(self.module(path=ROOT / 'src/elsewhere/governor.py', derive_inputs=derive_none))
         self.assertIsNone(conformance.load_derive(ROOT))
 
+    def test_load_derive_a_file_that_is_not_a_string(self):
+        """A governor module whose __file__ is not a string gives None, even with a callable derive_inputs."""
+        m = self.module(derive_inputs=derive_none)
+        m.__file__ = None
+        self.stub(m)
+        self.assertIsNone(conformance.load_derive(ROOT))
+
     def test_load_derive_the_roots_function(self):
         self.stub(self.module(derive_inputs=derive_none))
         self.assertIs(conformance.load_derive(ROOT), derive_none)
