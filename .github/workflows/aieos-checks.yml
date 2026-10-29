@@ -1,4 +1,4 @@
-# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md), revision 12: the checks the first code task needs
+# AIEOS: the CI channel (Master Plan M0, docs/plan/master-plan.md), revision 13: the checks the first code task needs
 # (decision D-181, option K1), with the conformance runs of M2 (DM A62; decisions D-217 C5 and D-218). Runs on every push
 # to any branch and checks every pushed commit. It reads only: it writes nothing to the repository and uses no secret.
 # Records: this run's log, its step summary, its annotations and each step's conclusion. Its results are advisory (DM
@@ -102,6 +102,12 @@
 # its content's purpose; that the module only reads Git objects stays with that task's tests and review; the rules
 # stay an accident filter, not a containment; constitution INV-004 (only the core writes the project-state
 # directory) is unchanged, since the allowance lets the module name the directory, not write to it.
+# Revision 13 (decision D-3613; the decision agent's own decision under DM A66; DEF-0031) changes one message
+# only: the SEC-003 record step's text "(each needs the owner's own yes)" now says "(each needs the owner's own yes or,
+# for gov-AIEOS, its own decision of the decision agent under DM A66)", as constitution SEC-003 revision 4 and DM A66
+# state. It removes and loosens no check, grants no write access, uses no secret and changes no setting; the step still
+# only counts and prints, and exits 0. Limits: the other texts that keep .github/ changes with the owner stay open
+# (DEF-0031: the Master Plan, governor-spec and the governor's path rule).
 name: aieos-checks
 
 on:
@@ -401,7 +407,7 @@ jobs:
         run: |
           set -euo pipefail
           G=$(grep -cE '^[0-9a-f]{12} [A-Z][0-9]*[[:space:]]+\.github/' changed-paths.txt || true)
-          echo "SEC-003 changed paths under .github/ in the pushed commits: $G (each needs the owner's own yes)" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "SEC-003 changed paths under .github/ in the pushed commits: $G (each needs the owner's own yes or, for gov-AIEOS, its own decision of the decision agent under DM A66)" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: GOV-003 evaluator paths (reports an evaluator change)
         if: ${{ !cancelled() }}
