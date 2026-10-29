@@ -1,19 +1,21 @@
-# AIEOS: the native shadow ports (M8; docs/plan/m8-plan.md §2, §4, §5; decisions D-3336, D-3408 and the decision that
-# approves this text), revision 1. It runs, on GitHub's hosted Linux and Windows runners, the export of the frozen
-# fixtures into the job's temporary folder and prints the toolchain versions; then, only when the folder
+# AIEOS: the native shadow ports (M8; docs/plan/m8-plan.md §2, §4, §5; decisions D-3336, D-3408, D-3478 and the
+# decision that approves this text), revision 2. It runs, on GitHub's hosted Linux and Windows runners, the export of
+# the frozen fixtures into the job's temporary folder and prints the toolchain versions; then, only when the folder
 # native/go/governor exists (TASK-100), the governor-only reference export (tests/unit/test_export_governor.py, with
-# its --check against its pin) and the native governor's steps, with GOTOOLCHAIN=local, GOPROXY=off and
-# CGO_ENABLED=0: vet, the format check (gofmt's own exit kept), build, its run over the fixtures, the byte compare of
-# its output with the governor reference, one run with no argument that must exit non-zero and print nothing to
+# its --check against its pin) and the native governor's steps; and, only when the folder native/go/resume exists
+# (TASK-101), the Resume Check-only reference export (tests/unit/test_export_resume.py, with its --check against its
+# pin) and the native Resume Check's steps, in its own temporary folder. Each port's steps run with GOTOOLCHAIN=local,
+# GOPROXY=off and CGO_ENABLED=0: vet, the format check (gofmt's own exit kept), build, its run over the fixtures, the
+# byte compare of its output with its reference, one run with no argument that must exit non-zero and print nothing to
 # standard output, and its tests. Go is the runners' own, not downloaded; standard library only, no module download.
 # It reads only: it checks out the pushed commit from the repository's public address, built from the runner's server
 # and repository variables, with no credential; it uses no action, no secret and no token, makes no download, writes
 # nothing to the repository and calls no API. It runs on every push to main and to task branches, with no paths
-# filter, so that a change of the bootstrap governor, of records.py or of a fixture also reruns the shadow.
-# Its results are advisory: a native port decides nothing (Master Plan :84; m8-plan.md §2); they are this run's job
-# logs only, and no record of the governor and no step of the CI workflow aieos-checks.yml reads them. It is not a
-# trust-boundary measurement. Who decides a change to this file: the decision agent under DM A66, each change its own
-# decision; a change that grants write access, uses a secret or token, or changes a repository or security setting
+# filter, so that a change of the bootstrap governor, of records.py, of the Resume Check or of a fixture also reruns
+# the shadow. Its results are advisory: a native port decides nothing (Master Plan :84; m8-plan.md §2); they are this
+# run's job logs only, and no record of the governor and no step of the CI workflow aieos-checks.yml reads them. It is
+# not a trust-boundary measurement. Who decides a change to this file: the decision agent under DM A66, each change its
+# own decision; a change that grants write access, uses a secret or token, or changes a repository or security setting
 # stays the owner's.
 name: aieos-native
 
@@ -68,6 +70,23 @@ jobs:
           else
             echo "no port in native/go/governor"
           fi
+      - name: native resume check (only if native/go/resume exists)
+        run: |
+          if [ -d native/go/resume ]; then
+            export GOTOOLCHAIN=local GOPROXY=off CGO_ENABLED=0
+            $PY tests/unit/test_export_resume.py --root tests/conformance --check > "$RUNNER_TEMP/rc-reference.json"
+            wc -c "$RUNNER_TEMP/rc-reference.json"
+            mkdir "$RUNNER_TEMP/native-rc"
+            (cd native/go/resume && go vet . && out="$(gofmt -l .)" && test -z "$out" && go build -trimpath -o "$RUNNER_TEMP/native-rc/resume.exe" .)
+            "$RUNNER_TEMP/native-rc/resume.exe" "$RUNNER_TEMP/fixtures.json" > "$RUNNER_TEMP/native-rc.json"
+            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/rc-reference.json" "$RUNNER_TEMP/native-rc.json"
+            echo "native resume check: byte-equal to the resume check reference"
+            if "$RUNNER_TEMP/native-rc/resume.exe" > "$RUNNER_TEMP/native-rc-noarg.txt"; then echo "native resume check: exits 0 with no argument"; false; fi
+            test ! -s "$RUNNER_TEMP/native-rc-noarg.txt"
+            (cd native/go/resume && go test -count=1 -v . -args "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/rc-reference.json")
+          else
+            echo "no port in native/go/resume"
+          fi
 
   windows:
     runs-on: windows-latest
@@ -109,4 +128,21 @@ jobs:
             (cd native/go/governor && go test -count=1 -v . -args "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/governor-reference.json")
           else
             echo "no port in native/go/governor"
+          fi
+      - name: native resume check (only if native/go/resume exists)
+        run: |
+          if [ -d native/go/resume ]; then
+            export GOTOOLCHAIN=local GOPROXY=off CGO_ENABLED=0
+            $PY tests/unit/test_export_resume.py --root tests/conformance --check > "$RUNNER_TEMP/rc-reference.json"
+            wc -c "$RUNNER_TEMP/rc-reference.json"
+            mkdir "$RUNNER_TEMP/native-rc"
+            (cd native/go/resume && go vet . && out="$(gofmt -l .)" && test -z "$out" && go build -trimpath -o "$RUNNER_TEMP/native-rc/resume.exe" .)
+            "$RUNNER_TEMP/native-rc/resume.exe" "$RUNNER_TEMP/fixtures.json" > "$RUNNER_TEMP/native-rc.json"
+            $PY tests/unit/test_export_reference.py --compare "$RUNNER_TEMP/rc-reference.json" "$RUNNER_TEMP/native-rc.json"
+            echo "native resume check: byte-equal to the resume check reference"
+            if "$RUNNER_TEMP/native-rc/resume.exe" > "$RUNNER_TEMP/native-rc-noarg.txt"; then echo "native resume check: exits 0 with no argument"; false; fi
+            test ! -s "$RUNNER_TEMP/native-rc-noarg.txt"
+            (cd native/go/resume && go test -count=1 -v . -args "$RUNNER_TEMP/fixtures.json" "$RUNNER_TEMP/rc-reference.json")
+          else
+            echo "no port in native/go/resume"
           fi
