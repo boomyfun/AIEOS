@@ -53,11 +53,12 @@ abnormal ends beyond the lease's expiry are not handled (section 11 point 10); t
 the document (M2 of decision D-983, a stated departure from line 49's wording, with the same outcome: two runs give
 equal records); the commit is read from the document, so a replay shows the core's handling of a recorded commit,
 never that a runtime made it; a passing replay shows how the core handles a recorded session, never that any hook
-observes anything (C6 stays unmeasured); a run against the real writer's files is not tested in task TASK-051 (its
-tests write no file; N2 of decision D-984); one run at a time (the writer's limit); F-a (decision D-988): the
+observes anything (C6 stays unmeasured); a run against the real writer's files is not tested in task TASK-051 or
+task TASK-052 (their tests write no file; N2 of decision D-984); one run at a time (the writer's limit); F-a (decision D-988): the
 repository has no project-state directory yet, so N1 cannot tell a fresh scratch root from the self-build's own root
 before its first event, and a replay given that root would create a store and a log there; replay has no caller in
-task TASK-051, and a caller must give a fresh root; __init__.py is not changed, so __all__ does not name this module.
+tasks TASK-051 and TASK-052, and a caller must give a fresh root; __init__.py is not changed, so __all__ does not
+name this module.
 """
 
 import datetime

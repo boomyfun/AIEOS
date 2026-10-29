@@ -57,6 +57,16 @@ class R1Malformed(unittest.TestCase):
                 self.assertEqual(len(out), 1)
                 self.assertEqual(out[0]['kind'], 'malformed')
 
+    def test_more_malformed_forms(self):
+        cases = (('verification_plan', ['G0']), ('verification_plan', [{'gate': 'G0', 'check': ''}]),
+                 ('acceptance_criteria', [{'AC1': 3}]),
+                 ('verification_plan', [{'gate': 'G2', 'check': 'tests', 'args': ['AC1', 3]}]))
+        for key, value in cases:
+            c = contract()
+            c[key] = value
+            with self.subTest(key=key, value=value):
+                self.assertEqual(kinds(ac_coverage.check(c)), [('malformed', key)])
+
 
 class R2Uncovered(unittest.TestCase):
     """AC2: an AC no gate names is uncovered, in the order of acceptance_criteria."""
@@ -104,6 +114,15 @@ class R4Stray(unittest.TestCase):
                 {'gate': 'G3', 'check': 'constitution', 'args': ['X1', 'AC2', 'X3']}]
         self.assertEqual(kinds(ac_coverage.check(contract(plan=plan, const=()))),
                          [('stray_arg', 'X2'), ('stray_arg', 'X1'), ('stray_arg', 'X3')])
+
+    def test_the_stray_detail_names_its_gate(self):
+        want = 'X1 in the args of %s is neither an AC of the contract nor an article of its constitution list'
+        for gate in ('G2', 'G3'):
+            plan = [{'gate': 'G2', 'check': 'tests', 'args': ['AC1', 'AC2'] + (['X1'] if gate == 'G2' else [])},
+                    {'gate': 'G3', 'check': 'constitution', 'args': ['INV-001'] + (['X1'] if gate == 'G3' else [])}]
+            with self.subTest(gate=gate):
+                out = ac_coverage.check(contract(plan=plan))
+                self.assertEqual([f['detail'] for f in out], [want % gate])
 
 
 class R5Result(unittest.TestCase):
@@ -190,9 +209,16 @@ class R7Purity(unittest.TestCase):
         names = {n.func.id for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
         self.assertIn('open', names)
 
+    def test_no_refused_name_anywhere(self):
+        names = {n.id for n in ast.walk(self.tree()) if isinstance(n, ast.Name)}
+        for refused in ('open', 'exec', 'eval', 'compile', '__import__', 'input'):
+            self.assertNotIn(refused, names)
+        self.assertIn('open', {n.id for n in ast.walk(ast.parse('f = open\n')) if isinstance(n, ast.Name)})
+
     def test_docstring_states_the_limits(self):
         doc = ast.get_docstring(self.tree())
-        for s in ('DEF-0042 point 7', 'decides no acceptance', 'writes and appends nothing'):
+        for s in ('DEF-0042 point 7', 'decides no acceptance', 'writes and appends nothing', 'at gate level only',
+                  'no reader of contract files'):
             self.assertIn(s, doc)
 
 

@@ -85,6 +85,12 @@ class R1Malformed(unittest.TestCase):
         out = ac_tests.listing(T, contract(), {'tests/b.py': 'def (:\n', 'tests/a.py': 'def (:\n'}, {})
         self.assertEqual(kinds(out), [('malformed', 'tests/a.py')])
 
+    def test_a_path_form_before_any_source(self):
+        """TASK-022 AC1: every test path's form is checked before any source, so a bad path form at a late path is
+        reported before an earlier source that does not parse."""
+        out = ac_tests.listing(T, contract(), {'tests/a.py': 'def (:\n', 'tests/z\\x.py': ''}, {})
+        self.assertEqual(kinds(out), [('malformed', 'tests')])
+
 
 class R2Naming(unittest.TestCase):
 
@@ -132,6 +138,27 @@ class R2Naming(unittest.TestCase):
                 '            """TASK-099 AC1"""\n\n\ndef helper():\n    """TASK-099 AC1"""\n')
         out = run(tests={P: text})
         self.assertEqual(out['named'], {'AC1': [], 'AC2': [P + '::Case.test_n']})
+
+    def test_a_bare_criterion_beside_a_qualified_one_does_not_count(self):
+        """TASK-022 AC2: a bare criterion beside a qualified mention of the same task in one docstring does not count,
+        even in the task's own file; only the qualified one does."""
+        out = run(tests={P: src(fn('test_a', 'TASK-099 AC1 and AC2'))})
+        self.assertEqual(out['named'], {'AC1': [P + '::test_a'], 'AC2': []})
+        self.assertEqual(kinds(out), [('untested', 'AC2')])
+
+    def test_an_over_long_or_lower_case_task_id_is_not_one(self):
+        """TASK-022 AC2: "TASK-" with four digits or in lower case is not a task id, so a bare criterion beside it still
+        counts in the task's own file."""
+        out = run(tests={P: src(fn('test_a', 'TASK-0221 and AC1'), fn('test_b', 'task-099 and AC2'))})
+        self.assertEqual(out['named'], {'AC1': [P + '::test_a'], 'AC2': [P + '::test_b']})
+        self.assertEqual(out['findings'], [])
+
+    def test_a_write_set_path_in_another_form_matches_no_test(self):
+        """TASK-022 AC1 and TASK-022 AC2: a write-set path with backslash separators is not a malformed input, and it
+        matches no test, so a bare criterion in the test file counts for nobody."""
+        out = run(ws={T: ['tests\\unit\\test_x.py']})
+        self.assertEqual(out['named'], {'AC1': [], 'AC2': []})
+        self.assertEqual([f['kind'] for f in out['findings']], ['untested', 'untested'])
 
     def test_a_path_in_two_write_sets_is_ambiguous(self):
         """TASK-022 AC2: a bare mention in a file that two tasks' write sets list counts for neither, and the test is

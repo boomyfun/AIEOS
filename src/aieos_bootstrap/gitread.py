@@ -40,7 +40,8 @@ Readings (the implementer's, for the decision agent's ruling, not the contract's
   caller checks run's exit and error before parsing.
 
 Limits (TASK-024 AC10): git is trusted as the operating system finds it, by its name, not by a pinned path or hash
-(on Windows a git program placed in a place searched before PATH would be found first), with the caller's PATH taken
+(on Windows a git program placed in a place that process creation searches before PATH, such as the directory of the
+Python program or the current directory of the calling process, would be found first), with the caller's PATH taken
 as given once every entry of it is absolute; on Windows the program search does not use the PATH passed to git, so
 the refusal of an empty or relative PATH entry closes that route on POSIX only; the repository's own configuration
 is still read by git, and the fixed options override only the keys named above; GIT_NO_LAZY_FETCH is ignored by a

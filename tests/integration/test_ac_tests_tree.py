@@ -22,7 +22,7 @@ EXPECTED_AMBIGUOUS = 2
 _TOP = re.compile(r'^([a-z_]+):(.*)$')
 _AC = re.compile(r'^  - (AC[0-9]+[a-z]?): ')
 _GATE = re.compile(r'^  - \{gate: (G[0-9]+), check: ([a-z_]+)(?:, args: \[(.*)\])?\}$')
-_PATH = re.compile(r'^    - (\S+)$')
+_PATH = re.compile(r'^    - (\S+)(?:\s+#.*)?$')
 
 
 def read_contract(text):
@@ -79,6 +79,7 @@ class TheTree(unittest.TestCase):
                 'acceptance_criteria:\n  - AC1: x\nverification_plan:\n  - {gate: G2, check: tests, args: [AC1]}\n')
         values = read_contract(text)
         self.assertEqual(values['write_set'], ['src/a.py', 'tests/unit/test_a.py'])
+        self.assertEqual(read_contract('write_set:\n  paths:\n    - src/a.py  # a note\n')['write_set'], ['src/a.py'])
         self.assertEqual(values['verification_plan'], [{'gate': 'G2', 'check': 'tests', 'args': ['AC1']}])
         with self.assertRaises(ValueError):
             read_contract('verification_plan:\n  - gate G0\n')
@@ -106,7 +107,7 @@ class TheTree(unittest.TestCase):
 
     def test_this_task_has_no_finding(self):
         """TASK-022 AC10 and TASK-022 AC8: the module gives TASK-022 itself no finding, so each of its G2 criteria is named by
-        one of its own tests."""
+        a counting test (one of its own tests, or a qualified mention in any test file)."""
         out = self.out['TASK-022']
         self.assertEqual(out['findings'], [])
         self.assertEqual(ac_tests.listing_record('TASK-022', 'v1', out['findings'], 'test', 'deterministic_tool_local'),

@@ -5,8 +5,8 @@ every acceptance criterion maps to evidence).
 ``verification_plan`` and ``constitution``) and returns the findings of section 6 item 1: each AC id that no gate's
 ``args`` names ("uncovered"), an empty ``acceptance_criteria`` list ("no_acceptance_criteria"), and each ``args``
 entry that is neither an AC id of the contract nor an article id of its own ``constitution`` list ("stray_arg"; the
-article allowance is a reading of the specification's proposed text, TASK-021 R1). A contract whose three fields are
-not in their forms gives one "malformed" finding and nothing else (fail closed).
+article allowance is a reading of the specification's proposed text, AC4's reading, decision D-516 R1). A contract
+whose three fields are not in their forms gives one "malformed" finding and nothing else (fail closed).
 
 ``coverage_record`` returns, when there are findings, the one record of specification 2 section 6.2 that section 6
 item 1 names: an observation with outcome blocking and blocking_kind other, one per contract version (specification 4
@@ -26,6 +26,7 @@ import re
 
 from aieos_bootstrap import records
 
+# The finding kinds, for readers; nothing in the module uses KINDS (decision D-520 F3).
 KINDS = ('malformed', 'no_acceptance_criteria', 'uncovered', 'stray_arg')
 SOURCE_CLASSES = ('deterministic_tool_local', 'deterministic_tool_external_ci')
 _AC = re.compile(r'AC[0-9]+[a-z]?')
@@ -112,7 +113,8 @@ def check(contract):
 
 def coverage_record(task_id, contract_version, findings, recorder, source_class):
     """The one blocking record for a contract version's findings, or None when there are none (TASK-021 AC6). It is
-    returned, never written. Raises ValueError for an argument out of its form."""
+    returned, never written. Raises ValueError for an argument out of its form. It does not examine the elements of
+    findings: any non-empty list gives the blocking record (fail closed)."""
     if not _full(_TASK, task_id):
         raise ValueError('task_id is not TASK- followed by digits')
     if not _full(_VERSION, contract_version):

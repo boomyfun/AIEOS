@@ -429,6 +429,29 @@ class TheCall(unittest.TestCase):
                          (EVALUATOR, scope_reconcile.CONSTITUTION_PATH, scope_reconcile.POLICY_PATH))
         self.assertEqual(i['non_task'], scope_drift.non_task_list(POLICY_TEXT))
 
+    def test_claims_gets_the_contracts_and_the_rules(self):
+        """TASK-034 AC5 and TASK-034 AC6: claims gets the write set of a contract whose bytes hash to the task's last
+        task.approved event, and the seven risk rules of the policy, in their order."""
+        repo, p, c = world(['src/x.py'], trailer='AIEOS-Task: TASK-090')
+        mem = Memory()
+        approve(mem, 'TASK-090', CONTRACT)
+        seen = []
+        orig = scope_drift.claims
+        try:
+            scope_drift.claims = lambda inputs: seen.append(inputs) or orig(inputs)
+            run(repo, c, mem, contracts={'TASK-090': {'contract_bytes': CONTRACT, 'write_set': ['src/x.py']}})
+        finally:
+            scope_drift.claims = orig
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(seen[0]['contracts'], {'TASK-090': ['src/x.py']})
+        self.assertEqual(seen[0]['risk_rules'], [
+            {'match': ['docs/**', '*.md'], 'class': 'low'}, {'match': ['src/**', 'tests/**'], 'class': 'medium'},
+            {'match': ['src/**', 'tests/**'], 'class': 'high'},
+            {'match': ['docs/plan/**', 'docs/WORKING-RECORDS.md'], 'class': 'high'},
+            {'match': ['**/contracts/**'], 'class': 'critical'},
+            {'match': ['docs/pre-genesis/**', 'docs/specs/**'], 'class': 'critical'},
+            {'match': ['.github/**'], 'class': 'critical'}])
+
 
 class TheAppend(unittest.TestCase):
     def test_appended_then_duplicate(self):
@@ -535,6 +558,9 @@ class Purity(unittest.TestCase):
         """TASK-034 AC11: the import check above finds an import that is not allowed (a negative control)."""
         tree = ast.parse('import os\n')
         self.assertEqual({a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}, {'os'})
+        allowed = {'datetime', 'hashlib', 're', 'aieos_bootstrap.gitread', 'aieos_bootstrap.records',
+                   'aieos_bootstrap.scope_drift', 'aieos_bootstrap.writer'}
+        self.assertNotIn('os', allowed)
 
 
 def tree_of(repo, cid):

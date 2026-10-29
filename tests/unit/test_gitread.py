@@ -211,6 +211,31 @@ class TheProcess(unittest.TestCase):
         self.assertEqual(len(s.calls), 1)
         self.assertIsNone(gitread.path_error(GOODPATH))
 
+    def test_the_checked_environment_is_the_one_passed(self):
+        """TASK-024 AC2 and TASK-024 AC12 (erratum E1): the PATH that is checked is the one of the mapping passed to git,
+        not a second read of the process environment."""
+        bad = {'PATH': 'bin', 'GIT_CONFIG_NOSYSTEM': '1'}
+        with mock.patch.dict(os.environ, {'PATH': GOODPATH}, clear=True):
+            with mock.patch.object(gitread, 'environment', return_value=bad):
+                r, s = call(FORMS[2], own_path=False)
+        self.assertEqual(s.calls, [])
+        self.assertEqual(r['error'], 'PATH has an empty or relative entry')
+        good = dict(gitread.environment(), PATH=GOODPATH)
+        with mock.patch.dict(os.environ, {'PATH': 'bin'}, clear=True):
+            with mock.patch.object(gitread, 'environment', return_value=good):
+                r, s = call(FORMS[2], own_path=False)
+        self.assertEqual(len(s.calls), 1)
+        self.assertIs(s.calls[0][1]['env'], good)
+
+    def test_more_path_entries(self):
+        """TASK-024 AC2 and TASK-024 AC12 (erratum E1): an empty entry between two absolute ones and a drive-relative
+        entry are refused on both platforms; a UNC entry is absolute on Windows and not on POSIX."""
+        refused = 'PATH has an empty or relative entry'
+        for path in (os.pathsep.join([str(ROOT), '', str(SRC)]), 'C:bin'):
+            self.assertEqual(gitread.path_error(path), refused, path)
+        unc = '\\\\server\\share\\bin'
+        self.assertEqual(gitread.path_error(unc), None if os.name == 'nt' else refused)
+
     def test_diff_tree_carries_its_closing_options(self):
         """TASK-024 AC1 and TASK-024 AC2: diff-tree's fixed form carries --no-ext-diff and --no-textconv, and the call
         carries --no-pager, core.pager=cat, core.fsmonitor=false, core.hooksPath and an empty diff.external."""
@@ -378,6 +403,26 @@ class SingleWrapper(unittest.TestCase):
                         or (isinstance(n, ast.ImportFrom) and (n.module or '').split('.')[0] == 'subprocess')):
                     found.append(p.relative_to(ROOT).as_posix())
         self.assertEqual(found, ['src/aieos_bootstrap/gitread.py'])
+
+    def test_the_three_modules_name_their_criteria(self):
+        """TASK-024 AC11 and TASK-024 AC12: every test function of the three test modules names "TASK-024 ACn" in its
+        own docstring and no other task's criterion in qualified form; the check finds a test without one."""
+        def problems(text):
+            out = []
+            for node in ast.parse(text).body:
+                for f in [node] + (list(node.body) if isinstance(node, ast.ClassDef) else []):
+                    if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef)) and f.name.startswith('test'):
+                        doc = ast.get_docstring(f) or ''
+                        if 'TASK-024 AC' not in doc:
+                            out.append(f.name)
+                        out.extend(f.name for part in doc.split('TASK-')[1:] if part[3:6] == ' AC' and part[:3] != '024')
+            return out
+        for group, name in (('unit', 'test_gitread.py'), ('property', 'test_gitread_properties.py'),
+                            ('integration', 'test_gitread_repo.py')):
+            text = (ROOT / 'tests' / group / name).read_bytes().decode('utf-8')
+            self.assertEqual(problems(text), [], name)
+        self.assertEqual(problems('def test_a():\n    pass\n'), ['test_a'])
+        self.assertEqual(problems('def test_b():\n    """TASK-024 AC1 and TASK-025 AC2"""\n'), ['test_b'])
 
     def test_docstring_and_package(self):
         """TASK-024 AC6 and TASK-024 AC10: the docstring names INV-001's single wrapper, the pinned list and the

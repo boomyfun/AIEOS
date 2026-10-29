@@ -5,6 +5,8 @@ and 781: every acceptance criterion maps to evidence, and a test declares the cr
 mapping from a path to its source text, and every task's write set, and returns, per AC id of the contract, the tests
 that name it, the tests whose naming is ambiguous, and one "untested" finding for each AC of the contract's G2 tests
 gate that no counting test names. A malformed input gives one "malformed" finding and nothing else (fail closed).
+The forms are checked in the order of the inputs: task_id, the contract, every test path's form, then each source in
+sorted path order, then the write sets; so a bad path form at a late path is reported before a bad source at an earlier one.
 
 The naming rules are the decision agent's reading (decision D-529 C2), not the specification's words, which say only
 that "A test names the ACs it stands for in its name or docstring":
@@ -15,6 +17,10 @@ that "A test names the ACs it stands for in its name or docstring":
 - A bare mention, an AC id in the docstring outside a qualified mention or a name part "ac<digits>", counts only when
   the test's name and docstring name no task id, and then only for a task whose write set lists the test's path; if
   the write sets of more than one task list it, it counts for none and the test is listed as ambiguous.
+- A task id is "TASK-" with exactly three digits, in upper case; "TASK-0221" or "task-022" is not one, so a bare mention
+  beside it still counts.
+- Write-set paths are checked only as non-empty strings; a path in another form, such as one with backslash separators,
+  matches no test.
 
 ``listing_record`` returns, when there are findings, the one record of specification 2 section 6.2 in section 6 item
 1's form: an observation with outcome blocking and blocking_kind other. It returns the record; it writes and appends

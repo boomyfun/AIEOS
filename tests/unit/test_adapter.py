@@ -365,6 +365,8 @@ class R9OwnTests(unittest.TestCase):
         self.assertEqual(named['051'], {'AC%d' % i for i in range(1, 13)})
         self.assertEqual(named['052'], {'AC%d' % i for i in range(1, 12)})
         self.assertEqual(re.findall(r'TASK-(?!051 |052 |053 )[0-9]+ AC[0-9]+', 'TASK-032 AC6'), ['TASK-032 AC6'])
+        self.assertEqual(re.findall(r'TASK-(?!051 |052 |053 )[0-9]+ AC[0-9]+', 'TASK-053 AC6 and TASK-0530 AC1'),
+                         ['TASK-0530 AC1'])
 
 
 if __name__ == '__main__':

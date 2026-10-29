@@ -119,6 +119,18 @@ class R1Arguments(unittest.TestCase):
         mem = Memory(held())
         self.assertEqual(call(mem)['result'], 'done')
 
+    def test_more_wrong_arguments_are_refused(self):
+        """TASK-052 AC1, TASK-052 AC5 and TASK-052 AC11: a time with an offset of seven hours, a token with an extra key
+        and a token with a negative counter each give "argument" and no call."""
+        plus7 = datetime.timezone(datetime.timedelta(hours=7))
+        wrong = [{'now': NOW.astimezone(plus7)}, {'fencing_token': {'epoch': 'e1', 'counter': 3, 'x': 1}},
+                 {'fencing_token': {'epoch': 'e1', 'counter': -1}}]
+        for over in wrong:
+            mem = Memory(held())
+            r = call(mem, **over)
+            self.assertEqual((r['result'], r['reason'], mem.calls), ('refused', 'argument', []), over)
+            self.assertTrue(r['findings'], over)
+
     def test_the_defaults_are_the_writer_functions_at_call_time(self):
         """TASK-052 AC1, TASK-052 AC11: append and release default, at call time, to writer.append_event and
         writer.release_lease_token."""
@@ -236,6 +248,22 @@ class R3Order(unittest.TestCase):
                          ('done', [], [EVENT, EVENT + '/decision'], None))
         self.assertEqual(mem.log, log)
 
+    def test_a_repeat_with_a_stale_token_while_another_lease_is_held(self):
+        """TASK-052 AC3 and TASK-052 AC11 (decision D-1000 E1): a repeat of a completed call, made while the task is
+        held by another token, gives "done", both event_ids under duplicate, nothing appended, released None with a
+        finding naming "token", and the other holder's lease stays."""
+        mem = Memory(held())
+        self.assertEqual(call(mem)['result'], 'done')
+        log = mem.log
+        other = held(token={'epoch': 'e1', 'counter': 4})
+        mem.lease = other
+        r = call(mem)
+        self.assertEqual((r['result'], r['appended'], r['duplicate'], r['released']),
+                         ('done', [], [EVENT, EVENT + '/decision'], None))
+        self.assertTrue(any('token' in f for f in r['findings']), r['findings'])
+        self.assertEqual(mem.log, log)
+        self.assertEqual(mem.lease, other)
+
 
 class R4Fence(unittest.TestCase):
     def test_a_session_not_holding_the_lease_is_refused_by_the_fence(self):
@@ -254,6 +282,14 @@ class R4Fence(unittest.TestCase):
             self.assertEqual([e['type'] for e in events], ['record.added'], lease)
             self.assertEqual(events[0]['payload']['evidence_type'], 'refused_submission')
             self.assertEqual(events[0]['payload']['refers_to'], EVENT)
+
+    def test_a_lower_counter_or_another_epoch_is_refused_by_the_fence(self):
+        """TASK-052 AC4 and TASK-052 AC11: a held lease with a lower counter and one with another epoch each give
+        "fence" at the first append, as a higher counter does."""
+        for lease in (held(token={'epoch': 'e1', 'counter': 2}), held(token={'epoch': 'e2', 'counter': 3})):
+            mem = Memory(lease)
+            r = call(mem)
+            self.assertEqual((r['result'], r['reason'], r['appended']), ('refused', 'fence', []), lease)
 
 
 class R5Result(unittest.TestCase):
@@ -290,6 +326,26 @@ class R6Adapter(unittest.TestCase):
                               release=fenced.release)
         self.assertEqual((f['result'], f['reason'], f['decision'], f['core']['reason']),
                          ('refused', 'core', None, 'fence'))
+
+    def test_adapter_violation_calls_record_once(self):
+        """TASK-052 AC6 and TASK-052 AC11: adapter.violation calls violation.record exactly once, with arguments that
+        bind to record's own signature."""
+        mem = Memory(held())
+        real = violation.record
+        seen = []
+
+        def counting(*args, **kwargs):
+            bound(real, args, kwargs)
+            seen.append(args)
+            return real(*args, **kwargs)
+        violation.record = counting
+        try:
+            r = adapter.violation(ROOT, TASK, dict(TOKEN), observation(), EVENT, REC, NOW, append=mem.append,
+                                  release=mem.release)
+        finally:
+            violation.record = real
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(r['result'], 'done')
 
 
 class R8Purity(unittest.TestCase):

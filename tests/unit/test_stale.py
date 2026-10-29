@@ -156,6 +156,13 @@ class RuleThree(unittest.TestCase):
             r = stale.stale(inputs(read_set=[{'entry': 'pkg.f', 'kind': kind, 'patterns': ['docs/a.md']}]))
             self.assertNotIn(('rule 3', 'pkg.f', 'not resolved by the caller'), unc(r))
 
+    def test_empty_patterns_uncovered_for_a_path_entry(self):
+        """TASK-023 AC3 and TASK-023 AC13: a path entry whose patterns are an empty list is uncovered and meets nothing,
+        as an interface or schema entry is, though its own text would match the changed path (decision D-551 Q2)."""
+        r = stale.stale(inputs(read_set=[{'entry': 'docs/a.md', 'kind': 'path', 'patterns': []}]))
+        self.assertEqual(r['stale']['commit'], [])
+        self.assertIn(('rule 3', 'docs/a.md', 'not resolved by the caller'), unc(r))
+
     def test_path_entry_matched_by_its_text(self):
         """TASK-023 AC3 and TASK-023 AC13: a path entry is matched by its own text, not by its patterns (decision D-548
         Q2)."""
@@ -306,8 +313,9 @@ class Module(unittest.TestCase):
         self.assertEqual(names, {'hashlib', 're', 'aieos_bootstrap.resume_check'})
 
     def test_no_file_clock_or_dynamic_calls(self):
-        """TASK-023 AC7 and TASK-023 AC9 and TASK-023 AC13: no open, write, clock, environment, exec, eval, compile,
-        __import__ or assert."""
+        """TASK-023 AC7 and TASK-023 AC9 and TASK-023 AC13: a fixed list of names: no call of open, exec, eval, compile
+        or __import__; no attribute write, write_text, write_bytes, time, now, environ, getenv or system; no assert;
+        neither importlib nor the project-state directory's name in the text (the import test covers the rest)."""
         text = SRC.read_bytes().decode('utf-8')
         tree = ast.parse(text)
         called = {n.func.id for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}

@@ -430,6 +430,7 @@ class R10Violation(unittest.TestCase):
         another class, and an observation recorded under another recorder are each refused "document" before any
         call; a document without violation is unchanged."""
         bad = [document(violation={'observation': {}, 'event_id': 'v'}),
+               document(submission=None, violation={'observation': {}, 'event_id': 'v'}),
                dict(violation_doc(), submission=document()['submission']),
                violation_doc(violation={'observation': dict(violation_doc()['violation']['observation'],
                                                             source_class='human_authority')}),
@@ -452,6 +453,9 @@ class R10Violation(unittest.TestCase):
         self.assertEqual([s['step'] for s in r['steps']], ['read_log', 'open_store', 'append_event', 'append_event',
                                                            'start', 'violation', 'end'])
         self.assertEqual(r['steps'][5]['result']['decision'], 'STOP: violation')
+        self.assertEqual(r['steps'][5]['result']['released']['fencing_token'], {'epoch': 'e-replay', 'counter': 1})
+        self.assertIsNone(r['steps'][6]['result']['released'])
+        self.assertIn('release: nothing released (none)', r['steps'][6]['result']['findings'])
         self.assertEqual(store.leases, {})
         events = [line.event for line in mem.lines()]
         types = [e['type'] for e in events]
@@ -487,6 +491,9 @@ class R10Violation(unittest.TestCase):
         r = replay.replay(violation_doc(), ROOT, fns)
         self.assertEqual((r['result'], r['reason'], r['steps'][-1]['step']), ('refused', 'violation', 'end'))
         self.assertIn('record.added', [line.event['type'] for line in mem.lines()])
+        refused = [line.event['payload'] for line in mem.lines()
+                   if line.event['type'] == 'record.added' and line.event['payload'].get('evidence_type') == 'refused_submission']
+        self.assertEqual([(p['refers_to'], p['subject']) for p in refused], [('violation-1', TASK)])
 
     def test_two_runs_with_a_violation_are_equal(self):
         """TASK-052 AC7, TASK-052 AC11: two replays with a violation over equal documents and equal empty stand-in

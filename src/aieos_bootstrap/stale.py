@@ -7,7 +7,8 @@ versions at the base's head, its effective read-set with each entry resolved by 
 accepted commit with their changed paths, the triggering base commit and the task's earlier evidence.stale events. It
 returns the stale record ids by reason, at most one evidence.stale event per reason with only the ids that no earlier
 event of the same reason listed, and the list of what it could not check. A malformed input gives an error and no
-event (fail closed).
+event (fail closed). The named keys are checked in the order of INPUT_KEYS and an unknown key only after they all
+pass (DEF-0050 F3); keys inside a record other than record_id, commit and intent_versions are ignored (F4).
 
 - Rule 2 (reason intent_version): a record with intent_versions is stale when, for an id it names, the current
   version differs. An id with no current version is uncovered only (a reading of the task contract, AC2).

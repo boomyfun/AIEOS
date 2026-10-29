@@ -135,14 +135,16 @@ class Properties(unittest.TestCase):
         rng = random.Random(3402)
         for k in range(100):
             repo, mem, p, c, ctree, paths, trailers, contracts = random_world(rng, k)
-            scope_reconcile.reconcile_scope('/s', '/r', c, {'contracts': contracts}, REC, NOW, read=repo,
-                                            read_log=mem.read_log, append=mem.append)
+            out = scope_reconcile.reconcile_scope('/s', '/r', c, {'contracts': contracts}, REC, NOW, read=repo,
+                                                  read_log=mem.read_log, append=mem.append)
+            self.assertEqual(out['result'], 'reconciled', out)
             self.assertNotIn(['cat-file', '-p', ctree], repo.reads)
 
     def test_a_second_run_appends_nothing_new(self):
         """TASK-034 AC15 and TASK-034 AC7: a rerun with the same facts appends nothing and reports the event as a
         duplicate."""
         rng = random.Random(3403)
+        total = 0
         for k in range(100):
             repo, mem, p, c, ctree, paths, trailers, contracts = random_world(rng, k)
             first = scope_reconcile.reconcile_scope('/s', '/r', c, {'contracts': contracts}, REC, NOW, read=repo,
@@ -152,6 +154,8 @@ class Properties(unittest.TestCase):
                                                      read_log=mem.read_log, append=mem.append)
             self.assertEqual(mem.log, log)
             self.assertEqual((second['appended'], second['duplicate']), ([], first['appended']))
+            total += len(first['appended'])
+        self.assertGreater(total, 0)
 
 
 class Naming(unittest.TestCase):

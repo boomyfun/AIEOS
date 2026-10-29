@@ -77,6 +77,22 @@ class Properties(unittest.TestCase):
                     self.assertEqual(records.check_record(r), [])
                     self.assertEqual((r['outcome'], r['blocking_kind']), ('blocking', 'other'))
 
+    def test_the_findings_equal_a_literal_oracle(self):
+        for seed in SEEDS:
+            rng = random.Random(seed)
+            for _ in range(ROUNDS):
+                c = random_contract(rng)
+                acs = [next(iter(i)) for i in c['acceptance_criteria']]
+                named = [a for g in c['verification_plan'] for a in g.get('args', [])]
+                want = [('no_acceptance_criteria', 'acceptance_criteria')] if not acs else []
+                want += [('uncovered', a) for a in acs if a not in named]
+                strays = []
+                for a in named:
+                    if a not in acs and a not in c['constitution'] and a not in strays:
+                        strays.append(a)
+                want += [('stray_arg', a) for a in strays]
+                self.assertEqual([(f['kind'], f['ref']) for f in ac_coverage.check(c)], want, (seed, c))
+
 
 if __name__ == '__main__':
     unittest.main()
