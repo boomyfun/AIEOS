@@ -783,7 +783,7 @@ class PretoolHookFiles(unittest.TestCase):
 class RunEndToEnd(unittest.TestCase):
     """TASK-098 AC6 (the init end-to-end test carried from TASK-095, t95x-S1 F3): init, import and run through cli.main
     over a temporary folder with the real writer and launcher, only the Git reader and the base read stood in. The
-    import leg runs on a Windows root only (import_task takes a Windows root only, TASK-097's limit)."""
+    import leg runs on a Windows or a POSIX root (import_task takes both since TASK-104; TASK-097's limit is closed)."""
 
     POLICY = ('## 3. The rules\n\n```yaml\nrisk_rules:\n'
               '  - match: { paths: ["docs/**", "*.md"] }\n    risk: low\n'
@@ -858,10 +858,9 @@ class RunEndToEnd(unittest.TestCase):
             claims = [x.event['payload']['subject'] for x in report.lines if x.event['type'] == 'record.added']
             self.assertEqual(claims, ['INT-001', 'INT-002'])
 
-    @unittest.skipIf(os.name != 'nt', "import_task takes a Windows root only (TASK-097's limit)")
     def test_init_import_then_run(self):
-        """TASK-098 AC6: on a Windows root, init, then import, then run: the three contract files match their
-        task.drafted hashes and the log passes check_log."""
+        """TASK-098 AC6: on a temporary root (Windows or POSIX), init, then import, then run: the contract files match
+        their task.drafted hashes and the log passes check_log."""
         with tempfile.TemporaryDirectory() as root:
             rc, out = self.call(root, ['init'])
             self.assertEqual(rc, 0, out)
@@ -871,6 +870,20 @@ class RunEndToEnd(unittest.TestCase):
                                        '--write', 'docs/a.md'])
             self.assertEqual(rc, 0, out)
             self.check_the_log_and_files(root, ['TASK-1', 'TASK-2'])
+
+    def test_the_same_intent_under_another_name(self):
+        """TASK-098 AC6: after init and a run of an intent by D-1, the same intent by D-2 under another task is
+        refused "intent" through the real writer: the tasks folder is unchanged and the log is byte-equal."""
+        with tempfile.TemporaryDirectory() as root:
+            self.init_and_runs(root)
+            tasks = os.path.join(root, writer.STATE_DIR, 'tasks')
+            before_files, before_log = sorted(os.listdir(tasks)), read(writer.log_path(root))
+            rc, out = self.call(root, ['run', 'TASK-4', 'a made-up intent', '--class', 'decision_agent', '--by', 'D-2',
+                                       '--write', 'docs/a.md'])
+            self.assertEqual(rc, 1, out)
+            self.assertIn('refused intent', out)
+            self.assertEqual(sorted(os.listdir(tasks)), before_files)
+            self.assertEqual(read(writer.log_path(root)), before_log)
 
     def test_run_with_no_layout(self):
         """TASK-098 AC6: run on a folder with no layout is refused "layout", with nothing appended and no

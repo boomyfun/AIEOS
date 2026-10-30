@@ -438,8 +438,8 @@ class TASK098AC1Runs(unittest.TestCase):
         refused one have exactly RUN_KEYS."""
         self.assertEqual(launcher.RUN_KEYS, ('result', 'reason', 'findings', 'intent_id', 'claim_id', 'kind', 'risk',
                                              'path', 'contract_hash', 'event_ids', 'appends'))
-        self.assertEqual(launcher.RUN_REASONS, ('argument', 'clock', 'head', 'log', 'exists', 'layout', 'write',
-                                                'append'))
+        self.assertEqual(launcher.RUN_REASONS, ('argument', 'clock', 'head', 'log', 'exists', 'intent', 'layout',
+                                                'write', 'append'))
         self.assertEqual(launcher.RUN_KINDS, ('single', 'drafting'))
         self.assertEqual(launcher.RUN_RECORDER, 'aieos cli run')
         for out in (go(World()), go(World(), task='x')):
@@ -640,6 +640,96 @@ class TASK098AC2Refusals(unittest.TestCase):
                  if isinstance(x, ast.Constant) and isinstance(x.value, str)]
         self.assertEqual([t for t in texts if writer.STATE_DIR in t.lower()], [])
         self.assertIn('STATE_DIR', {x.attr for n in mine for x in ast.walk(n) if isinstance(x, ast.Attribute)})
+
+
+def log_with(*events):
+    """The log bytes of a Log() holding one more line per (payload, event_id): decided by eventlog.append."""
+    log = Log()
+    for payload, event_id in events:
+        r = eventlog.append(log.data, 'record.added', payload, event_id, NOW)
+        assert r.result == 'appended', r
+        log.data += r.line
+    return log
+
+
+class TASK098AC2IntentRefusals(unittest.TestCase):
+    def refused(self, out, reason):
+        self.assertEqual((out['result'], out['reason']), ('refused', reason), out)
+        return out['findings']
+
+    def test_the_same_intent_under_another_name(self):
+        """TASK-098 AC2: the same intent under another name, whose claim the append would answer "conflict", is refused
+        with "intent" before write_contract: nothing is written and nothing is appended."""
+        w = World()
+        self.assertEqual(go(w, source_class='decision_agent', who='D-1')['result'], 'done')
+        calls, data = list(w.calls), w.data
+        out = go(w, source_class='decision_agent', who='D-2', task='TASK-9')
+        found = self.refused(out, 'intent')
+        self.assertEqual(w.names()[len(calls):], ['read', 'read_log', 'read_base'])
+        self.assertEqual(len(written(w)), 1)
+        self.assertEqual(w.data, data)
+        self.assertEqual(len(found), 1)
+        self.assertIn('INT-001', found[0])
+        self.assertIn('decision D-1', found[0])
+        self.assertEqual((out['intent_id'], out['claim_id'], out['risk'], out['kind'], out['path'],
+                          out['contract_hash'], out['event_ids'], out['appends']),
+                         ('INT-001', record_id_of('decision_agent'), 'low', None, None, None, [], []))
+        self.assertEqual(tuple(out), launcher.RUN_KEYS)
+
+    def test_a_log_that_holds_the_claim_event_with_another_payload(self):
+        """TASK-098 AC2: a log whose line under the claim event id carries another payload (a stand-in log) is
+        refused with "intent", with nothing written; the same payload is a duplicate and the run goes on."""
+        other = dict(record_of(), recorder='someone else, as stated to aieos cli run (not checked)')
+        w = World(log=log_with((other, CEID)))
+        self.refused(go(w), 'intent')
+        self.assertEqual(written(w), [])
+        self.assertNotIn('append', w.names())
+        w = World(log=log_with((record_of(), CEID)))
+        out = go(w)
+        self.assertEqual((out['result'], out['appends']), ('done', ['duplicate', 'appended']))
+
+    def test_the_subject_alone_can_cause_it(self):
+        """TASK-098 AC2: a claim of the record_id under another event id with the subject INT-001 and, on the claim
+        event id, the same record_id with the subject INT-002: the first match gives INT-001, the line under the claim
+        event id differs, and the finding names the subject of that line, INT-002."""
+        log = Log().claim('INT-001')
+        r = eventlog.append(log.data, 'record.added', record_of('INT-002'), CEID, NOW)
+        log.data += r.line
+        w = World(log=log)
+        found = self.refused(go(w), 'intent')
+        self.assertIn('INT-002', found[0])
+        self.assertNotIn('INT-001', found[0])
+        self.assertEqual(written(w), [])
+        self.assertNotIn('append', w.names())
+
+    def test_a_raise_in_the_dry_run_gives_log(self):
+        """TASK-098 AC2: a raise inside the dry run of eventlog.append keeps the reason "log" (the step variable is
+        not changed): nothing is written and nothing is appended."""
+        w = World()
+        with mock.patch.object(launcher.eventlog, 'append', side_effect=RuntimeError('x')) as dry:
+            out = go(w)
+        found = self.refused(out, 'log')
+        self.assertEqual(dry.call_count, 1)
+        self.assertIn('log: a step raised RuntimeError', found)
+        self.assertEqual(written(w), [])
+        self.assertNotIn('append', w.names())
+
+    def test_the_same_record_id_under_another_event_id_goes_on(self):
+        """TASK-098 AC2: a claim of the same record_id under another event id and another recorder is not a
+        conflict: the run is done as before."""
+        other = dict(record_of('INT-001'), recorder='someone else, as stated to aieos cli run (not checked)')
+        log = Log().add('record.added', other, None)
+        out = go(World(log=log))
+        self.assertEqual((out['result'], out['appends']), ('done', ['appended', 'appended']))
+
+    def test_a_log_without_a_final_lf_goes_on(self):
+        """TASK-098 AC2: any other answer of the dry run lets the run go on as before: a log without a final LF is
+        answered "log" by eventlog.append, so the run writes the contract and stops at "append"."""
+        w = World()
+        w.data = w.data[:-1]
+        out = go(w)
+        self.refused(out, 'append')
+        self.assertEqual(len(written(w)), 1)
 
 
 class Stand:

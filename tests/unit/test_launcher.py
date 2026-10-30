@@ -695,14 +695,14 @@ class TASK086AC10Modules(Base):
     def test_the_import_sets(self):
         """TASK-086 AC10, as TASK-089 AC10, TASK-094 AC5, TASK-096 AC5 and TASK-098 AC5 change it: by ast,
         execution.py's import set is the one its tests pin; launcher.py imports only datetime, hashlib and re and
-        aieos_bootstrap's adapter, base_files, base_inputs, execution, gitread, handoff_file, read_set_record, records,
-        resume_check, resume_inputs, resume_log_inputs, scope_drift, scope_reconcile and writer."""
+        aieos_bootstrap's adapter, base_files, base_inputs, eventlog, execution, gitread, handoff_file, read_set_record,
+        records, resume_check, resume_inputs, resume_log_inputs, scope_drift, scope_reconcile and writer."""
         self.assertEqual(imports(tree_of('execution.py')),
                          {'datetime', 're', 'aieos_bootstrap.records', 'aieos_bootstrap.resume_check',
                           'aieos_bootstrap.writer'})
         self.assertEqual(imports(tree_of('launcher.py')),
                          {'datetime', 'hashlib', 're'} | {'aieos_bootstrap.' + m for m in (
-                             'adapter', 'base_files', 'base_inputs', 'execution', 'gitread', 'handoff_file',
+                             'adapter', 'base_files', 'base_inputs', 'eventlog', 'execution', 'gitread', 'handoff_file',
                              'read_set_record', 'records', 'resume_check', 'resume_inputs', 'resume_log_inputs',
                              'scope_drift', 'scope_reconcile', 'writer')})
 

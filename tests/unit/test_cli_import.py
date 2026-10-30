@@ -3,9 +3,10 @@
 stand-ins given as keyword arguments, over event logs built in memory with eventlog.append, the append stand-in bound
 to writer.append_event's signature; the command is run by mock.patch.object of launcher.import_task, restored after
 each test. No test writes a file, runs Git or starts a process; the only files read are the package's own
-launcher.py and cli.py and this file, with pathlib's read_bytes, for the ast checks; the root is a literal Windows
-path that names no folder (L-0032). Stand-in defaults are sentinels, never a value a case passes (L-0033). Each test
-names its criteria in its own docstring."""
+launcher.py and cli.py and this file, with pathlib's read_bytes, for the ast checks; the roots are literal paths
+that name no folder, one Windows and one POSIX (L-0032), besides the root forms that the AC2 tests pass to
+import_task with stand-in callees. Stand-in defaults are sentinels, never a value a case passes (L-0033). Each
+test names its criteria in its own docstring."""
 
 import ast
 import datetime
@@ -24,6 +25,7 @@ APPEND_SIGNATURE = inspect.signature(REAL_APPEND_EVENT)
 HERE = pathlib.Path(__file__).resolve()
 SRC = HERE.parents[2] / 'src' / 'aieos_bootstrap'
 ROOT = 'C:/import-root-97'
+POSIX_ROOT = '/import-root-104'
 NOW = datetime.datetime(2026, 10, 28, 9, 0, 0, tzinfo=datetime.timezone.utc)
 TASK = 'TASK-7'
 OTHER = 'TASK-1'
@@ -317,10 +319,20 @@ class TASK097AC2Refusals(unittest.TestCase):
             w = World()
             self.refused(imp(w, **case), 'argument')
             self.assertEqual(w.calls, [], case)
-        for root in ('relative/root', None, 3, ''):
+        for root in ('relative/root', None, 3, '', 'C:foo', '\\\\host\\share'):
             w = World()
             self.refused(launcher.import_task(root, TASK, lambda: NOW, **w.kw()), 'argument')
             self.assertEqual(w.calls, [], root)
+
+    def test_the_root_forms(self):
+        """TASK-097 AC2: the root is an absolute Windows or POSIX path, as run's is; '//host/share' and '/x' are
+        accepted as run accepts them, and a refused root gives the finding of the Windows or POSIX form."""
+        for root in (ROOT, POSIX_ROOT, '//host/share', '/x'):
+            out = launcher.import_task(root, TASK, lambda: NOW, **World().kw())
+            self.assertEqual((out['result'], out['reason']), ('done', None), (root, out))
+        w = World()
+        out = launcher.import_task('relative/root', TASK, lambda: NOW, **w.kw())
+        self.assertEqual(self.refused(out, 'argument'), ['argument: root is not an absolute Windows or POSIX path'])
 
     def test_the_clock(self):
         """TASK-097 AC2: a raising clock, a naive time and a time with a fraction of a second give "clock" with
@@ -597,8 +609,10 @@ class TASK097AC5Modules(unittest.TestCase):
                 self.assertNotIn('owner', call[6].lower())
 
     def test_this_test_file(self):
-        """TASK-097 AC5: this file imports no tempfile, sqlite3, shutil or subprocess, names no open, roots only the
-        literal 'C:/import-root-97', and has no one-argument .replace() and no .replace(target=...)."""
+        """TASK-097 AC5: this file imports no tempfile, sqlite3, shutil or subprocess, names no open, has no string
+        constant that starts with 'C:/' and is longer than it other than the root 'C:/import-root-97' (the POSIX root
+        '/import-root-104' and the root forms of the AC2 tests are not collected by this pin), and has no
+        one-argument .replace() and no .replace(target=...)."""
         tree = ast.parse(HERE.read_bytes().decode('utf-8'))
         imported = set()
         for n in ast.walk(tree):

@@ -160,7 +160,9 @@ writer.append_event, and refuses a task id that already has events in the log. R
 the proposals are a launched session's, and every launch is the owner's. base_inputs is not changed, so the contract
 it writes is not yet read by launch or approve. import_task reads the caller's clock once, an exception to "reads no
 clock" above, and writes through writer.write_contract and writer.append_event, the writer being the one module that
-opens a file.
+opens a file. Since task TASK-104 its root is an absolute Windows or POSIX path, as run_task's is, and TASK-097's limit
+(a Windows root only) is closed for import; end, launch_outside and approval_act keep their Windows-only root (a stated
+limit).
 
 run_task (task TASK-098; `aieos run`, specification 7 section 3 :30, specification 1 section 12) records the intent
 as a claim and makes and records one task; it returns a mapping with exactly RUN_KEYS and never raises an Exception.
@@ -171,7 +173,15 @@ single task from a fixed template, anything else a drafting task from another fi
 owner_kept_act true. It writes the contract through writer.write_contract before any
 append, then appends the intent's claim and task.drafted through writer.append_event; the claim names who stated the
 intent, as approval_act's records do, with decision_ref for decision_agent (r3). run_task reads the caller's
-clock once, an exception to "reads no clock" above.
+clock once, an exception to "reads no clock" above. Since task TASK-104 it refuses with reason "intent", before
+writer.write_contract, exactly when eventlog.append, given the log read at step "log", would answer "conflict" for the
+intent's claim event (a dry run of eventlog.append with the event the real append gives it); nothing is written and
+nothing is appended, and TASK-098's limit that the second statement of an intent under another name was refused only
+after the contract was written is closed. Stated limits of that check: the check and the write are not one step, the
+check sees the bytes read at step "log", so a race can still end in eventlog's "conflict" refusal after the write (seen
+as reason "append"); the Windows-only roots of end, launch_outside and approval_act stay; the reader of the tasks folder
+of the project-state directory (link 1 of DEF-0105) stays open; the second person's statement of the same intent is not
+recorded, because run_task takes the first claim of the record_id and the refused statement leaves no trace in the log.
 """
 
 import datetime
@@ -181,6 +191,7 @@ import re
 from aieos_bootstrap import adapter
 from aieos_bootstrap import base_files
 from aieos_bootstrap import base_inputs
+from aieos_bootstrap import eventlog
 from aieos_bootstrap import execution
 from aieos_bootstrap import gitread
 from aieos_bootstrap import handoff_file
@@ -1362,8 +1373,8 @@ def _import_result(result, reason=None, findings=(), path=None, contract_hash=No
 def _import_argument_findings(root, task_id, clock, callees):
     """Step 1: the arguments' findings."""
     found = []
-    if not (isinstance(root, str) and _WINDOWS_ROOT.fullmatch(root) is not None):
-        found.append('argument: root is not an absolute Windows path')
+    if not (isinstance(root, str) and _ROOT.fullmatch(root) is not None):
+        found.append('argument: root is not an absolute Windows or POSIX path')
     if not (isinstance(task_id, str) and _TASK.fullmatch(task_id) is not None):
         found.append('argument: task_id is not TASK- followed by digits')
     if not callable(clock):
@@ -1469,7 +1480,7 @@ def import_task(root, task_id, clock, read=None, read_log=None, write_contract=N
 
 RUN_KEYS = ('result', 'reason', 'findings', 'intent_id', 'claim_id', 'kind', 'risk', 'path', 'contract_hash',
             'event_ids', 'appends')
-RUN_REASONS = ('argument', 'clock', 'head', 'log', 'exists', 'layout', 'write', 'append')
+RUN_REASONS = ('argument', 'clock', 'head', 'log', 'exists', 'intent', 'layout', 'write', 'append')
 RUN_KINDS = ('single', 'drafting')
 RUN_RECORDER = 'aieos cli run'
 RUN_INTENT_MAX = 2000
@@ -1660,6 +1671,22 @@ def _run_intent(report, intent, source_class, who):
     return intent_id, record
 
 
+def _run_conflict(report, log, record, claim_event, moment):
+    """Step 7a (task TASK-104): the findings of a refusal with reason "intent", or None. A dry run of eventlog.append
+    over the bytes read at step "log" with the event the real claim append gives it (the type, the payload, the
+    event id and the time); the refusal is exactly an answer "refused" with reason "conflict". Any other answer
+    lets the run go on."""
+    answer = eventlog.append(log, 'record.added', record, claim_event, moment)
+    if not (answer.result == 'refused' and answer.reason == 'conflict'):
+        return None
+    event = next((line.event for line in report.lines if line.event.get('seq') == answer.seq), None)
+    payload = event.get('payload') if isinstance(event, dict) else None
+    payload = payload if isinstance(payload, dict) else {}
+    named = [v if isinstance(v, str) else 'not a string' for v in (payload.get('subject'), payload.get('recorder'))]
+    return ['intent: the log already holds, under this intent\'s claim event id, a claim that differs from this '
+            'one (intent %s, recorder %s); the subject alone can cause this' % tuple(named)]
+
+
 def _run_contract(kind, task_id, head, intent_id, write):
     """Step 8: the template of the kind, filled with the task id, the head, the intent id and the write set."""
     form = _RUN_SINGLE if kind == 'single' else _RUN_DRAFTING
@@ -1694,9 +1721,10 @@ def run_task(root, task_id, intent, source_class, who, write, clock, read=None, 
     mapping with exactly RUN_KEYS; it never raises an Exception. Its steps, each step's name being the reason of a
     refusal or a raise at it: argument (who as approval_act checks it, r3); clock; head (start's own reader, _head, 40
     lowercase hex); log (read_log, then records.check_log); exists (any event of the task in the log); the class at the
-    base (never a refusal); the intent's id and claim; the kind and its template; write (write_contract, before any
-    append, whose "exists" and "layout" pass through); append (the intent's claim with its record's recorder, then
-    task.drafted with RUN_RECORDER, no fencing token)."""
+    base (never a refusal); the intent's id and claim; intent (a dry run of eventlog.append: a claim that would answer
+    "conflict" is refused before anything is written, TASK-104); the kind and its template; write (write_contract,
+    before any append, whose "exists" and "layout" pass through); append (the intent's claim with its record's
+    recorder, then task.drafted with RUN_RECORDER, no fencing token)."""
     callees = (read, read_log, read_base, write_contract, append)
     step = 'argument'
     found = []
@@ -1723,10 +1751,15 @@ def run_task(root, task_id, intent, source_class, who, write, clock, read=None, 
         if not (isinstance(head, str) and _HEX40.fullmatch(head) is not None):
             raise _import_stop('head', ['head: not 40 lowercase hex characters'])
         step = 'log'
-        report = _run_log(read_log(root), task_id)
+        log_bytes = read_log(root)
+        report = _run_log(log_bytes, task_id)
         risk, found = _run_class(read_base, read, root, head, write)
         intent_id, record = _run_intent(report, intent, source_class, who)
         claim_id = record['record_id']
+        claim_event = hashlib.sha256('\n'.join(('run-event', 'record.added', claim_id)).encode('utf-8')).hexdigest()
+        clash = _run_conflict(report, log_bytes, record, claim_event, moment)
+        if clash is not None:
+            raise _import_stop('intent', clash)
         kind = 'single' if risk == 'low' else 'drafting'
         text = _run_contract(kind, task_id, head, intent_id, write)
         digest = hashlib.sha256(text.encode('utf-8')).hexdigest()
@@ -1734,7 +1767,6 @@ def run_task(root, task_id, intent, source_class, who, write, clock, read=None, 
         path = _import_write(write_contract, root, task_id, text)
         contract_hash = digest
         step = 'append'
-        claim_event = hashlib.sha256('\n'.join(('run-event', 'record.added', claim_id)).encode('utf-8')).hexdigest()
         event_ids.append(claim_event)
         appends.append(_run_append(append, root, 'record.added', record, claim_event, moment, record['recorder'], None,
                                    "append: the contract %s (%s) is written, the intent's claim is not" % (path,
