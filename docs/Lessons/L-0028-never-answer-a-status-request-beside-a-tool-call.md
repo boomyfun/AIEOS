@@ -89,6 +89,10 @@ Session 87e2584b, later part (2026-10-29; TASK-101):
   (two Reads), D-3506 (three Reads; then three Edits), D-3531 (two calls), D-3542 (two Edits), D-3554 (two Edits of
   the lessons draft, noted in D-3555), D-3556 (a checkpoint Edit with a Read; two Greps).
 
+Session 9dbe9c67 (2026-10-30; TASK-103):
+- Messages with text before a tool call, refused by the hook nine times (main transcript :2056, :3789, :3902, :4144, :4423, :4535, :6894, :7016 and :8250; the last a status line before a Grep after the local fast-forward); no decision ruled any of the nine resends: each call was resent alone at once, without a decision, and the nine are reported in D-3843.
+- Three read-only Bash calls sent in one message where a decision said "each step alone" (D-3841, reported in D-3842); the results were identical to single calls; disclosed.
+
 ## Why it happens
 The app's request reads as asking for words now, and the worker adds them to the call it is about to send.
 

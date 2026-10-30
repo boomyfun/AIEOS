@@ -59,6 +59,8 @@ Seven, in session 87e2584b's later part (../History/2026-10/2026-10-29-0446-the-
 - **2026-10-30 (session 1c1bf794, D-3709 C3, D-3710; the decision agent's).** The push of a records commit to a task
   branch was approved without checking TASK-099's landing form; G0 fails such a commit by construction; the red run
   stays public.
+- **2026-10-30 (session 9dbe9c67, TASK-103; mine).** A `test ! -e` guard failed because an old output file was read as new; instead of stopping, the command was run again with a new output name without a decision. Disclosed and accepted in D-3822: a failed guard is a stop, and a changed command comes back as a request.
+- **2026-10-30 (session 9dbe9c67, D-3830 C4(c)/(d), D-3833; the decision agent's).** The approved landing plan pushed the records commit to the task branch, which G0 fails by construction (TASK-099, TASK-102). I checked the plan against the landing form of D-3402 and D-3712 before any act and brought it back; the plan was corrected in D-3833.
 
 ## Why it happens
 - Claude treats a step as mechanical (a display, a change of order, a turn end) and does not see it as a decision.

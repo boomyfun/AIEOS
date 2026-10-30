@@ -81,6 +81,7 @@ One, in session 87e2584b's later part (../History/2026-10/2026-10-29-0446-the-la
   staged run; the owner's guard (DM A57 R3) allows only `timeout 110 python <file> < /dev/null`; the command was
   refused before it ran. The worker had not checked the condition against the guard; the script was split into stages
   of one allowed command each.
+- **2026-10-30 (session 9dbe9c67, TASK-103).** The owner's command guard refused `python -I` (the clean-folder form was used instead), a heredoc (the text was written with the Write tool and appended from the file) and a stray `python -c` fragment (removed, not retried); none was run as written.
 
 ## Why it happens
 - Git Bash heredocs interpret quotes and backslashes.
