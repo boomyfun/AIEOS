@@ -22,3 +22,4 @@ TASK-095, TASK-097, TASK-098; specification 7 §2, §3.
 
 ## Log
 - 2026-10-29: opened at M7's exit (session ea6ea0a3).
+- 2026-10-30: links 2 and 3 done by TASK-104 (accepted in D-3892; task commit f79656f1; the Linux leg of the end-to-end import test is the real test of the POSIX root); link 1 (the reader of the tasks folder) stays open.
