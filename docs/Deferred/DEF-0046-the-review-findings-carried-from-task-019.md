@@ -19,3 +19,4 @@ Nothing.
 
 ## Log
 - 2026-10-11: opened (decisions D-491, D-492; session d662611e).
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled F4 (tests/integration/test_runner_risk_run.py:166) and F5 (test_runner_risk_run.py:182, :195, :207); open F2 (the shared helper stays copied: AC4 withdrawn, D-3599 M2) and the carried R5 case. Status stays open.

@@ -1,6 +1,6 @@
 # DEF-0094: the session sentences left stale by TASK-077
 
-- Status: open
+- Status: done
 - Opened: 2026-10-23 (session 308d8b07; decision D-2061 and the acceptance decision of TASK-077, D-2089)
 - Deferred by: decision agent (A41, A51), D-2061 (the stale sentences left, each resumed at its module's next text change) and D-2089 (TASK-077's acceptance).
 - Decision group: A (a text change of each module and of tests/unit/test_t0.py, in a task of its own or with the module's next change).
@@ -23,3 +23,4 @@ TASK-077 (records.py's `session` key); DEF-0051 (what the key may count for).
 
 ## Log
 - 2026-10-23: opened (session 308d8b07; TASK-077's acceptance, D-2089).
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): STATUS DONE. All three sentences are corrected: src/aieos_bootstrap/t0.py:48-49 ("this module writes no ``session`` key, which records.py accepts since TASK-077"), src/aieos_bootstrap/claude_code.py:76-77 ("this module writes no ``session`` key; records.py accepts one since TASK-077"), src/aieos_bootstrap/claude_code_channel.py:18-20 (records.py accepts a session key since specification 2 revision 10), and the pin tests/unit/test_t0.py:359 now holds the corrected phrase (broken-copy proof in the acceptance record). The map's note that commit E cleared a clause in claude_code.py :77 is wrong (that clause still reads "records.py accepts one since TASK-077"); that clause is true since TASK-077 and is not one of this item's three sentences. Closed by TASK-102.

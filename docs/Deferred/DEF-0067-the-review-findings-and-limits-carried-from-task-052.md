@@ -17,3 +17,4 @@
 
 ## Log
 - 2026-10-16: opened (D-1010).
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled D3's test gap (tests/unit/test_violation.py:251), D5, D8, D16 (tests/unit/test_replay.py:433, :456-458, :496), D10 (test_violation.py:286), D12 (:330), D15 (:122), D14 (src/aieos_bootstrap/replay.py:56-60); D11 was done earlier; open D6, D7, D9 and, with no change shown, the AC8 limits, readings c1 to c3, D3's reading, D1, D4 and D13 (the map's "settled except D6, D7, D9" takes these in too). Status stays open.

@@ -24,3 +24,4 @@ TASK-017 accepted (done, D-458).
 ## Log
 - 2026-10-11: opened (decision files D-458, D-456 C4 and D-462; session 51321169).
 - 2026-10-29: point (e) is addressed by conformance-files.md revision 11 (section 10's `articles` row; DM F76; decisions D-3611 and the decision that approves the row), in the commit that adds DM F76; section 9's row `inputs` uses the same words for the Resume Check input `articles` and is not changed by revision 11, so it is noted here for the file's next revision; points (a) to (d) remain, so the item stays open.
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled (b) (tests/unit/test_runner_risk.py:206); also done though not in the map: (a) the smoke check (tests/property/test_runner_risk_properties.py:153); open (c), (d); (e) is addressed by conformance-files revision 11. Status stays open.

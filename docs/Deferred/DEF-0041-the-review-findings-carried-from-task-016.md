@@ -28,3 +28,4 @@ TASK-016 accepted (done, D-414).
 
 ## Log
 - 2026-10-11: opened (decision file D-414).
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled (c)'s docstring half, epoch reuse (src/aieos_bootstrap/writer.py:355-357), (f) (tests/unit/test_writer.py:215), (h) (test_writer.py:353, :377), (j) (writer.py:357-359), (b) by the docstring alternative that DEF-0041 :10 names (writer.py:267-270; the code move is not made), (e) in part (test_writer.py:445), (i) in part (writer.py:269-270, :539-541); open (a), (d), (e) the R8 scan (test_writer.py:441), (g) (tests/property/test_writer_properties.py:60-61), (i) WriteResult.refusal (writer.py:132) and grant_lease (writer.py:432); (c)'s requirement on the contract of the first task that calls the store (DEF-0041 :11) stays as written. Status stays open.

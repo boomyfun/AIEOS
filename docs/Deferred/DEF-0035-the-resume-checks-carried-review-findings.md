@@ -32,3 +32,4 @@ TASK-008 accepted (done, D-363).
 ## Log
 - 2026-10-10: opened (decision files D-361 and D-363).
 - 2026-10-24: R5 F4 closed as documentation only by TASK-085's records (decision D-2573); the item stays open for its other points (decision D-2682).
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled the test gaps R2 e and R5 F6 (tests/unit/test_resume_check.py:460-537, class R10CarriedGaps) and R1 3 (tests/integration/test_resume_check_fixtures.py:4-6); open R2 a to d (R2 d with R5 F5), R5 F2, F3, R1 2, R4, R3 (resume_check.py is forbidden). Status stays open.

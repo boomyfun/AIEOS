@@ -1,6 +1,6 @@
 # DEF-0098: TASK-083's departures from specification 6, for its next revision
 
-- Status: open
+- Status: done
 - Opened: 2026-10-24 (session 3797498a; TASK-083's contract, decisions D-2403 and D-2409)
 - Deferred by: decision agent (A41, A51), D-2409 (the departures of TASK-083's two MCP tools, carried for specification 6's next revision).
 - Decision group: A (a revision of specification 6, approved in its own decision; nothing here changes the specification).
@@ -27,3 +27,4 @@ TASK-083 (the two tools), TASK-082 (base_inputs), TASK-080 (context_compiler); s
 - 2026-10-24: opened (session 3797498a; decisions D-2403, D-2409).
 - 2026-10-29: specification 6 revision 8 writes the departures (a) to (e) into section 4, section 5 and section 8 (DM F74; decisions D-3608 and the decision that approves the row), in the commit that adds DM F74; specification 7 :56 and section 10 item 8 and the stale line of context_compiler.py :38 remain.
 - 2026-10-29: specification 7 revision 4 corrects its section 6 first and second bullets and section 10 item 8 (DM F75; decisions D-3610 and the decision that approves the row), in the commit that adds DM F75; the stale line of context_compiler.py :38 remains, so the item stays open.
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): STATUS DONE. Points (a) to (e) are written into specification 6 revision 8 (log of 2026-10-29), specification 7 :56 and section 10 item 8 are corrected by specification 7 revision 4 (log of 2026-10-29), and the stale line of context_compiler.py is now true: src/aieos_bootstrap/context_compiler.py:39-40 ("No reader of the inputs and no MCP tool are in this module ...: base_inputs reads the inputs, and mcp_server calls build_work_order"). Its close condition (DEF-0098 :21) is met. Closed by TASK-102 with the specification revisions.

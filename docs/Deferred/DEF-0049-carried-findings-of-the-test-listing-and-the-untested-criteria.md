@@ -52,3 +52,4 @@ Nothing.
 
 ## Log
 - 2026-10-11: opened (decisions D-530 and D-536; session a067ac68).
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled F1 (src/aieos_bootstrap/ac_tests.py:8-9; tests/unit/test_ac_tests.py:88), F3 (:142), F5 (tests/integration/test_ac_tests_tree.py:25, :82), F7 and F9 by stating the behaviour and pinning it, with no change to it (ac_tests.py:20-23; test_ac_tests.py:149, :156), F11 (test_ac_tests_tree.py:110); open F4; F2, F8 (ac_tests.py:184-186 is unchanged) and F10 were not shown changed, although the map says all but F4 are settled; the 180 criteria (data), the naming convention and DEF-0042 points 7 and 8 are unchanged; F6 and F12 need no action. Status stays open.

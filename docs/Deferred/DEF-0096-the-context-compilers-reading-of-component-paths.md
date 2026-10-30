@@ -22,3 +22,4 @@ TASK-080 (context_compiler.py at 9c41ab22); specification 3 :55-57; specificatio
 ## Log
 - 2026-10-24: opened (session 308d8b07; TASK-080's acceptance, D-2206).
 - 2026-10-29: specification 6 revision 8 (DM F74) does not take up this item; it stays open for a later revision of specification 6 or for the next task that changes context_compiler.py or resume_check's pattern reading.
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled the O1 pin test (tests/unit/test_context_compiler.py:391) and the _json_value docstring and Limits sentence (src/aieos_bootstrap/context_compiler.py:130-134, :37-39); open O1's decision (context_compiler.py:294-295), the file case, N1. Status stays open.

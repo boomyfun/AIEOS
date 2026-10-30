@@ -29,3 +29,4 @@ Nothing.
 
 ## Log
 - 2026-10-11: opened (decisions D-551 and D-552; session 953a7328).
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled F3 and F4 (src/aieos_bootstrap/stale.py:10-11), F8 (tests/unit/test_stale.py:316), the empty patterns for a path entry (test_stale.py:159); open F6, F7 (commit messages, cannot change), F9, F10, fix point 2 (the second commit's message), and the readings that wait for specification 4's next revision. Status stays open.

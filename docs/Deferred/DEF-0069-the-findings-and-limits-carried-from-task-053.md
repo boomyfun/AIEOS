@@ -17,3 +17,4 @@
 ## Log
 - 2026-10-16: opened (D-1025, D-1028 amendment 1).
 - 2026-10-16: TASK-054's part done (D-1038): accepted and landed on main by a fast-forward to 56675042, after the owner notice (D-1032), five way-2 reviews (D-1034, D-1035), fix H (D-1035, D-1036) and the decision agent's review (D-1037); D1 closed for blocking records; its carried gap for 'fail' records in DEF-0070. The item stays open for TASK-053's carried findings D4, D6, D9, D10 and its limits.
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled D6 (tests/unit/test_adapter.py:368-369); open D4, D9, D10 and TASK-053's AC7 limits. Status stays open.

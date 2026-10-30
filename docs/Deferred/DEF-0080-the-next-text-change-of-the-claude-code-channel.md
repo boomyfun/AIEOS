@@ -18,3 +18,4 @@ TASK-063's module (src/aieos_bootstrap/claude_code_channel.py) was accepted with
 
 ## Log
 - 2026-10-18: opened (session dc541296; D-1276).
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled the session sentence, the AC5 reading, the hook_result statement and the subclass note (src/aieos_bootstrap/claude_code_channel.py:18-20, :51-55, :61-62, :87-88) and, though not in the map, two untested points (tests/unit/test_claude_code_channel.py:201; tests/property/test_claude_code_channel_properties.py:98); open the single-branch broken copies for the backslash, leading-slash and empty-text checks of the path test (a comment only, claude_code_channel.py:204) and the contract-header point (under docs/, outside the write set). Status stays open.

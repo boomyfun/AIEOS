@@ -23,3 +23,4 @@ TASK-014 accepted (done, D-386).
 
 ## Log
 - 2026-10-10: opened (decision file D-386).
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled the path-rule isolation (tests/unit/test_conformance_files.py:658), the comment in tests/integration/test_conformance_set.py:379, the module docstring and two renames of tests/integration/test_conformance_rc_set.py (:3, :106, :154); open: the base case 'a fixture path' (tests/unit/test_conformance_files.py:624) still does not isolate the path rule; the recorded-only commit-message point is unchanged. Status stays open.

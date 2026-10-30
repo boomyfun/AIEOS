@@ -29,3 +29,4 @@ TASK-007 accepted (D-328) and on `main`.
 ## Log
 - 2026-10-10: opened (decision files D-327 and D-328).
 - 2026-10-11: F-a and F-b resolved and F-d's tests added by TASK-015 (accepted, decision file D-405; c2c9196e on `main`); F-c, F-e, F-f, F-h and F-i stay open. ../History/2026-10/2026-10-11-0121-decision-files-d388-d398-and-task-015.md
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled F-c (src/aieos_bootstrap/eventlog.py:188-189), F-e (tests/unit/test_eventlog.py:422-437), F-f (eventlog.py:186-187, :216-217), F-i (test_eventlog.py:192); F-h (noted) stays open, as DEF-0032 :31 lists it; F-g and R2 F2 are lines in DEF-0024. Status stays open.

@@ -21,3 +21,4 @@ DEF-0030 (the core's caller).
 
 ## Log
 - 2026-10-12 (session 6f7d6716): opened. TASK-024 accepted at 057cc530 and on `main` (decision D-584; records 62f1d1b3, D-585). ../History/2026-10/2026-10-12-0048-the-git-reader-accepted-and-on-main.md
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled G2 (src/aieos_bootstrap/gitread.py:43-44), G3 (tests/unit/test_gitread.py:214), G5 in part (test_gitread.py:230), and, though not in the map, a naming test for F13 (test_gitread.py:407); open G4, the stale sentence "no caller exists yet" (gitread.py:51; startup.py and other modules now call gitread), G5's NUL entry and ":" case, E1, F6/G1, F8, F14 to F16, G7. Status stays open.

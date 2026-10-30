@@ -23,3 +23,4 @@ TASK-015 accepted (done, D-405).
 
 ## Log
 - 2026-10-11: opened (decision file D-405).
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled the rename, the no-task_id and other-lease-event cases, the full record in the matrix, the mis-indented line (tests/unit/test_eventlog.py:299), the docstring R1 to R7 (test_eventlog.py:1-3, :301, :311, :318, :385); open the duplicated True case (test_eventlog.py:264, :399; the map says :263, :398), the finding text (src/aieos_bootstrap/eventlog.py:227, pinned at test_eventlog.py:389) and the untested conflict without recorder (no diff line). Status stays open.

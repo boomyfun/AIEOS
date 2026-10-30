@@ -24,3 +24,4 @@ TASK-094, TASK-096, TASK-098.
 
 ## Log
 - 2026-10-29: opened at M7's exit (session ea6ea0a3).
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled launch_outside named (src/aieos_bootstrap/launcher.py:120-121) and cli.py:3 revision; open the lowercased-form sentence (launcher.py:169), the specification 4 :61 point, the markers. Status stays open.

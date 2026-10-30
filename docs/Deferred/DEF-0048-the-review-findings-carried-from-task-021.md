@@ -30,3 +30,4 @@ Nothing.
 
 ## Log
 - 2026-10-11: opened (decisions D-516 and D-520; session a447d091).
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled F1 (tests/unit/test_ac_coverage.py:212-216), F2 in part (a literal-oracle property added, tests/property/test_ac_coverage_properties.py:80; no change to the key-order property is shown), F3 (src/aieos_bootstrap/ac_coverage.py:29), F5 (ac_coverage.py:116-117), F6 (test_ac_coverage.py:118), F9 (:60), F10 (ac_coverage.py:8), F11 in part (test_ac_coverage.py:220); open F11's no-caller limit (ac_coverage.py:20 says there is no caller in the core, while src/aieos_bootstrap/verification_records.py:120-121 calls it), reading R1 with F4 (for specification 4's next revision), TASK-004's AC12 (an uncovered criterion of an accepted contract), F7, F8, DEF-0042 point 7. Status stays open.

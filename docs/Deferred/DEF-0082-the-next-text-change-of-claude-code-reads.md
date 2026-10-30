@@ -27,3 +27,4 @@ TASK-065's module (src/aieos_bootstrap/claude_code_reads.py) was accepted with t
 
 ## Log
 - 2026-10-18: opened (session 0c786edd; D-1312).
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled R4-1/R3-3 (tests/unit/test_claude_code_reads.py:195), R4-2 (src/aieos_bootstrap/claude_code_reads.py:43-44), R4-3 (:27), R4-5 (:55, :128), R2-4 (:47), R2-2/R5-3 (test_claude_code_reads.py:58), R3-1 (:82), R3-4 (:170), R3-5 (:164; tests/property/test_claude_code_reads_properties.py:75, whose edit cannot fail); open R2-3, R3-6, R5-4, R3-2, R4-4, R5-2. Status stays open.

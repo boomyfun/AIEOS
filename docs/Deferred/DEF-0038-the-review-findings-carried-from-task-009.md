@@ -24,3 +24,4 @@ TASK-009 accepted (done, D-395).
 
 ## Log
 - 2026-10-11: opened (decision file D-395).
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled the argument failing cases (tests/unit/test_recovery.py:88-92), the property both ways (tests/property/test_recovery_properties.py:80, :101), the refused-append fence case (test_recovery.py:292), the docstring (test_recovery.py:1, :208) and recovery.py:8-10 in part (misplaced, miscased and twice-named keys); open: the malformed-trailer finding is still not named in that docstring; the recorded-only line is unchanged. Status stays open.

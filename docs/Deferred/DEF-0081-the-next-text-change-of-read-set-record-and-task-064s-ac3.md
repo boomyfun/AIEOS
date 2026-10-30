@@ -19,3 +19,4 @@ TASK-064's module (src/aieos_bootstrap/read_set_record.py) was accepted with the
 
 ## Log
 - 2026-10-18: opened (session 01f64acc; D-1296).
+- 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled the fence sentence, "from the holder of the token", adapter.submit named, state['passed'] stated (src/aieos_bootstrap/read_set_record.py:21-33, :57-59, :87-88, :191, :246), the integration test's note (tests/integration/test_read_set_record_store.py:6-7) and three untested points (tests/unit/test_read_set_record.py:65, :110, :198); open the contract-header points and TASK-064's AC3 text; the map's "point 15" matches no point of this item; broken copies for the list changed in place and observe's record-is-None check show no change. Status stays open.
