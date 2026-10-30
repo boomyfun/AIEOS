@@ -1,0 +1,164 @@
+# Task contract TASK-103, DRAFT r3 (= r1 with F5 of D-3758, the Edits of D-3794, the R2d Edits of D-3803 and the R2e Edits of D-3808 applied, these last not reviewed again; scratchpad only; not approved; not committed). The CI step of DEF-0107 point 7 with DEF-0109's
+# list fix. Fields and value forms follow specification 2 section 5.1 and TASK-102's contract. Drafted under D-3752 C2/C3/C4,
+# D-3755 and D-3756 (C1 to C5). Whether it is approved is recorded in the decision files, not here.
+# Ordering departure (D-3752 C4): the plan docs/plan/m8-plan.md section 7 puts DEF-0105, DEF-0101 and DEF-0095 next; this task
+# comes first because DEF-0107's decided policy (point 7) names it as the next build task and it gives every later tests/ task the
+# base-tests run automatically. After this task's acceptance the plan's order resumes with DEF-0105, then DEF-0101, then DEF-0095.
+# Point 5's gap stays (DEF-0107): src/aieos_bootstrap/** is an evaluator path, so a changed governor is judged by itself; this task
+# does not close it and is not claimed to close GOV-003.
+# Risk: critical. R9 (.github/**) is critical (risk-rules section 3). Change class: critical_cr; every path of the write set is a
+# GOV-003 evaluator path (the workflow lists '.github/**'). Profile for critical (assurance-model.md section 5):
+# unit_test, integration_test, deterministic_rule, static_security_analysis and ai_review (cross-model), plus functional
+# [property/fuzz] (met by property_test records) and architecture [human_review]. The cross-model entry is the pair of section 5:
+# a way-2 review by a Claude model other than the implementer's, checked by machine against every model that did task work
+# (L-0037, L-0038), and a separate review of the decision agent; a decision-agent review that meets human_review is not also that
+# half, so two decision-agent reviews are needed. Recorded per article (L-0034).
+# How G0 and SEC-003 treat the workflow path (confirmed by the reads recorded in D-3757; the refusal side is read, not run): G0 (aieos-checks.yml :158-320) accepts a
+# write_set path that matches and no forbidden pattern (aieos-checks.yml :312-318: forbidden first, then write_set); any other
+# .github path fails as "outside the write-set", so this contract needs no '.github/**' in forbidden and lists the other two
+# workflows by name only as a belt; SEC-003 (constitution, revision 4) puts a .github/ change to the
+# decision agent under DM A66, each change its own decision; the binding by SHA-256 comes from D-3752 C3, and the limits (no
+# write access, secret, token or setting, else the owner) from DM A66 and DEF-0107 point 7.
+# owner_kept_act: false is read as follows: spec 2 section 5.1 sets it for an act that A51 item (4) keeps. A51 (4) keeps "anything under
+# `.github/`"; DM A66 (in force by A67) says that for the AIEOS self-build the decision agent decides in the owner's place "adding,
+# changing or deleting files under `.github/`, including changes that remove or loosen a check, each change as its own decision",
+# and that every other act of A51 (4) stays the owner's. So this task's one act, a change of the workflow, is not owner-kept; each
+# change is bound by SHA-256 (D-3752 C3). A73 (2026-10-30) amends A51 (4) for other acts (settings, publishing, history rewrite)
+# and does not concern files under .github/;
+# the change grants no write access, uses no secret or token and changes no setting (AC5), which would stay the owner's; no other
+# owner-kept act is in the task. OPS-002 is listed and is met by this reading.
+# Applicable articles: as listed; INV-001 to INV-004 and GOV-002 are listed fail closed (their scopes, the core's and the bootstrap's
+# source trees, the project-state directory and the scenario files, are not changed: the forbidden list holds src/**, tests/**
+# and .aieos/**). Not applicable, with reasons: INV-005 to INV-008 and INV-010 (their scope is the decision engine,
+# the governor and their records; the task changes none of them, and the workflow's conformance steps stay byte-equal, AC5);
+# INV-009 (the event log is not touched); INV-011 (no auto-accept is set or used); GOV-001 (the concept file is not touched);
+# GOV-004 (no Genesis-bound artifact is touched); GOV-005 and GOV-006 (the task changes no decision-matrix row, record or
+# pre-genesis document; the records after acceptance fall under their own decisions); OPS-001 (scope: the repository's refs; the task changes no ref,
+# as in TASK-001 :11-12; its git capabilities forbid push, and every push, the task branch's included, is the worker's under its
+# own decision and carries OPS-001's push rule).
+# traces_to: DEF-0107 point 7 is the requirement and GOV-003 the article. No specification section governs the CI step itself:
+# governor-spec.md section 8 and assurance-model.md section 6, which GOV-003 cites, govern a change to the governor and
+# auto-accept, and this task makes neither.
+# DEF-0107's policy (D-3740) was reviewed once, before four small fixes that were not reviewed again, among them the wording of
+# point 7's handling rule (DEF-0107 log, 2026-10-30).
+# What the task does not do: no change under src/, tests/, native/, bench/, docs/ except docs/tasks/TASK-103.yaml (commit C) and the
+# records; no change of permissions (contents: read), no secret, no token, no setting, no third-party action; the base-tests step
+# is report-only (D-3755); tests the change adds are not judged by it. Commit C (docs/tasks/TASK-103.yaml) is made by the worker
+# under its own decision, outside the executor's write capability.
+task: TASK-103
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add to the CI workflow aieos-checks.yml (1) a check that fails when the two embedded EVALUATOR lists are not exactly two equal
+  lists, (2) a report-only step that runs the base commit's tests against the change in an overlay tree and prints one summary line
+  and the failing test names, and (3) the native, bench and Go governor and lockfile forms in both EVALUATOR lists with patterns
+  that contain neither "native/" nor "bench/"; every other step stays byte-equal.
+traces_to:
+  - docs/Deferred/DEF-0107-gov-003-in-the-self-build-the-change-s-own-tests.md#7
+  - docs/Deferred/DEF-0109-the-pinned-evaluator-list-and-the-native-and-bench-governor-files.md
+  - docs/pre-genesis/constitution.md#GOV-003
+input_state:
+  # base_commit is filled by script from refs/heads/main just before commit C; commit C has it as its one parent.
+  base_commit: f0dec7fe049e6bba34f13d9020342d147cee64e0
+  depends_on: [TASK-102]
+  intent_versions:
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/Deferred/DEF-0107-gov-003-in-the-self-build-the-change-s-own-tests.md: 6b0095a97879a1f3bfa9bb8f11004da2e8ebbb79c7e22ece84ee9c701d8f0382
+write_set:
+  paths:
+    - .github/workflows/aieos-checks.yml
+read_set:
+  paths:
+    - docs/Deferred/
+    - docs/plan/m8-plan.md
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - src/aieos_bootstrap/scope_reconcile.py
+    - tests/
+    - .github/workflows/
+    - native/
+    - bench/
+  interfaces: [aieos_bootstrap.scope_reconcile.evaluator_from_workflow]
+  schemas: []
+forbidden:
+  - .github/workflows/aieos-bench.yml
+  - .github/workflows/aieos-native.yml
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - bench/**
+  - native/**
+  - docs/**
+  - src/**
+  - tests/**
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      Scope. The task commits change only .github/workflows/aieos-checks.yml. The new file equals, byte for byte, the file built by the
+      approved scripts from the base (mk_wf103b.py, then mk_wf103c.py, then mk_wf103d.py, or a successor approved by the decision agent; the final output SHA-256, now d64a6206be6194c4faf70b14b593fa44df8c59dc6f99e793b4b500e69d62bc03, is to be bound in the A66 decision and checked by the executor); a diff
+      against the base shows only the two EVALUATOR list tails, the revision-14 header entry, the evaluator-lists-equal step before the deterministic_rule step, and the base-tests step as the job's last step (after static_security_analysis). Approvals: mk_wf103b.py under D-3757 C2 and D-3758, its output accepted in D-3759; mk_wf103c.py built under D-3784 C3 and run under D-3786, its output accepted as a draft for review in D-3787; mk_wf103d.py under D-3792 C1 and D-3793, its output accepted in D-3794. At acceptance the record brings the diff of the task commit against the base and the byte comparison of the file with the built file.
+  - AC2: >-
+      The lists. Both EVALUATOR literals are single plain quoted lists that scope_reconcile._LITERAL accepts and are identical; no
+      other line starts with "EVALUATOR = ["; the workflow holds exactly two "def parse_contract(text):" (test_task_contract_repo.py
+      :99-107). Raw output of evaluator_from_workflow(new workflow text) shows the full new list (the old entries plus the new ones),
+      and of the same function on the base text shows the old list. The earlier output of check103.py is a rehearsal on the wf103b text (nine entries added to 26); the acceptance run prints the full new list and both copies from the task commit. These scripts are run by the worker at acceptance, each under its own decision, not by the executor.
+  - AC3: >-
+      Coverage. A coverage table in the acceptance record names every file under native/ and bench/ and the pattern of the new lists
+      that matches it, computed by script with BOTH matchers (the workflow's own pattern_re of the gov003 step, and the governor's
+      aieos_bootstrap.governor.matches, which reads the list through scope_drift) over the Glob of native/** and bench/**; no pattern contains "native/" or "bench/"; tests/unit/test_native_isolation.py and
+      tests/unit/test_bench_isolation.py pass unchanged. The wider patterns '**/go/**', '**/rust/**', '**/ts/**' over-match (stricter
+      handling; stated, not computed). governor.matches lets ** match zero names, so a bare file named go, rust or ts matches the governor but not the workflow's regex (D-3784 C4).
+  - AC4: >-
+      The base-tests step. Its output is fixed: first the line "aieos_bootstrap imported from <path>" with the path under the merged tree (a git worktree of the commit under test; D-3756 C3 replaced the work/ tree of D-3755 C2 by it so that the base tests have git access; the local run under the scratchpad's merged tree is accepted in D-3774),
+      then one summary line "GOV-003 base tests: <N> run, <F> failed, tests from <base_commit>, src from <HEAD>", then the failing
+      test names; exit 0; "GOV-003 base tests: no task" when task.json names none; "GOV-003 base tests: no base commit in task.json" (exit 0) when task.json has no 40-hex base_commit; "GOV-003 base tests: setup failed: <worktree|archive|extract|import>"
+      (exit 0) when a setup command fails; "GOV-003 base tests: zero tests ran" when no test ran. The pass proof is the CI run of the task commit; the
+      broken-copy proof is a local run on a commit that is never pushed (its command a decision of its own) over a copy whose src changes one comparison in autonomy.py (14 of the 24 tests of the pattern fail in the run), showing F > 0 and
+      the failing names, the import path under the merged tree. Tests the change adds are not judged; this is stated in the output
+      comment and in the acceptance record. The acceptance evidence records, from the job data of the task-branch CI run (a read-only
+      query), the conclusion of every step and the base-tests step's summary line; a skipped blocking step means the run does not count. The two messages "no task" and "no base commit in task.json" are read from the step text, not run in the local simulation. Standard error lines (for example the traceback in the import case) may appear after or among the fixed lines; D-3774 rules them expected. The zero-tests line follows the summary line. An unexpected error in an unguarded command of the step ends it as failed without failing the job (continue-on-error); the exit 0 above holds for the guarded paths and the normal end. Every later acceptance of a task that changes tests/ brings this step's raw output and names each base-test failure in its departure (D-3755 C3; DEF-0107 point 4 (i)).
+  - AC5: >-
+      Nothing else changes. Every other step of the workflow is byte-equal to the base; permissions stay "contents: read"; the file
+      uses no secret, no token, no write access, no third-party action and changes no setting; the tests that read the workflow file (the isolation tests, test_task_contract_repo.py :99-107) pass; test_scope_reconcile.py :259 and :316 run the parser on a synthetic workflow text (WORKFLOW_TEXT, :32) and test_scope_drift.py :309 uses the workflow's path as a name only, so these three do not read the file and do not pin its list; they pass. The local suites ran on a clone with the wf103b build installed; the final file is tested only by the CI run of the task commit.
+  - AC6: >-
+      Honest limits. The acceptance record states: report-only (it is not a gate); same-lineage evidence; it does not judge tests the
+      change adds; point 5's gap; the native, bench and Go suites are not run by the step; the overlay tree is a git worktree whose
+      tests/ are the base's, so a base test that expects a clean status or its own HEAD may fail by construction (such names are
+      listed with the reason). Further stated limits (R1, R1b): a step timeout may show as a red step, or may make the job red, and loses
+      the report (no summary line); GitHub's behaviour here is not verified; the revision-14 header entry carries no decision number (it
+      does not exist before the A66 decision) and calls go.mod, go.sum and tsconfig.json lockfile and configuration forms; header line 3
+      ("writes nothing to the repository") does not mention the runner-side worktree; the counts come from logs the code under test can
+      write; a group missing from the base is not counted; a test that expects .git to be a directory may fail on the worktree's .git
+      file; the step timeout N = ceil(1.5 x S / 60 s) minutes = 4 comes from one sample (run 40973930972: S = 139 s); the local
+      simulation used python for python3, git -c core.longpaths=true, the unit group only and the pattern test_autonomy.py only, and the
+      full unmodified run is proven only by the CI on the task branch; the base-tests step is the job's last step so that a timeout
+      cannot skip a blocking step. The refusal side of G0 (every other path fails) is read from the script (D-3757), not run. Further limits (R2d, not counted): the step has no shell key, so the runner's default shell applies (R1b); the job's timeout-minutes 15 also covers the conformance steps, which have no timeouts of their own (R1b); the base's workflow-reading tests (test_bench_isolation, test_native_isolation, test_task_contract_repo) read the change's workflow, because .github is not replaced in the overlay (R1); coverage is by directory name, so later files such as bench/README.md are not covered (R1); the timing sample was one run on another branch whose G0 scope step failed, and it timed the change's tests, not the base's (R1b); the local overlay did not run the git-reading tests (test_task_contract_repo, test_scope_reconcile_log); one integration test was skipped in the local suite (skipped=1) and is not named. At acceptance a deferred item is opened for the question whether to make the step failing (D-3755 Q1). The local simulation commands (bash, python -m unittest discover) were run in the scratchpad under their own decisions and are not the executor's capabilities.
+  - AC7: >-
+      The CI evidence. On the aieos-checks and aieos-native runs of the accepted commit and of main after the records commit, every job
+      and step is successful, read by a read-only script by run id. The reads of GitHub job data (here and in AC4) are made by the worker with read-only commands, each its own decision, outside the task's capabilities. Pushes are made by the worker, each its own decision (the task's capabilities forbid push).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: critical
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1500k, wall_time: 8h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5]}
+  - {gate: G3, check: constitution, args: [AC6, AC7, INV-001, INV-002, INV-003, INV-004, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts AND the aieos-checks and aieos-native runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
