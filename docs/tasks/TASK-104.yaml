@@ -1,0 +1,244 @@
+# Task contract TASK-104 (draft r4 = r3 with D-3877's R1 only, in the scratchpad; not reviewed, not approved, not committed): links 2 and 3 of DEF-0105
+# (docs/Deferred/DEF-0105-the-zero-friction-paths-open-links.md): `aieos import` takes a POSIX root as well as a Windows root, and
+# `aieos run` refuses, BEFORE it writes the contract, an intent whose claim the later append would answer "conflict", with the new reason "intent".
+# Scope ruled in decision D-3867 (options 2a and 3a; the split of DEF-0105: link 1, the reader of `.aieos/tasks/`, waits for its own
+# specification decision with DEF-0095's question and then gets TASK-105). Fields and value forms follow specification 2 section 5.1
+# and TASK-102's contract. Place in the order (m8-plan section 7): DEF-0105 first, then DEF-0101, then DEF-0095. "Commit X" below is
+# the task's map commit, as in TASK-102.yaml :13: the commit whose map lists the scan's hits, the rename map and the exemptions.
+# Pin scan (D-3867 C1, reads only, at main 302d50b1): RUN_REASONS is defined at src/aieos_bootstrap/launcher.py :1472 and read by
+# src/aieos_bootstrap/cli.py :614 (`_intent_run_in_form`) and pinned exactly at tests/unit/test_cli_run.py :441-442 (the tuple); the
+# import root finding text is at launcher.py :1366 (the same text for end :482, launch_outside :848 and approval_act :1080, which
+# stay Windows-only) and no test file names it; _WINDOWS_ROOT is at :468, _ROOT at :208; the literal root of import's tests is
+# 'C:/import-root-97' (tests/unit/test_cli_import.py :26; its docstring at :600-601 names it, the pin is the assertion at :611-613, which
+# collects string constants that start with 'C:/' and are longer than 3 characters, so it is kept as it is and not widened, and it does not
+# see a POSIX literal); the end-to-end import leg is skipped off Windows at tests/integration/test_writer_files.py :861 and its docstring
+# at :863 says "on a Windows root"; run_task's docstring (launcher.py :1693-1699) lists the steps whose names are the reasons;
+# launcher.py's import set is pinned exactly by tests/unit/test_launcher.py :703-707 (docstring :696-699; its naming test :750-757 requires
+# "TASK-086 AC" in every test docstring of that file) and the new import of AC5 changes it. Also seen: tests/integration/test_writer_files.py
+# :786 is a class docstring that states TASK-097's limit ("import_task takes a Windows root only") and becomes false with AC1;
+# tests/unit/test_cli_import.py :6-7 says "the root is a literal Windows path" and becomes false as well (it is rewritten with :600-601);
+# tests/unit/test_cli_launch.py :174 (about launch_outside) and tests/unit/test_reconcile.py :744 (run_task as a forbidden name of
+# another module) were seen and need no change. launcher.py's module docstring and its function docstrings are pinned by tests
+# outside the write set (test_launcher_outside.py :600/:629, test_launcher_gone.py :422/:446, test_launcher_end.py :364,
+# test_cli_launch.py :515/:547, test_cli_init.py :349/:361, test_cli_approve.py :693-699) and by three inside it (test_launcher.py :731-757,
+# test_cli_run.py :844/:873, test_cli_import.py :625/:652), so a docstring edit keeps every phrase those tests pin and adds none that they
+# refuse. The first step of the work re-runs this scan and writes its hits in commit X's map. Existing tests were checked for logs that hold
+# the run's claim event id: the only ones are built by run_task itself with the same payload (test_cli_run.py :171, :304, :386-388, :418),
+# which eventlog answers "duplicate", so no existing case changes.
+# What the task does not do: it changes no specification (links 2 and 3 need none), no workflow, no DEF file (each DEF log line is
+# its own decision), no behaviour of end, launch_outside or approval_act (their Windows-only roots stay and are a stated limit),
+# nothing under native/, bench/, .github/, docs/ or tests/conformance/. It does not read `.aieos/tasks/` (link 1).
+# Risk: high. R2 matches src/** and tests/** (medium) and R3 reads them fail closed as high (risk-rules section 2 point 3); no
+# critical rule matches the write set (no docs/specs/**, no .github/**); the highest rule that matches is R3: high. Confirmed by
+# script over the base (risk_class104c.py, TASK-102's form) in the approval request.
+# Change class: critical_cr, because the CI's EVALUATOR list (aieos-checks.yml, 35 entries) holds src/aieos_bootstrap/** and the
+# tests folders, so every path of the write set is a GOV-003 evaluator path (read as D-3599 M3 reads it). Confirmed by script
+# (gov003_class104c.py) in the approval request.
+# Evidence profile (assurance-model.md section 5, gov-AIEOS, high): unit_test, integration_test, deterministic_rule,
+# static_security_analysis, ai_review (cross-model), plus the evidence_required of the applicable articles, recorded per article
+# from the start (L-0034), built at the approval request through records.check_record and the governor shadow. GOV-003 is
+# recorded as it falls (DEF-0107's policy, D-3740, applies: the task changes files under tests/): no "holds" is claimed for the
+# tests part; acceptance is a stated departure from the advisory governor, per task, in the form of D-3706/D-3707; the
+# compensating controls are the local run of the base's tests against the change's src and a review of the test diff by a
+# reviewer whose model differs from every model that did task work (L-0038), listed by machine.
+# Reviews: round 1 of this contract was by Sonnet 5.5 and Opus 5.5, read tools only (the Opus copy in the scratchpad is partial; see
+# review104_opus.SOURCE.txt); round 2 was by Haiku 5.5 (the owner's instruction and D-3873 C4); r3 was reviewed by the decision agent
+# against the list of D-3876 in D-3877 (no round 3 by a helper), and r4 is r3 with D-3877's R1 only; every later helper review in this session is on Haiku 5.5; each brief is brought
+# to the decision agent first; the decision agent's own review stands for the pair's half; the acceptance review is on a model that did
+# no task work.
+# Applicable articles: as listed; INV-001 to INV-004 and GOV-002 are listed fail closed (INV-003, the bootstrap source tree, is the
+# tree the task changes and its evidence is human_review; GOV-002 is met by the path rule that tests/conformance/** is forbidden). INV-009
+# (the event log) is listed too, because AC2 works on event-id idempotency; it is met by: eventlog.py unchanged, event ids unchanged
+# (AC3), and the new refusal appending nothing. Not applicable, with reasons: INV-005 to INV-008 and INV-010 (their scope is the
+# decision engine, the governor and their records; the task changes none of them); INV-011 (no auto-accept is set or used); GOV-001 (the
+# concept file is not touched); GOV-004 (no Genesis-bound artifact is touched); GOV-005 and GOV-006 (the task changes no decision-matrix
+# row, record or pre-genesis document; the records after acceptance fall under their own decisions); SEC-003 (no .github/ change);
+# OPS-001 (the task changes no ref: its git capabilities forbid push, and every push, the task branch's included, is the worker's
+# own decision and carries OPS-001's push rule).
+# owner_kept_act: false is read as follows: the task's acts are source and test edits in the write set; A51 item (4) keeps real use of
+# the zero-friction paths on E:/AIEOS or a real project (DEF-0105 :6) and settings, accounts and keys; this task never runs `import` or `run`
+# on E:/AIEOS or on any real project (the tests use stand-ins and a temporary folder), so no owner-kept act is in it; A73 (2026-10-30)
+# amends A51 item (4) for other acts (TASK-103.yaml :26) and is not relied on here. OPS-002 is listed and is met by this reading.
+# Stated limits (D-3867 C3, D-3874, D-3876): (1) the check of AC2 and the write are not one step, and the window runs from read_log
+# (step 4: the check sees the bytes read there) to the claim append, so a race can still end in eventlog's "conflict" refusal
+# (eventlog.py :180-184), seen as run reason "append" (launcher.py :1686-1687), after the write; the task does not claim that window
+# closed; (2) the roots of end, launch_outside and approval_act stay Windows-only; (3) link 1 stays open under DEF-0105; (4) the second
+# person's statement of the same intent is not recorded: run_task takes the first claim of the record_id (launcher.py :1649) and the
+# refused statement leaves no trace in the log.
+task: TASK-104
+contract_version: v1
+task_type: implementation
+objective: >-
+  Take up links 2 and 3 of DEF-0105 in src/aieos_bootstrap/launcher.py and its tests: import_task accepts an absolute Windows or
+  POSIX root as run_task does, and run_task refuses, before write_contract and with the reason "intent", exactly the case in which
+  eventlog.append (which the launcher reaches through writer.append_event), given the same log, would answer "conflict" for the
+  intent's claim event: nothing written, nothing appended; no other behaviour changes, no DEF file changes.
+traces_to:
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#3
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#10
+  - docs/specs/spec-01-state-and-event-model.md#12
+  - docs/plan/m8-plan.md#7
+  - docs/Deferred/DEF-0105-the-zero-friction-paths-open-links.md
+input_state:
+  # base_commit is filled by script from refs/heads/main just before commit C is made; commit C has it as its one parent.
+  base_commit: 302d50b1bcc2306a0e51c172d9c60f200e3d6f5c
+  depends_on: [TASK-097, TASK-098, TASK-103]
+  intent_versions:
+    # sha256 of each file at base_commit (pin104.py for the first five, git show for the sixth)
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 8739a44748fb9c15fafe8031a86f67dce56eeb5cb3b0b3e0db60681503c7f29a
+    docs/specs/spec-02-aieos-file-format.md: e7c427b06775069a43d5e6d317a61c1974e5be921aee08a581c1918572a37a61
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/Deferred/DEF-0105-the-zero-friction-paths-open-links.md: 1e7bf6e0ff9b1af7ba9e2c3a86f90740c509c67159712944df09c6e1ca6ace57
+write_set:
+  paths:
+    - src/aieos_bootstrap/launcher.py
+    - tests/unit/test_cli_import.py
+    - tests/unit/test_cli_run.py
+    - tests/unit/test_launcher.py
+    - tests/integration/test_writer_files.py
+read_set:
+  paths:
+    - docs/Deferred/
+    - docs/plan/m8-plan.md
+    - docs/specs/
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/tasks/TASK-097.yaml
+    - docs/tasks/TASK-098.yaml
+    - docs/tasks/TASK-103.yaml
+    - src/aieos_bootstrap/
+    - tests/
+    - .github/workflows/
+  interfaces: [aieos_bootstrap.launcher.import_task, aieos_bootstrap.launcher.run_task]
+  schemas: []
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - bench/**
+  - native/**
+  - docs/**
+  - tests/conformance/**
+  - tests/run_tests.py
+  - src/aieos_bootstrap/cli.py
+  - src/aieos_bootstrap/writer.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/task_contract.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      Link 2. launcher.import_task accepts an absolute Windows or POSIX root (launcher's _ROOT form, as run_task does, so '/x',
+      '//host/share', '..' segments and embedded newlines are accepted exactly as run_task accepts them; _check_root is the backstop);
+      its finding for another root reads "argument: root is not an absolute Windows or POSIX path"; the refused samples are tested
+      ('relative/root', '', None, 3, 'C:foo' and a backslash-UNC root); every other step of import_task is unchanged; end, launch_outside
+      and approval_act keep their Windows-only root and finding text (shown by their unchanged tests). The skipIf of the end-to-end
+      import leg in tests/integration/test_writer_files.py (:861) is removed and the docstrings at :786 (TASK-097's limit) and :863
+      ("on a Windows root") and at tests/unit/test_cli_import.py :6-7 and :600-601 are corrected, so the leg runs in CI on Linux (the
+      aieos-checks job is ubuntu-24.04; the aieos-native and aieos-bench windows jobs do not run the unit or integration tests) and, on
+      Windows, in the worker's own local run of the tests (the contract's shell capability), not as an owner act. The POSIX root case
+      added to tests/unit/test_cli_import.py uses its own literal '/import-root-104', a string constant that does not start with 'C:/',
+      so the pin at :611-613 (which stays as it is, collecting only 'C:/' constants, and does not see the POSIX literal) is neither
+      widened nor tripped; the rewritten docstring at :600-601 names both literals. New run tests in tests/unit/test_cli_run.py use that
+      file's ROOT.
+  - AC2: >-
+      Link 3. launcher.run_task refuses, before write_contract and with the new reason "intent", exactly when eventlog.append (through
+      writer.append_event), given the same log, would answer "conflict" for the intent's claim event. The check is a dry run of eventlog
+      itself, with no copy of its rule: after claim_id is set (launcher.py :1729) and before the kind is chosen (:1730), run_task calls
+      eventlog.append(log_bytes, 'record.added', record, claim_event, moment) with the same event type, payload, event id and time as the
+      real claim append (no task_id, fencing_token or corrects, which the real claim append leaves None too; lease, recorder and
+      record_id, which writer.append_event adds, are read by eventlog only for a fence refusal after the duplicate-or-conflict answer,
+      eventlog.py :153-156, :176-184, so they cannot change that answer), where log_bytes is the bytes read at step "log" (read_log's result is kept in a local
+      and passed on to _run_log) and claim_event is sha256 of '\n'.join(('run-event', 'record.added', claim_id)) (launcher.py :1737). Only
+      an answer that is a refusal with the reason "conflict" refuses the run with "intent"; the rule it reflects is eventlog.py :176-184
+      (the first line whose duplicate_of is None and whose event_id is the claim event id; its _same_text, eventlog.py :84-90, is None or
+      differs from the new event's). Nothing is written and nothing is appended. The finding names the intent id (the subject of the
+      conflicting line, found by the answer's seq in the report's lines; the new intent id is not shown) and the recorder of that line, each
+      shown only if it is a str (otherwise named as "not a string"), and states that the subject alone can cause the refusal (_run_intent
+      takes the first claim of the record_id by its INT-digits subject, launcher.py :1645-1651). The refused answer carries intent_id and
+      claim_id and risk as computed, kind None, path None, contract_hash None, event_ids [] and appends [], and the class findings as
+      every refusal does; read_base is called before the refusal. RUN_REASONS gains "intent" between "exists" and "layout" and the pin at
+      tests/unit/test_cli_run.py :441-442 is widened by that one name; run_task's docstring step list (launcher.py :1693-1699) gains the
+      step. cli.py is unchanged (it reads launcher.RUN_REASONS). The refusal is an explicit stop of the step "intent": the step variable that
+      gives the reason of a raise is not changed, so a raise inside _run_intent, _run_contract or the dry run keeps the reason "log" as
+      today.
+  - AC3: >-
+      The unchanged cases. The same intent under the same class and the same who still gives the claim "duplicate" and a new task;
+      a claim with the same record_id under another event id keeps today's behaviour (test_cli_run.py :522 stays "done"); a new intent
+      still gets the next INT id; the refusals "exists", "layout", "write" and "append" keep their reasons and order; the reason of a raise
+      inside _run_intent or _run_contract stays "log"; any other answer of the dry run (a duplicate, an append that would succeed, or
+      the reason "log" for a log without a final LF, which _run_log does not check) lets the run go on as today; E2 (write before claim) and
+      E4 (who does not enter the record_id) hold; event ids are unchanged.
+  - AC4: >-
+      Tests. Every existing test function that the task changes keeps its assertions or gets stronger ones, shown by a script that
+      compares, per test function, the ordered list of ast.dump of each assert statement and each self.assert* call at the base and at
+      the task commit (TASK-102's AC3 form), with exactly two exempted assertions whose value changes, both listed in commit X's map: the
+      RUN_REASONS equality at tests/unit/test_cli_run.py :441-442 (it gains 'intent') and the launcher import-set equality at
+      tests/unit/test_launcher.py :703-707 (it gains 'aieos_bootstrap.eventlog', and the docstring at :696-699 names eventlog, with no
+      TASK-104 id); an added test passes at the task commit and fails on a stated broken copy where the item says "pin"; no test is
+      deleted. The AC2 tests assert written(w) == [], no 'append' in w.names() and the reason "intent", and cover the subject-only case
+      (a log with line A: the claim's record_id with subject INT-001 under event id 'ev-1', and line B: the same record_id under the claim
+      event id with subject INT-002; _run_intent gives INT-001, eventlog conflicts on B, the finding names INT-002), the case of the same
+      record_id under another event id (still "done"), a stand-in case whose log bytes carry the claim event id with another payload, and
+      a log without a final LF (the run goes on); one real-writer case is added in tests/integration/test_writer_files.py: a real init, a
+      run under who A, then the same intent under who B gives "intent", the contract folder is unchanged and the log is byte-equal before
+      and after. A test added or changed in a module whose naming test requires a task's criteria in every test docstring
+      (tests/unit/test_cli_import.py requires "TASK-097 AC", TASK097AC6Docs :645-652; tests/unit/test_cli_run.py requires "TASK-098 AC",
+      TASK098AC6Docs :866-873; tests/unit/test_launcher.py requires "TASK-086 AC", :750-757) names the criteria that naming test requires
+      and no TASK-104 id (TASK-102's AC3 form); the link to TASK-104 is in commit X's map; tests/integration/test_writer_files.py has no
+      such naming test. New run tests use ROOT, not a new 'C:/' literal. Any new helper in launcher.py is named _run... or _import... so
+      the ast pins (test_cli_run.py :623-642, test_cli_import.py :424-444) cover it. A docstring edit in launcher.py keeps every phrase
+      that a test pins (test_launcher.py, test_launcher_outside.py, test_launcher_gone.py, test_launcher_end.py, test_cli_launch.py,
+      test_cli_init.py, test_cli_approve.py :693-699) and adds none that such a test refuses by assertNotIn; otherwise the point leaves.
+  - AC5: >-
+      Parity and purity (INV-001, INV-002, INV-004). The frozen fixtures and reference outputs, tests/conformance/ and the native ports
+      are unchanged; launcher.py adds exactly one import, `from aieos_bootstrap import eventlog`, and no other import, no exec, eval,
+      compile, __import__ or importlib, no process, no connection and no file write at import; eventlog.py is unchanged; the literal
+      ".aieos" appears nowhere in launcher.py, comments, docstrings and finding texts included (test_launcher.py :725); the phrases
+      'TASK-097', 'TASK-098' and 'not changed' stay (launcher.py :155-174); the deterministic rule, OPS-003, SEC-001, SEC-002 and
+      bandit steps report no finding at the task commits.
+  - AC6: >-
+      The stated limits. launcher's docstrings state the four limits of the header (the race, with the check seeing the bytes read at step
+      "log"; the Windows-only roots of end, launch_outside and approval_act; link 1 open under DEF-0105; the second statement of an intent
+      not recorded) without the literal ".aieos"; TASK-097's root limit and TASK-098's G2 limit are stated as closed.
+  - AC7: >-
+      The CI evidence. On the aieos-checks and aieos-native runs of the accepted commit every job and step is successful, read by run
+      id; the Linux leg of the import end-to-end test is the real test of the POSIX root through write_contract (a failure there
+      stops the task: the task does not widen); on main after the records commit likewise. Pushes and GitHub job-data reads are the
+      worker's own decisions outside the capabilities above (push is forbidden there).
+  - AC8: >-
+      The records (L-0034). The task's evidence records' forms are built and checked through records.check_record and a governor
+      shadow over a dry records list at the approval request, with their raw output: per-article records, the property or replay
+      records only where the constitution gives an article of the task that evidence, and the profile entries of risk high; the expected
+      result is NEEDS_REVIEW or NEEDS_REWORK at the GOV-003 row as in TASK-102/TASK-103, stated in the acceptance as a departure.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1500k, wall_time: 8h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5]}
+  - {gate: G3, check: constitution, args: [AC6, AC7, AC8, INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts AND the aieos-checks and aieos-native runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
