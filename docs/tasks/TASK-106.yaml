@@ -1,0 +1,262 @@
+# Task contract TASK-106 (draft r5 = r4p (r4 with pin106's hashes) with D-3934 C1 (the base_commit comment), 2026-10-31, session 85a45f06, in the scratchpad; not reviewed, not approved,
+# not committed): the base-tip check of DEF-0101
+# (docs/Deferred/DEF-0101-the-launchers-open-requirements-before-a-runtime-is-launched.md). Scope ruled in decisions D-3918 and D-3919
+# (one task; check 0 is closed for the launcher by the Resume Check at every start; the untouched-root check stays open) and D-3927
+# (base is passed to begin by keyword, always). The text it builds is specification 7 revision 5 (approved by D-3921; DM row F77; on main at
+# 2a6b7fb0, sha256 debb999e223aa4cec2f505d16f9b8e156bfc57eca9b15f7b1c5e1e14059c874c), section 5, last bullet, and section 10 items 7 and 8.
+# Fields and value forms follow specification 2 section 5.1 and TASK-104's contract (docs/tasks/TASK-104.yaml, r4).
+# Pin scan so far (D-3927; reads only, at main 2a6b7fb0; the first step of the work re-runs it and writes its hits in the map of commit X,
+# the commit whose map lists the scan's hits and the exemptions, as in TASK-104): launcher.py start :378 (nine positional parameters, then
+# the keyword callees), HEAD_ARGS :212, _head :273-284, START_KEYS :207, the reasons as strings in start :392-:473 (no tuple), the step
+# list in the module docstring :7-:44 (the steps from :10; step 3 is the HEAD read), launch_outside :967-:1040 (it calls begin with nine positional arguments at
+# :993-:994 and maps start's "not granted" to "not granted", any other non-granted answer to "refused", :1006-:1007), gitread.py form_error
+# :92-:93 (rev-parse takes HEAD or an object id only) and its docstring :7, cli.py :62-:64 and :469 (launcher.launch_outside(root, task,
+# clock, starter); cli.py is unchanged). Tests that this work touches or that would break: tests/unit/test_launcher.py (the Repo stand-in
+# :105-:120 answers any rev-parse name that is not HEAD_ARGS with exit 128 unless the name is an object it holds, so the new base read needs
+# a case in it; the order pins :369, :377, :384 list the callee names with one 'read' and become two; :326 pins ['expire', 'read'] for
+# a head failure and stays; :312-:315 pins the first recorded call as HEAD_ARGS and that every recorded call passes gitread.form_error,
+# so the new call passes it only after the gitread change), tests/integration/test_launcher_repo.py (:89 launcher.start(...); see the finished scan below), tests/unit/test_cli_launch.py (:82 `def begin(self, *args)` has no **kwargs and :136-:137 pins the exact
+# positional tuple of begin), tests/unit/test_gitread.py, tests/property/test_gitread_properties.py and tests/integration/test_gitread_repo.py
+# (the rev-parse form). The CI workflow is not touched: its pattern rule for gitread.py pins the import and use of subprocess, the keywords
+# of run, the list that begins with git and SUBCOMMANDS bound once (aieos-checks.yml :1524-:1626), not argument forms (spec 7 item 8,
+# revision 5; D-3920 read the workflow for any other check of gitread's argument forms and found none).
+# Pin scan, finished (D-3928 C1; reads only, at main 2a6b7fb0): (1)
+# tests/unit/test_launcher_gone.py needs no change: its stand-in read `ok_head` (:110-:111) answers any arguments with the head, so the base
+# read gets an equal answer, and its run() stops at the expiry; its pins of START_KEYS and _CALLEES (:131, :163-:167) are unchanged; it leaves
+# the write set. (2) tests/unit/test_startup.py and tests/property/test_startup_properties.py do not call launcher.start (the earlier count was
+# of the word HEAD); test_launcher_outside.py and test_launcher_end.py import launcher but call neither start nor launch_outside (launch_outside
+# is called only in tests/unit/test_cli_launch.py :111, :162, :184); none of them is touched. (3) tests/integration/test_launcher_repo.py does
+# not create a repository: its Intercept (:45-:56) answers the exact HEAD form with the fixed COMMIT and forwards every other read to gitread.run
+# on the real repository REPO; the new base read would be forwarded: locally, where refs/heads/main exists, it finds the real main tip, not COMMIT, and the test would
+# get "not granted" with the reason "base"; on CI, where the checkout is a detached head and main is fetched only into
+# refs/remotes/origin/main (aieos-checks.yml :163-:166), refs/heads/main is absent and the test would get "refused" with the reason "base";
+# either way Intercept must also answer the exact base form (rev-parse --verify --end-of-options refs/heads/main) with
+# COMMIT, and test_the_reads (:95-:104) pins the forwarded subcommands and that no HEAD form is forwarded, so it also stays true for the base
+# form; this file is in the write set; r0's remark that the test repository must have a branch named main was wrong. (4) No test, workflow or
+# document pins the text of gitread.form_error's refusal for rev-parse ("args are not the fixed form of rev-parse", gitread.py :101: only
+# gitread.py names it) or the docstring line gitread.py :7 beyond gitread's own tests (tests/unit/test_gitread.py 33 hits of form_error,
+# SUBCOMMANDS or gitread names; tests/property/test_gitread_properties.py 5; tests/integration/test_gitread_repo.py 9); no test names
+# "refs/heads". (5) The L-0037 reads of the governor (src/aieos_bootstrap/governor.py :264-:319): an entry of an ordinary type (unit_test,
+# integration_test, property_test, deterministic_rule, static_security_analysis) is satisfied by a CI-class record of that evidence type with
+# outcome pass; ai_review is satisfied only by a way-2 other_model_review (same_lineage_review class, reviewer model different from the
+# implementer's, with a decision_ref) while the delegation is in force; the cross-model entry at risk high or critical needs a pair, a passing
+# way-2 record and a passing decision_agent_review that stands for it; a failed candidate is listed and blocks.
+# What the task does not do: it changes no specification (revision 5 is its text), no workflow, no DEF file (each DEF log line is its own
+# decision), no hook, no adapter, no behaviour of end, end_outside or approval_act; it adds no option to `aieos launch` (cli.py passes
+# no base); it does not read the remote-tracking ref; it does not fetch; it does not close the untouched-root check or the hook's missing
+# check 0; max_risk stays the caller's; it launches no runtime.
+# Risk: high. R3 reads src/** and tests/** fail closed as high (risk-rules section 2 point 3); no critical rule matches the write set (no
+# docs/specs/**, no .github/**). Confirmed by script over the base in the approval request (risk_class106.py, TASK-104's form).
+# Change class: critical_cr, because the CI's EVALUATOR list (aieos-checks.yml) holds src/aieos_bootstrap/** and the tests folders, so every
+# path of the write set is a GOV-003 evaluator path. Confirmed by script (gov003_class106.py) in the approval request.
+# Evidence profile (assurance-model.md section 5, gov-AIEOS, high): unit_test, integration_test, property_test (the gitread name form),
+# deterministic_rule, static_security_analysis, ai_review (cross-model), plus the evidence_required of the applicable articles, recorded per
+# article from the start (L-0034) through records.check_record and the governor shadow in the approval request. GOV-003 is recorded as it falls
+# (DEF-0107's policy, D-3740): no "holds" is claimed for the tests part; acceptance is a stated per-task departure from the advisory governor
+# in the form of D-3706/D-3707 and D-3892; compensating controls: the local run of the base's tests against the change's src and a review of the
+# test diff by a reviewer whose model differs from every model that did task work (L-0038), listed by machine (L-0037: read the budget and the
+# checker's rules before the work).
+# Models: the main session writes the code and the tests; helpers read only; each brief goes to the decision agent first.
+# Applicable articles: INV-001 (gitread is INV-001's single process wrapper; a new name form inside its fixed rev-parse form is a change to it),
+# INV-002, INV-003, INV-004, INV-009 (the event log: unchanged; the new refusal appends nothing), GOV-002, GOV-003, SEC-001, SEC-002, OPS-002,
+# OPS-003. Not applicable, with reasons: INV-005 to INV-008 and INV-010 (decision engine, governor, records: not changed), INV-011 (no auto-accept),
+# GOV-001, GOV-004, GOV-005, GOV-006, SEC-003 (no .github/ change), OPS-001 (no ref change by the task: git forbids push).
+# owner_kept_act: false: the task's acts are source and test edits in the write set; it never runs `aieos launch` on E:/AIEOS or any real
+# project (the tests use stand-ins and read-only reads of this repository); A51 item (4) keeps launching with a runtime with the owner.
+# Stated limits: (1) the check reads the local ref refs/heads/<base> once, at step "base"; the ref can move after it (a race between the check
+# and the grant; AIEOS_BASE is the head read at step "head"); (2) the remote-tracking ref is not read: the launcher fetches nothing; (3) the
+# untouched-root and Git-state check of spec 5 :121 stays open (DEF-0101); (4) the hook still makes no check 0 (spec 5 :121) - closed for the
+# launcher by the Resume Check (resume_check.py :529-:530), as D-3918 C3 rules; the hook needs none (spec 7 revision 5 :49); (5) `aieos launch` passes the default base "main"; an
+# option for other bases is open (spec 7 section 10 item 7); (6) the strict name rule of spec 7 revision 5 is stricter than git's own, so a base that
+# git accepts but the rule refuses is refused at the argument check.
+task: TASK-106
+contract_version: v1
+task_type: implementation
+objective: >-
+  Build the base-tip check of specification 7 revision 5 in src/aieos_bootstrap/launcher.py and src/aieos_bootstrap/gitread.py and their tests:
+  start and launch_outside take a keyword base (default "main"); start refuses a base out of form at its argument check; after the HEAD read
+  and before the log read, start reads refs/heads/<base> once through gitread and gives "refused" with the reason "base" when it cannot be read
+  or is out of form, and "not granted" with the reason "base" when HEAD is not that tip; launch_outside always passes base to begin by
+  keyword; gitread's rev-parse form accepts that one branch ref name; the launcher's check 0 is pinned by a test of the composed path.
+traces_to:
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#5
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#10
+  - docs/specs/spec-05-adapter-contract.md#11
+  - docs/plan/m8-plan.md#7
+  - docs/Deferred/DEF-0101-the-launchers-open-requirements-before-a-runtime-is-launched.md
+input_state:
+  # base_commit was written from refs/heads/main when the contract was drafted; the executor of commit C refuses unless it equals HEAD,
+  # refs/heads/main and refs/remotes/origin/main; commit C has it as its one parent.
+  base_commit: 2a6b7fb0d95ea498d08b6ff621aff507a2b0bbe3
+  depends_on: [TASK-086, TASK-090, TASK-094, TASK-104]
+  intent_versions:
+    # sha256 of each file at base_commit, filled by script (pin106.py) at the approval request
+    docs/specs/spec-07-cli-and-zero-friction-path.md: debb999e223aa4cec2f505d16f9b8e156bfc57eca9b15f7b1c5e1e14059c874c
+    docs/specs/spec-05-adapter-contract.md: c3d356414d46db76b2e95a321c49ee11670b592f3dfec714ba7874df89f873de
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/Deferred/DEF-0101-the-launchers-open-requirements-before-a-runtime-is-launched.md: b972461201c35938e301de7eeedc35525e04adb233a7bd0544136d723cce9328
+write_set:
+  # final as known after the finished scan (D-3928 C1): a file may leave, none may join without a contract revision
+  paths:
+    - src/aieos_bootstrap/launcher.py
+    - src/aieos_bootstrap/gitread.py
+    - tests/unit/test_launcher.py
+    - tests/unit/test_cli_launch.py
+    - tests/unit/test_gitread.py
+    - tests/property/test_gitread_properties.py
+    - tests/integration/test_launcher_repo.py
+    - tests/integration/test_gitread_repo.py
+read_set:
+  paths:
+    - docs/Deferred/
+    - docs/plan/m8-plan.md
+    - docs/specs/
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/tasks/TASK-086.yaml
+    - docs/tasks/TASK-094.yaml
+    - docs/tasks/TASK-104.yaml
+    - src/aieos_bootstrap/
+    - tests/
+    - .github/workflows/
+  interfaces: [aieos_bootstrap.launcher.start, aieos_bootstrap.launcher.launch_outside, aieos_bootstrap.gitread.form_error]
+  schemas: []
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - bench/**
+  - native/**
+  - docs/**
+  - tests/conformance/**
+  - tests/run_tests.py
+  - src/aieos_bootstrap/cli.py
+  - src/aieos_bootstrap/writer.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/task_contract.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The argument. launcher.start gains the keyword parameter base="main" after its existing parameters (the nine positional parameters
+      keep their order); its argument check (step 1) refuses a base that is not a str or is out of the strict name rule of spec 7 revision 5
+      (1 to 100 characters of ASCII letters, digits, ".", "_", "-" and "/"; split on "/", every part non-empty, beginning with a letter or digit,
+      not ending in "." or ".lock"; ".." nowhere) with "refused", the reason "argument" and a finding that begins "argument: base"; this happens
+      before the gone sessions' records and the expiry, so no callee is called; the samples are tested ('', 3, None, 'a..b', '-x', 'a//b', 'a/',
+      '/a', 'a.lock', 'a/.b', 'a.', 'x@{1}', a 101-character name, a name with a space or a newline) and the accepted samples ('main',
+      'release-1.2', 'feature/x', 'a_b'). _CALLEES and START_KEYS are unchanged. The argument check calls gitread's one name-rule function,
+      never gitread.form_error, so the first recorded call that tests/unit/test_launcher.py :312 pins stays the HEAD form with no call before it.
+  - AC2: >-
+      The step. In start, after the step "head" and before the step "log", a step "base" reads the ref once with
+      read(repo, ['rev-parse', '--verify', '--end-of-options', 'refs/heads/' + base], TIMEOUT) through the same callee as the HEAD read: an
+      answer that is not the form of a dict with no error, exit 0 and bytes, or that is not exactly 40 lowercase hexadecimal characters after
+      ascii decoding and strip, gives "refused" with the reason "base" and a finding that begins "base:"; an answer that differs from the head
+      gives "not granted" with the reason "base" and a finding that begins "base: HEAD" and names both commits (40 hex, shown as read); an
+      equal answer lets start go on as today. In both refusals head_commit carries the head, no session row is opened, no lease and no end,
+      and read_log, held, start and end are not called; the gone sessions' records and the expiry run before the step as today. The step
+      variable is "base" while the read runs, so a raise inside it gives "refused" with the reason "base" as the other steps do.
+  - AC3: >-
+      gitread. form_error accepts for rev-parse exactly the forms of today (HEAD or an object id) and, as a third, the name 'refs/heads/' + base
+      where base satisfies the same strict rule (the rule is one pure function written once in gitread.py, called by form_error and by launcher.py through gitread; it
+      is not duplicated anywhere); every other name is refused as today; cat-file, rev-list and diff-tree are unchanged; SUBCOMMANDS is bound once to the same
+      tuple. The docstring of gitread.py states the third form. The tests: the accepted and refused samples of AC1 through form_error;
+      property tests for the rule (every accepted name starts with a letter or digit and holds none of the refused forms); the name-rule function
+      uses no os attribute and no os call that tests/unit/test_gitread.py :384-:393 does not already allow. No test makes a temporary repository
+      (the deterministic rule denies subprocess, tempfile, shutil and file writes in tests, aieos-checks.yml :1532-:1542; only the writer tests
+      may use tempfile, :1545-:1552) and no test reads refs/heads/main of the real repository (absent on CI, :163-:166). The one real-repository
+      test in tests/integration/test_gitread_repo.py reads, through gitread.run, a well-formed ref name that exists in no checkout (for example
+      refs/heads/no-such-branch-106) and asserts the non-zero exit as git gives it, with the wrapper's answer in form.
+  - AC4: >-
+      launch_outside. It gains the keyword parameter base="main" after write_handoff, checks it with the same rule (gitread's one function) in its own argument check
+      ("refused", reason "argument", no clock call, no begin call), so an out-of-form base never reaches begin (D-3928 ruling 1), and always calls begin(root, root, task_id, LAUNCH_ADAPTER, None, LAUNCH_HOLDER, LAUNCH_RECORDER, now,
+      now + LAUNCH_LEASE, base=base) with base as a keyword. The stand-in begin of tests/unit/test_cli_launch.py becomes
+      `def begin(self, *args, **kwargs)` and records the keywords; the pin at :136-:137 asserts the positional tuple unchanged and the
+      keywords {'base': 'main'}; one test covers a non-default base. cli.py is unchanged: `aieos launch` passes no base.
+  - AC5: >-
+      Check 0 and the unchanged cases. One test in tests/integration/test_launcher_repo.py (the class that runs the real adapter.start and the real
+      Resume Check over the real repository at COMMIT) runs start with a log whose task.approved names a contract hash that differs from the
+      contract at COMMIT, and shows that start gives "not granted" with the reason "decision" and no fencing token, and that the decision.execution record passed
+      to the append stand-in (read as test_launcher_repo.py :92-:93 does) has decision None and the error exactly "check 0: the contract at
+      HEAD is not the approved contract" (resume_check.py :529-:530; start's own answer does not carry that text); the Resume Check is not
+      stubbed, so the refusal comes from resume_check.py's code; a broken copy that removes the comparison at resume_check.py :529-:530 makes
+      the test fail because the record's error is not the check-0 text, not merely because no grant is given; the held, state, inputs, start and decision refusals keep their
+      reasons and order; the environment of a grant carries AIEOS_BASE equal to the head; the gone records, expiry and other steps are
+      unchanged.
+  - AC6: >-
+      Tests. Every existing test function that the task changes keeps its assertions or gets stronger ones, shown by a script that compares,
+      per test function, the ordered list of ast.dump of each assert statement and each self.assert* call at the base and at the task commit
+      (TASK-102's AC3 form, TASK-104's AC4), with the exempted assertions whose value changes listed in commit X's map and named in the
+      approval request: the order pins that count the callee 'read' (tests/unit/test_launcher.py :369, :377, :384, and any other pin of the recorded read calls in that file), the Intercept of
+      tests/integration/test_launcher_repo.py (:45-:56; its pins at :95-:104 keep their assertions), the begin tuple pin (tests/unit/test_cli_launch.py :136-:137), and any pin of the
+      recorded calls that the new second read changes; an added test passes at the task commit and fails on a stated broken copy where the item
+      says "pin"; no test is deleted; a test added or changed in a module whose naming test requires a task's criteria in every test docstring
+      names the criteria that naming test requires and no TASK-106 id (the link is in commit X's map). The Repo stand-in of test_launcher.py
+      answers refs/heads/main with self.head at call time (:457-:467 sets a new repo.head); the Intercept of test_launcher_repo.py answers the
+      exact base form with COMMIT. Named as unchanged: tests/unit/test_launcher.py :312 (the first recorded call is the HEAD form). Named as a
+      test whose coverage shifts: tests/unit/test_launcher.py :563-:571 (reader_raises: its second read is now the base read); a case is added
+      in which the HEAD read succeeds and the base read raises, giving "refused" with the reason "base". Named naming tests and pins that stay:
+      tests/unit/test_gitread.py :407-:425 (every test names "TASK-024 AC") and :432 ("no caller exists yet"); test docstrings that become
+      inexact are updated: tests/unit/test_gitread.py :81-:84 ("a ref name other than HEAD") and tests/integration/test_launcher_repo.py :2 and
+      :46 ("answers only the exact HEAD form").
+  - AC7: >-
+      Parity and purity (INV-001, INV-002, INV-004). The frozen fixtures and reference outputs, tests/conformance/ and the native ports are
+      unchanged; launcher.py and gitread.py add no import beyond the standard library already used (gitread keeps its pinned import of
+      subprocess under the CI pattern rule; no exec, eval, compile, __import__ or importlib, no new process form, no connection, no file write at
+      import); the literal ".aieos" appears nowhere in launcher.py (test_launcher.py :725); phrases pinned by tests stay; the deterministic rule,
+      OPS-003, SEC-001, SEC-002 and bandit steps report no finding at the task commits; the CI workflow files are unchanged.
+  - AC8: >-
+      The stated limits. launcher.py's docstrings (module and start's step list, launch_outside) state the step "base", the two outcomes and the
+      limits of the header (the race; the local ref only; the untouched-root check open; the hook without check 0; the default base in
+      `aieos launch`; the strict rule stricter than git's), without the literal ".aieos". The two phrases that tests/unit/test_launcher.py
+      :735-:739 pins stay, and the sentences around them are rewritten so that they stay true: "AIEOS_BASE is the head_commit" (launcher.py :27)
+      now says that step "base" has found it equal to the base branch's tip at the read, and "not before DEF-0101's open points are closed"
+      (:89) now lists open points that no longer name the base-tip check. approval_act's docstring (launcher.py :150-:152) stops calling the
+      base-tip check open and still states that approval_act itself does not check that HEAD is the base branch's tip (that check is start's step
+      "base"; a docstring change only; the task changes no behaviour of approval_act). The docstring citation in
+      tests/integration/test_launcher_repo.py :107, "aieos-checks.yml :135" for the pinned Resume Check hash, is corrected to :153 (the pin is
+      AIEOS_PINNED_RESUME_CHECK at aieos-checks.yml :153; :135 is the start of the job's env block). DEF-0101's closed and open points are written by its own
+      decision after landing (a reading of D-3918 C3, "inside TASK-106 when it runs", as the DEF-0105 Log line and DEF-0113 were written after
+      TASK-104 landed), with the content D-3918 C3 requires (the check-0 bullet closed by the Resume Check and the new composed-path test;
+      the untouched-root check as an open bullet citing spec 5 :121; the max_risk and launch bullets unchanged).
+  - AC9: >-
+      The CI evidence. On the aieos-checks and aieos-native runs of the accepted commit every job and step is successful, read by run id; the
+      real-repository tests run on the Linux leg (the aieos-checks job is ubuntu-24.04) and, on Windows, in the worker's own local run of the
+      tests; on main after the records commit likewise. Each push and each GitHub job-data read is a decision of the decision agent,
+      outside the capabilities above.
+  - AC10: >-
+      The records (L-0034, L-0037). The task's evidence records' forms are built and checked through records.check_record and a governor shadow
+      over a dry records list at the approval request, with their raw output: per-article records, the property records for gitread's rule, and
+      the profile entries of risk high; the expected result is NEEDS_REVIEW or NEEDS_REWORK at the GOV-003 row as in TASK-102 to TASK-104,
+      stated in the acceptance as a departure.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1500k, wall_time: 8h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7]}
+  - {gate: G3, check: constitution, args: [AC8, AC9, AC10, INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts AND the aieos-checks and aieos-native runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
