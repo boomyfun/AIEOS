@@ -17,6 +17,10 @@ but not equal, and a records script that compares it with the transcript stops.
   exact copies, and the records cite those.
 - **2026-10-29 (session 87e2584b, D-3500).** cilist_c101.py and fetch_logc101.py were copied by retyping with Write; the
   decision agent checked them line by line; later copies were made by sed or by script.
+- **2026-10-30 (session 1c1bf794).** The outputs of the reviews R1 to R5, R1b, R2b, RA, RA2, RG and RG2 were saved by
+  review_save2.py (the last handback of the agent, "xb", hash printed), the records script found each reviewer by the
+  hash of its saved text in the agent transcripts, and the decision pages were built and copied by scripts with hash
+  checks. No retyped copy.
 
 ## Why it happens
 A copy that reads the same is taken for a copy that is the same.

@@ -54,6 +54,11 @@ Seven, in session 87e2584b's later part (../History/2026-10/2026-10-29-0446-the-
 - **D-3547.** Scratch files made by calls 4 to 11 before the decision on them.
 - **D-3553.** copy_3530.sh written before its decision (ruled acceptable; nothing redone).
 - **D-3527 (a).** `set -o noclobber;` dropped from a decision's command on the worker's own judgment, since the owner's rule forbids ';'; the conflict should have come to the decision agent before the run.
+- **2026-10-30 (session 1c1bf794, D-3703).** After a dry run stopped, the records script was edited before the
+  condition "no further edit" was re-read; the edit was not run and the script was restored byte for byte.
+- **2026-10-30 (session 1c1bf794, D-3709 C3, D-3710; the decision agent's).** The push of a records commit to a task
+  branch was approved without checking TASK-099's landing form; G0 fails such a commit by construction; the red run
+  stays public.
 
 ## Why it happens
 - Claude treats a step as mechanical (a display, a change of order, a turn end) and does not see it as a decision.

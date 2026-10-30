@@ -26,6 +26,10 @@ One, in session 87e2584b (2026-10-29, TASK-099):
   INSUFFICIENT_EVIDENCE, row 3, twelve missing entries: the governor counts an article's evidence only through records
   whose dimension is the article's id. Per-article copies were added (D-3395, D-3396); TASK-100's contract named them
   from r0 (AC10).
+- **2026-10-30 (session 1c1bf794, D-3704, D-3706).** The dry records list for TASK-102 used a decision_agent_review
+  for the GOV-003 article; the governor satisfies an ai_review entry only by a way-2 record whose reviewer's model
+  differs from the implementer's (governor.py :270-319), and a failed way-2 record gives NEEDS_REWORK at row 2. The
+  rule was read from the governor's code after the dry runs, not before.
 
 ## Why it happens
 The record's form is written from the specification's words, and the checker's own rules sit in code that no review

@@ -77,6 +77,10 @@ One occurrence in session ea6ea0a3 (the History of that session):
 
 One, in session 87e2584b's later part (../History/2026-10/2026-10-29-0446-the-later-part-task-101-the-native-resume-check-in-shadow.md):
 - **D-3496, D-3548.** A heredoc ("<<") append to the checkpoint was refused by the guard before it ran (ruled in D-3497, and as a guard stop in D-3549); the append was then done by Read and Edit, and the "<<" form was not retried.
+- **2026-10-30 (session 1c1bf794, D-3699 C5).** The decision agent's condition named `timeout 400 python …` for a
+  staged run; the owner's guard (DM A57 R3) allows only `timeout 110 python <file> < /dev/null`; the command was
+  refused before it ran. The worker had not checked the condition against the guard; the script was split into stages
+  of one allowed command each.
 
 ## Why it happens
 - Git Bash heredocs interpret quotes and backslashes.

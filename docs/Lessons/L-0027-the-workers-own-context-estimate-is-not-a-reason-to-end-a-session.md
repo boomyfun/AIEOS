@@ -24,6 +24,12 @@ The worker cannot see the context level; its estimate, counted from the conversa
   decision D-3255 had named, sent before the lessons and the checkpoint were reread; nothing depended on the order.
 - **2026-10-29 (session 87e2584b, D-3393).** After a compaction, two Globs went out before the checkpoint was reread;
   nothing depended on the order.
+- **2026-10-30 (session 1c1bf794, the owner's words at :12771).** A turn ended with nothing more to do now while the
+  CI runs of the records commit were in progress and the next steps were known; the owner wrote: "việc chưa xong tại
+  sao lại tự ý dừng, đây là lỗi lần thứ ba rồi đấy" (the first time, at :9825, after a question to the owner about
+  publishing was interrupted: "tại sao lại dừng rồi, tiếp tục đi"). Afterwards each next step went on in the same
+  turn: a CI list read is asked for at once, and the drafts for the following step are written while a run is in
+  progress.
 
 ## Why it happens
 The level is shown to the owner by the app, not to the worker. The worker counts what it has read and written, and that count runs high (long tool outputs and agent reports weigh less than they seem, or the window is larger than assumed). Which of these holds is a guess.
