@@ -19,3 +19,4 @@ DEF-0107.
 
 ## Log
 - 2026-10-30: opened with DEF-0107's stated policy (session 9dbe9c67).
+- 2026-10-30: its resume condition was met by TASK-103, which changes .github/workflows/aieos-checks.yml; handled per task as a stated departure (GOV-003 recorded as fail by the way-2 review R3w for the workflow's own text; acceptance in the form of D-3706 and D-3707); the general policy stays open, so the status stays open.

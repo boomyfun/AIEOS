@@ -1,6 +1,6 @@
 # DEF-0107: GOV-003 in the self-build: the CI's test gates run the change's own tests
 
-- Status: resumed
+- Status: done
 - Opened: 2026-10-30 (session 1c1bf794; TASK-102's acceptance, decisions D-3705, D-3706, D-3707)
 - Deferred by: decision agent (A41, A51), at TASK-102's acceptance
 - Decision group: A
@@ -50,3 +50,4 @@ DM A51 item (7), docs/pre-genesis/decision-matrix.md line 112, with its markers:
 ## Log
 - 2026-10-30: opened at TASK-102's acceptance (session 1c1bf794).
 - 2026-10-30: policy decided (D-3740), D-3706 C3 met; the CI step stays in the named build task; done when that task is accepted. Reviewed once by a reviewer on claude-haiku-5-5 (the draft before four small fixes); the fixes (the record's words in point 6, the scope sentence in point 1, the handling-rule wording in point 7, the status) were not reviewed again, nor were the restored quotations and the wording of point 1's list and of point 8 (D-3740).
+- 2026-10-30: point 7 done: TASK-103 accepted (D-3830; the CI step runs the base's tests against the change; run 41019962046 on the task head, runs 41033002434 and 41033002251 on main at 621129ae green); the lists-equal step's gap is DEF-0111, the question of a failing step is DEF-0112; point 5's gap stays stated (DEF-0110, DEF-0111).

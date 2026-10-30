@@ -1,6 +1,6 @@
 # DEF-0109: the pinned evaluator list lacks the native, bench and Go governor and lockfile forms
 
-- Status: open
+- Status: done
 - Opened: 2026-10-30 (session 1c1bf794; TASK-102's article reviews RG and RG2, decisions D-3705, D-3707)
 - Deferred by: decision agent (A41, A51), at TASK-102's acceptance
 - Decision group: A
@@ -20,3 +20,4 @@ DEF-0107.
 ## Log
 - 2026-10-30: opened at TASK-102's acceptance (session 1c1bf794).
 - 2026-10-30: named in point 7 of DEF-0107's stated policy (D-3740) as part of the next build task, with the CI step; until that task settles the reading, the native, bench and Go governor files are handled as evaluator paths (a handling rule, not a reading of A29); a reading that leaves any of them outside A29's evaluator goes to the owner.
+- 2026-10-30: done by TASK-103 (nine entries in both lists, the lists-equal step, coverage of the 66 files of native/ and bench/ by both matchers, task head c584cd83); TASK-103 settles the reading inclusively (the native, bench and Go governor and lockfile forms are covered by both matchers, 66 files, 0 not covered), so no narrowing of A29 and nothing goes to the owner; the forgeability of the lists-equal step is DEF-0111.
