@@ -108,6 +108,18 @@
 # state. It removes and loosens no check, grants no write access, uses no secret and changes no setting; the step still
 # only counts and prints, and exits 0. Limits: the other texts that keep .github/ changes with the owner stay open
 # (DEF-0031: the Master Plan, governor-spec and the governor's path rule).
+# Revision 14 (TASK-103; DM A66, its own decision; DEF-0107 point 7 and DEF-0109) adds one blocking check and one report-only
+# step, removes and loosens no check, grants no write access, uses no secret and changes no setting: (1) nine entries at the
+# end of both embedded EVALUATOR lists ('**/go/**',
+# '**/rust/**', '**/ts/**' and the lockfile and configuration forms go.mod, go.sum, Cargo.lock, Cargo.toml, tsconfig.json and
+# package-lock.json), written without the strings the isolation tests forbid, so that the native, bench and Go trees are handled
+# as evaluator paths (stricter handling, reported only); (2) a step "GOV-003 evaluator lists equal", a blocking check that the
+# file holds exactly two equal copies of the list (the governor reads the list from the base's workflow and takes none if the
+# copies differ); (3) a step "GOV-003 base tests (report only)" that runs the base commit's tests against the change in a merged
+# worktree and prints one summary line and the names of the failing tests; it exits 0, has continue-on-error and its own
+# timeout, and does not judge tests the change adds. Limits: the new patterns cover by directory name; the counts come from logs
+# that the code under test can write; the step's full run is proven only by this CI; point 5 of the DEF-0107 policy (a changed
+# governor judges itself) is not closed.
 name: aieos-checks
 
 on:
@@ -433,7 +445,10 @@ jobs:
                        'tests/unit/**', 'tests/integration/**', 'tests/property/**', 'tests/run_tests.py',
                        '**/Pipfile', '**/Pipfile.lock', '**/poetry.lock', '**/uv.lock', '**/constraints*.txt',
                        '**/MANIFEST.in', '**/tox.ini', '**/pytest.ini', '**/conftest.py', '**/.python-version',
-                       '**/pyproject.toml', '**/setup.cfg', '**/setup.py', '**/requirements*.txt']
+                       '**/pyproject.toml', '**/setup.cfg', '**/setup.py', '**/requirements*.txt',
+                       '**/go/**', '**/rust/**', '**/ts/**',
+                       '**/go.mod', '**/go.sum', '**/Cargo.lock', '**/Cargo.toml', '**/tsconfig.json',
+                       '**/package-lock.json']
           OWNER_PATHS = ['docs/pre-genesis/measurement-protocol.md', 'docs/pre-genesis/measurements/**']
 
 
@@ -500,7 +515,10 @@ jobs:
                        'tests/unit/**', 'tests/integration/**', 'tests/property/**', 'tests/run_tests.py',
                        '**/Pipfile', '**/Pipfile.lock', '**/poetry.lock', '**/uv.lock', '**/constraints*.txt',
                        '**/MANIFEST.in', '**/tox.ini', '**/pytest.ini', '**/conftest.py', '**/.python-version',
-                       '**/pyproject.toml', '**/setup.cfg', '**/setup.py', '**/requirements*.txt']
+                       '**/pyproject.toml', '**/setup.cfg', '**/setup.py', '**/requirements*.txt',
+                       '**/go/**', '**/rust/**', '**/ts/**',
+                       '**/go.mod', '**/go.sum', '**/Cargo.lock', '**/Cargo.toml', '**/tsconfig.json',
+                       '**/package-lock.json']
           OWNER_PATHS = ['docs/pre-genesis/measurement-protocol.md', 'docs/pre-genesis/measurements/**']
 
 
@@ -1459,6 +1477,24 @@ jobs:
           if grep -q '"task": null' ../task.json; then echo "property_test: no task"; exit 0; fi
           PYTHONPATH=src python3 -m unittest discover -s tests/property -p 'test_*.py' -v
 
+      - name: GOV-003 evaluator lists equal
+        if: ${{ !cancelled() }}
+        working-directory: work
+        shell: python3 {0}
+        run: |
+          # AIEOS CI: GOV-003 / DEF-0109: the evaluator list is embedded twice in this file (the gov003 and ops002 steps). The
+          # governor reads it from the base's workflow (scope_reconcile.evaluator_from_workflow) and takes no list at all if the
+          # copies differ. This step reads the copies from this file's own text and fails if they are not exactly two equal lists.
+          import ast
+          import re
+
+          text = open('.github/workflows/aieos-checks.yml', encoding='utf-8').read()
+          found = re.findall(r"^ +EVALUATOR = (\[[^\]]*\])$", text, re.M)
+          values = [ast.literal_eval(x) for x in found]
+          equal = len(values) == 2 and values[0] == values[1]
+          print('GOV-003 evaluator lists: %d found, %s, %d entries' % (len(values), 'equal' if equal else 'NOT EQUAL', len(values[0]) if values else 0))
+          raise SystemExit(0 if equal else 1)
+
       - name: deterministic_rule (INV-001, INV-002, INV-004)
         if: ${{ !cancelled() }}
         working-directory: work
@@ -1759,3 +1795,39 @@ jobs:
           if [ -e "$GR" ]; then "$A/venv/bin/bandit" "$GR" --ini "$A/empty.bandit" --ignore-nosec --skip B404,B603,B607 -f txt || S=1; fi
           "$A/venv/bin/bandit" -r "$GITHUB_WORKSPACE/work/tests" --ini "$A/empty.bandit" --ignore-nosec --skip B101,B311 -f txt || S=1
           [ "$S" = 0 ]
+
+      - name: GOV-003 base tests (report only)
+        if: ${{ !cancelled() }}
+        working-directory: work
+        continue-on-error: true
+        timeout-minutes: 4
+        run: |
+          # AIEOS CI: DEF-0107 point 7: the base's tests against the change. Report only: it prints one summary line and the
+          # names of the failing tests, and exits 0. A merged tree is made as a git worktree of the pushed commit whose tests/
+          # are replaced by the tests/ of the task's base commit (task.json), so the base's tests run against the change's src,
+          # docs and fixtures and have git access. Same-lineage evidence; it does not judge tests the change adds. A failed
+          # setup command prints "setup failed" and a run of zero tests prints "zero tests ran"; neither reads as a clean result.
+          # The counts come from logs that the code under test can write; tests the change adds and a group missing from the base are
+          # not counted; an unexpected error in the unguarded commands ends the step as failed without failing the job
+          # (continue-on-error), and the step has its own timeout.
+          set -u
+          if grep -q '"task": null' ../task.json; then echo "GOV-003 base tests: no task"; exit 0; fi
+          BASE=$(sed -n 's/.*"base_commit": "\([0-9a-f]\{40\}\)".*/\1/p' ../task.json)
+          if [ "${#BASE}" != 40 ]; then echo "GOV-003 base tests: no base commit in task.json"; exit 0; fi
+          HEADSHA=$(git rev-parse HEAD)
+          if ! git worktree add -q --detach ../merged "$HEADSHA"; then echo "GOV-003 base tests: setup failed: worktree"; exit 0; fi
+          rm -rf ../merged/tests
+          if ! git archive "$BASE" tests > ../base-tests.tar; then echo "GOV-003 base tests: setup failed: archive"; exit 0; fi
+          if ! tar -x -f ../base-tests.tar -C ../merged; then echo "GOV-003 base tests: setup failed: extract"; exit 0; fi
+          cd ../merged
+          export PYTHONPATH=src
+          if ! python3 -c 'import os, aieos_bootstrap as a; print("aieos_bootstrap imported from", os.path.abspath(a.__file__))'; then echo "GOV-003 base tests: setup failed: import"; exit 0; fi
+          for g in unit integration property; do
+            python3 -m unittest discover -s tests/$g -p 'test_*.py' -v > ../gov003_$g.log 2>&1 || true
+          done
+          RUN=$(cat ../gov003_*.log | grep -E '^Ran [0-9]+ tests?' | awk '{s+=$2} END{print s+0}')
+          FAILED=$(cat ../gov003_*.log | grep -cE '^(FAIL|ERROR): ' || true)
+          echo "GOV-003 base tests: $RUN run, $FAILED failed, tests from $BASE, src from $HEADSHA"
+          if [ "$RUN" = 0 ]; then echo "GOV-003 base tests: zero tests ran"; fi
+          cat ../gov003_*.log | grep -E '^(FAIL|ERROR): ' || true
+          exit 0
