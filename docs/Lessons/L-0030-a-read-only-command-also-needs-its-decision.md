@@ -39,6 +39,7 @@ Seven, in session 87e2584b's later part (../History/2026-10/2026-10-29-0446-the-
 - **D-3553.** A Read at a wrong path and a Glob to find copy_3473.sh, needed by D-3552 C4 but not named.
 - **D-3554.** Reads to draft the end records (calls 4 to 13 after D-3553), not named by a decision; one Glob listed the whole scratchpad, broader than needed.
 - **D-3556.** A Read of place_end.py, a Glob of the five lesson files and two Greps of them, to write the placement script, not named by a decision; they only read.
+- **2026-10-30 (session 578ea88b).** I ran read-only commands (greps, lists, hashes, diffs, git status) during steps that a decision approved, which no decision had named one by one; disclosed in the end-records request of D-3903.
 
 ## Why it happens
 A read is not felt as an act, and right after a compaction the habits of the call form are weakest.

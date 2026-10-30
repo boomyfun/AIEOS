@@ -41,6 +41,7 @@ One, in session ea6ea0a3 (2026-10-26, TASK-096, D-3223):
   reported it itself: "REVIEW VOID BY ITS OWN RULE. I made one Bash call by mistake ("echo no", no effect on any file)
   after the instruction "run no command"." The review was taken as unapproved evidence only; the round-2 brief added an
   explicit line naming every other tool, and round 2 (t96y-S1) declared "only Read and Grep were used".
+- **2026-10-30 (session 578ea88b).** A departure. The five reviewers (a393faea, a3d9aa84, a4ed7346, ab069cb4, af9413cd) read E:\AIEOS paths directly with Read, Grep and Glob: 55, 67, 65, 42 and 32 assistant lines with such calls (261, by Grep count); no Bash or PowerShell call in any of them. Read and Grep do not rewrite the index, so the harm is low. They were read-only by their calls, not by a tool restriction. The decision agent approved the round-1 briefs in D-3872, knowing the reviewers would read E:\AIEOS directly (D-3872: "the reviewers have Grep and Glob on E:\AIEOS"; "the reviewers will read the base tree, as the briefs say"), without naming L-0016; the later briefs were approved by later decisions (not checked line by line). The departure is the decision agent's as well as the worker's.
 
 ## Why it happens
 A brief's tool rule competes with the reviewer's habit of checking things by shell, and a path into the working tree makes a read-only command able to touch it.

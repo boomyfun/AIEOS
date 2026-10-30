@@ -26,6 +26,7 @@ One, in session 2026-10-19-2004 (../History/2026-10/2026-10-19-2004-the-pages-d1
 Two, in session 2026-10-19-2233 (../History/2026-10/2026-10-19-2233-the-pages-d1489-to-d1493-the-broken-copies-and-reviews-of-task-068-and-the-refusal-investigation.md):
 - **2026-10-19 (D-1497).** A reasoning_extraction refusal of a reply during a Write, after a guard refusal (:452); not redone; brought to the decision agent.
 - **2026-10-19 (D-1503, D-1504).** A reasoning_extraction refusal of the request after the Write of review entries (:926); not redone; the owner asked for the true cause; an investigation by metadata only (see L-0025).
+- **2026-10-30 (session 578ea88b).** D-3873: the stop happened while saving the Opus reviewer's answer; no redo; the file stays partial; the full text is cited from the reviewer's transcript (pointer file review104_opus.SOURCE.txt).
 
 ## Why it happens
 The official refusal documentation says that Opus 5.5 and Sonnet 5.5 carry safety classifiers that can stop a reply, with categories such as "cyber", where benign security work can also trigger a stop, and "reasoning_extraction"; the reason is not shown in the app's notice. The work's text was about blocking hooks, bypass hunts and push blocking, so a "cyber" stop is the likely cause, which stays a guess.

@@ -61,6 +61,7 @@ Seven, in session 87e2584b's later part (../History/2026-10/2026-10-29-0446-the-
   stays public.
 - **2026-10-30 (session 9dbe9c67, TASK-103; mine).** A `test ! -e` guard failed because an old output file was read as new; instead of stopping, the command was run again with a new output name without a decision. Disclosed and accepted in D-3822: a failed guard is a stop, and a changed command comes back as a request.
 - **2026-10-30 (session 9dbe9c67, D-3830 C4(c)/(d), D-3833; the decision agent's).** The approved landing plan pushed the records commit to the task branch, which G0 fails by construction (TASK-099, TASK-102). I checked the plan against the landing form of D-3402 and D-3712 before any act and brought it back; the plan was corrected in D-3833.
+- **2026-10-30 (session 578ea88b).** The hash and command slips of this session (L-0039) went to the decision agent as requests (D-3892 C7, D-3894, D-3896); no new failure of the rule.
 
 ## Why it happens
 - Claude treats a step as mechanical (a display, a change of order, a turn end) and does not see it as a decision.
