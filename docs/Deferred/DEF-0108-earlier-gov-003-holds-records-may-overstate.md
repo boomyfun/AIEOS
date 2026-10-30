@@ -19,3 +19,4 @@ DEF-0107.
 
 ## Log
 - 2026-10-30: opened at TASK-102's acceptance (session 1c1bf794).
+- 2026-10-30: the wording is set by point 6 of DEF-0107's stated policy (D-3740): earlier GOV-003 "holds" records of tasks that changed or added tests do not cover the tests part; no record is edited. Status stays open until DEF-0107 is done; no list of the earlier tasks that changed tests is made unless a later decision asks for it.

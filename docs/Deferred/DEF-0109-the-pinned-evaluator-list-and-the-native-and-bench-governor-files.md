@@ -19,3 +19,4 @@ DEF-0107.
 
 ## Log
 - 2026-10-30: opened at TASK-102's acceptance (session 1c1bf794).
+- 2026-10-30: named in point 7 of DEF-0107's stated policy (D-3740) as part of the next build task, with the CI step; until that task settles the reading, the native, bench and Go governor files are handled as evaluator paths (a handling rule, not a reading of A29); a reading that leaves any of them outside A29's evaluator goes to the owner.
