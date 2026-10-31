@@ -285,6 +285,12 @@ Occurrence in session 2026-10-19-1411 (../History/2026-10/2026-10-19-1411-the-re
 Occurrence in session 2026-10-19-1743 (../History/2026-10/2026-10-19-1743-the-pages-d1447-to-d1460-the-acceptance-and-the-landing-of-task-067.md):
 - **2026-10-19 (D-1453 to D-1457).** A text slip beside a read-only ls (:175) made the call-form guard refuse the next Bash (R5); listed by D-1453, the refused read done with the Read tool. Two command forms refused by the command guard before they ran, the worker's errors: a Python run without "timeout 110 " (:260, R3) and a "python -c" one-liner (:457, R2); each listed by its own decision and redone once in the guard's form. A second text slip beside a Write (:339) was listed by D-1455 before any further Bash. The app's notice "[Auto-Mode Bypass]" fell on D-1456's report, and two calls to the decision agent about it were stopped by the app's classifier (:490, :497; D-1457, L-0024).
 
+Occurrences in session 2026-10-31-2135 (../History/2026-10/2026-10-31-2135-m8-stage-8-task-109-the-untouched-root-check-at-the-grant.md), each my incorrect command, refused before it ran and redone (four, as the History page counts):
+- **2026-10-31 (D-4142).** A command carried a stray interpreter call ("python" with a dash) beside the real work; refused (R2); redone without it.
+- **2026-11-01 (D-4157).** The same form in a sed command that adapted a push script; refused (R2, R3); redone without it.
+- **2026-11-01 (D-4161).** A parse check of a new script written as an interpreter call with an option string, not in the required form; refused (R2, R3); the script was only hashed, not parse-checked; disclosed in the request.
+- **2026-11-01 (D-4176).** A search whose text held the forbidden form (the end records' lesson search); refused (R2); redone with another search word.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
