@@ -1,0 +1,261 @@
+# Task contract TASK-105 (draft r2 = r1p with D-4022's changes, 2026-10-31, session 96aec1d9, in the scratchpad; not approved, not committed;
+# the haiku review of r1p did not count, because the reviewer used the Bash tool (read-only) against the save script's tool assertion, and
+# its findings were used as data under D-4022; the contract's check is the decision agent's own read of the r1p-to-r2 diff): the shared
+# resolution of a task contract's path (DEF-0105 link 1, docs/Deferred/DEF-0105-the-zero-friction-paths-open-links.md). Scope ruled in
+# decisions D-4002, D-4015 and D-4016 (design option (a) of D-4015: a new module that the three readers use; M1 to M8 of D-4016). The text it
+# builds is specification 7 revision 6 (approved by D-4004 and D-4005; DM row F78; on main at 0341cf8b, sha256
+# 97026c84ba96e198bfa33a87f924487845bf0649335a72abd5e053f9b706c852), section 6 (the state directory of the readers), section 7 (only a
+# committed file at the base counts; the core does not commit) and section 10 item 17.
+# Fields and value forms follow specification 2 section 5.1 and TASK-106's contract (docs/tasks/TASK-106.yaml).
+# Not in this task: the handoff reader and the write after a submission (DEF-0095), the rule that a contract's write set does not list the
+# state directory (proposed, read by no check), DEF-0113, DEF-0101's untouched-root check, any change to cli.py, launcher.py, writer.py,
+# gitread.py, base_files.py, the program of the hook, settings or the CI workflows.
+# Risk: high. R3 reads src/** and tests/** fail closed as high (risk-rules section 2 point 3); no critical rule matches the write set (no
+# docs/specs/**, no .github/**). Confirmed by script over the base in the approval request (TASK-106's form). Change class: critical_cr,
+# because the CI's EVALUATOR list holds src/aieos_bootstrap/** and the tests folders; confirmed by script in the approval request.
+# Evidence profile (assurance-model.md section 5, gov-AIEOS, high): unit_test, integration_test, property_test, deterministic_rule,
+# static_security_analysis, ai_review (cross-model), plus the evidence_required of the applicable articles, recorded per article from the
+# start (L-0034) through records.check_record and the governor shadow in the approval request. GOV-003 is recorded as it falls (DEF-0107's
+# policy): no "holds" is claimed for the tests part; acceptance is a stated per-task departure from the advisory governor in the form of
+# TASK-102 to TASK-106; compensating controls: the local run of the base's tests against the change's src and a review of the test diff by
+# a reviewer whose model differs from every model that did task work (L-0038), listed by machine.
+# Models: the main session writes the code and the tests; helpers read only; each brief goes to the decision agent first.
+# Pin scan (first step of the work, reads only, written in the map of commit X): the scan of D-4016 (the three import pins, the call-count pins,
+# the finding-text pins, the docstring pins) is re-run at the base, and extended to claude_code_pretool_hook.py and
+# tests/unit/test_claude_code_pretool_hook.py; a pin by hash or in CI on the hook, or any pin not in the list below, stops the work and comes
+# to the decision agent.
+# Stated limits: (1) a contract in both folders refuses the task until an approved act removes one; (2) only the committed base is read;
+# (3) a state entry that is present but not a plain tree or blob is a refusal, never a fallback; (4) no speed measurement in this task; call
+# counts are bounded by stand-in tests; (5) the hook is unchanged as a program: only its docstring and the modules it calls change; hook
+# placement and settings stay the owner's.
+task: TASK-105
+contract_version: v1
+task_type: implementation
+objective: >-
+  Build specification 7 revision 6's shared resolution of a task contract's path: a new module src/aieos_bootstrap/contract_path.py (it
+  imports only writer, uses only writer.STATE_DIR and does no I/O) gives the ordered candidates (the state directory, then docs) and one rule
+  (state only: read state; docs only: read docs; both: a finding and nothing read; neither: the reader's own absent finding; a refusal on
+  either side is a refusal and never a fallback); base_inputs (_contract and _contract_at), task_contract.read_contract and the contract
+  walk of claude_code_shell_allow use it; with the docs folder only, every call list and every finding text stays as today; the docstrings
+  of the three readers and of the hook state the true call bounds.
+traces_to:
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#6
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#7
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#10
+  - docs/plan/m8-plan.md#7
+  - docs/Deferred/DEF-0105-the-zero-friction-paths-open-links.md
+input_state:
+  # base_commit was written from refs/heads/main when the contract was drafted; the executor of commit C refuses unless it equals HEAD,
+  # refs/heads/main and refs/remotes/origin/main; commit C has it as its one parent.
+  base_commit: 0341cf8b7334618c046820d4b5e029d22cfa0d02
+  depends_on: [TASK-071, TASK-072, TASK-076, TASK-082, TASK-085, TASK-097]
+  intent_versions:
+    # sha256 of each file at base_commit, filled by script (pin script) at the approval request
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 97026c84ba96e198bfa33a87f924487845bf0649335a72abd5e053f9b706c852
+    docs/specs/spec-02-aieos-file-format.md: e7c427b06775069a43d5e6d317a61c1974e5be921aee08a581c1918572a37a61
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/Deferred/DEF-0105-the-zero-friction-paths-open-links.md: ea615a7ce69d6a2565ca2241756799cde709ab9de76d1dae213c80743660e977
+write_set:
+  # a file may leave after the pin scan, none may join without a contract revision; each path with its reason (D-4016 M7)
+  paths:
+    - src/aieos_bootstrap/contract_path.py
+    - src/aieos_bootstrap/base_inputs.py
+    - src/aieos_bootstrap/task_contract.py
+    - src/aieos_bootstrap/claude_code_shell_allow.py
+    - src/aieos_bootstrap/claude_code_pretool_hook.py
+    - tests/unit/test_contract_path.py
+    - tests/unit/test_base_inputs.py
+    - tests/unit/test_task_contract.py
+    - tests/unit/test_claude_code_shell_allow.py
+    - tests/unit/test_claude_code_pretool_hook.py
+    - tests/unit/test_claude_code_read_hook.py
+    - tests/property/test_contract_path_properties.py
+    - tests/integration/test_base_inputs_repo.py
+    - tests/integration/test_task_contract_repo.py
+  # reasons: contract_path.py is the new module (AC1); base_inputs.py, task_contract.py and claude_code_shell_allow.py are the three readers (AC2 to
+  # AC4); claude_code_pretool_hook.py changes its docstring only (AC5); test_contract_path.py and test_contract_path_properties.py test the
+  # module (AC1, AC6); test_task_contract.py, test_claude_code_shell_allow.py and test_claude_code_pretool_hook.py gain only the amended pins
+  # and amended assertions (AC5, AC6), each citing the owning task's ACn, because their naming pins (tests/unit/test_task_contract.py :27 and
+  # :489-496, test_claude_code_shell_allow.py :360-361, test_claude_code_pretool_hook.py :1159-1160) forbid a TASK-105 test; the six-case
+  # tests of task_contract and claude_code_shell_allow live in tests/unit/test_contract_path.py, and those of base_inputs in test_base_inputs.py
+  # (no naming pin) or test_contract_path.py; test_claude_code_read_hook.py widens its OWN_IMPORTS entry for claude_code_shell_allow.py by
+  # contract_path (AC5; found by the haiku review as data, finding 3); test_base_inputs_repo.py (no naming pin) gains the real-repository test
+  # of AC6; test_task_contract_repo.py has a naming pin (:45, check :132-140) and gains no test: its existing test (:116-131, docs only at
+  # the adding commit) is the real-repository check for task_contract and stays unchanged; the file is listed only for a pin amendment
+  # that cites a TASK-071 ACn, and leaves the write set at the pin scan if untouched.
+read_set:
+  paths:
+    - docs/Deferred/
+    - docs/plan/m8-plan.md
+    - docs/specs/
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/tasks/TASK-071.yaml
+    - docs/tasks/TASK-072.yaml
+    - docs/tasks/TASK-074.yaml
+    - docs/tasks/TASK-076.yaml
+    - docs/tasks/TASK-082.yaml
+    - docs/tasks/TASK-085.yaml
+    - docs/tasks/TASK-097.yaml
+    - docs/tasks/TASK-106.yaml
+    - src/aieos_bootstrap/
+    - tests/
+    - .github/workflows/
+  interfaces: [aieos_bootstrap.contract_path.candidates, aieos_bootstrap.contract_path.decide]
+  schemas: []
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - bench/**
+  - native/**
+  - docs/**
+  - tests/conformance/**
+  - tests/run_tests.py
+  - src/aieos_bootstrap/writer.py
+  - src/aieos_bootstrap/cli.py
+  - src/aieos_bootstrap/launcher.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/resume_log_inputs.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/session_violation.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The module. contract_path.py imports only writer and reads no attribute of it but STATE_DIR; it opens no file, starts no process and imports
+      no os, subprocess, gitread or time; no string constant, docstring or comment in it holds the substring of the state directory's name (CI's
+      string rule allows it only in writer.py and claude_code_shell_allow.py). candidates(task_id) checks the id (TASK-<digits>) and returns the
+      ordered pair of component tuples ((STATE_DIR, 'tasks', '<id>.yaml'), ('docs', 'tasks', '<id>.yaml')) and nothing else (no joined string; the
+      interfaces list stays at two names). decide(state, docs) takes each side as one of 'present', 'absent', 'refused' and returns, for the nine
+      pairs: (present, absent) gives ('read', 'state'); (absent, present) gives ('read', 'docs'); (present, present) gives ('both', None); (absent,
+      absent) gives ('absent', None); whenever either side is 'refused' it gives ('refused', 'state') when the state side is refused (also when both are)
+      and ('refused', 'docs') otherwise (a stated choice of this task, proposed and fail closed, not the specification's words: an unreadable docs
+      side cannot be shown absent, which the both-folders rule of specification 7 section 6 needs, so (present, refused) gives ('refused', 'docs')
+      although the specification consults docs when the state side is absent); any other argument raises ValueError, as candidates does for an id not of the form TASK-<digits>; a
+      test covers each of the two. Each of the nine
+      pairs is a row of the table test; a purity test (AST) pins the module's imports, its used names and attributes and the absence of the substring.
+      A test shows contract_path's state directory equals writer.STATE_DIR and claude_code_shell_allow.POLICY_DIR.
+  - AC2: >-
+      base_inputs. _contract and _contract_at read the contract through one helper: the state candidate is read with base_files.read_file and
+      classified (found is present; exactly one finding equal to "<ancestor or path> is missing", the rule of base_inputs._absent, is absent; any other
+      finding is refused), the docs candidate likewise, and contract_path.decide gives the outcome: read gives the text of that side; absent gives the
+      docs candidate's findings exactly as today (each finding prefixed by its path as _read does); both gives the finding "contract: <task> is in
+      both folders" (the state directory is not named by a literal); refused gives the refused side's findings; when both sides are refused, the state side's findings come first, then the docs side's. With the docs folder only, the git call list
+      is today's (a state lookup of a name that the root listing does not hold makes no call; base_inputs memoizes identical calls) and
+      test_read_cache's property (no identical call repeats) holds. The hash and parse checks after the read are unchanged.
+  - AC3: >-
+      task_contract. read_contract reads the commit and the root tree once, classifies each side by the entry check (the name absent from the
+      listing is absent; present with a wrong kind or mode, or a listing error, is refused; else present) at the state folder, its tasks folder and
+      the contract name, and likewise at docs, its tasks and the contract name; contract_path.decide gives the outcome; only the chosen blob is
+      read. With the docs folder only the calls are today's five (commit, root, docs, tasks, blob, all cat-file -p with the timeout of today) and
+      every finding, reason and shape is unchanged ('tree: docs missing', 'tree: tasks missing', 'tree: contract missing'); with a state folder the
+      calls are at most seven. New findings, exactly: 'tree: state not a tree', 'tree: state tasks not a tree', 'tree: state contract not a blob'
+      (a state-side refusal), 'tree: contract in both folders' (both), all with the reason 'tree' as the existing tree findings and no paths in the
+      answer; no fallback to docs after a state-side refusal. The source and the docstring of task_contract.py hold no substring of the state
+      directory's name (the pins at test_task_contract.py :448 and :477); its docstring keeps 'The five calls' and 'about 50 seconds' for the docs-only
+      case and adds the case with a state folder (seven calls, about 70 seconds).
+  - AC4: >-
+      claude_code_shell_allow. _read keeps one commit read and one root read, reads the state folder's tree once for both the policy walk and the
+      contract walk, and classifies and decides the contract as in AC3 with the findings prefixed 'contract: ' ('contract: tree: contract missing' as
+      today for neither side; 'contract: tree: state not a tree', 'contract: tree: state tasks not a tree', 'contract: tree: state contract not a
+      blob', 'contract: tree: contract in both folders'). POLICY_DIR stays and is the folder step of the policy walk (the contract walk takes the state
+      folder from contract_path); the answer shapes, the reasons and the policy findings ('policy: tree: .aieos missing', 'policy: tree: policy
+      missing') are unchanged. Each walk's outcome for a state-side refusal, in order (the state folder entry is not a tree, or a link, or has a wrong
+      mode): the policy walk gives its existing finding ('policy: tree: .aieos not a tree', test_claude_code_shell_allow.py :114 and :121-123) and an
+      empty policy list; the contract walk gives 'contract: tree: state not a tree' and no contract list, because the state side is refused and never
+      falls back; the two findings come in that order (policy, then contract), the answer's shape is as today, and the case at :114 and :121-123,
+      which expects the contract list still read, is an amended assertion (an amendment of TASK-076 AC1) listed among AC6's exemptions. The other state-side refusals (a stated choice of this task, fail closed, covered by one test): when the state
+      tasks entry is not a tree, or the state contract entry is not a 100644 blob, or a git failure or out-of-form tree text occurs when reading the
+      state folder's tree or its tasks tree, the contract walk gives its fixed finding ('contract: tree: state tasks not a tree', 'contract: tree:
+      state contract not a blob', or the existing git or text finding with the 'contract: ' prefix), no list and no fallback; the policy walk is as
+      today, except where the failure is in reading the state folder's tree itself, which is read once for both walks: there each walk gives its own
+      finding, policy first. With a store like the tests' (the state
+      folder holding the policy file only) the calls stay at most seven, with a state tasks folder at most eight, all cat-file -p with the timeout of
+      today, the commit and the root once each. A contract that is refused or in both folders is refused at step 3 of the hook through task_contract's
+      reader (claude_code_pretool_hook.py :30-36: any contract result other than "read" is refused before step 4); the empty allowlist (the
+      hook's _allowlist, :223-237, the returns at :227, :231, :233 and :236) is a second fail-closed layer.
+  - AC5: >-
+      The pins and the docstrings. The three import pins are widened by exactly the name contract_path, each named as an amendment: TASK-071 AC5 at
+      tests/unit/test_task_contract.py :436; TASK-076 AC8 at tests/unit/test_claude_code_shell_allow.py :322-323; TASK-082 AC8 at
+      tests/unit/test_base_inputs.py :537-538, with its used-attribute pin (:541-545) widened to include contract_path and its exact used
+      attributes; 'writer' stays a forbidden name in test_claude_code_shell_allow.py :327. The hook module's docstring changes only: the reader
+      sentence at :30 names the two folders, and the call-and-time sentence (:90-94) states the true worst case (fifteen calls, about 150 seconds
+      for the git calls alone; thirteen when the state folder holds the policy file only); the pinned phrases at
+      tests/unit/test_claude_code_pretool_hook.py :1138 and :1216 are amended and named as amendments of TASK-072 AC9, TASK-074 AC3 and TASK-076
+      AC7, and :1219-1220 is kept; an added test pins that the hook module's AST with its docstrings removed equals the base's. If a pinned phrase of
+      test_task_contract.py :471-472 must change, it is named as a TASK-071 AC7 amendment. The separation check of
+      tests/unit/test_claude_code_read_hook.py (OWN_IMPORTS at :45, run at :389-390 and :489-495) widens its entry for claude_code_shell_allow.py
+      by exactly contract_path and is named as an amendment of TASK-076 AC7; the hook's import closure gains writer through contract_path, which
+      uses writer.STATE_DIR only (the closure already holds writer through claude_code_store.py and session_violation.py).
+  - AC6: >-
+      Tests. Every existing test function that the task changes keeps its assertions or gets stronger ones, shown by a script that compares, per test
+      function, the ordered list of ast.dump of each assert statement and each self.assert* call at the base and at the task commit (TASK-102's
+      AC3 form), with the exempted assertions listed in commit X's map and named in the approval request; added tests: the table of AC1 (nine
+      rows), base_inputs, task_contract and claude_code_shell_allow each for the six cases (state only, docs only, both, neither, state refused, docs
+      refused) with real tree-object stand-ins or the existing fake tables and the call bounds of AC3 and AC4, a property test (random presence
+      and refusal combinations give the decide table and never a fallback past a refused state), a parity test stated against the public returns
+      (on one stand-in each reader's answer equals that same reader's answer on a docs-only stand-in that holds the same contract bytes; no
+      bytes are compared across readers), and in tests/integration/test_base_inputs_repo.py a test that reads the commit named by BASE (:14)
+      through base_inputs (docs only), with the expected answer written in the test. For task_contract no test is added to
+      tests/integration/test_task_contract_repo.py (its naming pin :45 and check :132-140): its existing test at :116-131 (TASK_070_ADDED, docs
+      only) is the real-repository check and is kept unchanged. Where the existing test modules carry naming pins that allow only the owning task's
+      criteria in a test docstring (tests/unit/test_task_contract.py :27, test_claude_code_shell_allow.py :360-361, test_claude_code_pretool_hook.py
+      :1159-1160, tests/integration/test_task_contract_repo.py :45, tests/property/test_task_contract_properties.py :21), a TASK-105 test is not
+      added there; any change left in such a file cites the owning task's ACn as an amendment, and the property file is not touched. The
+      exempted assertions include test_claude_code_shell_allow.py :114 and :121-123 (AC4). No test makes a temporary repository and none reads the working tree
+      of the real repository beyond what the existing tests read (aieos-checks.yml deterministic rule). An added test fails on a stated broken copy
+      where the item says "pin".
+  - AC7: >-
+      Parity and purity (INV-001, INV-002, INV-004). tests/conformance/, the native ports, the CI files, writer.py, gitread.py, base_files.py,
+      launcher.py, resume_inputs.py, resume_log_inputs.py, mcp_server.py and the hook's program are unchanged; no new process form, no import beyond the
+      standard library already used and contract_path; the substring of the state directory's name appears in no changed src file except
+      claude_code_shell_allow.py's existing POLICY_DIR; the deterministic rule, OPS-003, SEC-001, SEC-002 and bandit steps report no finding at the
+      task commits.
+  - AC8: >-
+      The stated limits. The docstrings of contract_path.py, base_inputs.py, task_contract.py and claude_code_shell_allow.py state the order, the
+      both-folders finding, the refusal without fallback, the committed-base-only rule, the call bounds, and that the handoff reader (DEF-0095)
+      and DEF-0113 are not done by this task, and the stated choice that a refused docs side with a present state side is a refusal. DEF-0105's Log
+      line is written by its own decision after landing.
+  - AC9: >-
+      The CI evidence. On the aieos-checks and aieos-native runs of the accepted commit every job and step is successful, read by run id; the
+      real-repository tests run on the Linux leg; on main after the records commit likewise. Each push and each GitHub job-data read is a
+      decision of the decision agent, outside the capabilities above.
+  - AC10: >-
+      The records (L-0034, L-0037). The task's evidence records' forms are built and checked through records.check_record and a governor shadow over a
+      dry records list at the approval request, with their raw output: per-article records, the property records, and the profile entries of risk
+      high; the expected result is NEEDS_REVIEW or NEEDS_REWORK at the GOV-003 row as in TASK-102 to TASK-106, stated in the acceptance as a departure.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1500k, wall_time: 8h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7]}
+  - {gate: G3, check: constitution, args: [AC8, AC9, AC10, INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts AND the aieos-checks and aieos-native runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false: the task's acts are edits to source and test files in the write set; it never launches a runtime on E:/AIEOS or any
+# real project (the tests use stand-ins and read-only reads of this repository); A51 item (4) keeps launching with a runtime with the owner.
+owner_kept_act: false
