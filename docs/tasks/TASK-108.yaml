@@ -1,0 +1,197 @@
+# Task contract TASK-108 (draft r1, session c7d6f32b, 2026-10-31; plan ruled in D-4075 and D-4077; r0 changed by D-4078 C1 and C2): the reader half of DEF-0095, "the last handoff"
+# of a task chosen by the claim records' order among the handoff files at the base, in both folders (docs/Deferred/DEF-0095-the-handoff-file-of-the-claim-tools-for-the-launcher.md).
+# The text it builds is specification 7 revision 6 (on main, sha256 97026c84ba96e198bfa33a87f924487845bf0649335a72abd5e053f9b706c852): section 6 (the state
+# directory of the readers; the handoff listing is base_inputs only), section 7 (the last handoff; the state-file rule) and section 10 items 9 and 17.
+# Fields and value forms follow specification 2 section 5.1 and TASK-107's contract (docs/tasks/TASK-107.yaml).
+# Not in this task: the write after a submission and any launcher wiring, abnormal ends, the state commit and its automation, the rule that a contract's
+# write set does not list the state directory (stated, read by no check), DEF-0113, DEF-0101's untouched-root check, specification 7 revision 7 (the
+# TASK-105 rename and the stale citation base_inputs.py :595-597 at :63; it follows this task's findings), any change to cli.py, launcher.py,
+# writer.py, handoff_file.py, gitread.py, base_files.py, mcp_server.py, the program of the hook, settings or the CI workflows.
+# Risk: high. R3 reads src/** and tests/** fail closed as high (risk-rules section 2 point 3); no critical rule matches the write set (no docs/specs/**, no
+# .github/**). Confirmed by script over the base in the approval request (TASK-107's form). Change class: critical_cr, because the CI's EVALUATOR list holds
+# src/aieos_bootstrap/** and the tests folders; confirmed by script in the approval request.
+# Evidence profile (assurance-model.md section 5, gov-AIEOS, high): unit_test, integration_test, property_test, deterministic_rule, static_security_analysis,
+# ai_review (cross-model), plus the evidence_required of the applicable articles, recorded per article from the start (L-0034) through records.check_record and
+# the governor shadow in the approval request. GOV-003 is recorded as it falls (DEF-0107's policy): acceptance is a stated per-task departure from the
+# advisory governor in the form of TASK-102 to TASK-107; compensating controls: the local run of the base's tests against the change's src and a review of the
+# test diff by a reviewer whose model differs from every model that did task work (L-0038), listed by machine.
+# Models (L-0044): the main session writes the code and the tests; reviewers and helpers run on Haiku 5.5 only; any other model for them needs the owner first; no
+# Fable; the decision agent runs on Opus 5.5. Each brief goes to the decision agent first.
+# Pin scan (first step of the work, reads only, written in the map of commit X): the pins on base_inputs.py (test_base_inputs.py :597-:616 imports and used names,
+# :618- refused names and strings including the state directory's substring, :660-:669 docstring phrases, :671-:678 the naming pin "TASK-082 ACn"; test_resume_inputs.py
+# :518-:535 the import pin of TASK-085 AC7; the call-count pins) is re-run at the base; a pin not in the list below stops the work and comes to the decision agent.
+# Stated limits: (1) a handoff file of one task and session in both folders refuses the task's handoff until an approved act removes one; (2) only the committed
+# base is read; (3) with two or more files, a file whose session has no handoff claim in the log cannot be ordered, so the reader refuses (a stated choice of this
+# task, proposed and fail closed, not the specification's words); (4) a handoff made in a session that ended abnormally writes no file and is never "the last
+# handoff" (specification 7 section 7); (5) the core does not commit the state files: who commits them is the user, or on the self-build the owner or an approved
+# executor script (specification 7 :74), and they stay out of an agent's commit because the work tree is cut after the state commit and CI refuses any changed
+# path under the state folder (specification 7 :75); the rule that a contract's write set does not list the state directory is stated and not enforced.
+task: TASK-108
+contract_version: v1
+task_type: implementation
+objective: >-
+  Build specification 7 revision 6's reader of "the last handoff": base_inputs lists the handoff files of the task at the base under the writer's state
+  directory (its handoffs folder) and under docs (docs/handoffs, as today), a file of one name in both folders is a finding, and among two or more files
+  it chooses the one whose session has the newest handoff claim record in the event log's order (the position among the task's deduplicated events, not a
+  clock); one file is returned as today, none gives None, and an unorderable choice or an out-of-form session part is a finding, never a guess; the docs-only
+  git calls and every other finding text stay as today.
+traces_to:
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#6
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#7
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#10
+  - docs/plan/m8-plan.md#7
+  - docs/Deferred/DEF-0095-the-handoff-file-of-the-claim-tools-for-the-launcher.md
+input_state:
+  # base_commit was written from refs/heads/main when the contract was drafted; the executor of commit C refuses unless it equals HEAD,
+  # refs/heads/main and refs/remotes/origin/main; commit C has it as its one parent.
+  base_commit: 7556220d66075421979c3ef542c040d75ef1cf61
+  depends_on: [TASK-079, TASK-082, TASK-087, TASK-094, TASK-107]
+  intent_versions:
+    # sha256 of each file at base_commit, filled by script (pin script) at the approval request
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 97026c84ba96e198bfa33a87f924487845bf0649335a72abd5e053f9b706c852
+    docs/specs/spec-02-aieos-file-format.md: e7c427b06775069a43d5e6d317a61c1974e5be921aee08a581c1918572a37a61
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: ff2f80e24e8b519d3cb4ab7904e613f6dfb6c5c3a991c63bf38de4826def8b69
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/Deferred/DEF-0095-the-handoff-file-of-the-claim-tools-for-the-launcher.md: 3991864a888c15f1abd6c7850ab25ffcf0c1b89dab212a53f216ba605c4d581c
+write_set:
+  # a file may leave after the pin scan, none may join without a contract revision; each path with its reason
+  paths:
+    - src/aieos_bootstrap/base_inputs.py
+    - tests/unit/test_base_inputs.py
+    - tests/integration/test_base_inputs_repo.py
+  # reasons: base_inputs.py changes _handoff, passes it the task's events, and its docstrings (AC1, AC2, AC5); test_base_inputs.py gains the added tests and the amended
+  # test_handoffs, every test docstring starting "TASK-082 AC7" as an amendment by this task, because its naming pin (:671-:678) forbids a TASK-108 test and the task
+  # adds no test file (AC4); contract_path.py and its test are not touched (its sentence "DEF-0095 (the handoff reader) and DEF-0113 are not done here" stays true, "here"
+  # being that module; D-4078); test_base_inputs_repo.py gains the real-repository test of AC4 only if the pin scan finds no naming pin there, and leaves the write set otherwise.
+read_set:
+  paths:
+    - docs/Deferred/
+    - docs/plan/m8-plan.md
+    - docs/specs/
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/tasks/TASK-079.yaml
+    - docs/tasks/TASK-082.yaml
+    - docs/tasks/TASK-087.yaml
+    - docs/tasks/TASK-094.yaml
+    - docs/tasks/TASK-107.yaml
+    - src/aieos_bootstrap/
+    - tests/
+    - .github/workflows/
+  interfaces: [aieos_bootstrap.contract_path.candidates, aieos_bootstrap.contract_path.decide]
+  schemas: []
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - bench/**
+  - native/**
+  - docs/**
+  - tests/conformance/**
+  - tests/run_tests.py
+  - src/aieos_bootstrap/writer.py
+  - src/aieos_bootstrap/handoff_file.py
+  - src/aieos_bootstrap/cli.py
+  - src/aieos_bootstrap/launcher.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/resume_log_inputs.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/contract_path.py
+  - tests/unit/test_contract_path.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The listing and the files. base_inputs._handoff lists the handoff files of the task at the base in two folders: the docs folder as today (the listing of docs,
+      the names docs/handoffs/<task>-<session>.md with no '/' after the head, so TASK-1000 files are not TASK-100's) and the state folder's handoffs folder (the
+      listing of '<state directory>/handoffs', the state directory taken as the first component of contract_path.candidates(task_id)[0], so base_inputs gains no
+      import, no used name of contract_path beyond candidates and decide, and no substring of the state directory's name; the claim test of AC2 is written inside
+      base_inputs.py and is not an import of handoff_file (the import pin at test_base_inputs.py :607-:608 stays unchanged); a missing folder lists as empty by _listing's
+      rule of _absent, any other listing failure is a refusal as today). A name under a task's head that ends in '.md' and whose session part does not fullmatch
+      [A-Za-z0-9._-]{1,128} or is '.' or '..' gives the finding 'last_handoff: <path>: the session part is out of form' and nothing is read (a stated choice of this
+      task, fail closed: today any such name counts). The same '<task>-<session>.md' name in both folders gives the finding 'last_handoff: <name> is in both folders'
+      and nothing is read. No file gives None; exactly one file gives {ref, text} as today, the ref being the path read, whether or not the log holds a claim of its
+      session. The text of the chosen file is read with the reader's existing byte rules.
+  - AC2: >-
+      The order. With two or more files the choice uses the events that _inputs already holds (the task's deduplicated events from _log_events; no second read of the log):
+      a claim of a session is an event of type 'record.added' whose payload is an object with fact_kind 'claim', subject the task, session the file's session, and refers_to
+      starting 'handoffs/<task>-<session>.md#' (handoff_file._claims' test, which also fixes the form of the whole reference); the rank of a file is the largest position of
+      such an event in the events list (the log's order, no clock is read); the file with the largest rank is chosen; a session with claims and no file is not counted; the
+      refers_to of one session never matches another session's file because the test ends in '.md#'. With two or more files and any file with no claim of its session the
+      finding is 'last_handoff: <n> handoffs of <task>; which is the last cannot be told: <path> has no handoff claim in the log' and nothing is read (a stated choice of this
+      task, proposed and fail closed, not the specification's words, which order by claim records only). Two files cannot share a rank; if they do, _Stop with the finding
+      'last_handoff: two handoffs share a rank' (a guard, covered by a test with a hand-built events list).
+  - AC3: >-
+      The call bounds. With the docs folder only (no state folder), the git call list, the findings and the shapes of every reader result are today's, except the
+      handoff findings of AC1 and AC2. The state folder's listing adds the calls of one base_files.list_paths of the prefix '<state directory>/handoffs' (nothing when the
+      root listing does not hold the state directory, by base_files' rule), cached by prefix so that no identical call repeats (test_read_cache's property holds). The
+      docstring states the added bound.
+  - AC4: >-
+      The pins and the tests. tests/unit/test_base_inputs.py's import pin (:597-:616) is unchanged and still passes (no new import, no new used attribute); the naming pin
+      (:671-:678) is met by the docstring of every added test starting 'TASK-082 AC7' with the words 'amended by TASK-108'; the existing test_handoffs (:508-:521) keeps its
+      assertions (two files and no claim in the log still give findings, which AC2 keeps true) and gets stronger ones; added tests, each with its stated broken copy where the
+      item says 'pin': none, one, and two files in docs only with and without claims; the state folder only; both folders with different names; the same name in both
+      folders; the out-of-form session part; the newest claim chosen though the other file's name sorts later; a claim of another task or session not counted; a claim whose
+      refers_to is of another session; a file with no claim among two; the TASK-1000 head; the rank guard; a test that contract_path.candidates(TASK)[0][0] equals
+      writer.STATE_DIR (the test file may import writer; the import pin applies to base_inputs.py only); the call list and the cache property; a missing state folder as
+      empty and a refused state listing as a refusal. A property test is added only if the pin scan finds a test module without a naming pin; otherwise the random ordering
+      case is a loop inside one unit test. In tests/integration/test_base_inputs_repo.py, if it has no naming pin, a test reads the commit named by its BASE through base_inputs
+      with the expected answer (no handoff file) written in the test. No test makes a temporary repository.
+  - AC5: >-
+      The docstrings. The module docstring's last_handoff line (:32) states the true rule (none, one, the claim-order choice among two or more, the two folders, the findings), its
+      TASK-107 limits sentence (:37-:40) no longer says the handoff reader is not done and states the new call bound. contract_path.py and its test are not touched. The
+      phrases pinned at test_base_inputs.py :660-:669 stay.
+  - AC6: >-
+      The stated limits. The docstring of base_inputs.py states, in plain words, the five limits of the header (both folders, committed base only, the unorderable choice
+      refused, abnormal ends, the state commit not made by the core and the unenforced write-set rule), and that the write after a submission, the launcher's wiring, DEF-0113
+      and DEF-0101's untouched-root check are not done by this task. DEF-0095's and DEF-0105's Log lines are written by their own decision after landing.
+  - AC7: >-
+      Parity and purity (INV-001, INV-002, INV-004). tests/conformance/, the native ports, the CI files, writer.py, handoff_file.py, gitread.py, base_files.py, launcher.py,
+      mcp_server.py, resume_inputs.py and every file of the forbidden list are unchanged; no new process form, no import beyond what base_inputs imports today; the substring of the
+      state directory's name appears in no changed src file; the deterministic rule, OPS-003, SEC-001, SEC-002 and bandit steps report no finding at the task commits; the
+      resume_inputs and context_compiler tests that read last_handoff pass unchanged.
+  - AC8: >-
+      The CI evidence. On the aieos-checks and aieos-native runs of the accepted commit every job and step is successful, read by run id; on main after the records commit
+      likewise. Each push and each GitHub job-data read is a decision of the decision agent, outside the capabilities above.
+  - AC9: >-
+      The records (L-0034, L-0037). The task's evidence records' forms are built and checked through records.check_record and a governor shadow over a dry records list at the
+      approval request, with their raw output: per-article records, and the profile entries of risk high; the expected result is NEEDS_REVIEW or NEEDS_REWORK at the GOV-003 row as in
+      TASK-102 to TASK-107, stated in the acceptance as a departure. The contract's budgets and exit conditions are printed at the first step of the work (L-0037).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1500k, wall_time: 8h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC7]}
+  - {gate: G3, check: constitution, args: [AC6, AC8, AC9, INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts AND the aieos-checks and aieos-native runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false: the task's acts are edits to source and test files in the write set; it never launches a runtime on E:/AIEOS or any real project (the tests use stand-ins
+# and read-only reads of this repository); A51 item (4) keeps launching with a runtime with the owner.
+owner_kept_act: false
