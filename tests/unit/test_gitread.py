@@ -69,6 +69,40 @@ def commit_bytes(parents=(A,), message='Subject\n\nBody line.\n', extra=''):
     return (head + '\n' + message).encode('utf-8')
 
 
+class BranchRefForm(unittest.TestCase):
+    GOOD = ['main', 'release-1.2', 'feature/x', 'a_b', 'a', 'A0', 'a.b', 'x' * 100, 'a/b/c-d_e.f']
+    BAD = ['', 'a..b', '-x', 'a//b', 'a/', '/a', 'a.lock', 'a/.b', 'a.', 'x@{1}', 'x' * 101, 'a b', 'a\n', '.a',
+           'a/b.lock', 'a/b/', '_a', 'a/_b', 'é', 'a\x00b', 'a:b', 'a~1', 'a^', 'a?', 'a*', 'a[b', 'a\\b']
+
+    def test_a_base_branch_ref_is_accepted(self):
+        """TASK-024 AC1: rev-parse accepts the name refs/heads/ followed by one strict base name, in the one fixed form,
+        and calls the process function once."""
+        for name in self.GOOD:
+            self.assertTrue(gitread.is_base_name(name), name)
+            r, s = call(['rev-parse', '--verify', '--end-of-options', 'refs/heads/' + name])
+            self.assertEqual(len(s.calls), 1, name)
+            self.assertIsNone(r['error'], name)
+
+    def test_other_branch_names_are_refused_before_any_process(self):
+        """TASK-024 AC1 and TASK-024 AC3: a base name out of the strict rule, another ref prefix, the prefix alone and
+        the branch name given without it are refused with no call to the process function."""
+        for name in self.BAD:
+            self.assertFalse(gitread.is_base_name(name), name)
+            r, s = call(['rev-parse', '--verify', '--end-of-options', 'refs/heads/' + name])
+            self.assertEqual(s.calls, [], name)
+            self.assertTrue(r['error'], name)
+        for ref in ('refs/heads/', 'refs/heads', 'refs/tags/x', 'refs/remotes/origin/main', 'heads/main', 'main',
+                    'refs/heads//main', 'REFS/HEADS/main', ' refs/heads/main', 'refs/heads/main '):
+            r, s = call(['rev-parse', '--verify', '--end-of-options', ref])
+            self.assertEqual(s.calls, [], ref)
+            self.assertTrue(r['error'], ref)
+
+    def test_the_rule_takes_only_a_str(self):
+        """TASK-024 AC1: the base-name rule is false for a value that is not a str and does not raise."""
+        for value in (None, 3, b'main', ['main'], ('main',), 1.5, True):
+            self.assertFalse(gitread.is_base_name(value), value)
+
+
 class PinnedForms(unittest.TestCase):
     def test_each_pinned_form_starts_one_process(self):
         """TASK-024 AC1 and TASK-024 AC12: each of the six pinned forms is accepted and calls the process function
@@ -80,8 +114,8 @@ class PinnedForms(unittest.TestCase):
 
     def test_every_other_form_is_refused_before_any_process(self):
         """TASK-024 AC1, TASK-024 AC3 and TASK-024 AC12: a fifth subcommand, an extra or missing option, a ref name
-        other than HEAD, an option-like or uppercase object name, an empty or non-list args and a non-string element are
-        refused, with no call to the process function."""
+        other than HEAD and other than refs/heads/ followed by a base name, an option-like or uppercase object name, an
+        empty or non-list args and a non-string element are refused, with no call to the process function."""
         bad = [
             ['log'], ['commit', '-m', 'x'], ['show', A], [],
             ['rev-parse', '--verify', '--end-of-options', 'main'],

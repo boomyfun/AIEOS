@@ -64,6 +64,7 @@ class World:
                         'starter': None if starter is None else starter}
         self.clocks = [NOW, NOW + datetime.timedelta(minutes=5)] if clocks is GOOD else list(clocks)
         self.calls = []
+        self.begin_kwargs = []
 
     def _give(self, name, args):
         self.calls.append((name, args))
@@ -79,7 +80,8 @@ class World:
             raise value
         return value
 
-    def begin(self, *args):
+    def begin(self, *args, **kwargs):
+        self.begin_kwargs.append(kwargs)
         return self._give('begin', args)
 
     def contract_at(self, *args):
@@ -135,10 +137,27 @@ class TASK094AC1Composition(unittest.TestCase):
         later = NOW + datetime.timedelta(minutes=5)
         self.assertEqual(world.args('begin'), [(ROOT, ROOT, TASK, 'claude_code', None, 'aieos cli launch',
                                                 'aieos cli launch', NOW, NOW + launcher.LAUNCH_LEASE)])
+        self.assertEqual(world.begin_kwargs, [{'base': 'main'}])
         self.assertEqual(world.args('contract_at'), [(ROOT, HEAD, TASK)])
         self.assertEqual(world.args('finish'), [(ROOT, TASK, SESSION, TOKEN, later, PATHS, [], RECORDER)])
         self.assertEqual(world.args('write_handoff'), [(ROOT, TASK, SESSION, None)])
         self.assertEqual(launcher.LAUNCH_LEASE, datetime.timedelta(hours=2))
+
+    def test_a_base_is_passed_to_begin_by_keyword(self):
+        """TASK-094 AC1: a non-default base reaches begin as the keyword base with the nine positional arguments
+        unchanged; a base out of the strict rule gives "refused" with reason "argument" and neither the clock nor begin is
+        called."""
+        world = World()
+        out = launch(world, base='release/1.2')
+        self.assertEqual(out['result'], 'done')
+        self.assertEqual(world.begin_kwargs, [{'base': 'release/1.2'}])
+        self.assertEqual(len(world.args('begin')[0]), 9)
+        for bad in ('', 'a..b', '-x', 'a/', 3, None, 'x' * 101):
+            world = World()
+            out = launch(world, base=bad)
+            self.assertEqual((out['result'], out['reason']), ('refused', 'argument'), bad)
+            self.assertTrue(out['findings'][0].startswith('argument: base '), out['findings'])
+            self.assertEqual(world.calls, [], bad)
 
     def test_the_starter_gets_a_copy(self):
         """TASK-094 AC1: the starter is called once with a copy of the grant's environment, equal and not the same

@@ -10,8 +10,8 @@ expiry, then the Resume Check, then the grant):
 1. The arguments: root an absolute path (a drive letter followed by ":/" or ":\\", or a leading "/"), repo checked by
    gitread.form_error with the HEAD read's form and TIMEOUT, task_id TASK-<digits>, adapter_name, holder and recorder
    non-empty strings, max_risk None or one of RISKS, now and expires_at timezone-aware UTC whole seconds with
-   expires_at after now, every callee None or callable; a wrong one gives "refused" with reason "argument" and no
-   callee called.
+   expires_at after now, base (TASK-106; default "main") a str that gitread.is_base_name accepts, every callee None or
+   callable; a wrong one gives "refused" with reason "argument" and no callee called.
 1a. The gone sessions' records, before the expiry (task TASK-090; specification 5 section 11 point 10; specification
    7 :47): read_sessions(root, task_id) lists the sessions that hold stored reads for the task; for each, in order,
    session_leases(root, session_id, now) is read once and the session is skipped when any of its rows is unexpired at
@@ -24,7 +24,14 @@ expiry, then the Resume Check, then the grant):
 2. The core's expiry, expire(root, now) (writer.expire_leases): the core's expiry runs before a grant (specification
    5 :112).
 3. HEAD, read once through read by gitread's fixed form; an answer that is not exactly 40 lowercase hex characters
-   gives "refused". AIEOS_BASE is the head_commit read here; that it is the base branch's tip is not checked.
+   gives "refused". AIEOS_BASE is the head_commit read here; step 3a finds it equal to the base branch's tip at that
+   read.
+3a. The base (task TASK-106; specification 7 revision 5, section 5): the local ref refs/heads/<base> is read once
+   through read by gitread's rev-parse form, after the HEAD read and before the log read: an answer that is not a
+   mapping with no error, exit 0 and bytes, or is not exactly 40 lowercase hex characters, gives "refused" with reason
+   "base"; a HEAD that does not equal the ref's answer gives "not granted" with reason "base"; each with no session
+   row opened and read_log, held, start and end not called. Only the local ref is read, nothing is fetched, and the
+   ref can move after the read; a base out of form was refused in step 1 with reason "argument".
 4. The log, read once by read_log(root), then execution.task_view over those bytes: its findings give "refused";
    then a task IN_PROGRESS (a lease still held after the expiry) gives "not granted" with reason "held", and any
    other state outside READY and REWORK gives "not granted" with reason "state"; all before adapter.start, with no
@@ -86,8 +93,12 @@ The rulings, each this task's choice (decisions D-2673, D-2675, D-2681):
 Stated limits: the observed read-set record is written at four call places: end writes it at the normal end and for the
 gone session at the end after a violation or an expiry, with the reads' removal (TASK-089), start's step 1a writes it at
 the next start, before the expiry, for a session gone with no end (TASK-090), and end_outside for `aieos end`; launching
-with a runtime is not before DEF-0101's open points are closed: the base-tip check, check 0 and max_risk (a statement,
-not a lock). Step 1a's limits: with no later start of the task no record is written; a gone session that
+with a runtime is not before DEF-0101's open points are closed: the untouched-root check and max_risk (a statement, not
+a lock; check 0 is made by the Resume Check at every start and the base-tip check by step 3a). The base's limits
+(TASK-106): the hook still makes no check 0 (specification 5 :121; specification 7 revision 5 :49); the base-name rule
+of gitread.is_base_name is stricter than git's own, so a base that git accepts but the rule refuses is refused in step 1
+with reason "argument"; `aieos launch` passes no base, so the default "main" holds, and an option for other bases is
+open (specification 7 section 10 item 7). Step 1a's limits: with no later start of the task no record is written; a gone session that
 stored no read is never listed; now is the caller's, so a now later than the real time reads a live lease as expired;
 it writes records and removes reads even when start then refuses or does not grant; a session that can never be
 processed keeps its reads and gives its line at every start; a project with no store gives a line at each start; the
@@ -148,7 +159,7 @@ for approve a contract-kind authority record (approval_binding kind contract, no
 it; for reject the same binding with outcome fail and no state event; for edit a claim marked contract_edit, holding the
 note as text, and no state event. It writes no acceptance-kind approval, so nothing it writes is counted by the
 governor at acceptance. It reads the contract at HEAD through start's own reader, _head; that HEAD is the base
-branch's tip is not checked (DEF-0101's base-tip check, open), and the check that the contract equals the last drafted
+branch's tip is not checked here (the base-tip check is start's step 3a, not approval_act's), and the check that the contract equals the last drafted
 version binds the approval to the drafted text whatever HEAD is. The source class and the name are the caller's
 statement, not checked. approval_act reads the caller's clock once, an exception to "reads no clock" above.
 
@@ -243,7 +254,18 @@ def _utc_whole(value):
             and value.microsecond == 0)
 
 
-def _argument_findings(root, repo, task_id, adapter_name, max_risk, holder, recorder, now, expires_at, callees):
+def _base_finding(base):
+    """The finding for a base that gitread.is_base_name refuses, or None (TASK-106 AC1)."""
+    if gitread.is_base_name(base):
+        return None
+    shown = repr(base[:60]) if isinstance(base, str) else type(base).__name__
+    return ('argument: base %s is not a base branch name of specification 7 revision 5 (1 to 100 of the ASCII letters, '
+            'digits, ".", "_", "-" and "/"; split on "/", every part non-empty, beginning with a letter or a digit and '
+            'not ending in "." or ".lock"; ".." nowhere)' % shown)
+
+
+def _argument_findings(root, repo, task_id, adapter_name, max_risk, holder, recorder, now, expires_at, callees,
+                       base='main'):
     found = []
     if not (isinstance(root, str) and _ROOT.fullmatch(root) is not None):
         found.append('argument: root is not an absolute path')
@@ -257,6 +279,9 @@ def _argument_findings(root, repo, task_id, adapter_name, max_risk, holder, reco
             found.append('argument: %s is not a non-empty string' % name)
     if not (max_risk is None or (isinstance(max_risk, str) and max_risk in RISKS)):
         found.append('argument: max_risk is neither null nor one of low, medium, high and critical')
+    base_found = _base_finding(base)
+    if base_found is not None:
+        found.append(base_found)
     times = True
     for name, value in (('now', now), ('expires_at', expires_at)):
         if not _utc_whole(value):
@@ -282,6 +307,24 @@ def _head(read, repo):
     if _HEX40.fullmatch(head) is None:
         return None, ['head: rev-parse HEAD gave %r, not 40 lowercase hex characters' % head[:80]]
     return head, None
+
+
+def _base_tip(read, repo, base, head):
+    """Step 3a (TASK-106): (None, None) when HEAD is the tip of refs/heads/<base>, else ("refused" or "not granted",
+    findings)."""
+    name = 'refs/heads/%s' % base
+    r = read(repo, ['rev-parse', '--verify', '--end-of-options', name], TIMEOUT)
+    if not (isinstance(r, dict) and r.get('error') is None and r.get('exit') == 0 and isinstance(r.get('out'), bytes)):
+        return 'refused', ['base: rev-parse %s gave no answer (%r)' % (name, r.get('error') if isinstance(r, dict) else r)]
+    try:
+        tip = r['out'].decode('ascii').strip()
+    except UnicodeDecodeError:
+        return 'refused', ['base: rev-parse %s gave a non-ASCII answer' % name]
+    if _HEX40.fullmatch(tip) is None:
+        return 'refused', ['base: rev-parse %s gave %r, not 40 lowercase hex characters' % (name, tip[:80])]
+    if tip != head:
+        return 'not granted', ['base: HEAD %s is not the tip %s of %s' % (head, tip, name)]
+    return None, None
 
 
 def session_id_of(task_id, now, head_commit):
@@ -378,14 +421,14 @@ def _gone_records(root, task_id, now, recorder, read_sessions, session_leases, s
 def start(root, repo, task_id, adapter_name, max_risk, holder, recorder, now, expires_at, read=None, read_log=None,
           expire=None, start=None, end=None, check=None, append=None, grant=None, release=None, held=None,
           start_session=None, end_session=None, release_lease_token=None, read_sessions=None, session_leases=None,
-          stored_reads=None, remove_reads=None, observe_gone=None):
-    """Start one session (TASK-086 AC1 to AC7; TASK-090 AC3 to AC6): a mapping with exactly START_KEYS; never
-    raises."""
+          stored_reads=None, remove_reads=None, observe_gone=None, base='main'):
+    """Start one session (TASK-086 AC1 to AC7; TASK-090 AC3 to AC6; TASK-106 AC1 and AC2, the keyword base): a mapping
+    with exactly START_KEYS; never raises."""
     callees = (read, read_log, expire, start, end, check, append, grant, release, held, start_session, end_session,
                release_lease_token, read_sessions, session_leases, stored_reads, remove_reads, observe_gone)
     try:
         found = _argument_findings(root, repo, task_id, adapter_name, max_risk, holder, recorder, now, expires_at,
-                                   callees)
+                                   callees, base)
     except Exception as exc:  # AC1: an argument whose own methods raise
         found = ['argument: checking the arguments raised %s' % type(exc).__name__]
     if found:
@@ -416,6 +459,10 @@ def start(root, repo, task_id, adapter_name, max_risk, holder, recorder, now, ex
         head, found = _head(read, repo)
         if found:
             return _result('refused', 'head', found, gone=gone)
+        step = 'base'
+        outcome, found = _base_tip(read, repo, base, head)
+        if outcome is not None:
+            return _result(outcome, 'base', found, head_commit=head, gone=gone)
         step = 'log'
         log = read_log(root)
         if not isinstance(log, bytes):
@@ -853,7 +900,7 @@ def _launch_strs(value):
     return [f for f in value if isinstance(f, str)] if isinstance(value, (list, tuple)) else []
 
 
-def _launch_argument_findings(root, task_id, clock, starter, callees):
+def _launch_argument_findings(root, task_id, clock, starter, callees, base='main'):
     found = []
     if not (isinstance(root, str) and _WINDOWS_ROOT.fullmatch(root) is not None):
         found.append('argument: root is not an absolute Windows path')
@@ -866,6 +913,9 @@ def _launch_argument_findings(root, task_id, clock, starter, callees):
     for name, value in zip(_LAUNCH_CALLEES, callees):
         if value is not None and not callable(value):
             found.append('argument: %s is neither None nor callable' % name)
+    base_found = _base_finding(base)
+    if base_found is not None:
+        found.append(base_found)
     return found
 
 
@@ -965,15 +1015,18 @@ def _launch_finish(state, clock, finish, finish_outside, write_handoff):
 
 
 def launch_outside(root, task_id, clock, starter, begin=None, contract_at=None, finish=None, finish_outside=None,
-                   write_handoff=None):
+                   write_handoff=None, base='main'):
     """Launch one session from outside the runtime (task TASK-094; `aieos launch`, specification 7 :34-35, sections 5
     and 7): start with max_risk None, on a grant the contract's write set at the grant's head, the caller's starter, the
     session's end in every case after a grant, then the handoff file after a done end. A mapping with exactly
     LAUNCH_KEYS; it never raises an Exception; a BaseException from the starter is re-raised after the end and the
-    handoff."""
+    handoff. The keyword base (task TASK-106; default "main") names the base branch: a base that gitread.is_base_name
+    refuses gives "refused" with reason "argument" before the clock and begin are called, and begin is always called with
+    base=base by keyword; `aieos launch` passes no base, so the default "main" holds and an option for other bases is
+    open (specification 7 section 10 item 7)."""
     callees = (begin, contract_at, finish, finish_outside, write_handoff)
     try:
-        found = _launch_argument_findings(root, task_id, clock, starter, callees)
+        found = _launch_argument_findings(root, task_id, clock, starter, callees, base)
     except Exception as exc:  # an argument whose own methods raise
         found = ['argument: checking the arguments raised %s' % type(exc).__name__]
     if found:
@@ -991,7 +1044,7 @@ def launch_outside(root, task_id, clock, starter, begin=None, contract_at=None, 
         return _launch_result('refused', 'clock', [_LAUNCH_BAD_CLOCK])
     try:
         started = begin(root, root, task_id, LAUNCH_ADAPTER, None, LAUNCH_HOLDER, LAUNCH_RECORDER, now,
-                        now + LAUNCH_LEASE)
+                        now + LAUNCH_LEASE, base=base)
     except Exception as exc:
         return _launch_result('refused', 'start', ['start: a step raised %s' % type(exc).__name__])
     if type(started) is not dict:

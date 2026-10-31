@@ -61,6 +61,44 @@ class Calls:
         raise AssertionError('no process may start here')
 
 
+class BranchRefProperties(unittest.TestCase):
+    def test_the_base_name_rule_and_the_form_agree(self):
+        """TASK-024 AC1: for random names over letters, digits, ".", "_", "-", "/", a space and a non-ASCII letter, the
+        pinned rev-parse form with refs/heads/ and the name has no form error exactly when is_base_name accepts the name,
+        and every accepted name is 1 to 100 ASCII characters whose parts are non-empty, begin with a letter or a digit,
+        do not end in "." or ".lock" and hold no "..", with none of the refused characters."""
+        for seed in SEEDS:
+            rng = random.Random(seed)
+            for _ in range(ROUNDS * 5):
+                name = ''.join(rng.choice(NAME_CHARS) for _ in range(rng.randrange(0, 14)))
+                ok = gitread.is_base_name(name)
+                err = gitread.form_error(REPO, ['rev-parse', '--verify', '--end-of-options', 'refs/heads/' + name], 30)
+                self.assertEqual(err is None, ok, name)
+                if ok:
+                    self.assertTrue(1 <= len(name) <= 100 and name.isascii(), name)
+                    self.assertNotIn('..', name)
+                    for part in name.split('/'):
+                        self.assertTrue(part and part[0].isalnum(), name)
+                        self.assertFalse(part.endswith('.') or part.endswith('.lock'), name)
+                    self.assertFalse(set(name) & set(' é'), name)
+
+    def test_a_name_that_is_not_a_base_name_is_never_a_branch_ref_form(self):
+        """TASK-024 AC1 and TASK-024 AC12: a broken ref name (a prefix other than refs/heads/, or the prefix with a
+        character from an unsafe set) is refused by the form check and never starts a process."""
+        c = Calls()
+        with mock.patch.object(gitread.subprocess, 'run', c):
+            for seed in SEEDS:
+                rng = random.Random(seed)
+                for _ in range(ROUNDS):
+                    bad = rng.choice(['refs/tags/', 'refs/remotes/', 'heads/', 'refs/heads//', 'refs/head/']) + 'main'
+                    r = gitread.run(REPO, ['rev-parse', '--verify', '--end-of-options', bad])
+                    self.assertTrue(r['error'], bad)
+                    bad2 = 'refs/heads/' + rng.choice(['a', 'b/c']) + rng.choice(['..', ' ', '\n', ':', '~', '^', '?', '*', '[', '\\', '@{'])
+                    r2 = gitread.run(REPO, ['rev-parse', '--verify', '--end-of-options', bad2])
+                    self.assertTrue(r2['error'], bad2)
+        self.assertEqual(c.n, 0)
+
+
 class Forms(unittest.TestCase):
     def test_broken_forms_are_refused_without_a_call(self):
         """TASK-024 AC1 and TASK-024 AC12: every argument list made out of a pinned form by an insertion, a removal or a

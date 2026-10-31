@@ -48,6 +48,17 @@ class RepositoryHistory(unittest.TestCase):
         self.assertEqual(r['exit'], 0)
         self.assertIsNotNone(gitread.OBJECT_ID.fullmatch(r['out'].decode('utf-8').strip()))
 
+    def test_a_missing_branch_ref_gives_a_nonzero_exit(self):
+        """TASK-024 AC8, TASK-024 AC1 and TASK-024 AC12: rev-parse of a well-formed refs/heads/ name that exists in no
+        checkout is accepted by the form check, runs, and gives the exit code and the bytes of the wrapper's answer with
+        no refusal error; git answers a non-zero exit and no object id."""
+        r = gitread.run(ROOT, ['rev-parse', '--verify', '--end-of-options', 'refs/heads/no-such-branch-106'])
+        self.assertIsNone(r['error'])
+        self.assertNotEqual(r['exit'], 0)
+        self.assertIsInstance(r['exit'], int)
+        self.assertEqual(r['out'], b'')
+        self.assertIsInstance(r['err'], bytes)
+
     def test_refused_forms_start_nothing(self):
         """TASK-024 AC8, TASK-024 AC1, TASK-024 AC3 and TASK-024 AC12: a write form and a fifth subcommand return the
         refusal result."""

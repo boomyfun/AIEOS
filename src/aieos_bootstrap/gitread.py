@@ -4,7 +4,8 @@ section 12 point 4; DEF-0030): the first piece of the core's caller, and INV-001
 INV-001 allows a process only "through one wrapper with a pinned list of allowed executables". This module is that
 wrapper. Its pinned list is [git], and git runs only with one of four read-only subcommands, each in one fixed form:
 
-- rev-parse: ["rev-parse", "--verify", "--end-of-options", <name>], the name an object id or HEAD;
+- rev-parse: ["rev-parse", "--verify", "--end-of-options", <name>], the name an object id, HEAD, or "refs/heads/" followed by
+  one branch name that is_base_name accepts (specification 7 revision 5, section 5: the launcher's base-tip check; TASK-106);
 - cat-file: ["cat-file", "-p", <id>] or ["cat-file", "-t", <id>];
 - rev-list: ["rev-list", "--parents", "-n", "1", <id>];
 - diff-tree: ["diff-tree", "--no-commit-id", "--name-only", "-r", "--no-renames", "--no-ext-diff", "--no-textconv",
@@ -75,6 +76,27 @@ def _is_id(s):
     return OBJECT_ID.fullmatch(s) is not None
 
 
+BASE_NAME_CHARS = re.compile(r'[A-Za-z0-9._/-]{1,100}')
+BRANCH_PREFIX = 'refs/heads/'
+
+
+def is_base_name(name):
+    """Whether name is one base branch name of specification 7 revision 5 (section 5): a str of 1 to 100 ASCII letters,
+    digits, ".", "_", "-" and "/"; split on "/", every part is non-empty, begins with a letter or a digit and does not end
+    in "." or ".lock"; and ".." occurs nowhere. The rule is stricter than git's own (TASK-106 AC3). Pure: it starts no
+    process and reads nothing."""
+    if type(name) is not str or BASE_NAME_CHARS.fullmatch(name) is None or '..' in name:
+        return False
+    for part in name.split('/'):
+        if not part or not part[0].isalnum() or part.endswith('.') or part.endswith('.lock'):
+            return False
+    return True
+
+
+def _is_branch_ref(s):
+    return s.startswith(BRANCH_PREFIX) and is_base_name(s[len(BRANCH_PREFIX):])
+
+
 def form_error(repo, args, timeout):
     """Why repo, args and timeout are not a pinned form, or None when they are one (TASK-024 AC1)."""
     # exact types, not subclasses: a subclass of list or str could compare or iterate otherwise than it indexes
@@ -90,7 +112,7 @@ def form_error(repo, args, timeout):
     if sub not in SUBCOMMANDS:
         return 'subcommand not in the pinned list'
     if sub == 'rev-parse':
-        ok = len(args) == 4 and args[1:3] == ['--verify', '--end-of-options'] and (args[3] == 'HEAD' or _is_id(args[3]))
+        ok = len(args) == 4 and args[1:3] == ['--verify', '--end-of-options'] and (args[3] == 'HEAD' or _is_id(args[3]) or _is_branch_ref(args[3]))
     elif sub == 'cat-file':
         ok = len(args) == 3 and args[1] in ('-p', '-t') and _is_id(args[2])
     elif sub == 'rev-list':

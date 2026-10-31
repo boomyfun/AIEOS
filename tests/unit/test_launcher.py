@@ -29,6 +29,7 @@ REC = 'aieos-launcher (unit)'
 TOKEN = {'epoch': 'e1', 'counter': 1}
 LEASE = {'task_id': TASK, 'fencing_token': TOKEN, 'expires_at': LATER}
 HEAD_ARGS = ['rev-parse', '--verify', '--end-of-options', 'HEAD']
+BASE_ARGS = ['rev-parse', '--verify', '--end-of-options', 'refs/heads/main']
 
 S_TEXT = 'Đặc tả — một dòng\n'
 S_HASH = hashlib.sha256(S_TEXT.encode('utf-8')).hexdigest()
@@ -104,7 +105,7 @@ class Repo:
 
     def __call__(self, repo, args, timeout=30):
         self.calls.append((repo, list(args), timeout))
-        if list(args) == HEAD_ARGS:
+        if list(args) == HEAD_ARGS or list(args) == BASE_ARGS:
             return ok((self.head + '\n').encode('ascii'))
         oid = args[-1]
         if oid not in self.objects:
@@ -356,9 +357,131 @@ class TASK086AC1Arguments(Base):
             self.assertEqual(seen, [name])
 
 
+class TASK086AC1BaseTip(Base):
+    OTHER = 'b' * 40
+
+    def reading(self, repo, tip_answer):
+        """A read that answers the exact base form with tip_answer (a callable or a value) and every other call as the
+        repository stand-in does."""
+        def read(r, a, t=30):
+            if list(a) == BASE_ARGS:
+                return tip_answer(r, a, t) if callable(tip_answer) else tip_answer
+            return repo(r, a, t)
+        return read
+
+    def test_a_base_out_of_form_is_refused_at_the_argument_check(self):
+        """TASK-086 AC1: a base that is not a str or is out of the strict base-name rule gives "refused" with reason
+        "argument" and a finding that begins "argument: base ", with no callee called and no git read."""
+        for bad in ('', 'a..b', '-x', 'a//b', 'a/', '/a', 'a.lock', 'a/.b', 'a.', 'x@{1}', 'x' * 101, 'a b', 'a\n', 3,
+                    None, b'main'):
+            repo = world()
+            c = calls_for(repo, approved_log(repo))
+            r = launch(c, stub=('start', 'end'), base=bad)
+            self.assert_form(r)
+            self.assertEqual((r['result'], r['reason']), ('refused', 'argument'), bad)
+            self.assertTrue(r['findings'][0].startswith('argument: base '), r['findings'])
+            self.assertEqual(c.names(), [], bad)
+            self.assertEqual(repo.calls, [], bad)
+
+    def test_the_base_ref_is_read_after_head_and_before_the_log(self):
+        """TASK-086 AC1 and TASK-086 AC2: the default base reads the exact form for refs/heads/main once, right after the
+        HEAD read and before read_log, with the gitread timeout, and the form passes gitread.form_error."""
+        repo = world()
+        c = calls_for(repo, approved_log(repo))
+        launch(c, stub=('start', 'end'))
+        self.assertEqual(repo.calls[0], (REPO, HEAD_ARGS, 30))
+        self.assertEqual(repo.calls[1], (REPO, BASE_ARGS, 30))
+        self.assertEqual(c.names()[:4], ['expire', 'read', 'read', 'read_log'])
+        self.assertIsNone(gitread.form_error(*repo.calls[1]))
+
+    def test_a_non_default_base_names_its_own_ref(self):
+        """TASK-086 AC1: base="release/1.2", "main", "release-1.2", "feature/x" and "a_b" read refs/heads/<base>, and the
+        start goes on when that ref is HEAD: the reason is neither "argument" nor "base" and adapter.start is called."""
+        for name in ('release/1.2', 'main', 'release-1.2', 'feature/x', 'a_b'):
+            repo = world()
+            seen = []
+            other = ['rev-parse', '--verify', '--end-of-options', 'refs/heads/' + name]
+
+            def read(r, a, t=30, repo=repo, other=other, seen=seen):
+                if list(a) == other:
+                    seen.append(list(a))
+                    return ok((repo.head + '\n').encode('ascii'))
+                return repo(r, a, t)
+            c = calls_for(repo, approved_log(repo), read=read)
+            r = launch(c, stub=('start', 'end'), base=name)
+            self.assertEqual(seen, [other], name)
+            self.assertNotIn(r['reason'], ('argument', 'base'), name)
+            self.assertIn('start', c.names(), name)
+
+    def test_a_head_that_is_not_the_tip_is_not_granted(self):
+        """TASK-086 AC1 and TASK-086 AC5b: a HEAD that differs from the base ref's answer gives "not granted" with
+        reason "base", a finding "base: HEAD <head> is not the tip <tip> of refs/heads/main", the head in head_commit, no
+        session row and no read_log, held, start or end."""
+        repo = world()
+        c = calls_for(repo, approved_log(repo), read=self.reading(repo, ok((self.OTHER + '\n').encode('ascii'))))
+        r = launch(c, stub=('start', 'end'))
+        self.assert_form(r)
+        self.assertEqual((r['result'], r['reason']), ('not granted', 'base'))
+        self.assertIn('base: HEAD %s is not the tip %s of refs/heads/main' % (repo.head, self.OTHER), r['findings'])
+        self.assertEqual(r['head_commit'], repo.head)
+        self.assertEqual(c.names(), ['expire', 'read', 'read'])
+        self.assertIsNone(r['environment'])
+
+    def test_an_unreadable_base_ref_is_refused(self):
+        """TASK-086 AC1: a base read with no answer, a non-zero exit, a non-bytes output, a non-ASCII answer or an answer
+        that is not 40 lowercase hex characters gives "refused" with reason "base" and a finding that begins "base:", with
+        the head in head_commit and no later callee."""
+        answers = [{'exit': 128, 'out': b'', 'err': b'fatal', 'error': None}, {'exit': 0, 'out': 'x', 'err': b'',
+                                                                              'error': None},
+                   {'exit': None, 'out': b'', 'err': b'', 'error': 'refused'}, 'x', None,
+                   ok(b'\xff\xfe\n'), ok(b'abc\n'), ok(b''), ok(b'A' * 40 + b'\n')]
+        for answer in answers:
+            repo = world()
+            c = calls_for(repo, approved_log(repo), read=self.reading(repo, answer))
+            r = launch(c, stub=('start', 'end'))
+            self.assert_form(r)
+            self.assertEqual((r['result'], r['reason']), ('refused', 'base'), answer)
+            self.assertTrue(r['findings'][0].startswith('base:'), r['findings'])
+            self.assertEqual(r['head_commit'], repo.head)
+            self.assertEqual(c.names(), ['expire', 'read', 'read'], answer)
+
+    def test_a_raise_in_the_base_read_is_refused(self):
+        """TASK-086 AC1: the HEAD read succeeds and the base read raises: "refused" with reason "base" and no later
+        callee (the step variable is "base")."""
+        def boom(r, a, t=30):
+            raise RuntimeError('x')
+        repo = world()
+        c = calls_for(repo, approved_log(repo), read=self.reading(repo, boom))
+        r = launch(c, stub=('start', 'end'))
+        self.assert_form(r)
+        self.assertEqual((r['result'], r['reason']), ('refused', 'base'))
+        self.assertEqual(c.names(), ['expire', 'read', 'read'])
+
+
+    def test_a_raise_in_the_inputs_reads_is_refused(self):
+        """TASK-086 AC4 and TASK-086 AC7: the HEAD read and the base read succeed and the next read, the first of the
+        inputs reads, raises: "refused", with adapter.start and adapter.end not called."""
+        repo = world()
+        seen = []
+
+        def read(r, a, t=30):
+            seen.append(list(a))
+            if len(seen) > 2:
+                raise RuntimeError('x')
+            return repo(r, a, t)
+        c = calls_for(repo, approved_log(repo), read=read)
+        r = launch(c, stub=('start', 'end'))
+        self.assert_form(r)
+        self.assertEqual(r['result'], 'refused')
+        self.assertEqual(seen[:2], [HEAD_ARGS, BASE_ARGS])
+        self.assertEqual(c.of('start'), [])
+        self.assertEqual(c.of('end'), [])
+        self.assertEqual(r['reason'], 'inputs')
+
+
 class TASK086AC2Order(Base):
     def test_the_order(self):
-        """TASK-086 AC2: expire, then read (HEAD), then read_log, then held (the one held call before adapter.start),
+        """TASK-086 AC2: expire, then read (HEAD), then read (the base ref), then read_log, then held (the one held call before adapter.start),
         then the readers' reads, then adapter.start, then adapter.end when no token was granted and the row was
         opened; execute's own second read_log and held calls come inside adapter.start. TASK-090 AC7: with a recording
         read_sessions, it is called first, before expire."""
@@ -366,22 +489,22 @@ class TASK086AC2Order(Base):
         c = calls_for(repo, approved_log(repo), start=ended(), end=ended())
         r = launch(c, stub=('start', 'end'))
         names = c.names()
-        self.assertEqual(names[:4], ['expire', 'read', 'read_log', 'held'])
+        self.assertEqual(names[:5], ['expire', 'read', 'read', 'read_log', 'held'])
         self.assertEqual(names[-2:], ['start', 'end'])
-        self.assertTrue(set(names[4:-2]) == {'read'} and len(names) > 7, names)
+        self.assertTrue(set(names[5:-2]) == {'read'} and len(names) > 8, names)
         self.assert_form(r)
         self.assertEqual(r['result'], 'not granted')
         c = calls_for(repo, approved_log(repo))
         r = launch(c, max_risk=None)
         names = c.names()
-        self.assertEqual(names[:4], ['expire', 'read', 'read_log', 'held'])
+        self.assertEqual(names[:5], ['expire', 'read', 'read', 'read_log', 'held'])
         first = names.index('start_session')
         self.assertEqual(names[first:first + 3], ['start_session', 'read_log', 'held'])
         self.assertEqual(names[-1], 'end_session')
         self.assertEqual(r['result'], 'not granted')
         c = calls_for(repo, approved_log(repo), read_sessions=store(value=[]))
         r = launch(c, max_risk=None, read_sessions=c.make('read_sessions', writer.read_sessions))
-        self.assertEqual(c.names()[:5], ['read_sessions', 'expire', 'read', 'read_log', 'held'])
+        self.assertEqual(c.names()[:6], ['read_sessions', 'expire', 'read', 'read', 'read_log', 'held'])
         self.assertEqual(c.of('read_sessions')[0][1], (ROOT, TASK))
         self.assertEqual(r['result'], 'not granted')
 
