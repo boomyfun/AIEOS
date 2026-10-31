@@ -1,0 +1,209 @@
+# Task contract TASK-110 (draft r4 (r3 with the D-4219 edits), session 79c5920b, 2026-11-01; direction ruled in D-4203, D-4204, D-4206, D-4208; the text it builds is specification 7 revision 8, approved by row F80, on main at 002f2c49): the
+# filter route of DEF-0101 (docs/Deferred/DEF-0101-the-launchers-open-requirements-before-a-runtime-is-launched.md): a sixth gitread form, `config`, and a configuration read in launcher.start's step "root", before the
+# status read, that refuses the launch when the repository's own configuration names a filter driver or a core.worktree.
+# The text it builds is specification 7 revision 8 (on main, sha256 68379a59165bb41af50138820c11f8b6b63742ec1d01c1eb85bc54c41cf346c5): section 5, the bullet on the base's limits (the configuration read, its outcomes
+# and its limits), section 10 items 7 and 8. Not in this task: max_risk (stays the caller's), launching a runtime, the end-time re-check of the root (DEF-0101 stays open on both), any change to cli.py, writer.py, the adapter,
+# the hook, base_inputs.py, base_files.py, resume_*, mcp_server.py, the CI workflows (the workflow's revision 17, which moves SUBCOMMANDS to the six, is its own DM A66 decision, W3, taken after this contract is approved and
+# before the task branch is pushed) or docs/**, DEF-0113.
+# Order (departure from TASK-109's, ruled in D-4204 point 7): S2 (specification 7 revision 8 and row F80, on main), then this contract C, then W3 (the workflow's revision 17), then X (the code), then R, D and H.
+# Reason: a W3-before-C window would let CI accept a six-subcommand tuple that no approved contract binds.
+# Fields and value forms follow specification 2 section 5.1 and TASK-109's contract (docs/tasks/TASK-109.yaml).
+# Risk: high. R3 reads src/** and tests/** fail closed as high (risk-rules section 2 point 3); no critical rule matches the write set (no docs/specs/**, no .github/**). Confirmed by script over the base in the approval
+# request (TASK-109's form). Change class: critical_cr, because the CI's EVALUATOR list holds src/aieos_bootstrap/** and the tests folders; confirmed by script in the approval request.
+# Evidence profile (assurance-model.md section 5, gov-AIEOS, high): unit_test, integration_test, property_test, deterministic_rule, static_security_analysis, ai_review (cross-model), plus the evidence_required of the
+# applicable articles, recorded per article from the start (L-0034) through records.check_record and the governor shadow in the approval request. GOV-003 is recorded as it falls (DEF-0107's policy): acceptance is a stated
+# per-task departure from the advisory governor in the form of TASK-102 to TASK-109; compensating controls: the local run of the base's tests against the change's src and a review of the test diff by a reviewer whose model
+# differs from every model that did task work (L-0038), listed by machine.
+# Models (L-0044): the main session writes the code and the tests; reviewers and helpers run on Haiku 5.5 only; any other model for them needs the owner first; no Fable; the decision agent runs on Opus 5.5. Each brief
+# goes to the decision agent first.
+# Pin scan so far (reads only, at main 002f2c49; the first step of the work re-runs it and writes the hits in the map of commit X; a pin not listed here stops the work and comes to the decision agent): (1)
+# tests/unit/test_gitread.py pins gitread.py's imports to {os, re, subprocess} (no ImportFrom): gitread.py gains NO import and no new os attribute; the SUBCOMMANDS pin (TASK-109 amended it to the five) is amended to the
+# six; every test function of the three gitread test modules names "TASK-024 ACn" in its docstring (an added test says "TASK-024 ACn (amended by TASK-110)"); the docstring phrases of gitread.py are pinned (TASK-109 kept
+# 'single process wrapper', 'pinned list is [git]', 'revision 8', 'Limits (TASK-024 AC10)', 'no caller exists yet'): the amended docstring keeps every one (test_gitread.py :548-:552 pins ten phrases: those five and 'trusted as the operating system finds it', "repository's own", 'POSIX only', 'not capped in size', 'GIT_NO_LAZY_FETCH'); :409 pins SUBCOMMANDS[-1] == 'status' and becomes 'config'; FORMS (:22-:29) gains CONFIG_LIST, and 'each of the six pinned forms' (:107-:113) and test_gitread_repo.py :2 ('five pinned forms') are updated. (2) tests/unit/test_launcher.py: STATUS_ARGS (:33) and the
+# Repo stand-in (:64) answer HEAD, base and status forms and need an answer for the config form (clean by default; filter, core.worktree and malformed answers settable); the Repo stand-in's status branch (:113) needs the config form handled by its own exact-equality branch ahead of any fallback; repo.calls[2] == STATUS_ARGS at :399, seen[:3] == [HEAD, BASE, STATUS] at :483 and calls[:3] with form_error(*calls[2]) at :506-:507 become calls[3], seen[:4] with CONFIG_LIST third, and calls[:4] with form_error(*calls[3]); the pin ['read_sessions','expire','read','read','read','read_log','held'] at :639 becomes four reads after read_sessions and expire; the callee-order pins that continue past the root
+# step, ['expire','read','read','read','read_log', ...] at :400, :508 and :624-:632, become four reads (the slices names[:5] at :400 and :508 become [:6], names[:6] at :624 and :632 become [:7], names[6:-2] at :626 becomes [7:-2], names[:7] at :639 becomes [:8]; test_a_raise_in_the_inputs_reads_is_refused (:467-:486) raises when len(seen) > 3 at :476, which becomes > 4 so that the first inputs read raises); the pins that end at the root step, ['expire','read','read','read'] at :529, :577 and :591 (a refusal or non-grant at "root"),
+# become four reads when the refusal is at the status read and stay three when the refusal is at the config read; :505 pins repo.calls[2] to the status argument list (it becomes calls[3]); :1007 pins "TASK-086 AC" in every
+# docstring (an added test says "TASK-086 AC1 (amended by TASK-110)"); the launcher.py docstring phrases are pinned (test_launcher.py :990-:993, TASK086AC12Docstrings, pins eleven phrases and test_launcher_gone.py :459, test_the_launcher_s_docstring, pins others, among them "not before DEF-0101's open points are closed": all stay byte-exact;
+# the TASK-109 pins in six other modules stay and must keep passing). (3) tests/unit/test_launcher_gone.py: ok_head (:110) answers any arguments with the head's bytes, which the status read would refuse; TASK-109 amended it
+# to answer the status form with b''; it is amended to answer the config form with b'' too (ok_head :112 keeps args[0] == 'status' and gains the config form with b''); the second stand-in `dirty` (:377-:392) answers the HEAD bytes for every non-status form, which would give the config read '<hex>\n' without an ending NUL (a refusal, not the expected 'not granted'): it answers the config form with b'', its names pin at :390-:391 becomes four reads and c.of('read')[2] at :392 becomes [3]. (4) tests/integration/test_launcher_repo.py: Intercept (:47; STATUS_ARGS :22) answers the exact HEAD, base and status forms and
+# forwards every other read to gitread.run on the real repository; it is amended to answer the exact config form with b'' (the real repository's configuration is not under the test's control). (5) The CI INV-004 string
+# rule refuses a src string containing the state directory's name outside writer.py and the shell allowlist reader: neither changed src file may contain it. (6) The workflow's pattern rule for gitread.py pins
+# SUBCOMMANDS bound once to exactly the five (revision 16, line 1575): the task branch's CI fails the deterministic_rule step on a six-tuple until W3 is on main; so X is pushed to the task branch only after W3, and X is made in a clone cut from the head of main after W3 is on main: X's parent is that head (which holds W3), not C; base_commit stays the head of main at the contract's approval, the parent of C, which is what G0 detect checks (aieos-checks.yml :296-:304); G0 scope needs C as an ancestor of HEAD and one parent per task commit (:326-:335); this is a stated departure from TASK-109, where X's parent was C; the pre-push check shows by `git merge-base --is-ancestor <W3> <X>` (exit 0) that W3 is in X's history. Between W3 and X's landing on main, main holds the five-tuple while revision 17 requires the six; the check runs only for a task push ("no task" on main, D-4202), so main stays green, and no other task may be pushed in that window.
+# Stated limits: those of specification 7 revision 8 section 5, in plain words in the docstrings: (1) the two reads are made one after the other and not atomically, a change between them is acted on by the status read itself, and a change after them is not seen; (2) the match is on
+# the key text only (a key beginning "filter." or equal to "core.worktree", ASCII-lowercased), never on whether a file uses the driver, so a clone that named a driver and uses none is refused (for example after
+# `git lfs install --local`); (3) other keys change what the status read counts and are not refused (core.excludesFile, core.ignoreStat, core.sparseCheckout, core.sparseCheckoutCone, index.sparse, core.autocrlf,
+# core.eol, core.attributesFile, core.checkStat, core.trustctime, and attr.tree, git 2.40 and later, which makes git read .gitattributes from a named tree: per git's documentation, not run here); (4) the user's own global ignore file is meant not to be read, and whether git on a machine finds a home directory is not checked; (5) git's newer spelling `git config list` exists beside `--list` (per git's documentation, not run here); if `--list` is ever removed the read fails and so refuses the launch; (6) a bare clone is not refused by the configuration read: the status read exits non-zero there and is refused; (7) a partial clone (extensions.partialClone, remote.<name>.promisor) can make git start a lazy fetch, which can start the programs the transport names in the configuration (for example an ssh command or a remote helper) (per git's documentation, not run here); GIT_NO_LAZY_FETCH closes it only from git 2.44 (gitread.py :52-:53), so a git before 2.44 is not closed; refusing partial-clone keys would change specification 7 revision 8's refused set and is out of this task (a candidate point for DEF-0101); the reviewers R110s, R110d and R110c found no key besides filter.* and core.worktree that makes this exact status form start a program or look at another tree (R110c named attr.tree and partial clones as limits, not refusals).
+# Departures from the contract that the work must state as GOV-003 stated departures: GOV-003 as in TASK-102 to TASK-109; stale docstring phrases that the work updates (launcher.py :128-:145 on limits (1), (3) and (5) and :145-:147 on the workflow's SUBCOMMANDS
+# check, and gitread.py :5, :54 and :56-:63 on the five forms, the hook limit and the filter route, gitread.py :19-20 and :56 on the workflow's revision and the caller, and the test docstrings named in AC6) are in the write set.
+task: TASK-110
+contract_version: v1
+task_type: implementation
+objective: >-
+  Build specification 7 revision 8's configuration read: gitread gains a sixth read-only subcommand, config, in one fixed form (the constant CONFIG_LIST = ['config', '--list', '-z'], accepted only by exact equality in its own
+  branch of form_error; the status branch is made explicit so that no unknown name can fall into it), and launcher.start's step "root" reads that form once through the same read callee BEFORE the status read: an answer
+  (a sequence of NUL-ended records, each a key and a value split at the first newline, a record with no newline being a key with no value) in which any key, ASCII-lowercased, begins with "filter." or equals
+  "core.worktree" gives "not granted" with the reason "root" and findings that name the keys only (the count of such keys and at most 20 names, each the repr of the key's bytes cut to 80 bytes, never a value); a read that
+  fails, a timeout, an answer that is not a mapping, a non-zero exit, a non-bytes output, a non-empty output not ending in NUL, or a record with an empty key gives "refused" with the reason "root"; only a clean answer lets
+  the status read run; nothing else in start, end or launch_outside changes, and neither file gains an import or the state directory's name as a string.
+traces_to:
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#5
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#10
+  - docs/specs/spec-05-adapter-contract.md#11
+  - docs/plan/m8-plan.md#7
+  - docs/Deferred/DEF-0101-the-launchers-open-requirements-before-a-runtime-is-launched.md
+input_state:
+  # base_commit is the head of main when the contract is approved (now 002f2c49c8ef3f73ae41b1d06c8e403ee671f8d0); the executor of commit C refuses unless it equals HEAD, refs/heads/main and refs/remotes/origin/main;
+  # commit C has it as its one parent.
+  base_commit: 002f2c49c8ef3f73ae41b1d06c8e403ee671f8d0
+  depends_on: [TASK-024, TASK-086, TASK-106, TASK-109]
+  intent_versions:
+    # sha256 of each file at base_commit, filled by script (pin script) at the approval request
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 68379a59165bb41af50138820c11f8b6b63742ec1d01c1eb85bc54c41cf346c5
+    docs/specs/spec-05-adapter-contract.md: c3d356414d46db76b2e95a321c49ee11670b592f3dfec714ba7874df89f873de
+    docs/specs/spec-02-aieos-file-format.md: e7c427b06775069a43d5e6d317a61c1974e5be921aee08a581c1918572a37a61
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/Deferred/DEF-0101-the-launchers-open-requirements-before-a-runtime-is-launched.md: fc9b32bd35098327887c37171e7fa85ad9126e9631aff422fbedd8b43669814e
+    docs/plan/m8-plan.md: 564d9b74e0a4b118ce32cb6d9ff32aaf389aae118411b24233ee8c01cd10ecf7
+    docs/tasks/TASK-024.yaml: 3aaf705dc05663c2adef0ad3b0a93140f6508dcf8cc2d4c62b4bd737737d5a78
+    docs/tasks/TASK-086.yaml: 7138fdf1d057079967196e150c2198dca551990d772ea17fc7c5e3c221d5cf5a
+    docs/tasks/TASK-106.yaml: e1aac516476ecf1758ca8fc0a8363a622e2f49ba2799a44b55898b984b9ee509
+    docs/tasks/TASK-109.yaml: 5bda00f11dc7b10b70770329f291157dbd01e5ac3c7c57cc744a30b2bdcab707
+write_set:
+  # a file may leave after the pin scan, none may join without a contract revision; each path with its reason
+  paths:
+    - src/aieos_bootstrap/gitread.py
+    - src/aieos_bootstrap/launcher.py
+    - tests/unit/test_gitread.py
+    - tests/unit/test_launcher.py
+    - tests/unit/test_launcher_gone.py
+    - tests/integration/test_launcher_repo.py
+    - tests/integration/test_gitread_repo.py
+  # reasons: gitread.py gains the sixth subcommand, its constant form and the explicit status branch, with no import (AC1), and its docstring is updated (AC6); launcher.py gains the config read in the step "root" and its
+  # docstring (AC2, AC3, AC6); test_gitread.py gains the form tests and the amended SUBCOMMANDS pin (AC1, AC5); test_launcher.py gains the step's tests and the amended callee-order pins and Repo stand-in (AC3, AC4, AC5);
+  # test_launcher_gone.py has its ok_head amended (AC5); test_launcher_repo.py has its Intercept amended (AC5); test_gitread_repo.py gains the real-form shape test (AC5). The property module of gitread joins only by a
+  # contract revision if the scan shows a property test of the new rule is wanted there; every added test of a pinned module follows that module's naming pin.
+read_set:
+  paths:
+    - docs/Deferred/
+    - docs/plan/m8-plan.md
+    - docs/specs/
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/tasks/TASK-024.yaml
+    - docs/tasks/TASK-086.yaml
+    - docs/tasks/TASK-106.yaml
+    - docs/tasks/TASK-109.yaml
+    - src/aieos_bootstrap/
+    - tests/
+    - .github/workflows/
+  interfaces: [aieos_bootstrap.gitread.run, aieos_bootstrap.gitread.form_error, aieos_bootstrap.writer.STATE_DIR]
+  schemas: []
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - bench/**
+  - native/**
+  - docs/**
+  - tests/conformance/**
+  - tests/run_tests.py
+  - src/aieos_bootstrap/writer.py
+  - src/aieos_bootstrap/handoff_file.py
+  - src/aieos_bootstrap/cli.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/resume_log_inputs.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/contract_path.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/execution.py
+  - .gitattributes
+  - .gitignore
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The sixth form. gitread.SUBCOMMANDS is ('cat-file', 'diff-tree', 'rev-list', 'rev-parse', 'status', 'config') bound once as a literal tuple (the workflow's revision 17, W3, accepts exactly this six-tuple and no
+      longer the five that revision 16 accepts). The form is a module constant CONFIG_LIST = ['config', '--list', '-z'] and form_error accepts the config subcommand only when args equals CONFIG_LIST exactly (no further argument, no other
+      option, no other order). form_error gets an explicit `elif sub == 'config'` branch AND an explicit `elif sub == 'status'` branch, and any other subcommand name is refused before any process starts (a test passes a
+      seventh unknown name that the SUBCOMMANDS pin does not hold and one that is injected into SUBCOMMANDS by the test to show that no branch falls through). gitread.py gains no import, no new os attribute or os call, no
+      literal of the state directory's name, and still calls subprocess.run once; every other form, FIXED_OPTIONS and environment() are unchanged. The docstring lists the sixth form, says six read-only subcommands, and
+      replaces the filter-route limit of the fifth form with the statement that the launcher now reads the configuration first.
+  - AC2: >-
+      The configuration read. launcher.start, in the step "root" (after the step "base", before the log read), reads the config form once through the same read callee (read(repo, args, TIMEOUT)) BEFORE the status read;
+      a clean answer (b'' or records none of which is a refused key; exit 0; error None) goes on to the status read exactly as in TASK-109; the gone sessions' records and the expiry still run before it; a refusal or a
+      non-grant at the config read opens no session row, no lease, no adapter.start or end, calls neither the status read, read_log nor held, and returns head_commit. The arguments check is unchanged.
+      `launch_outside` is unchanged.
+  - AC3: >-
+      The outcomes. The parser is a private pure function of launcher.py, _config_keys(output), returning (refused_keys, None), where refused_keys is the list of refused key bytes in output order (possibly empty), or (None, finding); it raises nothing and is covered by tests with stand-in answers only. A
+      record is the bytes up to a NUL; the output must end in a NUL (the answer split on NUL ends with an empty element; b'' is zero records); a record is split at its FIRST newline into key and value; a record with no
+      newline is a key with no value; an empty key is a finding. A key is matched on bytes: ASCII-lowercased, it begins with b'filter.' or equals b'core.worktree'. Any such key gives "not granted" with the reason "root"
+      and the findings 'root: configuration names filter driver or work tree keys: <n>' (n the number of all refused keys, both kinds together) and at most 20 lines 'root: key ' + repr(key[:80]) (the cut is applied to the bytes before repr; the lines are the first 20 refused keys in output order; never a value; a test
+      with a value that looks like a credential shows that no value appears in findings, records or logs). A key line may show a user-chosen subsection name (the key only). Order of judgement: (0) the answer is a mapping with error None and exit 0, else "refused" with the finding 'root: git config gave no answer (%r)' of (error, exit) for a mapping and of the answer's type name otherwise, never the answer itself or its output; (1) the answer's output is bytes; (2) the output ends in a NUL (b'' is zero records) and every record has a non-empty key, all records scanned; (3) only then the refused keys: a malformed answer gives "refused" whatever keys it holds; the findings of a refusal are fixed texts that hold no byte of the answer ('root: the configuration answer is not bytes', 'root: the configuration answer does not end in NUL', 'root: the configuration answer has an empty key'). "refused" with the reason "root" and a 'root: ...' finding for: an answer that is not a mapping, error not
+      None, a non-zero exit, output that is not bytes, a non-empty output not ending in NUL, an empty key. A raise in the config read gives "refused" with the reason "root" (the existing step guard). The status read keeps
+      TASK-109's outcomes unchanged.
+  - AC4: >-
+      The order and the call bounds. Tests show: the config read is the third read (after HEAD and the base tip), the status read the fourth, then read_log: the callee names begin ['expire','read','read','read','read',
+      'read_log','held', ...] on a granted path; a refusal or non-grant at the config read ends the callee names at ['expire','read','read','read']; a refusal or non-grant at the status read ends them at
+      ['expire','read','read','read','read']; no later callee is called; the gone sessions' callees still come first; the argument list passed to the config read equals list(gitread.CONFIG_LIST) and to the status read
+      equals list(gitread.STATUS_HEAD) + [':(exclude)' + writer.STATE_DIR]. The launcher module docstring has the step 3b amended and states the limits in plain words.
+  - AC5: >-
+      The pins and the tests. tests/unit/test_gitread.py: the import and attribute pin is unchanged and passes; the SUBCOMMANDS pin is amended to the six; added tests, each docstring naming 'TASK-024 ACn' with
+      'amended by TASK-110': the accepted config form; each deviation refused (a table); no fall-through; the real-command shape. tests/unit/test_launcher.py: the Repo stand-in answers the config form (clean by default; a
+      filter key, a core.worktree key, a key with different case, a valueless key, a key with a newline in its value, and malformed answers settable); the callee-order pins are amended as in the header; added tests, each
+      docstring naming 'TASK-086 AC1 (amended by TASK-110)' or the AC it amends: clean continues; a filter key and a core.worktree key give "not granted"/"root" with the cap and the repr; each refusal kind; the order; no
+      later call; a raise; no value in findings; keys such as 'filterx', 'core.worktreex', 'xfilter.a' and 'core.bare' do NOT match. Added tests: a refused key followed by an empty record, and a refused key with no final NUL, both give "refused"; no finding of the config read contains any byte of a value of the test inputs (the values are obviously fake and not secret-shaped: none of ghp_, github_pat_, gho_, sk-, AKIA, nor a PEM key header). tests/unit/test_launcher_gone.py: ok_head answers the config form with b''. In
+      tests/integration/test_launcher_repo.py the Intercept answers the exact config form with b'' and every other read is forwarded unchanged. tests/integration/test_gitread_repo.py gains one test that runs
+      gitread.run on the repository's own clone with list(gitread.CONFIG_LIST) and asserts error None, exit 0 and that the answer parses by the launcher's parser, whatever it holds (it shows that the git in use accepts the form and that the answer is in the parser's form); the test prints nothing; no assertion compares or shows the output, err or any key or value of the answer; it asserts only error is None, exit == 0 and that the parser's finding is None, each with a fixed message; no added test prints, and no assertion message carries an answer's output beyond what findings hold; no test makes a temporary repository, starts a process itself or writes into the repository.
+  - AC6: >-
+      The stated limits. The docstrings of gitread.py and launcher.py state, in plain words, the limits of the header (1) to (7); the stale phrases are updated: launcher.py :145-:147 on the workflow's SUBCOMMANDS check
+      ("a later decision under DM A66 narrows it to the five", done by the workflow's revision 16; now: the six after W3), and gitread.py :5 ("five read-only subcommands" becomes six) and :56-:63 (the filter route is
+      now refused by the launcher's configuration read; the sentence 'was not taken' is replaced); also gitread.py :54 ("none of the five subcommands runs a hook" becomes six) and launcher.py :128-:145, limits (1), (3) and (5): limit (1) says two reads, the configuration and then the status, made one after the other and not atomically; limit (3) takes specification 7 revision 8's wording that the user's own global ignore file is "meant not to be read"; limit (5) says that the configuration read refuses filter.* and core.worktree keys and keeps the limits of the header (2) and (3); the header paragraph that begins 'Departures from the contract' lists these places and those that follow; also gitread.py :19-20, where the pinned phrase "the CI workflow's revision 8" stays byte-exact and the sentence around it says "now revision 17", and gitread.py :56, where the pinned phrase 'no caller exists yet' stays as a quotation of the TASK-024 text and the sentence says that the launcher has called gitread since TASK-086; the unpinned test docstrings test_gitread.py :107-:113, test_launcher_gone.py :372-:376, test_launcher_repo.py :3 and test_gitread_repo.py :2. DEF-0101's Log line and any Log line of DEF-0095 or DEF-0105 whose text changes are written by their own decisions
+      after landing.
+  - AC7: >-
+      Parity and purity (INV-001, INV-002, INV-004). tests/conformance/, the native ports, the CI files, writer.py, cli.py, base_files.py, base_inputs.py and every file of the forbidden list are unchanged; no new import in
+      either src file; no new process form beyond the one config form; the state directory's name appears as a string in no changed src file; the new docstrings and findings use none of the effect labels MEASURED,
+      ENFORCED and GUARANTEED (OPS-003's rule allows them only on a line that cites a decision-matrix row), and no string constant in a changed src file is exactly "valid", "accepted" or "approved"; the deterministic
+      rule (including revision 17's SUBCOMMANDS check on gitread.py), OPS-003, SEC-001, SEC-002 and bandit report no finding at the task commits.
+  - AC8: >-
+      The CI evidence. On the aieos-checks and aieos-native runs of the accepted commit every job and step is successful, read by run id (the task branch is pushed only after W3 is on main); on main after the records
+      commit likewise. Each push and each GitHub job-data read is a decision of the decision agent, outside the capabilities above.
+  - AC9: >-
+      The records (L-0034, L-0037). The task's evidence records' forms are built and checked through records.check_record and a governor shadow over a dry records list at the approval request, with their raw output:
+      per-article records, and the profile entries of risk high; the expected result is NEEDS_REWORK at the GOV-003 row as in TASK-102 to TASK-109, stated in the acceptance as a departure. The contract's budgets and exit
+      conditions are printed at the first step of the work (L-0037).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null", "timeout 110 python <a scratchpad script that
+    compiles src and tests and runs a part of tests/ with unittest> < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1500k, wall_time: 8h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC7]}
+  - {gate: G3, check: constitution, args: [AC6, AC8, AC9, INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts AND the aieos-checks and aieos-native runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false: the task's acts are edits to source and test files in the write set; it never launches a runtime on E:/AIEOS or any real project (the tests use stand-ins and read-only reads of this
+# repository); A51 item (4) keeps launching with a runtime with the owner.
+owner_kept_act: false
