@@ -120,6 +120,15 @@
 # timeout, and does not judge tests the change adds. Limits: the new patterns cover by directory name; the counts come from logs
 # that the code under test can write; the step's full run is proven only by this CI; point 5 of the DEF-0107 policy (a changed
 # governor judges itself) is not closed.
+# Revision 15 (decision D-4135; the decision agent's own decision under DM A66; DEF-0101, specification 7 revision 7) loosens one check, deterministic_rule,
+# for exactly one path and one value: the pattern rule for src/aieos_bootstrap/gitread.py (revision 8) pins SUBCOMMANDS bound
+# once to the four-subcommand tuple; it now also accepts the same tuple with 'status' added at its end, so that the Git reader
+# may carry the one fixed read-only form of `git status` that specification 7 revision 7 states for the launcher's untouched-root
+# check. Either tuple is accepted, so the rule holds for gitread.py before and after the task that adds the form. It removes
+# no other check, grants no write access, uses no secret and changes no setting. Limits: the rule pins the tuple, not that the
+# arguments passed are the pinned forms (that stays with the task's tests and review, as in revision 8); 'status' can start
+# programs that the repository's configuration names (clean and process filters), which specification 7 revision 7 states as a
+# limit to be settled before the check is built; the four-subcommand tuple stays accepted until a later decision tightens it.
 name: aieos-checks
 
 on:
@@ -1559,6 +1568,7 @@ jobs:
           ALLOW[SHELL_ALLOW] = {'modules': frozenset(), 'os': frozenset(), 'open_modes': frozenset(),
                                 'aieos_string': True}
           SUBCOMMANDS = ('cat-file', 'diff-tree', 'rev-list', 'rev-parse')
+          SUBCOMMANDS_STATUS = ('cat-file', 'diff-tree', 'rev-list', 'rev-parse', 'status')  # revision 15
           RUN_KEYWORDS = {'shell', 'stdin', 'stdout', 'stderr', 'capture_output', 'cwd', 'timeout', 'check', 'env'}
           MANIFESTS = {'setup.py', 'setup.cfg', 'pyproject.toml', 'Pipfile', 'Pipfile.lock', 'poetry.lock', 'MANIFEST.in'}
           VENDOR_DIRS = {'site-packages', 'vendor', '_vendor', 'node_modules', '__pypackages__'}
@@ -1619,11 +1629,11 @@ jobs:
               subs = [n for n in tree.body if isinstance(n, ast.Assign) and len(n.targets) == 1
                       and isinstance(n.targets[0], ast.Name) and n.targets[0].id == 'SUBCOMMANDS']
               try:
-                  ok = len(subs) == 1 and ast.literal_eval(subs[0].value) == SUBCOMMANDS
+                  ok = len(subs) == 1 and ast.literal_eval(subs[0].value) in (SUBCOMMANDS, SUBCOMMANDS_STATUS)
               except ValueError:
                   ok = False
               if not ok:
-                  findings.append('%s: SUBCOMMANDS is not bound once to the pinned tuple (revision 8)' % path)
+                  findings.append('%s: SUBCOMMANDS is not bound once to a pinned tuple (revision 8, revision 15)' % path)
 
 
           def check_source(path, text, findings):
