@@ -129,6 +129,11 @@
 # arguments passed are the pinned forms (that stays with the task's tests and review, as in revision 8); 'status' can start
 # programs that the repository's configuration names (clean and process filters), which specification 7 revision 7 states as a
 # limit to be settled before the check is built; the four-subcommand tuple stays accepted until a later decision tightens it.
+# Revision 16 (decision D-4194; the decision agent's own decision under DM A66; DEF-0101, specification 7 revision 7, TASK-109 landed) tightens the
+# same check, deterministic_rule: it now accepts only the five-subcommand tuple ('cat-file', 'diff-tree', 'rev-list', 'rev-parse', 'status') for SUBCOMMANDS in
+# src/aieos_bootstrap/gitread.py; the four-subcommand tuple is no longer accepted, and revision 15's last sentence is superseded. Nothing is
+# granted, loosened or removed apart from that acceptance; it grants no write access, uses no secret and changes no setting. Limits: as in revision 15,
+# the rule pins the tuple, not the arguments passed.
 name: aieos-checks
 
 on:
@@ -1567,8 +1572,7 @@ jobs:
           SHELL_ALLOW = 'src/aieos_bootstrap/claude_code_shell_allow.py'
           ALLOW[SHELL_ALLOW] = {'modules': frozenset(), 'os': frozenset(), 'open_modes': frozenset(),
                                 'aieos_string': True}
-          SUBCOMMANDS = ('cat-file', 'diff-tree', 'rev-list', 'rev-parse')
-          SUBCOMMANDS_STATUS = ('cat-file', 'diff-tree', 'rev-list', 'rev-parse', 'status')  # revision 15
+          SUBCOMMANDS = ('cat-file', 'diff-tree', 'rev-list', 'rev-parse', 'status')  # revision 16: the five only
           RUN_KEYWORDS = {'shell', 'stdin', 'stdout', 'stderr', 'capture_output', 'cwd', 'timeout', 'check', 'env'}
           MANIFESTS = {'setup.py', 'setup.cfg', 'pyproject.toml', 'Pipfile', 'Pipfile.lock', 'poetry.lock', 'MANIFEST.in'}
           VENDOR_DIRS = {'site-packages', 'vendor', '_vendor', 'node_modules', '__pypackages__'}
@@ -1629,11 +1633,11 @@ jobs:
               subs = [n for n in tree.body if isinstance(n, ast.Assign) and len(n.targets) == 1
                       and isinstance(n.targets[0], ast.Name) and n.targets[0].id == 'SUBCOMMANDS']
               try:
-                  ok = len(subs) == 1 and ast.literal_eval(subs[0].value) in (SUBCOMMANDS, SUBCOMMANDS_STATUS)
+                  ok = len(subs) == 1 and ast.literal_eval(subs[0].value) == SUBCOMMANDS
               except ValueError:
                   ok = False
               if not ok:
-                  findings.append('%s: SUBCOMMANDS is not bound once to a pinned tuple (revision 8, revision 15)' % path)
+                  findings.append('%s: SUBCOMMANDS is not bound once to a pinned tuple (revision 8, revision 15, revision 16)' % path)
 
 
           def check_source(path, text, findings):
