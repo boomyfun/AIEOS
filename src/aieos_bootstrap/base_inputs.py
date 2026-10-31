@@ -29,15 +29,27 @@ The readers, each this task's choice where TASK-082's contract says so:
 - files: the paths the write_set and read_set patterns match, found by listing each pattern's literal prefix, and the
   derived paths present at the commit.
 - derived_read_set: the path entries of the resume record's read_set whose sources include "derived", not recomputed.
-- last_handoff: none gives None, exactly one docs/handoffs/<task>-*.md gives {ref, text}, two or more give findings.
+- last_handoff: the task's handoff files at the base, in the writer's state directory (its handoffs folder) and in docs/handoffs, each named <task>-<session>.md
+  (a session part out of form, or one name in both folders, is a finding): none gives None, exactly one gives {ref, text}; two or more give the one whose session has the
+  newest handoff claim record in the log's order (the position among the task's events; a stated choice of TASK-108, proposed and fail closed, not the specification's
+  words: a file whose session has no claim cannot be ordered and is a finding).
 - budgets: BUDGETS.
 
 Limits, stated: the commit and the log are the caller's; the resume record is the task's last decision.execution, not
 one bound to the session; the task's later state events are not projected; a listing fails whole on a symbolic link, a
 submodule or an out-of-form name under its prefix (base_files' rules); a line's corrects field is not read. TASK-107's
 limits: the contract is read from the committed base only, never the working tree; the call bounds: the state candidate
-adds one base_files read to the docs-only calls (identical calls are cached, so the root listing is not repeated); the handoff reader
-(DEF-0095) and DEF-0113 are not done by TASK-107.
+adds one base_files read to the docs-only calls (identical calls are cached, so the root listing is not repeated); DEF-0113 is not
+done by TASK-107. TASK-108's limits: the handoff reader is done (DEF-0095's reader half) and reads the committed base only, never the
+working tree; its call bound: the state folder's handoffs folder adds one base_files listing to the docs-only calls (cached by
+prefix, so no identical call repeats; no added call when the root listing does not hold the state directory); a handoff file of one
+task and session in both folders refuses the task's handoff until an approved act removes one; with two or more files, a file whose
+session has no handoff claim in the log cannot be ordered and is refused; a handoff made in a session that ended abnormally writes no
+file and is never the last handoff; the core does not commit the state files: the user, or on the self-build the owner or an
+approved executor script, commits them, and they stay out of an agent's commit because the work tree is cut after the state commit
+and CI refuses any changed path under the state folder; the rule that a contract's write set does not list the state directory is
+stated and read by no check. The write of a handoff file after a submission, the launcher's wiring, DEF-0113 and DEF-0101's
+untouched-root check are not done by TASK-108.
 
 TASK-085 adds four public wrappers over these helpers, by added lines only, for its module resume_inputs: contract_at
 (the contract at a commit through _read and _parse_contract_text, CONTRACT_NEEDS and its task checked, with the
@@ -617,16 +629,55 @@ def _files(state, contract, derived):
     return files
 
 
-def _handoff(state, task_id):
-    head = '%s/handoffs/%s-' % (HANDOFF_PREFIX, task_id)
-    found = [p for p in _listing(state, HANDOFF_PREFIX)
-             if p.startswith(head) and p.endswith('.md') and '/' not in p[len(head):]]
-    if not found:
+def _handoff_files(state, task_id):
+    """The task's handoff files at the base, by session: the state directory's handoffs folder, then docs/handoffs; a session part out of form
+    or a name in both folders is a _Stop (TASK-108)."""
+    state_dir = contract_path.candidates(task_id)[0][0]
+    names = {}
+    for prefix, listed in ((state_dir, state_dir + '/handoffs'), (HANDOFF_PREFIX, HANDOFF_PREFIX)):
+        head = '%s/handoffs/%s-' % (prefix, task_id)
+        for p in _listing(state, listed):
+            if p.startswith(head) and p.endswith('.md') and '/' not in p[len(head):]:
+                session = p[len(head):-len('.md')]
+                if _SESSION.fullmatch(session) is None or session in ('.', '..'):
+                    raise _Stop(['last_handoff: %s: the session part is out of form' % p])
+                if session in names:
+                    raise _Stop(['last_handoff: %s-%s.md is in both folders' % (task_id, session)])
+                names[session] = p
+    return names
+
+
+def _handoff_rank(events, task_id, sessions):
+    """The largest position in events of a handoff claim of each session (the log's order; no clock): a record.added event whose payload is
+    an object with fact_kind 'claim', subject the task, the session and a refers_to that starts 'handoffs/<task>-<session>.md#'."""
+    rank = {}
+    for k, event in enumerate(events):
+        payload = event.get('payload')
+        if event.get('type') != 'record.added' or not isinstance(payload, dict):
+            continue
+        session, ref = payload.get('session'), payload.get('refers_to')
+        if payload.get('fact_kind') == 'claim' and payload.get('subject') == task_id and isinstance(session, str) and session in sessions \
+                and isinstance(ref, str) and ref.startswith('handoffs/%s-%s.md#' % (task_id, session)):
+            rank[session] = k
+    return rank
+
+
+def _handoff(state, task_id, events):
+    names = _handoff_files(state, task_id)
+    if not names:
         return None
-    if len(found) > 1:
-        raise _Stop(['last_handoff: %d handoffs of %s; which is the last is open (specification 6 :97)'
-                     % (len(found), task_id)])
-    return {'ref': found[0], 'text': _read(state, found[0])}
+    if len(names) == 1:
+        path = next(iter(names.values()))
+        return {'ref': path, 'text': _read(state, path)}
+    rank = _handoff_rank(events, task_id, names)
+    lacking = [names[s] for s in sorted(names) if s not in rank]
+    if lacking:
+        raise _Stop(['last_handoff: %d handoffs of %s; which is the last cannot be told: %s has no handoff claim in the log'
+                     % (len(names), task_id, lacking[0])])
+    if len(set(rank.values())) != len(rank):
+        raise _Stop(['last_handoff: two handoffs share a rank'])
+    path = names[max(rank, key=rank.get)]
+    return {'ref': path, 'text': _read(state, path)}
 
 
 def _arguments(repo, commit, task_id, session_id, log, read):
@@ -661,7 +712,8 @@ def _cached(read):
 def _inputs(repo, commit, task_id, session_id, log, read):
     _arguments(repo, commit, task_id, session_id, log, read)
     state = {'repo': repo, 'commit': commit, 'read': _cached(gitread.run if read is None else read), 'listings': {}}
-    approval, record = _approval_and_record(_log_events(log, task_id), task_id)
+    events = _log_events(log, task_id)
+    approval, record = _approval_and_record(events, task_id)
     contract, digest = _contract(state, task_id, approval, record)
     articles = _articles(state, record)
     components, interfaces = _components(contract)
@@ -671,7 +723,7 @@ def _inputs(repo, commit, task_id, session_id, log, read):
     return {'task': task_id, 'session_id': session_id, 'base': commit, 'contract': contract, 'contract_hash': digest,
             'resume_record': record, 'articles': articles, 'components': components, 'interfaces': interfaces,
             'adrs': {}, 'traced': traced, 'files': files, 'derived_read_set': derived,
-            'last_handoff': _handoff(state, task_id), 'budgets': dict(BUDGETS)}
+            'last_handoff': _handoff(state, task_id, events), 'budgets': dict(BUDGETS)}
 
 
 def work_order_inputs(repo, commit, task_id, session_id, log, read=None):

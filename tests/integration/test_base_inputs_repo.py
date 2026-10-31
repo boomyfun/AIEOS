@@ -88,6 +88,13 @@ class TASK082AC9Repository(unittest.TestCase):
         self.assertTrue(findings)
         self.assertTrue(all(f.startswith('docs/tasks/TASK-99999.yaml: ') for f in findings), findings)
 
+    def test_last_handoff_with_no_handoff_file(self):
+        """TASK-108 AC4: at base_commit, where neither docs/handoffs nor the state folder's handoffs folder holds a handoff file of
+        TASK-081, the same call gives no finding and last_handoff is None (the answer written here)."""
+        value, findings = base_inputs.work_order_inputs(ROOT, BASE, TASK, 's1', log_for(contract_text(BASE)), gitread.run)
+        self.assertIsNone(findings, findings)
+        self.assertIsNone(value['last_handoff'])
+
     def test_every_contract_parses(self):
         """TASK-082 AC9: every docs/tasks/*.yaml at base_commit parses with the subset reader except exactly the two
         of the closed excused list, both refused."""

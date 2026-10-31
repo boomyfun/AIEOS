@@ -9,10 +9,11 @@ import datetime
 import hashlib
 import json
 import pathlib
+import random
 import unittest
 from unittest import mock
 
-from aieos_bootstrap import base_files, base_inputs, conformance, context_compiler, eventlog, gitread
+from aieos_bootstrap import base_files, base_inputs, conformance, context_compiler, contract_path, eventlog, gitread, writer
 
 HERE = pathlib.Path(__file__).resolve()
 ROOT = str(HERE.parents[2])
@@ -519,6 +520,158 @@ class TASK082AC7Handoff(Base):
         self.assertIsNone(call(other)[0][0]['last_handoff'])
         with mock.patch.object(base_inputs, 'BUDGETS', {'constitution': 1}):
             self.assertEqual(call()[0][0]['budgets'], {'constitution': 1})
+
+
+STATE = writer.STATE_DIR
+
+
+def hand_path(session, state=False, task=TASK):
+    return '%s/handoffs/%s-%s.md' % (STATE if state else 'docs', task, session)
+
+
+def claim(session, name='done', n=1, task=TASK, subject=None, ref_session=None):
+    return {'record_id': 'mcp-claim/%s-%s-%s-%d' % (task, session, name, n), 'fact_kind': 'claim', 'source_class': 'agent_declared',
+            'recorder': 'aieos mcp_server, session ' + session, 'subject': subject or task, 'session': session, 'text': 'an item',
+            'refers_to': 'handoffs/%s-%s.md#%s/%d' % (task, ref_session or session, name, n)}
+
+
+def log_with(*claims, event_task=TASK):
+    log = good_log()
+    for k, payload in enumerate(claims):
+        log.add('record.added', payload, 'claim-%d' % k, task_id=event_task)
+    return log
+
+
+class TASK082AC7HandoffOrder(Base):
+    def last(self, files, log=None, git=None):
+        result, _ = call(files, log, git)
+        return result
+
+    def test_the_newest_claim_wins(self):
+        """TASK-082 AC7 (amended by TASK-108): of two files the one whose session has the newest handoff claim is chosen, though the other name sorts later."""
+        files = dict(FILES, **{hand_path('sa'): 'from a\n', hand_path('sb'): 'from b\n'})
+        value, found = self.last(files, log_with(claim('sb'), claim('sa')))
+        self.assertIsNone(found, found)
+        self.assertEqual(value['last_handoff'], {'ref': hand_path('sa'), 'text': 'from a\n'})
+        value, found = self.last(files, log_with(claim('sa'), claim('sb'), claim('sa', n=2), claim('sb', name='risks')))
+        self.assertEqual(value['last_handoff']['ref'], hand_path('sb'))
+
+    def test_two_folders_listed_together(self):
+        """TASK-082 AC7 (amended by TASK-108): the state directory's handoffs folder and docs/handoffs are listed together; a state file can be the last."""
+        files = dict(FILES, **{hand_path('sa'): 'docs\n', hand_path('sb', state=True): 'state\n'})
+        value, found = self.last(files, log_with(claim('sa'), claim('sb')))
+        self.assertIsNone(found, found)
+        self.assertEqual(value['last_handoff'], {'ref': hand_path('sb', state=True), 'text': 'state\n'})
+        value, found = self.last(files, log_with(claim('sb'), claim('sa')))
+        self.assertEqual(value['last_handoff']['ref'], hand_path('sa'))
+
+    def test_a_state_file_alone_and_no_file(self):
+        """TASK-082 AC7 (amended by TASK-108): one file in the state folder is returned, claims or not; a missing state folder reads as empty."""
+        files = dict(FILES, **{hand_path('s0', state=True): 'only\n'})
+        value, found = self.last(files)
+        self.assertIsNone(found, found)
+        self.assertEqual(value['last_handoff'], {'ref': hand_path('s0', state=True), 'text': 'only\n'})
+        value, found = self.last(FILES)
+        self.assertIsNone(found, found)
+        self.assertIsNone(value['last_handoff'])
+
+    def test_the_same_name_in_both_folders(self):
+        """TASK-082 AC7 (amended by TASK-108): one task and session in both folders is a finding and neither file is read."""
+        files = dict(FILES, **{hand_path('s0'): 'a\n', hand_path('s0', state=True): 'b\n'})
+        result, git = call(files, log_with(claim('s0')))
+        found = self.refused(result)
+        self.assertTrue(any('is in both folders' in f for f in found), found)
+        blobs = {gid('blob', b'a\n'), gid('blob', b'b\n')}
+        self.assertFalse([c for c in git.calls if c[-1] in blobs], git.calls)
+
+    def test_an_unorderable_choice_is_a_finding(self):
+        """TASK-082 AC7 (amended by TASK-108): with two or more files, a file whose session has no handoff claim cannot be ordered: a finding."""
+        files = dict(FILES, **{hand_path('sa'): 'a\n', hand_path('sb'): 'b\n'})
+        found = self.refused(call(files, log_with(claim('sa')))[0])
+        self.assertTrue(any('cannot be told' in f and hand_path('sb') in f for f in found), found)
+        found = self.refused(call(files)[0])
+        self.assertTrue(any('cannot be told' in f for f in found), found)
+
+    def test_claims_that_do_not_count(self):
+        """TASK-082 AC7 (amended by TASK-108): after the losing session's last counted claim, a claim whose refers_to names another session,
+        a non-claim, an event of another task and a claim of a session without a file are not counted; a later counted claim is (a claim whose subject
+        differs from its event's task is refused by the log itself and is not a case here)."""
+        files = dict(FILES, **{hand_path('sa'): 'a\n', hand_path('sb'): 'b\n'})
+        log = log_with(claim('sa'), claim('sb'), claim('sa', n=2, ref_session='sb'),
+                       dict({k: v for k, v in claim('sa', n=4).items() if k != 'text'}, fact_kind='observation'), claim('sz'))
+        log.add('record.added', claim('sa', n=5, subject='TASK-101'), 'claim-other-task', task_id='TASK-101')
+        value, found = call(files, log)[0]
+        self.assertIsNone(found, found)
+        self.assertEqual(value['last_handoff']['ref'], hand_path('sb'))
+        log.add('record.added', claim('sa', n=6), 'claim-last')
+        value, found = call(files, log)[0]
+        self.assertIsNone(found, found)
+        self.assertEqual(value['last_handoff']['ref'], hand_path('sa'))
+
+    def test_a_session_part_out_of_form(self):
+        """TASK-082 AC7 (amended by TASK-108): a name under the task's head with a session part out of form is a finding; a name out of the path-name form is refused by the listing first; the TASK-1000 head is not the task's."""
+        for bad in ('.', '..', 'a+b', 's' * 129):
+            files = dict(FILES, **{'docs/handoffs/%s-%s.md' % (TASK, bad): 'x\n'})
+            found = self.refused(call(files)[0])
+            self.assertTrue(any('the session part is out of form' in f for f in found), (bad, found))
+        files = dict(FILES, **{'docs/handoffs/%s-a b.md' % TASK: 'x\n'})
+        found = self.refused(call(files)[0])
+        self.assertTrue(any('out of the path-name form' in f for f in found), found)
+        files = dict(FILES, **{'docs/handoffs/TASK-1000-s0.md': 'x\n', hand_path('s1', state=True, task='TASK-1000'): 'y\n'})
+        value, found = call(files)[0]
+        self.assertIsNone(found, found)
+        self.assertIsNone(value['last_handoff'])
+
+    def test_the_rank_guard(self):
+        """TASK-082 AC7 (amended by TASK-108): two sessions with the same rank are a finding (unreachable with real events, shown with a stand-in rank)."""
+        files = dict(FILES, **{hand_path('sa'): 'a\n', hand_path('sb'): 'b\n'})
+        with mock.patch.object(base_inputs, '_handoff_rank', return_value={'sa': 3, 'sb': 3}):
+            found = self.refused(call(files, log_with(claim('sa'), claim('sb')))[0])
+        self.assertTrue(any('two handoffs share a rank' in f for f in found), found)
+
+    def test_the_state_directory_is_the_writers(self):
+        """TASK-082 AC7 (amended by TASK-108): the state directory the reader lists is the writer's STATE_DIR (the first component of the state candidate)."""
+        self.assertEqual(contract_path.candidates(TASK)[0][0], writer.STATE_DIR)
+
+    def test_a_refused_state_listing(self):
+        """TASK-082 AC7 (amended by TASK-108): a state handoffs folder that cannot be listed (a symbolic link in it) is a refusal, never an empty answer."""
+        blob = gid('blob', FILES['src/aieos_bootstrap/other.py'].encode('utf-8'))
+        files = dict(FILES, **{hand_path('s0', state=True): 'x\n'})
+        git = Git(files, {STATE + '/handoffs/': [('120000', 'blob', blob, 'link.md')]})
+        found = self.refused(call(files, git=git)[0])
+        self.assertTrue(any('listing of' in f for f in found), found)
+
+    def test_the_call_bounds(self):
+        """TASK-082 AC7 (amended by TASK-108): no identical call repeats with a state handoffs folder; the folder adds a bounded number of calls to the docs-only list."""
+        base = Git(FILES)
+        value, found = call(FILES, git=base)[0]
+        self.assertIsNone(found, found)
+        files = dict(FILES, **{hand_path('s0', state=True): 'x\n'})
+        git = Git(files)
+        value, found = call(files, git=git)[0]
+        self.assertIsNone(found, found)
+        self.assertEqual(len(git.calls), len({tuple(c) for c in git.calls}))
+        self.assertLessEqual(len(git.calls) - len(base.calls), 3)
+
+    def test_random_claim_orders_choose_the_newest(self):
+        """TASK-082 AC7 (amended by TASK-108): over seeded random orders of the claims of three sessions (each with a file, in either folder), the chosen file is
+        the one of the session whose last claim is the newest in the log."""
+        rng = random.Random(108)
+        names = ['sa', 'sb', 'sc']
+        for _ in range(60):
+            files = dict(FILES)
+            for s in names:
+                files[hand_path(s, state=rng.random() < 0.5)] = 'from %s\n' % s
+            order = [rng.choice(names) for _ in range(rng.randint(3, 9))]
+            order += [s for s in names if s not in order]
+            counts, payloads = {}, []
+            for s in order:
+                counts[s] = counts.get(s, 0) + 1
+                payloads.append(claim(s, n=counts[s]))
+            last = {s: k for k, s in enumerate(order)}
+            value, found = call(files, log_with(*payloads))[0]
+            self.assertIsNone(found, (order, found))
+            self.assertEqual(value['last_handoff']['text'], 'from %s\n' % max(names, key=lambda s: last[s]), order)
 
 
 STATE_PATH = '.' + 'aieos' + '/tasks/TASK-100.yaml'
