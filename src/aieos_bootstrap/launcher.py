@@ -32,6 +32,16 @@ expiry, then the Resume Check, then the grant):
    "base"; a HEAD that does not equal the ref's answer gives "not granted" with reason "base"; each with no session
    row opened and read_log, held, start and end not called. Only the local ref is read, nothing is fetched, and the
    ref can move after the read; a base out of form was refused in step 1 with reason "argument".
+3b. The root (task TASK-109; specification 7 revision 7, section 5; DEF-0101): right after the base check and before
+   the log read, the status of the repository is read once through read by gitread's status form (gitread.STATUS_HEAD
+   followed by ":(exclude)" and writer.STATE_DIR, so the project-state directory is left out). A clean answer (no
+   error, exit 0, no output) goes on. Any entry (a change against HEAD in the index or the working tree, or an
+   untracked file) gives "not granted" with reason "root", the finding "root: <n> entries (changes against HEAD in
+   the index or the working tree, or untracked files)" and at most 20 findings "root: <repr of the entry's path
+   bytes>", in git's order. An answer that is not a mapping, an error, a non-zero exit, output that is not bytes, an
+   entry out of the form [two status characters][space][path][NUL], an unterminated answer or a "##" entry gives
+   "refused" with reason "root" (_root_entries parses the answer and raises nothing). Either way no session row is
+   opened and read_log, held, start and end are not called.
 4. The log, read once by read_log(root), then execution.task_view over those bytes: its findings give "refused";
    then a task IN_PROGRESS (a lease still held after the expiry) gives "not granted" with reason "held", and any
    other state outside READY and REWORK gives "not granted" with reason "state"; all before adapter.start, with no
@@ -93,7 +103,7 @@ The rulings, each this task's choice (decisions D-2673, D-2675, D-2681):
 Stated limits: the observed read-set record is written at four call places: end writes it at the normal end and for the
 gone session at the end after a violation or an expiry, with the reads' removal (TASK-089), start's step 1a writes it at
 the next start, before the expiry, for a session gone with no end (TASK-090), and end_outside for `aieos end`; launching
-with a runtime is not before DEF-0101's open points are closed: the untouched-root check and max_risk (a statement, not
+with a runtime is not before DEF-0101's open points are closed: the untouched-root check after the session (the check before the grant is step 3b) and max_risk (a statement, not
 a lock; check 0 is made by the Resume Check at every start and the base-tip check by step 3a). The base's limits
 (TASK-106): the hook still makes no check 0 (specification 5 :121; specification 7 revision 5 :49); the base-name rule
 of gitread.is_base_name is stricter than git's own, so a base that git accepts but the rule refuses is refused in step 1
@@ -115,7 +125,31 @@ for `aieos end`; a raising start_session gives "session" with the row possibly p
 the hash of HEAD's resume_check.py, not of the imported module that runs. Two starts of one task in the same second
 at the same HEAD make the same session id, and the second is refused "started". One run at a time (the writer's
 limit); the expiry's result is not checked against the task; every limit of git_inputs, log_inputs, adapter.start and
-execute holds here.
+execute holds here. The root check's limits (TASK-109), in plain words: (1) the status is read once, before the
+grant, so a change between that read and the grant is not seen (the log, the view and the inputs come after it), and
+that the session leaves the root untouched afterwards is not checked and stays open (DEF-0101); (2) the project-state
+directory is left out, so a change to a tracked file inside it is not counted (only the task's own contract there is
+covered, by check 0), and gitread's name rule accepts any name that begins with ".", and that this module passes
+writer.STATE_DIR is pinned by a test only; (3) the ignore set is the repository's own ignore files and the clone's own
+.git/info/exclude, the user's global ignore file is not read, so an untracked file those files do not list, a cache or
+a tool file among them, refuses the launch, as does any uncommitted edit of the owner's; (4) a change of mode only, of
+a symbolic link, of case only, of line endings only, a file flagged assume-unchanged or skip-worktree, a change inside
+a submodule, a path outside the root, an unfinished merge, rebase or cherry-pick, stashes and other refs may not be
+counted or are not looked at; (5) status is the first form of gitread that can make git start a program named in
+configuration: no repository content can define a filter driver, but a driver named in the clone's own .git/config (or
+a file it includes, or the configuration a linked worktree shares) is started for files whose attributes name it when
+their stat data changed, and gitread cannot override driver names it does not know; refusing the launch when
+.gitattributes at HEAD holds "filter=" was not taken (it misses .git/info/attributes and costs a tree read), and
+neither were -c core.attributesFile and git's --attr-source (each closes only part of the risk and would change the
+existing forms and the line-ending handling); this is a stated limit and a review finding for INV-001, not a change to
+it, and it is carried to DEF-0101; (6) the workflow's check of
+gitread.SUBCOMMANDS, which accepts four subcommands or five since its revision 15, first runs on this task's branch,
+and a later decision under DM A66 narrows it to the five after this task lands; (7) the form needs a git that honours
+GIT_OPTIONAL_LOCKS (2.15 or later; that floor is for this variable only) and accepts --no-renames,
+--untracked-files=all and --ignore-submodules=all on status; the version in which each option appeared is not stated
+here, no floor is claimed for the whole form, and the version is not checked; a git that refuses an option exits
+non-zero, which refuses the launch with reason "root"; (8) the self-build's own use: the project root must be clean
+to be launched from, so the owner's uncommitted edits refuse the launch.
 
 Purity: it opens no file, reads no clock and no environment, and starts no process but through gitread; __init__.py
 is not changed.
@@ -327,6 +361,43 @@ def _base_tip(read, repo, base, head):
     return None, None
 
 
+_STATUS_CHARS = frozenset(b' MTADRCU?!')
+_ROOT_SHOWN = 20
+
+
+def _root_entries(output):
+    """Step 3b (TASK-109 AC3): (the path bytes of every entry of git status --porcelain=v1 -z, None) or (None, a
+    finding). Pure; raises nothing. An entry is two status characters, a space, a non-empty path and a NUL."""
+    if not isinstance(output, bytes):
+        return None, 'root: git status gave output that is not bytes'
+    parts = output.split(b'\0')
+    if parts[-1] != b'':
+        return None, 'root: git status gave an answer that does not end in the NUL of its last entry'
+    entries = []
+    for part in parts[:-1]:
+        if part[:2] == b'##':
+            return None, 'root: git status gave a branch entry (%r)' % part[:80]
+        if len(part) < 4 or part[0] not in _STATUS_CHARS or part[1] not in _STATUS_CHARS or part[2:3] != b' ':
+            return None, 'root: git status gave an entry out of form (%r)' % part[:80]
+        entries.append(part[3:])
+    return entries, None
+
+
+def _root(read, repo):
+    """Step 3b (TASK-109): (None, None) when the root is untouched, else ("refused" or "not granted", findings)."""
+    r = read(repo, list(gitread.STATUS_HEAD) + [':(exclude)' + writer.STATE_DIR], TIMEOUT)
+    if not (isinstance(r, dict) and r.get('error') is None and r.get('exit') == 0 and isinstance(r.get('out'), bytes)):
+        shown = (r.get('error'), r.get('exit')) if isinstance(r, dict) else r
+        return 'refused', ['root: git status gave no answer (%r)' % (shown,)]
+    entries, found = _root_entries(r['out'])
+    if found is not None:
+        return 'refused', [found]
+    if entries:
+        return 'not granted', (['root: %d entries (changes against HEAD in the index or the working tree, or untracked '
+                                'files)' % len(entries)] + ['root: %r' % e for e in entries[:_ROOT_SHOWN]])
+    return None, None
+
+
 def session_id_of(task_id, now, head_commit):
     """Step 5: "launch-" followed by the first 32 hex characters of the SHA-256 of "<task_id> <now.isoformat()>
     <head_commit>"."""
@@ -463,6 +534,10 @@ def start(root, repo, task_id, adapter_name, max_risk, holder, recorder, now, ex
         outcome, found = _base_tip(read, repo, base, head)
         if outcome is not None:
             return _result(outcome, 'base', found, head_commit=head, gone=gone)
+        step = 'root'
+        outcome, found = _root(read, repo)
+        if outcome is not None:
+            return _result(outcome, 'root', found, head_commit=head, gone=gone)
         step = 'log'
         log = read_log(root)
         if not isinstance(log, bytes):

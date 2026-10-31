@@ -2,7 +2,7 @@
 section 12 point 4; DEF-0030): the first piece of the core's caller, and INV-001's single process wrapper.
 
 INV-001 allows a process only "through one wrapper with a pinned list of allowed executables". This module is that
-wrapper. Its pinned list is [git], and git runs only with one of four read-only subcommands, each in one fixed form:
+wrapper. Its pinned list is [git], and git runs only with one of five read-only subcommands, each in one fixed form:
 
 - rev-parse: ["rev-parse", "--verify", "--end-of-options", <name>], the name an object id, HEAD, or "refs/heads/" followed by
   one branch name that is_base_name accepts (specification 7 revision 5, section 5: the launcher's base-tip check; TASK-106);
@@ -10,6 +10,10 @@ wrapper. Its pinned list is [git], and git runs only with one of four read-only 
 - rev-list: ["rev-list", "--parents", "-n", "1", <id>];
 - diff-tree: ["diff-tree", "--no-commit-id", "--name-only", "-r", "--no-renames", "--no-ext-diff", "--no-textconv",
   "-z", "--root", <id>];
+- status (TASK-109, DEF-0101, specification 7 revision 7: the launcher's untouched-root check): the constant STATUS_HEAD,
+  ["status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all", "--ignore-submodules=all", "--", "."],
+  followed by exactly one argument, ":(exclude)" and a name that is_state_name accepts (the project-state directory,
+  which the caller builds; this module holds no such name);
 
 where an object id is 40 or 64 lowercase hexadecimal characters. Anything else is refused before any process starts
 (fail closed). A further executable or subcommand is a change to this module and to the workflow's pattern rule for
@@ -47,9 +51,22 @@ as given once every entry of it is absolute; on Windows the program search does 
 the refusal of an empty or relative PATH entry closes that route on POSIX only; the repository's own configuration
 is still read by git, and the fixed options override only the keys named above; GIT_NO_LAZY_FETCH is ignored by a
 git older than 2.44, and GIT_CONFIG_GLOBAL by one older than 2.32; core.hooksPath has no test of effect, since none
-of the four subcommands runs a hook; output is not capped in size, and cat-file reads whatever object an id names;
+of the five subcommands runs a hook; output is not capped in size, and cat-file reads whatever object an id names;
 the repository path is the caller's; the parsers check form, not that a commit exists or is reachable;
-no caller exists yet. The module opens, writes and removes no file, reads no clock, and reads the environment only
+no caller exists yet. The fifth form (TASK-109) adds one limit: ``status`` is the first form that can make git start a program
+named in configuration. No repository content can define a filter driver, but a driver named in the clone's own
+.git/config (or a file it includes, or the configuration a linked worktree shares) is started for files whose
+attributes name it when their stat data changed, and this module cannot override driver names it does not know; the
+fixed options above do not close that route. Refusing the launch when .gitattributes at HEAD holds "filter=" was not
+taken (it misses .git/info/attributes and costs a tree read), and neither were -c core.attributesFile and git's
+--attr-source (each closes only part of the risk and would change the existing forms and the line-ending handling).
+INV-001's text is unchanged; this is a limit for its review part, carried to DEF-0101. The name
+rule accepts any name that begins with "." (such as ".github"), so the caller must pass the right name. The status
+form needs a git that honours GIT_OPTIONAL_LOCKS (2.15 or later; that floor is for this variable only) and accepts
+--no-renames, --untracked-files=all and --ignore-submodules=all on status; the version in which each option appeared
+is not stated here, no floor is claimed for the whole form, and the version is not checked; a git that refuses an
+option exits non-zero, which the caller reads as a refusal.
+The module opens, writes and removes no file, reads no clock, and reads the environment only
 for PATH and SYSTEMROOT.
 """
 
@@ -57,11 +74,14 @@ import os
 import re
 import subprocess
 
-SUBCOMMANDS = ('cat-file', 'diff-tree', 'rev-list', 'rev-parse')
+SUBCOMMANDS = ('cat-file', 'diff-tree', 'rev-list', 'rev-parse', 'status')
 MAX_TIMEOUT = 120
 OBJECT_ID = re.compile(r'[0-9a-f]{40}|[0-9a-f]{64}')
 DIFF_TREE = ['diff-tree', '--no-commit-id', '--name-only', '-r', '--no-renames', '--no-ext-diff', '--no-textconv', '-z',
              '--root']
+STATUS_HEAD = ['status', '--porcelain=v1', '-z', '--no-renames', '--untracked-files=all', '--ignore-submodules=all', '--',
+               '.']
+EXCLUDE_MAGIC = ':(exclude)'
 FIXED_OPTIONS = ['--no-pager', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=' + os.devnull, '-c',
                  'diff.external=', '-c', 'core.pager=cat']
 HEADER_KEY = re.compile(r'[a-z][a-z-]*')
@@ -93,6 +113,19 @@ def is_base_name(name):
     return True
 
 
+STATE_NAME_CHARS = re.compile(r'[A-Za-z0-9._-]{2,40}')
+
+
+def is_state_name(name):
+    """Whether name is one state-directory name of the status form (TASK-109 AC1): a str of 2 to 40 ASCII letters,
+    digits, ".", "_" and "-", whose first character is ".", with at least one letter or digit, and ".." nowhere (a "/"
+    is outside the set). The rule does not say which name is the right one. Pure: it starts no process and reads
+    nothing."""
+    if type(name) is not str or STATE_NAME_CHARS.fullmatch(name) is None or '..' in name or name[0] != '.':
+        return False
+    return any(c.isalnum() for c in name)
+
+
 def _is_branch_ref(s):
     return s.startswith(BRANCH_PREFIX) and is_base_name(s[len(BRANCH_PREFIX):])
 
@@ -117,8 +150,11 @@ def form_error(repo, args, timeout):
         ok = len(args) == 3 and args[1] in ('-p', '-t') and _is_id(args[2])
     elif sub == 'rev-list':
         ok = len(args) == 5 and args[1:4] == ['--parents', '-n', '1'] and _is_id(args[4])
-    else:
+    elif sub == 'diff-tree':
         ok = len(args) == len(DIFF_TREE) + 1 and args[:-1] == DIFF_TREE and _is_id(args[-1])
+    else:
+        ok = (len(args) == len(STATUS_HEAD) + 1 and args[:-1] == STATUS_HEAD and args[-1].startswith(EXCLUDE_MAGIC)
+              and is_state_name(args[-1][len(EXCLUDE_MAGIC):]))
     if not ok:
         return 'args are not the fixed form of %s' % sub
     return None

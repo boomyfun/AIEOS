@@ -30,6 +30,7 @@ TOKEN = {'epoch': 'e1', 'counter': 1}
 LEASE = {'task_id': TASK, 'fencing_token': TOKEN, 'expires_at': LATER}
 HEAD_ARGS = ['rev-parse', '--verify', '--end-of-options', 'HEAD']
 BASE_ARGS = ['rev-parse', '--verify', '--end-of-options', 'refs/heads/main']
+STATUS_ARGS = list(gitread.STATUS_HEAD) + [':(exclude)' + writer.STATE_DIR]
 
 S_TEXT = 'Đặc tả — một dòng\n'
 S_HASH = hashlib.sha256(S_TEXT.encode('utf-8')).hexdigest()
@@ -62,11 +63,13 @@ def ok(out):
 
 class Repo:
     """A stand-in for gitread.run over commits held in memory, ids being Git's own hashes; it answers the HEAD form
-    with its head and records its calls as (repo, args, timeout)."""
+    with its head, the status form (TASK-109) with its status answer (clean, b'', by default; a value or a callable
+    when set) and records its calls as (repo, args, timeout)."""
 
     def __init__(self):
         self.objects, self.files, self.parents, self.calls = {}, {}, {}, []
         self.head = None
+        self.status = b''
 
     def _put(self, kind, data):
         oid = gid(kind, data)
@@ -107,6 +110,8 @@ class Repo:
         self.calls.append((repo, list(args), timeout))
         if list(args) == HEAD_ARGS or list(args) == BASE_ARGS:
             return ok((self.head + '\n').encode('ascii'))
+        if list(args) == STATUS_ARGS:
+            return self.status(repo, args, timeout) if callable(self.status) else ok(self.status)
         oid = args[-1]
         if oid not in self.objects:
             return {'exit': 128, 'out': b'', 'err': b'fatal', 'error': None}
@@ -391,7 +396,8 @@ class TASK086AC1BaseTip(Base):
         launch(c, stub=('start', 'end'))
         self.assertEqual(repo.calls[0], (REPO, HEAD_ARGS, 30))
         self.assertEqual(repo.calls[1], (REPO, BASE_ARGS, 30))
-        self.assertEqual(c.names()[:4], ['expire', 'read', 'read', 'read_log'])
+        self.assertEqual(repo.calls[2], (REPO, STATUS_ARGS, 30))
+        self.assertEqual(c.names()[:5], ['expire', 'read', 'read', 'read', 'read_log'])
         self.assertIsNone(gitread.form_error(*repo.calls[1]))
 
     def test_a_non_default_base_names_its_own_ref(self):
@@ -459,29 +465,155 @@ class TASK086AC1BaseTip(Base):
 
 
     def test_a_raise_in_the_inputs_reads_is_refused(self):
-        """TASK-086 AC4 and TASK-086 AC7: the HEAD read and the base read succeed and the next read, the first of the
-        inputs reads, raises: "refused", with adapter.start and adapter.end not called."""
+        """TASK-086 AC4 and TASK-086 AC7 (amended by TASK-109): the HEAD read, the base read and the status read
+        succeed and the next read, the first of the inputs reads, raises: "refused", with adapter.start and adapter.end
+        not called."""
         repo = world()
         seen = []
 
         def read(r, a, t=30):
             seen.append(list(a))
-            if len(seen) > 2:
+            if len(seen) > 3:
                 raise RuntimeError('x')
             return repo(r, a, t)
         c = calls_for(repo, approved_log(repo), read=read)
         r = launch(c, stub=('start', 'end'))
         self.assert_form(r)
         self.assertEqual(r['result'], 'refused')
-        self.assertEqual(seen[:2], [HEAD_ARGS, BASE_ARGS])
+        self.assertEqual(seen[:3], [HEAD_ARGS, BASE_ARGS, STATUS_ARGS])
         self.assertEqual(c.of('start'), [])
         self.assertEqual(c.of('end'), [])
         self.assertEqual(r['reason'], 'inputs')
 
 
+class TASK086AC1Root(Base):
+    """The step "root" (task TASK-109; specification 7 revision 7, section 5)."""
+
+    def run_with(self, status, **over):
+        repo = world()
+        repo.status = status
+        c = calls_for(repo, approved_log(repo))
+        r = launch(c, stub=('start', 'end'), **over)
+        self.assert_form(r)
+        return repo, c, r
+
+    def test_the_status_read_is_third_and_built_from_the_state_directory(self):
+        """TASK-086 AC1 (amended by TASK-109): the status read is the third read, after HEAD and the base tip and
+        before read_log, with the gitread timeout; the whole argument list passed to read equals
+        list(gitread.STATUS_HEAD) + [':(exclude)' + writer.STATE_DIR], and it passes gitread.form_error."""
+        repo, c, r = self.run_with(b'')
+        self.assertEqual(repo.calls[2], (REPO, list(gitread.STATUS_HEAD) + [':(exclude)' + writer.STATE_DIR], 30))
+        self.assertEqual([a for _, a, _ in repo.calls[:3]], [HEAD_ARGS, BASE_ARGS, STATUS_ARGS])
+        self.assertIsNone(gitread.form_error(*repo.calls[2]))
+        self.assertEqual(c.names()[:5], ['expire', 'read', 'read', 'read', 'read_log'])
+        self.assertEqual(sum(1 for _, a, _ in repo.calls if a[0] == 'status'), 1)
+
+    def test_a_clean_root_goes_on(self):
+        """TASK-086 AC1 (amended by TASK-109): a clean answer (no error, exit 0, no output) goes on: the reason is not
+        "root" and adapter.start is called."""
+        repo, c, r = self.run_with(b'')
+        self.assertNotEqual(r['reason'], 'root')
+        self.assertIn('start', c.names())
+
+    def test_an_entry_is_not_granted_with_the_count_and_the_paths(self):
+        """TASK-086 AC1 (amended by TASK-109): an unstaged change, a staged one and an untracked file give "not granted"
+        with reason "root", the count, one finding per path as the repr of its bytes in git's order, the head in
+        head_commit, no environment and no callee after the third read."""
+        repo, c, r = self.run_with(b' M src/a.py\0A  b.txt\0?? c d.md\0')
+        self.assertEqual((r['result'], r['reason']), ('not granted', 'root'))
+        self.assertEqual(r['findings'], [
+            'root: 3 entries (changes against HEAD in the index or the working tree, or untracked files)',
+            "root: b'src/a.py'", "root: b'b.txt'", "root: b'c d.md'"])
+        self.assertEqual(r['head_commit'], repo.head)
+        self.assertIsNone(r['environment'])
+        self.assertEqual(c.names(), ['expire', 'read', 'read', 'read'])
+
+    def test_the_findings_show_at_most_twenty_paths(self):
+        """TASK-086 AC1 (amended by TASK-109): 25 entries give the count 25 and the first 20 paths only."""
+        out = b''.join(b'?? f%02d\0' % i for i in range(25))
+        repo, c, r = self.run_with(out)
+        self.assertEqual((r['result'], r['reason']), ('not granted', 'root'))
+        self.assertEqual(len(r['findings']), 21)
+        self.assertTrue(r['findings'][0].startswith('root: 25 entries ('), r['findings'][0])
+        self.assertEqual(r['findings'][1:], ["root: b'f%02d'" % i for i in range(20)])
+
+    def test_a_path_with_a_newline_or_a_non_ascii_byte_is_shown_as_bytes(self):
+        """TASK-086 AC1 (amended by TASK-109): a path holding a newline, a UTF-8 name and a byte that is not UTF-8 are
+        shown as the repr of the path bytes, with no decoding."""
+        repo, c, r = self.run_with(b'?? a\nb\0 M \xc3\xa9.md\0?? \xff\xfe\0')
+        self.assertEqual((r['result'], r['reason']), ('not granted', 'root'))
+        self.assertEqual(r['findings'][1:], ["root: b'a\\nb'", "root: b'\\xc3\\xa9.md'", "root: b'\\xff\\xfe'"])
+
+    def test_every_status_pair_is_an_entry(self):
+        """TASK-086 AC1 (amended by TASK-109): the unmerged pairs, the renamed, copied and type-changed ones and the
+        untracked and ignored marks are entries and give "not granted" with reason "root"."""
+        for pair in (' M', 'M ', 'MM', 'A ', 'AM', ' D', 'D ', 'R ', 'C ', 'T ', ' T', 'UU', 'AA', 'DD', 'AU', 'UD', '??',
+                     '!!'):
+            repo, c, r = self.run_with(pair.encode('ascii') + b' x\0')
+            self.assertEqual((r['result'], r['reason']), ('not granted', 'root'), pair)
+
+    def test_an_answer_out_of_form_is_refused(self):
+        """TASK-086 AC1 (amended by TASK-109): a read with no mapping, an error, a non-zero exit, output that is not
+        bytes, an unterminated answer, an entry out of form, an empty path and a branch entry give "refused" with
+        reason "root", a finding that begins "root:", the head in head_commit and no callee after the third read."""
+        outs = [b'?? a', b' M a', b'\0', b'?? a\0\0', b' M\0', b'M \0', b'XX a\0', b'?? a\0X\0', b'## main\0',
+                b'##x\0', b'M  a\0## main\0', b'?Ma\0', b'\xff\xff a\0', b'?? a\0?? b',
+                b'?X a\0', b'??xa\0', b'?? \0', b'X  a\0']
+        answers = [ok(o) for o in outs]
+        answers += [{'exit': 128, 'out': b'', 'err': b'fatal', 'error': None},
+                    {'exit': 0, 'out': 'x', 'err': b'', 'error': None},
+                    {'exit': None, 'out': b'', 'err': b'', 'error': 'refused'}, 'x', None, 3, [],
+                    {'exit': 0, 'out': None, 'err': b'', 'error': None}, {'exit': 1, 'out': b'', 'error': None},
+                    {'exit': 0, 'out': b'?? a\0', 'error': 'timeout'}]
+        for answer in answers:
+            repo = world()
+            repo.status = lambda r, a, t, answer=answer: answer
+            c = calls_for(repo, approved_log(repo))
+            r = launch(c, stub=('start', 'end'))
+            self.assert_form(r)
+            self.assertEqual((r['result'], r['reason']), ('refused', 'root'), answer)
+            self.assertTrue(r['findings'][0].startswith('root:'), r['findings'])
+            self.assertEqual(r['head_commit'], repo.head)
+            self.assertEqual(c.names(), ['expire', 'read', 'read', 'read'], answer)
+            self.assertIsNone(r['environment'])
+
+    def test_a_raise_in_the_status_read_is_refused(self):
+        """TASK-086 AC1 and TASK-086 AC7 (amended by TASK-109): the HEAD and base reads succeed and the status read
+        raises: "refused" with reason "root" and no later callee (the step variable is "root")."""
+        def boom(r, a, t=30):
+            raise RuntimeError('x')
+        repo = world()
+        repo.status = boom
+        c = calls_for(repo, approved_log(repo))
+        r = launch(c, stub=('start', 'end'))
+        self.assert_form(r)
+        self.assertEqual((r['result'], r['reason']), ('refused', 'root'))
+        self.assertEqual(c.names(), ['expire', 'read', 'read', 'read'])
+
+    def test_the_gone_records_still_come_first_and_no_session_is_opened(self):
+        """TASK-086 AC2 (amended by TASK-109): a non-grant at "root" calls neither read_log, held, start nor end, and the
+        gone sessions' lines and the expiry still ran before it."""
+        repo, c, r = self.run_with(b'?? x\0')
+        self.assertEqual(c.names()[0], 'expire')
+        for name in ('read_log', 'held', 'start', 'end', 'start_session', 'end_session'):
+            self.assertEqual(c.of(name), [], name)
+
+    def test_the_parser_is_pure_and_total(self):
+        """TASK-086 AC1 (amended by TASK-109): _root_entries gives ([], None) for no output, the path bytes of each
+        entry in order, and a finding, never a raise, for anything out of form or not bytes."""
+        self.assertEqual(launcher._root_entries(b''), ([], None))
+        self.assertEqual(launcher._root_entries(b' M a\0?? b c\0'), ([b'a', b'b c'], None))
+        for bad in (b'x', b' M a', b'\0', b'## a\0', b'?X a\0', b'??xa\0', b'?? \0', b'X  a\0',
+                    None, 'x', 3, bytearray(b' M a\0'), [b' M a\0']):
+            entries, found = launcher._root_entries(bad)
+            self.assertIsNone(entries, bad)
+            self.assertTrue(found.startswith('root:'), bad)
+
+
 class TASK086AC2Order(Base):
     def test_the_order(self):
-        """TASK-086 AC2: expire, then read (HEAD), then read (the base ref), then read_log, then held (the one held call before adapter.start),
+        """TASK-086 AC2 (amended by TASK-109): expire, then read (HEAD), then read (the base ref), then read (the
+        status of the root), then read_log, then held (the one held call before adapter.start),
         then the readers' reads, then adapter.start, then adapter.end when no token was granted and the row was
         opened; execute's own second read_log and held calls come inside adapter.start. TASK-090 AC7: with a recording
         read_sessions, it is called first, before expire."""
@@ -489,22 +621,22 @@ class TASK086AC2Order(Base):
         c = calls_for(repo, approved_log(repo), start=ended(), end=ended())
         r = launch(c, stub=('start', 'end'))
         names = c.names()
-        self.assertEqual(names[:5], ['expire', 'read', 'read', 'read_log', 'held'])
+        self.assertEqual(names[:6], ['expire', 'read', 'read', 'read', 'read_log', 'held'])
         self.assertEqual(names[-2:], ['start', 'end'])
-        self.assertTrue(set(names[5:-2]) == {'read'} and len(names) > 8, names)
+        self.assertTrue(set(names[6:-2]) == {'read'} and len(names) > 9, names)
         self.assert_form(r)
         self.assertEqual(r['result'], 'not granted')
         c = calls_for(repo, approved_log(repo))
         r = launch(c, max_risk=None)
         names = c.names()
-        self.assertEqual(names[:5], ['expire', 'read', 'read', 'read_log', 'held'])
+        self.assertEqual(names[:6], ['expire', 'read', 'read', 'read', 'read_log', 'held'])
         first = names.index('start_session')
         self.assertEqual(names[first:first + 3], ['start_session', 'read_log', 'held'])
         self.assertEqual(names[-1], 'end_session')
         self.assertEqual(r['result'], 'not granted')
         c = calls_for(repo, approved_log(repo), read_sessions=store(value=[]))
         r = launch(c, max_risk=None, read_sessions=c.make('read_sessions', writer.read_sessions))
-        self.assertEqual(c.names()[:6], ['read_sessions', 'expire', 'read', 'read', 'read_log', 'held'])
+        self.assertEqual(c.names()[:7], ['read_sessions', 'expire', 'read', 'read', 'read', 'read_log', 'held'])
         self.assertEqual(c.of('read_sessions')[0][1], (ROOT, TASK))
         self.assertEqual(r['result'], 'not granted')
 

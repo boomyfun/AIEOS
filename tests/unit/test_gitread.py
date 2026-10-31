@@ -391,6 +391,91 @@ class PathsParser(unittest.TestCase):
             self.assertTrue(p['error'], d)
 
 
+STATUS = ['status', '--porcelain=v1', '-z', '--no-renames', '--untracked-files=all', '--ignore-submodules=all', '--', '.']
+EXCLUDE = ':(exclude)'
+
+
+class StatusForm(unittest.TestCase):
+    GOOD_NAMES = ['.aieos', '.a', '.github', '.claude', '.gitattributes', '.a-b_c.d', '.' + 'x' * 39, '.1', '._a', '.-a']
+    BAD_NAMES = ['', '.', '..', '...', '.-', '._', '.--', 'src', 'docs', 'aieos', '-x', 'a/b', '.a/b', '/.a', '.a/', 'a.', '.a..b',
+                 '..a', '.' + 'x' * 40, ' .a', '.a ', '.a\n', '.\u00e9', '.a:b', '.a*', '.a?', '.a[b', '.a\\b', '.a\x00',
+                 '.a b', '.(a)', '!.a', '.a!', ':.a', '^.a', ':(exclude).a']
+
+    def test_the_status_form_is_pinned(self):
+        """TASK-024 AC1, amended by TASK-109: the constant STATUS_HEAD is the contract's list, the fifth subcommand is
+        in the pinned tuple, and the options of the form are, as a table, exactly the contract's."""
+        self.assertEqual(gitread.STATUS_HEAD, STATUS)
+        self.assertIs(type(gitread.STATUS_HEAD), list)
+        self.assertEqual(gitread.SUBCOMMANDS[-1], 'status')
+        self.assertEqual(gitread.STATUS_HEAD[1:7], ['--porcelain=v1', '-z', '--no-renames', '--untracked-files=all',
+                                       '--ignore-submodules=all', '--'])
+
+    def test_the_status_form_is_accepted(self):
+        """TASK-024 AC1 and TASK-024 AC12, amended by TASK-109: the head followed by ':(exclude)' and a name the rule
+        accepts starts one process, with git's fixed options, the repository and the arguments in order."""
+        for name in self.GOOD_NAMES:
+            args = list(gitread.STATUS_HEAD) + [EXCLUDE + name]
+            self.assertIsNone(gitread.form_error(REPO, args, 30), name)
+            r, s = call(args)
+            self.assertEqual(len(s.calls), 1, name)
+            self.assertIsNone(r['error'], name)
+            self.assertEqual(s.calls[0][0][0], ['git'] + gitread.FIXED_OPTIONS + ['-C', REPO] + args, name)
+
+    def test_every_deviation_from_the_status_form_is_refused(self):
+        """TASK-024 AC1, TASK-024 AC3 and TASK-024 AC12, amended by TASK-109: another option, a different order, a
+        missing or extra argument, a name out of form, a non-str and the form without its subcommand are refused with
+        no call to the process function."""
+        good = EXCLUDE + '.state'
+        head = list(STATUS)
+        bad = [
+            ['status'], head, head + [good, good], head + [good, '.'], head + ['.state'], head + [EXCLUDE], head + [''],
+            head + [EXCLUDE + '.'], head + [EXCLUDE + 'src'], head + [EXCLUDE + '.a/b'], head + [EXCLUDE + '-x'],
+            head + [':(EXCLUDE).state'], head + [':(exclude,top).state'], head + [':!.state'], head + [':^.state'],
+            head + [' ' + good], head + [good + ' '], head + [good + '\n'], head + [3], head + [None], head + [[good]],
+            head[:-1] + [good], head[:-2] + [good], head[1:] + [good], ['status', '--porcelain=v1'] + [good],
+            [a for a in head if a != '-z'] + [good], [a for a in head if a != '--no-renames'] + [good],
+            [a for a in head if a != '--untracked-files=all'] + [good],
+            [a for a in head if a != '--ignore-submodules=all'] + [good], head[:1] + head[2:] + [good],
+            ['status', '--porcelain=v2'] + head[2:] + [good], ['status', '--porcelain'] + head[2:] + [good],
+            ['status', '--short'] + head[2:] + [good], ['status', '--porcelain=v1', '-z', '--renames'] + head[4:] + [good],
+            ['status', '--porcelain=v1', '-z', '--no-renames', '--untracked-files=no'] + head[5:] + [good],
+            ['status', '--porcelain=v1', '-z', '--no-renames', '--ignore-submodules=all', '--untracked-files=all', '--', '.', good],
+            head[:7] + ['src', good], head[:7] + ['..', good], head[:7] + [good], ['status', '--ignored'] + head[1:] + [good],
+            head + ['--ignored', good], ['--porcelain=v1'] + head + [good], [good] + head,
+            tuple(head + [good]), 'status', 3, None,
+        ]
+        for b in bad:
+            r, s = call(b if type(b) is not list else list(b))
+            self.assertEqual(s.calls, [], b)
+            self.assertTrue(r['error'], b)
+            self.assertEqual(r['exit'], None, b)
+
+    def test_state_names(self):
+        """TASK-024 AC1, amended by TASK-109: is_state_name accepts a str of 2 to 40 ASCII letters, digits, '.', '_' and
+        '-' that begins with '.', has a letter or a digit and no '..', and refuses the rest, 'src' and 'docs' and 'a/b'
+        among them; a dot-name such as '.github' passes the rule; a value that is not a str is refused without a raise."""
+        for name in self.GOOD_NAMES:
+            self.assertTrue(gitread.is_state_name(name), name)
+        for name in self.BAD_NAMES:
+            self.assertFalse(gitread.is_state_name(name), name)
+        for value in (None, 3, b'.aieos', ['.aieos'], ('.aieos',), 1.5, True):
+            self.assertFalse(gitread.is_state_name(value), value)
+
+    def test_the_status_command_is_one_real_shape(self):
+        """TASK-024 AC1 and TASK-024 AC2, amended by TASK-109: the one process started for the status form is git with
+        the fixed options first, then -C and the repository, then the form, with no shell, a closed standard input and
+        the repository as the working directory."""
+        args = list(gitread.STATUS_HEAD) + [EXCLUDE + '.state']
+        r, s = call(args)
+        (cmd,), kw = s.calls[0]
+        self.assertEqual(cmd[:1], ['git'])
+        self.assertEqual(cmd[1:1 + len(gitread.FIXED_OPTIONS)], gitread.FIXED_OPTIONS)
+        self.assertEqual(cmd[1 + len(gitread.FIXED_OPTIONS):], ['-C', REPO] + args)
+        self.assertIs(kw['shell'], False)
+        self.assertEqual(kw['cwd'], REPO)
+        self.assertEqual(kw['stdin'], gitread.subprocess.DEVNULL)
+
+
 def source(name):
     return (SRC / name).read_bytes().decode('utf-8')
 
@@ -460,13 +545,13 @@ class SingleWrapper(unittest.TestCase):
 
     def test_docstring_and_package(self):
         """TASK-024 AC6 and TASK-024 AC10: the docstring names INV-001's single wrapper, the pinned list and the
-        workflow's revision 8, and states the limits; the package lists the module; SUBCOMMANDS is the pinned tuple."""
+        workflow's revision 8, and states the limits; the package lists the module; SUBCOMMANDS is the pinned tuple (the five of it amended by TASK-109)."""
         doc = ast.get_docstring(ast.parse(source('gitread.py')))
         for s in ('single process wrapper', 'pinned list is [git]', 'revision 8', 'Limits (TASK-024 AC10)',
                   'trusted as the operating system finds it', "repository's own", 'no caller exists yet', 'POSIX only',
                   'not capped in size', 'GIT_NO_LAZY_FETCH'):
             self.assertIn(s, doc)
-        self.assertEqual(gitread.SUBCOMMANDS, ('cat-file', 'diff-tree', 'rev-list', 'rev-parse'))
+        self.assertEqual(gitread.SUBCOMMANDS, ('cat-file', 'diff-tree', 'rev-list', 'rev-parse', 'status'))
         self.assertIn("'gitread'", source('__init__.py'))
 
 

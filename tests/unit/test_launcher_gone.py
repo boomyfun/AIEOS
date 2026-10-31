@@ -13,7 +13,7 @@ import types
 import unittest
 from unittest import mock
 
-from aieos_bootstrap import base_files, execution, gitread, launcher, read_set_record, resume_inputs
+from aieos_bootstrap import adapter, base_files, execution, gitread, launcher, read_set_record, resume_inputs
 from aieos_bootstrap import resume_log_inputs, writer
 
 HERE = pathlib.Path(__file__).resolve()
@@ -108,7 +108,9 @@ def run(listing=(S1,), **answers):
 
 
 def ok_head(repo, args, timeout=30):
-    return {'exit': 0, 'out': (HEAD + '\n').encode('ascii'), 'err': b'', 'error': None}
+    """HEAD for every form but the status form (TASK-109), which answers clean."""
+    out = b'' if args[0] == 'status' else (HEAD + '\n').encode('ascii')
+    return {'exit': 0, 'out': out, 'err': b'', 'error': None}
 
 
 def full(c, state='READY', started=None, ended=None, expired=()):
@@ -364,6 +366,37 @@ class TASK090AC6Findings(Base):
         r = full(Calls(answers), started={'result': 'done', 'decision': 'CONTINUE', 'fencing_token': TOKEN})
         self.assert_form(r)
         self.assertEqual((r['result'], r['findings']), ('granted', [skip]))
+
+
+class TASK090AC6TheRootStep(Base):
+    def test_a_gone_session_is_processed_before_a_root_non_grant(self):
+        """TASK-090 AC6 and TASK-090 AC4 (amended by TASK-109): with one gone session listed and a dirty root, the gone
+        session's callees come first, then the expiry, then the three reads (HEAD, the base tip and the status, the
+        status the third); the result is "not granted" with reason "root", the gone session's line comes first in the
+        findings, and read_log, adapter.start and adapter.end are never called."""
+        def dirty(repo, args, timeout=30):
+            out = b'?? x\0' if args[0] == 'status' else (HEAD + '\n').encode('ascii')
+            return {'exit': 0, 'out': out, 'err': b'', 'error': None}
+        c = Calls({'read_sessions': store(value=[S1]), 'session_leases': leases([]),
+                   'stored_reads': store(value=list(READS)), 'observe_gone': recorded(),
+                   'remove_reads': store(value=2), 'expire': [], 'read': dirty, 'read_log': b'', 'start': None,
+                   'end': None})
+        kw = {name: c.make(name, real) for name, real in REAL}
+        r = launcher.start(ROOT, REPO, TASK, 'unit', 'critical', 'agent-1', REC, NOW, LATER,
+                           read=c.make('read', gitread.run), read_log=c.make('read_log', writer.read_log),
+                           start=c.make('start', adapter.start), end=c.make('end', adapter.end), **kw)
+        self.assert_form(r)
+        self.assertEqual((r['result'], r['reason']), ('not granted', 'root'))
+        self.assertEqual(c.names(), ['read_sessions', 'session_leases', 'stored_reads', 'observe_gone',
+                                     'remove_reads', 'expire', 'read', 'read', 'read'])
+        self.assertEqual(c.of('read')[2][1][1][0], 'status')
+        self.assertTrue(r['findings'][0].startswith('gone_records: %s: ' % S1), r['findings'])
+        self.assertTrue(any(f.startswith('root: 1 entries (') for f in r['findings'][1:]), r['findings'])
+        self.assertIn("root: b'x'", r['findings'])
+        self.assertIsNone(r['environment'])
+        self.assertEqual(r['head_commit'], HEAD)
+        for name in ('read_log', 'start', 'end'):
+            self.assertEqual(c.of(name), [], name)
 
 
 class TASK090AC8FindingsValues(Base):

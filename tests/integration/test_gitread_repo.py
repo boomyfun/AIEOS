@@ -1,12 +1,12 @@
 """Integration test of aieos_bootstrap.gitread over this repository's history (task TASK-024, rule R7, AC8): read
-only, with the four pinned forms, on fixed commits of main; it needs the repository's full history (a shallow clone
+only, with the five pinned forms (the fifth added by TASK-109), on fixed commits of main; it needs the repository's full history (a shallow clone
 fails it). The results are data about accepted commits: they reopen nothing. Each test names its criteria in its own
 docstring."""
 
 import pathlib
 import unittest
 
-from aieos_bootstrap import gitread
+from aieos_bootstrap import gitread, launcher, writer
 
 ROOT = str(pathlib.Path(__file__).resolve().parents[2])
 FIX = '2b7bf15269c57484e3306c6a6532d4cea6b5d3e2'
@@ -66,6 +66,18 @@ class RepositoryHistory(unittest.TestCase):
             r = gitread.run(ROOT, args)
             self.assertEqual((r['exit'], r['out'], r['err']), (None, b'', b''))
             self.assertIn('subcommand', r['error'])
+
+    def test_the_status_form_runs_on_this_clone(self):
+        """TASK-024 AC8 and TASK-024 AC1, amended by TASK-109: the status form with the state directory left out is
+        accepted, runs on this clone and gives exit 0, no error and bytes that the launcher's parser reads, whatever the
+        clone holds, so CI's git accepts its options."""
+        r = gitread.run(ROOT, list(gitread.STATUS_HEAD) + [':(exclude)' + writer.STATE_DIR])
+        self.assertIsNone(r['error'])
+        self.assertEqual(r['exit'], 0)
+        self.assertIsInstance(r['out'], bytes)
+        entries, found = launcher._root_entries(r['out'])
+        self.assertIsNone(found)
+        self.assertIsInstance(entries, list)
 
 
 if __name__ == '__main__':

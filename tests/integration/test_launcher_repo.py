@@ -1,6 +1,6 @@
 """Integration tests of aieos_bootstrap.launcher over this repository's history (TASK-086 AC11): start for TASK-088
-with HEAD fixed at f216376e by a stand-in read that answers only the exact HEAD form and the exact base form
-(refs/heads/main) and forwards every other call to gitread.run unchanged; the log is a stand-in holding TASK-088's task.approved; every store function is a stand-in
+with HEAD fixed at f216376e by a stand-in read that answers only the exact HEAD form, the exact base form
+(refs/heads/main) and the exact status form (TASK-109, clean) and forwards every other call to gitread.run unchanged; the log is a stand-in holding TASK-088's task.approved; every store function is a stand-in
 bound to the real function's signature, so no file is written. The repository must hold the full history, as
 tests/integration/test_resume_log_inputs_repo.py needs. Each test names its criteria in its own docstring."""
 
@@ -19,6 +19,7 @@ TASK = 'TASK-088'
 PINNED = 'e1578939404da0b61d56d9187521b92c923e7cb841acdf15d0afb7155605a135'
 HEAD_ARGS = ['rev-parse', '--verify', '--end-of-options', 'HEAD']
 BASE_ARGS = ['rev-parse', '--verify', '--end-of-options', 'refs/heads/main']
+STATUS_ARGS = list(gitread.STATUS_HEAD) + [':(exclude)' + writer.STATE_DIR]
 NOW = datetime.datetime(2026, 10, 24, 12, 0, 0, tzinfo=datetime.timezone.utc)
 LATER = NOW + datetime.timedelta(hours=1)
 REC = 'aieos-launcher (integration)'
@@ -44,8 +45,9 @@ class Calls:
 
 
 class Intercept:
-    """A read that answers only the exact HEAD form and the exact base form (refs/heads/main) with COMMIT and forwards
-    every other call to gitread.run unchanged, recording the forwarded calls."""
+    """A read that answers only the exact HEAD form and the exact base form (refs/heads/main) with COMMIT, the exact
+    status form (TASK-109) with b'' and forwards every other call to gitread.run unchanged, recording the forwarded
+    calls."""
 
     def __init__(self):
         self.forwarded = []
@@ -53,6 +55,8 @@ class Intercept:
     def __call__(self, repo, args, timeout=30):
         if list(args) == HEAD_ARGS or list(args) == BASE_ARGS:
             return {'exit': 0, 'out': (COMMIT + '\n').encode('ascii'), 'err': b'', 'error': None}
+        if list(args) == STATUS_ARGS:
+            return {'exit': 0, 'out': b'', 'err': b'', 'error': None}
         self.forwarded.append((repo, list(args), timeout))
         return gitread.run(repo, args, timeout)
 
