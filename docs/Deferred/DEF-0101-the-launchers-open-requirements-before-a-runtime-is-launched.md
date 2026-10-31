@@ -14,10 +14,17 @@ adapter.start and adapter.end, and starts no runtime. Before a runtime is launch
   a violation or an expiry are written by TASK-089's launcher.end, with the stored reads' removal; the third, the gone
   session's record at the next start (specification 5 :125), with its listing of gone sessions through
   writer.read_sessions, is written by TASK-090's launcher.start before the expiry (decision D-2956);
-- the check that HEAD is the base branch's tip, and check 0 of the contract (specification 5 :121; specification 7
-  :49); AIEOS_BASE is the head_commit read once;
-- launching with a runtime, the owner's act, is not before this item's open points are closed: the base-tip check,
-  check 0 and max_risk; this is a statement, not a lock;
+- closed: the check that HEAD is the base branch's tip: launcher.start's step "base" (TASK-106, decision D-3970) reads
+  refs/heads/<base> (the base is "main" unless a caller passes another; `aieos launch` passes none) once, after the head
+  and before the log, and does not grant unless HEAD is that tip; AIEOS_BASE is the head_commit read once, found equal to
+  the tip at that read (the race, the local ref only and the strict name rule are stated in launcher.py's docstrings);
+- closed: check 0 of the contract (specification 5 :121; specification 7 :49) is made by the Resume Check at every
+  start (resume_check.py :529-:530), not by the launcher's hook; TASK-106's composed-path test in
+  tests/integration/test_launcher_repo.py shows it on the real adapter.start and the real Resume Check;
+- open: the check that the project's root is untouched before a launch (specification 5 :121); no task has been decided
+  for it;
+- launching with a runtime, the owner's act, is not before this item's open points are closed: the untouched-root check
+  and max_risk; this is a statement, not a lock;
 - max_risk is the caller's: a caller passing a non-null max_risk declares the runtime's tier, which only the owner's
   measurement can back (C6, P-LOC); the self-build passes null until then, so the launcher never grants (decision
   D-2673 ruling 2);
@@ -32,8 +39,8 @@ max_risk stays the caller's until a tier is measured.
 
 ## Resume when
 The record's three call places are closed by TASK-089 and TASK-090 (decisions D-2876, D-2956); this item closes when
-the base-tip check and check 0 are met or moved by their own decision; max_risk stays the caller's, as its bullet
-states.
+the untouched-root check is met or moved by its own decision (the base-tip check and check 0 were closed by TASK-106);
+max_risk stays the caller's, as its bullet states.
 
 ## Depends on
 TASK-086 (the launcher), TASK-089 (end's record and the stored reads' removal), TASK-064 (read_set_record, the
@@ -57,3 +64,8 @@ TASK-051 (adapter); specification 5 section 11 points 7 and 10, specification 7 
   "stored_reads", which launch_outside leaves to `aieos end` or the lease's expiry with no end_outside call (session
   ea6ea0a3; decisions D-3154, D-3164, D-3172, D-3178).
 - 2026-10-29: M7 exited (`docs/plan/m7-exit-review.md`): the base-tip check, check 0 and max_risk stay open before any runtime launch (session ea6ea0a3).
+- 2026-10-31: TASK-106 accepted (decision D-3970): launcher.start gains the step "base" (the base-tip check) and the
+  keyword base; gitread's rev-parse takes refs/heads/<base> as a third name form; check 0 is closed for the launcher by
+  the Resume Check at every start, shown by a composed-path test; the untouched-root check stays open, and so does
+  max_risk; `aieos launch` now refuses unless HEAD is the tip of the local refs/heads/main (session 85a45f06; decisions
+  D-3918, D-3919, D-3927, D-3938, D-3970).
