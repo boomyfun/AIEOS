@@ -18,6 +18,7 @@ Occurrences in session 2026-10-15-0229 (../History/2026-10/2026-10-15-0229-the-s
 
 One occurrence in session ea6ea0a3 (the History of that session):
 - **2026-10-25 (D-2941 to D-2944).** TASK-090's first code commit fa324e53 passed every local run, but its CI run 40144226012 failed only its bandit step: B608 read a test helper's INSERT built with "%" as string-built SQL. Fixed in 0fbde1ed by executemany with "?". The proposal of D-717 C4 was still not in the steps: before commit X, grep the added lines for bandit's patterns (B608: SQL built with % or format or +; B105: password-like constant names), as a proxy (L-0007), the CI's bandit run staying the evidence.
+- **2026-10-31 (../History/2026-10/2026-10-31-1018-m8-stage-8-task-107-the-shared-resolution-of-a-task-contract-s-path.md, D-4053).** A test pinned a SHA-256 of `ast.dump` of the hook module; it passed on the author's Python 3.14 and failed on the runner's 3.12 (aieos-checks run 41181364463). Prevention added: a pin on a syntax tree's dump is not portable; pin a digest of the text (the source lines without the docstring line ranges) or run the suite on the CI's interpreter before the push.
 
 ## Why it happens
 The local run was treated as a proxy for the CI's run without checking what the CI does before its test command.

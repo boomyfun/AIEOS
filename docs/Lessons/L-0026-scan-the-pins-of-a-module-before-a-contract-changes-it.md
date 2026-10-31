@@ -17,6 +17,7 @@ One in session 2026-10-23-1555 (../History/2026-10/2026-10-23-1555-the-pages-d19
 
 One in session 2026-10-23-1555 (../History/2026-10/2026-10-23-1555-the-later-part-4-task-078-the-mcp-servers-frame-and-its-status-tool.md):
 - **2026-10-23 (D-2109).** TASK-078's plan ran a read-only pin scan before drafting, as this lesson asks, but its findings named R8 and the hook lists and missed the three tests of `tests/unit/test_writer.py` that fix where new writer code may stand (R14 at :860-880, R20 at :1694-1737 and TASK-067's marker test); the decision agent accepted the scan without them (D-2106). Both contract reviews found them before commit C (blocking); revision r1 placed the new function above the TASK-066 marker and named the three pins. A scan by patterns finds the lines; reading which of them constrain the planned change is the step that was missed.
+- **2026-10-31 (../History/2026-10/2026-10-31-1018-m8-stage-8-task-107-the-shared-resolution-of-a-task-contract-s-path.md, D-4035 to D-4037).** TASK-105's pin scan covered the module's own tests and the hook lists but not another task's test on the changed module's own imports: tests/unit/test_resume_inputs.py (TASK-085 AC7) pinned base_inputs.py's imports and used attributes and was found only by the full run; it was outside the write set.
 
 ## Why it happens
 Reviews and drafts read the module to be changed and the tests of that module, not the tests of other tasks that guard it; a hash pin lives far from the module it guards.

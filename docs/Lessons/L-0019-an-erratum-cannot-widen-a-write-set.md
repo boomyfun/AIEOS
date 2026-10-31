@@ -15,6 +15,7 @@ One in session 2026-10-15-0830 (../History/2026-10/2026-10-15-0830-the-benchmark
 
 One in session 2026-10-23-1555 (../History/2026-10/2026-10-23-1555-the-pages-d1960-to-d1964-task-076-landed-specification-2-revision-9-and-m5s-exit.md):
 - **2026-10-23 (D-1979).** The missed R8 pin of TASK-075 (L-0026) needed `tests/unit/test_writer.py` in the write-set; G0 reads the contract only at its adding commit 6eb56b29, so TASK-076's contract, with TASK-075's content and the wider write-set, superseded TASK-075 before any code commit.
+- **2026-10-31 (../History/2026-10/2026-10-31-1018-m8-stage-8-task-107-the-shared-resolution-of-a-task-contract-s-path.md, D-4036, D-4037).** A contract revision (v2 of TASK-105 with the fifteenth path) could not widen the write set, because G0 reads only the commit that added the contract; the task restarted under a new id, TASK-107, and TASK-105's contract stays on main, never run.
 
 ## Why it happens
 An erratum is a recorded reading of a contract; the CI's G0 step reads the contract's bytes at the commit that added them, and no erratum reaches it.
