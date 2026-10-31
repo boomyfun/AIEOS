@@ -14,6 +14,7 @@ A decision's condition quoted a SHA-256 with one character missing, and the chec
 - **2026-10-30 (session 578ea88b, D-3893 C4, D-3894).** `make_records_104e.py dry4` stopped at the mode list; one token added by an exact-replacement script, with the diff shown.
 - **2026-10-30 (session 578ea88b, D-3892 C7, D-3890).** `python -I` was prescribed twice; run in the guard form `timeout 110 python <file> < /dev/null` and disclosed.
 - **2026-10-30 (session 578ea88b, D-3899).** The summary of the (2b) command in a request had a caret; the command as typed had none (main transcript :7224).
+- **2026-10-31 (session 85a45f06, D-3968 C1, D-3970 C2, D-3970 request).** The gate hash in two of the decision agent's commands differed from the machine value by one character, and my request retyped the hash of a dry-run output with the tail of the definition hash; the machine value was used and the slips disclosed.
 
 ## Why it happens
 Long hashes and commands are retyped from memory or from a previous message, and the decision agent repeats what the request says; the guard's forbidden forms are not in the decision agent's view.

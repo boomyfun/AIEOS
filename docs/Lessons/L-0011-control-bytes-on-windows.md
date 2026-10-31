@@ -82,6 +82,7 @@ One, in session 87e2584b's later part (../History/2026-10/2026-10-29-0446-the-la
   refused before it ran. The worker had not checked the condition against the guard; the script was split into stages
   of one allowed command each.
 - **2026-10-30 (session 9dbe9c67, TASK-103).** The owner's command guard refused `python -I` (the clean-folder form was used instead), a heredoc (the text was written with the Write tool and appended from the file) and a stray `python -c` fragment (removed, not retried); none was run as written.
+- **2026-10-30/31 (session 85a45f06, D-3966, D-3971).** The owner's command guard refused a here-document (the list was written with the Write tool instead) and a checkpoint line whose text described an interpreter form (reworded; D-3972 C5: such text is written with the Edit or Write tool, not inside a shell command); nothing ran as written.
 
 ## Why it happens
 - Git Bash heredocs interpret quotes and backslashes.

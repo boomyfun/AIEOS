@@ -40,6 +40,7 @@ Seven, in session 87e2584b's later part (../History/2026-10/2026-10-29-0446-the-
 - **D-3554.** Reads to draft the end records (calls 4 to 13 after D-3553), not named by a decision; one Glob listed the whole scratchpad, broader than needed.
 - **D-3556.** A Read of place_end.py, a Glob of the five lesson files and two Greps of them, to write the placement script, not named by a decision; they only read.
 - **2026-10-30 (session 578ea88b).** I ran read-only commands (greps, lists, hashes, diffs, git status) during steps that a decision approved, which no decision had named one by one; disclosed in the end-records request of D-3903.
+- **2026-10-31 (session 85a45f06, D-3968, D-3981, D-3984).** A stray no-op `sed -n 1p /dev/null`, a no-op variable assignment in a grep and a listing piped through sed and tr; read-only, disclosed and accepted as harmless.
 
 ## Why it happens
 A read is not felt as an act, and right after a compaction the habits of the call form are weakest.
