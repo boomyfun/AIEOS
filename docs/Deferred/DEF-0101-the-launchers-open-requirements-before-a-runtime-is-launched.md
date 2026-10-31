@@ -21,10 +21,22 @@ adapter.start and adapter.end, and starts no runtime. Before a runtime is launch
 - closed: check 0 of the contract (specification 5 :121; specification 7 :49) is made by the Resume Check at every
   start (resume_check.py :529-:530), not by the launcher's hook; TASK-106's composed-path test in
   tests/integration/test_launcher_repo.py shows it on the real adapter.start and the real Resume Check;
-- open: the check that the project's root is untouched before a launch (specification 5 :121); no task has been decided
-  for it;
-- launching with a runtime, the owner's act, is not before this item's open points are closed: the untouched-root check
-  and max_risk; this is a statement, not a lock;
+- closed at the grant: the check that the project's root is untouched before a launch (specification 5 :121;
+  specification 7 revision 7 section 5): launcher.start's step "root" (TASK-109, decisions D-4143 and D-4167) reads
+  gitread's fifth read-only form, status, in one fixed form that leaves the project-state directory out, once, after the
+  base check and before the log, and does not grant unless the answer is clean (any entry gives "not granted", an answer
+  out of form "refused", both with reason "root"); the eight stated limits are in the docstrings of launcher.py and
+  gitread.py (once, before the grant; the state directory left out; the ignore set; what may not be counted; the filter
+  question; the first run of the workflow's SUBCOMMANDS check and the later DM A66 decision; the git version; the
+  self-build's clean-root consequence);
+- open: that the root stays untouched after the check (between the read and the grant, and during the session) is not
+  checked; and the filter route: `status` can make git start a program that a clone's own configuration names as a
+  filter driver; the way-2 review R109 found INV-001 "does not hold on the filter route only"; the decision agent accepted
+  it as a stated limit (D-4139 (a), D-4165, D-4167), INV-001's text unchanged; the self-build checkout names none; the
+  candidate fix R109 raised, not decided: a sixth read form that refuses the launch when the repository's own
+  configuration (includes and worktree configuration included) names a filter driver;
+- launching with a runtime, the owner's act, is not before this item's open points are closed: the root's state after the
+  check and the filter route, and max_risk; this is a statement, not a lock;
 - max_risk is the caller's: a caller passing a non-null max_risk declares the runtime's tier, which only the owner's
   measurement can back (C6, P-LOC); the self-build passes null until then, so the launcher never grants (decision
   D-2673 ruling 2);
@@ -38,8 +50,9 @@ by decision D-2771 into TASK-089 (end's two call places and the removal) and TAS
 max_risk stays the caller's until a tier is measured.
 
 ## Resume when
-The record's three call places are closed by TASK-089 and TASK-090 (decisions D-2876, D-2956); this item closes when
-the untouched-root check is met or moved by its own decision (the base-tip check and check 0 were closed by TASK-106);
+The record's three call places are closed by TASK-089 and TASK-090 (decisions D-2876, D-2956); the base-tip check and
+check 0 were closed by TASK-106 and the untouched-root check at the grant by TASK-109; this item closes when the part
+of the root check that stays open (the state after the check, the filter route) is met or moved by its own decision;
 max_risk stays the caller's, as its bullet states.
 
 ## Depends on
@@ -69,3 +82,8 @@ TASK-051 (adapter); specification 5 section 11 points 7 and 10, specification 7 
   the Resume Check at every start, shown by a composed-path test; the untouched-root check stays open, and so does
   max_risk; `aieos launch` now refuses unless HEAD is the tip of the local refs/heads/main (session 85a45f06; decisions
   D-3918, D-3919, D-3927, D-3938, D-3970).
+- 2026-11-01: TASK-109 accepted (decision D-4167): launcher.start gains the step "root" (the untouched-root check at
+  the grant) and gitread its fifth read-only form, status; GOV-003 and INV-001's filter route are stated departures of
+  the acceptance (D-4139 (a), D-4165, D-4167); the part of the check after the grant and the filter route stay open, with
+  the candidate fix of the way-2 review R109 named; the workflow's SUBCOMMANDS check accepts four or five forms until a
+  later DM A66 decision narrows it to the five (session c7d6f32b; decisions D-4128 to D-4147, D-4165, D-4167, D-4172).
