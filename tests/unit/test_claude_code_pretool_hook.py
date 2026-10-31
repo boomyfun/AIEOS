@@ -1213,19 +1213,21 @@ class WhatIsStatedTask074(unittest.TestCase):
         self.assertNotIn('is hashed as no bytes, and the entry then refuses it without a record', doc)
 
     def test_the_program_is_the_base_program(self):
-        """TASK-076 AC7: the hook's program is the base's program: the syntax tree of the module without its docstrings (the
-        module's, each class's and each function's; an addition by TASK-107, which changed the module docstring only)
-        hashes to the value of the base commit c569dd4f; the same hash of a copy with one statement appended differs."""
+        """TASK-076 AC7: the hook's program is the base's program: the module's source lines without the line ranges of its
+        docstrings (the module's, each class's and each function's; an addition by TASK-107, which changed the module
+        docstring only) hash to the value of the base commit c569dd4f, a digest of the text and so the same under every
+        interpreter version; the same hash of a copy with one statement appended differs."""
         def program_digest(text):
-            tree = ast.parse(text)
-            for node in ast.walk(tree):
+            drop = set()
+            for node in ast.walk(ast.parse(text)):
                 if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
                     body = node.body
                     if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant) \
                             and isinstance(body[0].value.value, str):
-                        node.body = body[1:] or [ast.Pass()]
-            return hashlib.sha256(ast.dump(tree).encode('utf-8')).hexdigest()
-        base = '664c0a83ce1685c257f69ab6942c388f90476e8e43709f5351dfae9ea4ba66a4'
+                        drop |= set(range(body[0].lineno, body[0].end_lineno + 1))
+            kept = [line for number, line in enumerate(text.splitlines(), 1) if number not in drop]
+            return hashlib.sha256('\n'.join(kept).encode('utf-8')).hexdigest()
+        base = '3dd492a439e42a35d9c8c6c9a21f16011c4d5d73ff36c9175cd1bfb2fb6d8b96'
         self.assertEqual(program_digest(TEXT), base)
         self.assertNotEqual(program_digest(TEXT + '\n_BROKEN_COPY = 1\n'), base)
 
