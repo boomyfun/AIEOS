@@ -13,9 +13,13 @@ failure, a RecursionError or MemoryError among them, is given as findings. It wr
 clock and no environment, and starts no process but through read. Each reader fails closed.
 
 The readers, each this task's choice where TASK-082's contract says so:
-- contract: docs/tasks/<task>.yaml parsed by a fixed subset of YAML (the contract's header lists its forms and its
-  refusals); values are kept as strs; its SHA-256 must equal the contract_hash of the task's last task.approved, whose
-  contract_version must equal the contract's.
+- contract: tasks/<task>.yaml, found by contract_path's shared resolution (specification 7 revision 6, TASK-107): the writer's
+  state directory first and docs/tasks/<task>.yaml as the self-build's fallback; the contract in both folders is a finding
+  and nothing is read; a refusal on either side is a refusal and never a fallback (a stated choice of TASK-107: a refused
+  docs side with a present state side is a refusal); only a missing entry is absent. The git calls are today's with the
+  docs folder only (a name that the root listing does not hold makes no call, and identical calls are cached). The text is
+  parsed by a fixed subset of YAML (the contract's header lists its forms and its refusals); values are kept as strs; its
+  SHA-256 must equal the contract_hash of the task's last task.approved, whose contract_version must equal the contract's.
 - resume_record: the payload of the task's last decision.execution, after that approval, CONTINUE or CONTINUE_WITH,
   naming the task, the contract_hash and the contract_version.
 - articles: each applicable article's block in docs/pre-genesis/constitution.md.
@@ -30,7 +34,10 @@ The readers, each this task's choice where TASK-082's contract says so:
 
 Limits, stated: the commit and the log are the caller's; the resume record is the task's last decision.execution, not
 one bound to the session; the task's later state events are not projected; a listing fails whole on a symbolic link, a
-submodule or an out-of-form name under its prefix (base_files' rules); a line's corrects field is not read.
+submodule or an out-of-form name under its prefix (base_files' rules); a line's corrects field is not read. TASK-107's
+limits: the contract is read from the committed base only, never the working tree; the call bounds: the state candidate
+adds one base_files read to the docs-only calls (identical calls are cached, so the root listing is not repeated); the handoff reader
+(DEF-0095) and DEF-0113 are not done by TASK-107.
 
 TASK-085 adds four public wrappers over these helpers, by added lines only, for its module resume_inputs: contract_at
 (the contract at a commit through _read and _parse_contract_text, CONTRACT_NEEDS and its task checked, with the
@@ -43,7 +50,7 @@ TASK-085 is to pass HEAD, read: TASK-085 takes the commit as an argument, which 
 import hashlib
 import re
 
-from aieos_bootstrap import base_files, gitread, records, resume_check
+from aieos_bootstrap import base_files, contract_path, gitread, records, resume_check
 
 MAX_FILES = 2000
 MAX_FILE_BYTES = 16777216
@@ -399,6 +406,31 @@ def _read(state, path):
     return value['text']
 
 
+def _side(state, path):
+    """What the read of one candidate place gives: ('present', text), ('absent', findings) when exactly the path or an
+    ancestor is missing (the rule of _absent), or ('refused', findings); the findings are prefixed by the path as _read does."""
+    value, found = base_files.read_file(state['repo'], state['commit'], path, state['read'])
+    if not found:
+        return 'present', value['text']
+    prefixed = ['%s: %s' % (path, f) for f in found]
+    return ('absent' if _absent(found, path) else 'refused'), prefixed
+
+
+def _contract_text(state, task_id):
+    """The text of the task's contract through contract_path's shared resolution, or a _Stop for a contract in both
+    folders, in neither, or a refusal on either side."""
+    paths = ['/'.join(place) for place in contract_path.candidates(task_id)]
+    got = [_side(state, p) for p in paths]
+    what, side = contract_path.decide(got[0][0], got[1][0])
+    if what == 'read':
+        return got[0 if side == 'state' else 1][1]
+    if what == 'both':
+        raise _Stop(['contract: %s is in both folders' % task_id])
+    if what == 'absent':
+        raise _Stop(got[1][1])
+    raise _Stop([f for kind, found in got if kind == 'refused' for f in found])
+
+
 def _listing(state, prefix):
     """The paths under prefix, or [] when base_files says it is missing."""
     if prefix in state['listings']:
@@ -449,8 +481,7 @@ def _approval_and_record(events, task_id):
 
 
 def _contract(state, task_id, approval, record):
-    path = 'docs/tasks/%s.yaml' % task_id
-    text = _read(state, path)
+    text = _contract_text(state, task_id)
     digest = hashlib.sha256(text.encode('utf-8')).hexdigest()
     contract = _parse_contract_text(text)
     found = []
@@ -674,7 +705,7 @@ def _contract_at(repo, commit, task_id, read):
     if type(task_id) is not str or _TASK.fullmatch(task_id) is None:
         raise _Stop(['argument: task_id is not TASK-<digits>'])
     state = _plain_state(repo, commit, read)
-    text = _read(state, 'docs/tasks/%s.yaml' % task_id)
+    text = _contract_text(state, task_id)
     contract = _parse_contract_text(text)
     found = ['contract: no key %s' % key for key in CONTRACT_NEEDS if key not in contract]
     if found:

@@ -107,7 +107,9 @@ class AC1TheReader(unittest.TestCase):
     def test_each_policy_failure_empties_the_policy_list_only(self):
         """TASK-076 AC1: an absent .aieos tree, an absent project.yaml, a project.yaml that is not a blob, a .aieos
         that is not a tree, an unreadable blob and an over-cap or non-UTF-8 blob each give the policy list empty, the
-        contract list still read, and one fixed finding."""
+        contract list still read, and one fixed finding; the one exception, a .aieos that is not a tree, also empties the
+        contract list with its own second finding, because that folder is the contract's state place and a refusal there
+        never falls back (an amendment by TASK-107)."""
         cases = ((store(with_aieos=False), 'policy: tree: .aieos missing'),
                  (store(with_project=False), 'policy: tree: policy missing'),
                  (store(project=('040000', 'tree')), 'policy: tree: policy not a 100644 blob'),
@@ -119,6 +121,10 @@ class AC1TheReader(unittest.TestCase):
             with self.subTest(finding=finding):
                 out, _ = read(objects)
                 self.assertEqual((out['result'], out['policy'], out['allowlist']), ('read', [], []))
+                if finding == 'policy: tree: .aieos not a tree':
+                    self.assertEqual(out['contract'], [])
+                    self.assertEqual(out['findings'], [finding, 'contract: tree: state not a tree'])
+                    continue
                 self.assertEqual(out['contract'], ['ls -la', 'git status'])
                 self.assertEqual(out['findings'], [finding])
         out, _ = read(failing=(I['c'],))
@@ -310,8 +316,9 @@ class AC5TheOneList(unittest.TestCase):
 class AC8NoEntryAndNoFile(unittest.TestCase):
 
     def test_the_module_imports_and_names(self):
-        """TASK-076 AC8: the module imports only re and, as "from aieos_bootstrap import X", claude_code_hook and
-        gitread; it uses no open, no os, no process call of its own, no assert; RESULT_KEYS and the policy names."""
+        """TASK-076 AC8: the module imports only re and, as "from aieos_bootstrap import X", claude_code_hook,
+        contract_path (the one widening, an amendment by TASK-107) and gitread; it uses no open, no os, no process call
+        of its own, no assert; RESULT_KEYS and the policy names."""
         tree = ast.parse(TEXT)
         imports = set()
         for n in ast.walk(tree):
@@ -320,7 +327,7 @@ class AC8NoEntryAndNoFile(unittest.TestCase):
             elif isinstance(n, ast.ImportFrom):
                 imports.update((n.module, a.name) for a in n.names)
         self.assertEqual(imports, {('import', 're'), ('aieos_bootstrap', 'claude_code_hook'),
-                                   ('aieos_bootstrap', 'gitread')})
+                                   ('aieos_bootstrap', 'contract_path'), ('aieos_bootstrap', 'gitread')})
         names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
         attrs = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
         self.assertFalse((names | attrs) & {'open', 'os', 'print', 'exec', 'eval', '__import__', 'subprocess',

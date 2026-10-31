@@ -27,7 +27,8 @@ store's, the judge's or the core's findings, from standard input, from the envir
    base branch (main for the self-build) at the grant, which holds the approved contract from its commit C on; never
    the contract's own input_state.base_commit, at which the contract file does not exist. One absent, empty or out of
    form is read as a contract not readable at the base: reason "base", with the record of step 3.
-3. The contract: the contract reader's read of docs/tasks/<task>.yaml at the base, with no runner passed. Any result
+3. The contract: the contract reader's read of the task's contract at the base (the state directory's tasks folder
+   first, then docs/tasks/<task>.yaml, by contract_path's shared resolution), with no runner passed. Any result
    other than "read" is unreadable: a refusal on the write-set concern, recorded, STOP: violation (specification 5
    :113), on every concern alike, a Read call included (a stated choice, fail closed). Its record is built here in the
    judge's record form, evidence type write_outside_write_set and the fixed refers_to "the task contract is not
@@ -91,7 +92,9 @@ Limits, stated:
   each; for a Bash or PowerShell call the shell allowlist's reads come on top, at most seven more git calls of ten
   seconds each, twelve calls, about 120 seconds at worst for the git calls alone (the store lookup's lock wait and the
   core path's own waits come on top), against Claude Code's own hook timeout (unmeasured). Other tools keep the five
-  calls.
+  calls. With a state folder in the base (TASK-107) the contract reader makes up to seven calls and the allowlist
+  reader up to eight when that folder holds a tasks folder, fifteen calls, about 150 seconds at worst for the git calls
+  alone, and thirteen calls (six and seven) when it holds the policy file only.
 - The contract's forbidden list: forbidden is not enforced by this hook (specification 5 :109 names only
   write_set.paths); the gates find a forbidden path afterwards.
 - Calls refused without a record: after a lease expires, every hook call is refused without a record until the

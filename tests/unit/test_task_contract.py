@@ -427,13 +427,13 @@ class AC3Parse(unittest.TestCase):
 class AC5WhatItImports(unittest.TestCase):
 
     def test_task_contract_imports_and_names(self):
-        """TASK-071 AC5: task_contract.py imports exactly re and aieos_bootstrap.gitread and uses none of the refused
-        names, attributes or strings."""
+        """TASK-071 AC5: task_contract.py imports exactly re, aieos_bootstrap.contract_path (the one widening, an amendment
+        by TASK-107) and aieos_bootstrap.gitread and uses none of the refused names, attributes or strings."""
         text = (SRC / 'task_contract.py').read_bytes().decode('utf-8')
         tree = ast.parse(text)
         imports = {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
         imports |= {n.module + '.' + a.name for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) for a in n.names}
-        self.assertEqual(imports, {'re', 'aieos_bootstrap.gitread'})
+        self.assertEqual(imports, {'re', 'aieos_bootstrap.contract_path', 'aieos_bootstrap.gitread'})
         deny = {'open', 'exec', 'eval', 'compile', '__import__', 'importlib', 'input', 'breakpoint', '__builtins__'}
         self.assertEqual([n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and n.id in deny], [])
         attrs = {'now', 'utcnow', 'today', 'time', 'environ', 'getenv', 'system', 'popen', 'Popen', 'stdin'}

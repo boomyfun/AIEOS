@@ -1132,10 +1132,14 @@ class AC9WhatIsStated(unittest.TestCase):
     def test_the_docstring_states_the_limits(self):
         """TASK-072 AC9: the module docstring states each pinned phrase exactly as AC9 writes it, case kept and
         whitespace collapsed, and no effect label. TASK-076 AC7: the timing phrase is the twelve-call one, and the
-        policy file, the refused first words and the copied walk are stated."""
+        policy file, the refused first words and the copied walk are stated. Amended (an amendment of TASK-076 AC7 and
+        TASK-072 AC9): the docstring also states the worst case with a state tasks folder, fifteen calls, and the case
+        with the policy file only, thirteen calls (six and seven); the twelve-call phrase is kept."""
         doc = ' '.join(ast.get_docstring(ast.parse(TEXT)).split())
         for words in ('every shell call is refused', 'refused without a record',
-                      'twelve calls, about 120 seconds at worst for the git calls alone', 'the policy file',
+                      'twelve calls, about 120 seconds at worst for the git calls alone',
+                      'fifteen calls, about 150 seconds at worst for the git calls alone',
+                      'thirteen calls (six and seven) when it holds the policy file only', 'the policy file',
                       'refuses a first word such as timeout or python', 'kept in step by hand',
                       'AIEOS_BASE is a proposal', 'a nested runtime chooses its own',
                       'cannot show that AIEOS_BASE is the tip of main', 'replace refs', 'forbidden is not enforced',
@@ -1207,6 +1211,23 @@ class WhatIsStatedTask074(unittest.TestCase):
             with self.subTest(words=words):
                 self.assertIn(words, doc)
         self.assertNotIn('is hashed as no bytes, and the entry then refuses it without a record', doc)
+
+    def test_the_program_is_the_base_program(self):
+        """TASK-076 AC7: the hook's program is the base's program: the syntax tree of the module without its docstrings (the
+        module's, each class's and each function's; an addition by TASK-107, which changed the module docstring only)
+        hashes to the value of the base commit c569dd4f; the same hash of a copy with one statement appended differs."""
+        def program_digest(text):
+            tree = ast.parse(text)
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                    body = node.body
+                    if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant) \
+                            and isinstance(body[0].value.value, str):
+                        node.body = body[1:] or [ast.Pass()]
+            return hashlib.sha256(ast.dump(tree).encode('utf-8')).hexdigest()
+        base = '664c0a83ce1685c257f69ab6942c388f90476e8e43709f5351dfae9ea4ba66a4'
+        self.assertEqual(program_digest(TEXT), base)
+        self.assertNotEqual(program_digest(TEXT + '\n_BROKEN_COPY = 1\n'), base)
 
     def test_the_s1_1_and_s1_2_sentences(self):
         """TASK-074 AC3: main's sentence cites the documentation as unmeasured, and the seconds count the git calls

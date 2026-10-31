@@ -521,27 +521,98 @@ class TASK082AC7Handoff(Base):
             self.assertEqual(call()[0][0]['budgets'], {'constitution': 1})
 
 
+STATE_PATH = '.' + 'aieos' + '/tasks/TASK-100.yaml'
+DOCS_PATH = 'docs/tasks/TASK-100.yaml'
+
+
+def without(files, key):
+    return {k: v for k, v in files.items() if k != key}
+
+
+class TASK107AC2SharedResolution(Base):
+    """The six cases of the shared resolution of the contract's path (specification 7 revision 6)."""
+
+    def test_state_only_reads_the_state_contract(self):
+        """TASK-082 AC2, extended by TASK-107 AC2: the contract only in the state folder is read, and the answer equals the
+        docs-only answer (the base commit aside); no identical call repeats."""
+        state_only = dict(without(FILES, DOCS_PATH), **{STATE_PATH: CONTRACT})
+        (value, findings), git = call(state_only)
+        self.assertIsNone(findings, findings)
+        want = dict(call(FILES)[0][0])
+        got_value = dict(value)
+        self.assertNotEqual(want.pop('base'), got_value.pop('base'))
+        self.assertEqual(got_value, want)
+        self.assertEqual(len(git.calls), len({tuple(c) for c in git.calls}))
+        got, found = base_inputs.contract_at(ROOT, git.head, TASK, git)
+        self.assertIsNone(found)
+        self.assertEqual(got[1], contract_hash())
+
+    def test_docs_only_is_as_before(self):
+        """TASK-082 AC2, extended by TASK-107 AC2: the contract only in docs is read as before, with no identical call
+        repeated."""
+        (value, findings), git = call(FILES)
+        self.assertIsNone(findings, findings)
+        self.assertEqual(len(git.calls), len({tuple(c) for c in git.calls}))
+
+    def test_both_folders_is_a_finding_and_nothing_is_read(self):
+        """TASK-082 AC2, extended by TASK-107 AC2: the contract in both folders gives the finding "contract: <task> is in
+        both folders" and no value, through work_order_inputs and through contract_at."""
+        both = dict(FILES, **{STATE_PATH: CONTRACT})
+        findings = self.refused(call(both)[0])
+        self.assertEqual(findings, ['contract: TASK-100 is in both folders'])
+        git = Git(both)
+        value, found = base_inputs.contract_at(ROOT, git.head, TASK, git)
+        self.assertIsNone(value)
+        self.assertEqual(found, ['contract: TASK-100 is in both folders'])
+
+    def test_neither_gives_the_docs_finding(self):
+        """TASK-082 AC2, extended by TASK-107 AC2: the contract in neither folder gives the docs candidate's finding exactly
+        as before, prefixed by its path."""
+        findings = self.refused(call(without(FILES, DOCS_PATH))[0])
+        self.assertEqual(findings, ['docs/tasks/TASK-100.yaml: docs/tasks is missing'])
+
+    def test_a_refused_state_side_never_falls_back(self):
+        """TASK-082 AC2, extended by TASK-107 AC2: a state folder that is not a tree is a refusal with its own finding,
+        whether the docs contract is present or absent, never a fallback to docs."""
+        for files in (dict(FILES, **{'.' + 'aieos': 'x\n'}), dict(without(FILES, DOCS_PATH), **{'.' + 'aieos': 'x\n'})):
+            findings = self.refused(call(files)[0])
+            self.assertEqual(findings, ['%s: %s is a blob, not a tree' % (STATE_PATH, '.' + 'aieos')])
+
+    def test_a_refused_docs_side_is_a_refusal(self):
+        """TASK-082 AC2, extended by TASK-107 AC2: a docs tasks folder that is not a tree is a refusal with the docs
+        finding, also when the state contract is present (the stated choice of TASK-107), and when both sides are refused
+        the state findings come first."""
+        refused_docs = dict(without(FILES, DOCS_PATH), **{'docs/tasks': 'x\n'})
+        findings = self.refused(call(dict(refused_docs, **{STATE_PATH: CONTRACT}))[0])
+        self.assertEqual(findings, ['%s: docs/tasks is a blob, not a tree' % DOCS_PATH])
+        findings = self.refused(call(dict(refused_docs, **{'.' + 'aieos': 'x\n'}))[0])
+        self.assertEqual(findings, ['%s: %s is a blob, not a tree' % (STATE_PATH, '.' + 'aieos'),
+                                    '%s: docs/tasks is a blob, not a tree' % DOCS_PATH])
+
+
 class TASK082AC8Purity(Base):
     def tree(self):
         return ast.parse(SRC.read_bytes().decode('utf-8'))
 
     def test_imports_and_names(self):
-        """TASK-082 AC8: the module imports exactly hashlib, re and base_files, gitread, records and resume_check, and
-        uses exactly the names its contract lists."""
+        """TASK-082 AC8, amended by TASK-107 AC5: the module imports exactly hashlib, re and base_files, contract_path,
+        gitread, records and resume_check, and uses exactly the names its contract lists (contract_path's candidates and
+        decide are the amendment)."""
         names = set()
         for n in ast.walk(self.tree()):
             if isinstance(n, ast.Import):
                 names |= {a.name for a in n.names}
             elif isinstance(n, ast.ImportFrom):
                 names |= {'%s.%s' % (n.module, a.name) for a in n.names}
-        self.assertEqual(names, {'hashlib', 're', 'aieos_bootstrap.base_files', 'aieos_bootstrap.gitread',
-                                 'aieos_bootstrap.records', 'aieos_bootstrap.resume_check'})
+        self.assertEqual(names, {'hashlib', 're', 'aieos_bootstrap.base_files', 'aieos_bootstrap.contract_path',
+                                 'aieos_bootstrap.gitread', 'aieos_bootstrap.records', 'aieos_bootstrap.resume_check'})
         used = {}
         for n in ast.walk(self.tree()):
             if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id in (
-                    'base_files', 'gitread', 'records', 'resume_check'):
+                    'base_files', 'contract_path', 'gitread', 'records', 'resume_check'):
                 used.setdefault(n.value.id, set()).add(n.attr)
-        self.assertEqual(used, {'base_files': {'read_file', 'list_paths', 'MAX_BYTES'}, 'gitread': {'run'},
+        self.assertEqual(used, {'base_files': {'read_file', 'list_paths', 'MAX_BYTES'},
+                                'contract_path': {'candidates', 'decide'}, 'gitread': {'run'},
                                 'records': {'check_log'}, 'resume_check': {'matches'}})
 
     def test_refused_names_and_strings(self):

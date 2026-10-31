@@ -1,6 +1,7 @@
 """The task contract reader at a given commit (TASK-071, H2a).
 
-read_contract(root, commit, task_id, run=None) reads a lease task's contract, docs/tasks/<task_id>.yaml, as committed
+read_contract(root, commit, task_id, run=None) reads a lease task's contract, docs/tasks/<task_id>.yaml or, by
+contract_path's shared resolution (TASK-107), the writer's state directory first, as committed
 at an explicit commit, from the repository's object store only (never the working tree), through gitread.run only, and
 gives its task, base_commit, write_set and forbidden by G0's layout. parse_contract(text, task_id) is the pure parse of
 step (4). The result is a mapping with exactly result, reason, findings, task, base_commit, write_set and forbidden;
@@ -11,9 +12,14 @@ The flow, in this order, the first step that ends giving the result, one finding
 (1) the arguments, by exact types: root a str for which gitread.form_error gives None (an absolute path of an existing
     folder), commit fullmatching gitread.OBJECT_ID, task_id fullmatching "TASK-" and ASCII digits; checked in the order
     root, commit, task_id; reason "argument". run is a test seam: a production caller does not pass it.
-(2) the git reads: at most five calls, in the order commit, root tree, docs, tasks, blob, each
-    run(root, ["cat-file", "-p", <id>], 10), run taken at call time (gitread.run by default); a try around each run
-    call and the checks of its result; reason "git" for the call and the commit, reason "tree" for the three trees.
+(2) the git reads: with the docs folder only, at most five calls, in the order commit, root tree, docs, tasks, blob,
+    each run(root, ["cat-file", "-p", <id>], 10), run taken at call time (gitread.run by default); a try around each run
+    call and the checks of its result; reason "git" for the call and the commit, reason "tree" for the trees.
+    The root tree is read once and both places are looked up in it (contract_path.candidates: the state directory, then
+    docs); a place whose first name is not in the listing is absent and costs no call. With a state folder the calls are
+    at most seven (commit, root tree, the state folder, its tasks, docs, its tasks, the blob of the chosen place). Only a
+    missing name is absent: a name of the wrong kind or mode, a listing error or a failed call at either place is a
+    refusal, never a fallback; contract_path.decide gives the outcome, and only the chosen blob is read.
 (3) the contract's bytes: at most 1 MiB, strict UTF-8, no U+FEFF anywhere, none of the controls C0 but the line feed,
     DEL, C1, U+2028 or U+2029; reason "bytes".
 (4) the parse, parse_contract: the lines in file order, then the fields, then the task; reason "parse", and "task" for
@@ -24,13 +30,17 @@ The flow, in this order, the first step that ends giving the result, one finding
 The reason table: "argument" (argument: root, commit, task_id, text); "git" (git: run raised <type name>, result
 shape, error, exit <n>, exit not an int, out not bytes, commit text over the cap, commit text not UTF-8, commit out of
 form); "tree" (tree: tree text over the cap, tree text not UTF-8, line out of form, repeated name, docs missing, tasks
-missing, contract missing, docs not a tree, tasks not a tree, contract not a 100644 blob); "bytes" (bytes: over the cap,
+missing, contract missing, docs not a tree, tasks not a tree, contract not a 100644 blob, state not a tree, state
+tasks not a tree, state contract not a blob, contract in both folders); "bytes" (bytes: over the cap,
 not UTF-8, byte-order mark, control character); "parse" (parse: top-level line out of form, base_commit line out of
 form, write_set line out of form, forbidden line out of form, repeated key, item out of form, task missing, base_commit
 missing, base_commit out of form, write_set empty, forbidden empty, task value out of form); "task" (task: another
 task); "entry". No finding holds any part of git's output, error text or a name from a tree.
 
 Stated limits:
+- The handoff reader (DEF-0095) and DEF-0113 are not done by this module or by TASK-107.
+- A refused docs side with a present state side is a refusal, a stated choice of TASK-107 (contract_path.decide), proposed
+  and fail closed, not the words of the specification.
 - The commit is the caller's: no base is chosen here. capabilities.shell.allow is not read, and no allowlist source is
   chosen here.
 - Its refusals are stricter than G0's, and G0's rules are copied, not shared: a contract G0 accepts can be "unreadable"
@@ -39,7 +49,8 @@ Stated limits:
 - The object store only: a commit that does not exist, a shallow or partial clone without the objects, or another hash
   form gives "unreadable". The commit is not proven a commit object: any object whose text parse_commit accepts is
   followed.
-- The five calls of up to 10 seconds each: a caller may wait up to about 50 seconds. The caps of 1 MiB are checked
+- With a state folder the calls are at most seven, a caller may wait up to about 70 seconds. The five calls of up to 10
+  seconds each: a caller may wait up to about 50 seconds. The caps of 1 MiB are checked
   after run has returned the whole output; the tree-size bound of the cap: a tree of more than roughly 15,000 entries
   is "tree: tree text over the cap".
 - git is trusted as gitread trusts it: replace refs, grafts and alternates can change what a commit reads as (the
@@ -49,7 +60,7 @@ Stated limits:
 """
 import re
 
-from aieos_bootstrap import gitread
+from aieos_bootstrap import contract_path, gitread
 
 _RUN_KEYS = frozenset(('exit', 'out', 'err', 'error'))
 _CAP = 1 << 20
@@ -108,8 +119,9 @@ def _tree_id(out):
     return c['tree']
 
 
-def _entry(out, name, mode, kind, what):
-    """Step (2), one tree: the id of the sought entry, or _Refused with the "tree" finding."""
+def _look(out, name, mode, kind, what):
+    """Step (2), one tree: the id of the sought entry, None when the name is not in the tree, or _Refused with the "tree"
+    finding for a listing error or an entry of the wrong kind or mode."""
     if len(out) > _CAP:
         raise _Refused('tree', 'tree: tree text over the cap')
     try:
@@ -129,10 +141,31 @@ def _entry(out, name, mode, kind, what):
         raise _Refused('tree', 'tree: repeated name')
     found = [e for e in entries if e[3] == name]
     if not found:
-        raise _Refused('tree', 'tree: %s missing' % what)
+        return None
     if found[0][0] != mode or found[0][1] != kind:
-        raise _Refused('tree', 'tree: %s' % ('contract not a 100644 blob' if what == 'contract' else what + ' not a tree'))
+        wrong = {'contract': 'contract not a 100644 blob', 'state contract': 'state contract not a blob'}
+        raise _Refused('tree', 'tree: ' + wrong.get(what, what + ' not a tree'))
     return found[0][2]
+
+
+def _place(runner, root, root_out, names, state):
+    """Step (2), one place of the contract below the root tree: ('present', the blob id), ('absent', the "tree ... missing"
+    finding of the first missing name) or ('refused', the _Refused of a listing error, a failed call or a name of the wrong
+    kind or mode). names are the three components of contract_path.candidates; state tells the state place from docs."""
+    whats = ('state', 'state tasks', 'state contract') if state else ('docs', 'tasks', 'contract')
+    try:
+        top = _look(root_out, names[0], '040000', 'tree', whats[0])
+        if top is None:
+            return 'absent', 'tree: %s missing' % whats[0]
+        sub = _look(_call(runner, root, top), names[1], '040000', 'tree', whats[1])
+        if sub is None:
+            return 'absent', 'tree: %s missing' % whats[1]
+        blob = _look(_call(runner, root, sub), names[2], '100644', 'blob', whats[2])
+        if blob is None:
+            return 'absent', 'tree: %s missing' % whats[2]
+        return 'present', blob
+    except _Refused as r:
+        return 'refused', r
 
 
 def _bytes_text(out):
@@ -254,10 +287,20 @@ def read_contract(root, commit, task_id, run=None):
         runner = gitread.run if run is None else run
         try:
             tree = _tree_id(_call(runner, root, commit))
-            docs = _entry(_call(runner, root, tree), 'docs', '040000', 'tree', 'docs')
-            tasks = _entry(_call(runner, root, docs), 'tasks', '040000', 'tree', 'tasks')
-            blob = _entry(_call(runner, root, tasks), task_id + '.yaml', '100644', 'blob', 'contract')
-            text = _bytes_text(_call(runner, root, blob))
+            root_out = _call(runner, root, tree)
+            places = contract_path.candidates(task_id)
+            got = [_place(runner, root, root_out, places[0], True)]
+            if got[0][0] == 'refused':
+                raise got[0][1]
+            got.append(_place(runner, root, root_out, places[1], False))
+            what, side = contract_path.decide(got[0][0], got[1][0])
+            if what == 'refused':
+                raise got[1][1]
+            if what == 'both':
+                raise _Refused('tree', 'tree: contract in both folders')
+            if what == 'absent':
+                raise _Refused('tree', got[1][1])
+            text = _bytes_text(_call(runner, root, got[0 if side == 'state' else 1][1]))
         except _Refused as r:
             return _unreadable(r.reason, r.finding)
         return parse_contract(text, task_id)

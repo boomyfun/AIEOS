@@ -73,6 +73,21 @@ class TASK082AC9Repository(unittest.TestCase):
         self.assertIsNone(value)
         self.assertTrue(findings)
 
+    def test_contract_at_with_the_docs_folder_only(self):
+        """TASK-107 AC6: at base_commit, where the state folder holds no task contract, contract_at reads docs/tasks/TASK-081.yaml
+        through the shared resolution and gives the contract and the SHA-256 of that file, written here; a task that is in neither
+        place gives findings that begin with its docs path."""
+        got, findings = base_inputs.contract_at(ROOT, BASE, TASK, gitread.run)
+        self.assertIsNone(findings, findings)
+        contract, digest = got
+        self.assertEqual(digest, '29167efa16f44df83e1cd017c0f3cfaa0ac8daae97ba7e4d4a8bbde22a172da2')
+        self.assertEqual((contract['task'], contract['contract_version']), (TASK, 'v1'))
+        self.assertEqual(digest, hashlib.sha256(contract_text(BASE).encode('utf-8')).hexdigest())
+        got, findings = base_inputs.contract_at(ROOT, BASE, 'TASK-99999', gitread.run)
+        self.assertIsNone(got)
+        self.assertTrue(findings)
+        self.assertTrue(all(f.startswith('docs/tasks/TASK-99999.yaml: ') for f in findings), findings)
+
     def test_every_contract_parses(self):
         """TASK-082 AC9: every docs/tasks/*.yaml at base_commit parses with the subset reader except exactly the two
         of the closed excused list, both refused."""

@@ -524,14 +524,15 @@ class TASK085AC7Modules(Base):
                 names |= {a.name for a in n.names}
             elif isinstance(n, ast.ImportFrom):
                 names |= {'%s.%s' % (n.module, a.name) for a in n.names}
-        self.assertEqual(names, {'hashlib', 're', 'aieos_bootstrap.base_files', 'aieos_bootstrap.gitread',
-                                 'aieos_bootstrap.records', 'aieos_bootstrap.resume_check'})
+        self.assertEqual(names, {'hashlib', 're', 'aieos_bootstrap.base_files', 'aieos_bootstrap.contract_path',
+                                 'aieos_bootstrap.gitread', 'aieos_bootstrap.records', 'aieos_bootstrap.resume_check'})
         used = {}
         for n in ast.walk(tree):
             if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and n.value.id in (
-                    'base_files', 'gitread', 'records', 'resume_check'):
+                    'base_files', 'contract_path', 'gitread', 'records', 'resume_check'):
                 used.setdefault(n.value.id, set()).add(n.attr)
-        self.assertEqual(used, {'base_files': {'read_file', 'list_paths', 'MAX_BYTES'}, 'gitread': {'run'},
+        self.assertEqual(used, {'base_files': {'read_file', 'list_paths', 'MAX_BYTES'},
+                                'contract_path': {'candidates', 'decide'}, 'gitread': {'run'},
                                 'records': {'check_log'}, 'resume_check': {'matches'}})
 
     def test_new_module_imports_and_names(self):

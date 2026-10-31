@@ -42,7 +42,7 @@ OWN_IMPORTS = {'claude_code.py': {'governor', 'records'}, 'claude_code_hook.py':
                'claude_code_pretool_hook.py': {'claude_code', 'claude_code_store', 'claude_code_hook',
                                                'claude_code_channel', 'task_contract', 'session_violation',
                                                'claude_code_shell_allow'},
-               'claude_code_shell_allow.py': {'claude_code_hook', 'gitread'}}
+               'claude_code_shell_allow.py': {'claude_code_hook', 'contract_path', 'gitread'}}
 ALLOWED = {('claude_code_store.py', 'writer'): {'store_path', 'session_lease', 'StoreResult'},
            ('claude_code_read_hook.py', 'writer'): {'add_reads', 'StoreResult'}}
 THE_PAIR = ('claude_code_channel.py', 'adapter', 'violation')
