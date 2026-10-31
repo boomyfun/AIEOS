@@ -12,6 +12,7 @@ A script that was just made is run in the same call as its diff and hash, or an 
 ## Occurrences
 - 2026-10-31 (../History/2026-10/2026-10-30-2323-m8-stage-8-task-106-the-base-tip-check.md, D-3955, D-3977): the second dry run of the commit executor, and a page builder's dry run, ran without a hash gate (both read-only); accepted once, with the rule that a script whose hash is known runs only behind its gate (D-3955 C4).
 - 2026-10-31 (../History/2026-10/2026-10-30-2323-m8-stage-8-task-106-the-base-tip-check.md, D-3990): exec_def106.sh was edited in place with the Edit tool, so no diff file existed for the decision agent's condition; it read both texts instead and asked for a copy before editing from then on.
+- 2026-10-31 (../History/2026-10/2026-10-31-1739-m8-stage-8-task-108-the-reader-of-the-last-handoff.md, D-4119): the dry copy of exec_108d.sh was run once before the request that asked for it (read-only, nothing written); the decision agent ruled it harmless and asked that it not be repeated.
 
 ## Why it happens
 A new file has no hash until it exists, so the first run is done before a gate can be written; the Edit tool changes the file in place.
