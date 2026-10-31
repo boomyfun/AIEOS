@@ -134,6 +134,11 @@
 # src/aieos_bootstrap/gitread.py; the four-subcommand tuple is no longer accepted, and revision 15's last sentence is superseded. Nothing is
 # granted, loosened or removed apart from that acceptance; it grants no write access, uses no secret and changes no setting. Limits: as in revision 15,
 # the rule pins the tuple, not the arguments passed.
+# Revision 17 (decision D-4227; the decision agent's own decision under DM A66; DEF-0101, specification 7 revision 8, TASK-110's contract on main) widens the same check, deterministic_rule,
+# by one subcommand and says so plainly: it now accepts only the six-subcommand tuple ('cat-file', 'diff-tree', 'rev-list', 'rev-parse', 'status', 'config') for SUBCOMMANDS in
+# src/aieos_bootstrap/gitread.py; the five-subcommand tuple is no longer accepted. The added subcommand, config, is a read-only listing of the repository's own configuration (one fixed form,
+# pinned by gitread.py and its tests, not by this rule). Nothing else is loosened or removed; it grants no write access, uses no secret and changes no setting. Limits: as in revisions 15 and 16,
+# the rule pins the tuple, not the arguments passed; and between this revision and the landing of the task that adds the form, the check on a task push needs the six-tuple (the order of TASK-110's contract).
 name: aieos-checks
 
 on:
@@ -1572,7 +1577,7 @@ jobs:
           SHELL_ALLOW = 'src/aieos_bootstrap/claude_code_shell_allow.py'
           ALLOW[SHELL_ALLOW] = {'modules': frozenset(), 'os': frozenset(), 'open_modes': frozenset(),
                                 'aieos_string': True}
-          SUBCOMMANDS = ('cat-file', 'diff-tree', 'rev-list', 'rev-parse', 'status')  # revision 16: the five only
+          SUBCOMMANDS = ('cat-file', 'diff-tree', 'rev-list', 'rev-parse', 'status', 'config')  # revision 17: the six only
           RUN_KEYWORDS = {'shell', 'stdin', 'stdout', 'stderr', 'capture_output', 'cwd', 'timeout', 'check', 'env'}
           MANIFESTS = {'setup.py', 'setup.cfg', 'pyproject.toml', 'Pipfile', 'Pipfile.lock', 'poetry.lock', 'MANIFEST.in'}
           VENDOR_DIRS = {'site-packages', 'vendor', '_vendor', 'node_modules', '__pypackages__'}
@@ -1637,7 +1642,7 @@ jobs:
               except ValueError:
                   ok = False
               if not ok:
-                  findings.append('%s: SUBCOMMANDS is not bound once to a pinned tuple (revision 8, revision 15, revision 16)' % path)
+                  findings.append('%s: SUBCOMMANDS is not bound once to a pinned tuple (revision 8, revision 15, revision 16, revision 17)' % path)
 
 
           def check_source(path, text, findings):
