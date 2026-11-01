@@ -573,7 +573,7 @@ class TASK111Write(unittest.TestCase):
     def test_arguments_with_a_token(self):
         """TASK-087 AC2 (amended by TASK-111): a fencing_token that is not a mapping, or a commit given together with
         a token, is an argument refusal and no callee is called."""
-        for kw in (dict(fencing_token='x'), dict(fencing_token=[1]), dict(fencing_token=7), dict(commit=COMMIT)):
+        for kw in (dict(fencing_token=str(7)), dict(fencing_token=[1]), dict(fencing_token=7), dict(commit=COMMIT)):
             with self.subTest(kw=kw):
                 rec = Recorder()
                 r = self.run_with(rec, **kw)

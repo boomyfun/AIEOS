@@ -5,8 +5,10 @@ bytes and the store's held leases, and expiry."""
 import datetime
 import json
 import os
+import re
 import tempfile
 import unittest
+from unittest import mock
 
 from aieos_bootstrap import handoff_file, launcher, read_set_record, records, recovery, submit, writer
 
@@ -932,8 +934,12 @@ class SubmissionThenHandoffFiles(unittest.TestCase):
             self.assertIsNone(writer.held_lease(root, task))
             # the recorder must hold the session id (read_set_record._gone_findings refuses otherwise), as the real callers
             # and test_launcher_end.py build it
-            ended = launcher.end(root, task, 's-1', token, T0 + datetime.timedelta(minutes=3), [], [],
-                                 'aieos-launcher (integration) s-1')
+            # launcher.end takes only a Windows root (launcher._WINDOWS_ROOT); the temporary folder of a Linux runner is
+            # /tmp/..., so the pattern is replaced here by one that takes an absolute POSIX path too (a replacement in
+            # this test only; nothing in src changes)
+            with mock.patch.object(launcher, '_WINDOWS_ROOT', re.compile(r'(?:[A-Za-z]:[/\\]|/).*', re.DOTALL)):
+                ended = launcher.end(root, task, 's-1', token, T0 + datetime.timedelta(minutes=3), [], [],
+                                     'aieos-launcher (integration) s-1')
             self.assertEqual((ended['result'], ended['reason'], ended['path']), ('done', None, 'gone'))
             # the record by observe_gone (the real one), with the reason of a gone session
             self.assertEqual(ended['record']['result'], 'written')

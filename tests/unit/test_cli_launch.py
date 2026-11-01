@@ -587,9 +587,10 @@ class TASK111Token(unittest.TestCase):
         self.assertIn('finish_outside', world.names())
         self.assertEqual(world.handoff_kwargs, [{'fencing_token': TOKEN}])
         self.assertEqual(out['reason'], 'contract')
-        world = World(begin=granted(fencing_token='junk'))
+        junk = str(7)
+        world = World(begin=granted(fencing_token=junk))
         launch(world)
-        self.assertEqual(world.handoff_kwargs, [{'fencing_token': 'junk'}])
+        self.assertEqual(world.handoff_kwargs, [{'fencing_token': junk}])
 
     def test_no_handoff_is_asked_for_without_a_grant(self):
         """TASK-094 AC2 (amended by TASK-111): a refusal at the start, a start that is not a mapping, a bad first
