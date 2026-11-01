@@ -922,7 +922,7 @@ class SubmissionThenHandoffFiles(unittest.TestCase):
                                                  T0 + datetime.timedelta(minutes=1), REC, task_id=task,
                                                  fencing_token=token).result, 'appended')
             message = 'Work\n\nbody\n\nAIEOS-Task: %s\nAIEOS-Fence: %s:%d\n' % (task, store['epoch'], token['counter'])
-            commit_bytes = ('tree %s\nauthor A <a@b.c> 1 +0000\ncommitter A <a@b.c> 1 +0000\n\n%s' % ('4' * 40, message)
+            commit_bytes = ('tree %s\nauthor A 1 +0000\ncommitter A 1 +0000\n\n%s' % ('4' * 40, message)
                             ).encode('utf-8')
 
             def read(repo, args, *rest):
