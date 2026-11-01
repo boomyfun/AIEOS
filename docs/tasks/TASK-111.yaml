@@ -1,0 +1,162 @@
+# Task contract TASK-111, r9 (r8 with the inline comments of risk and owner_kept_act moved onto their own lines and capabilities, autonomy, verification_plan and exit_conditions in the block layout of TASK-105 to TASK-110, the layout that base_inputs._parse_contract_text reads, D-4311); r8 (r7 with each write_set comment on its own line and forbidden as a block list, the layout that G0 (aieos-checks.yml :230-:259) and task_contract.py (:192-:242) read, D-4309; r7 was r6 with the thirteen intent_versions hashes filled by fill111.py, D-4308); r6 (r5 made to be committed: this header, base_commit and the intent_versions keys; r5 was r4 with the edits E11 to E17 of D-4301; r4 was r3 with the findings of the review R111c, ruled in D-4301 with E11 to E17; r3 was r2 with the edits E7 to E10 of D-4299; r2 was r1 with the edits E1 to E6 of D-4298 and the pin scan; session a048abb9, 2026-11-01; direction ruled in D-4293 to D-4307; the text it builds is specification 7 revision 9, approved by row F81, on main at b8134377).
+# DEF-0095's write after a submission: launch_outside's handoff file gets `commit` = the commit the session submitted, found by the fence match in the event log.
+# Departure from m8-plan :46 (order): DEF-0101's remainder (the root's state after the check; max_risk) is not taken first. Ground (D-4297, corrected in D-4298): what DEF-0101 still has open (DEF-0101 :32-33, :46-50) only has
+# meaning with a running tool, whose launch is a real-world act decided as its own decision (DM A73, which amends A51 item (4) for the self-build); none is scheduled; it stays open and is not closed here.
+# Also named: m8-plan :47 and DEF-0101 :46 still say "owner's act"; this is corrected in H by its own decision, outside this write set.
+# Order (the TASK-110 form): S (specification 7 revision 9 with a DM row), then this contract C, then X (the code), then R (records), D (DEF-0095's text), H (end records). No workflow change is planned (W is only
+# if the pin scan finds a pattern rule of aieos-checks.yml that the change trips; then it is its own DM A66 decision, before X is pushed).
+# Facts read (file:line, main db675920):
+#  F1 launcher.py :1103-:1145 (_launch_finish): after a done end, write_handoff(root, task_id, session_id, None) (:1130); findings of the handoff are added only when it is not written/none (:1139-:1143).
+#  F2 handoff_file.py :13-:15 write(root, task_id, session_id, commit, read_log=None, write_handoff=None) reads the log once and composes; :25 "it writes the caller's commit as given, since the log ties no submission to a session";
+#     :17-:20 the limit "nothing calls write after a submission" (true only for submission; launch_outside calls it with None).
+#  F3 submit.py :193-:195, :203-:204: submit appends task.submitted {commit, compensating false} with fencing_token = the commit's AIEOS-Fence trailer, then releases the lease by that token.
+#  F4 records.py :679-:687: a task.submitted line must carry fencing_token {epoch, counter}; so the log holds the token of every submission.
+#  F5 base_inputs.py :472-:477 (_log_events: records.check_log, lines with duplicate_of None, same task_id) and :808-:822 (submitted_commits: commits only, no token).
+#  F6 eventlog.py :105-:109 and submit.py :78-:83: two tokens are equal when their canonical JSON text is equal.
+#  F7 launcher.end :738-:814 and _path :699-:716: with the lease released by submit, session_leases has no unexpired row for the session, so _path gives "gone"; the record is written by observe_gone with the reason
+#     'lease gone (released or expired)' (read_set_record.py :216), then adapter.end(token) runs; adapter.py :15-:18 says its release refusal with reason "none" or "token" ("a submission or the core released it")
+#     is no error. So end is EXPECTED to give "done" after a submission, with no change to end or end_outside. This is a reading of the code; AC3 below makes a test show it, and if the test shows a refusal the task is
+#     split (D-4297 direction): the end path would be its own task. Basis of "gone" (E5, D-4298): writer.py :512-:513 (release_lease_token deletes the lease row) and :908-:925 (session_leases lists the rows that remain).
+#  F8 Pin scan (reads only, main db675920, grep and Read of tests/ and the workflow): (1) tests/unit/test_handoff_file.py :259 pins handoff_file.py's imports to exactly {json, re, aieos_bootstrap.writer} and :262-:266 forbid
+#     names (open, exec, eval, compile, __import__, subprocess, os, sys, time, datetime), attributes (environ, getenv, now, write_text, open_store) and any string containing ".aieos"; :302-:307 pin the docstring phrases
+#     'the handoff file', 'specification 2 section 5.2', 'calls write after the launcher', 'not committed', 'the last handoff', "the caller's commit", 'create-only', 'never raises', 'TASK-087' and forbid
+#     'nothing calls write but its tests'; :309-:323 every test function of that file and of TASK087WriteHandoff in test_writer.py names 'TASK-087 AC' in its docstring (an added test: 'TASK-087 AC2 (amended by TASK-111)');
+#     the stand-ins at :141-:166 call write(root, task, session, commit, read_log=, write_handoff=) and the recorded calls are pinned at :198. (2) tests/unit/test_cli_launch.py: World.write_handoff (:96-:97) takes
+#     (*args) only, so a keyword call raises TypeError; :143 pins its arguments to [(ROOT, TASK, SESSION, None)]; :116 and :121 pin the callee order; :328 pins handoff_file's docstring phrase 'calls write after the launcher';
+#     :174-:180 patch handoff_file.write; :502-:506 pins names in cli.py (_launch, _render_launch, _launch_in_form; unchanged) and test_launcher.py :1112-:1141 pins the names launcher.py may use from handoff_file (the attribute write only; unchanged).
+#     (2b, added by the review R111c) More pins of launcher.py's and handoff_file.py's text: test_cli_launch.py :532-:538 (TASK094AC6Docs) pins launcher.py docstring phrases 'launch_outside', 'TASK-094', 'no starter', 'max_risk None',
+#     "reads the caller's clock", 'end_outside' (in launcher.py :197-:206, the region AC4 rewrites); test_launcher.py :1145-:1156 (TASK086AC12Docstrings) pins launcher.py module-docstring phrases ('starts no runtime', 'never raises',
+#     "not before DEF-0101's open points are closed", "the store is the caller's", 'max_risk null never grants', 'AIEOS_BASE is the head_commit', 'the log is read twice', "this task's choice", 'the record before the release',
+#     'no fencing token', 'TASK-090') and forbids 'writes no observed read-set record'; test_cli_launch.py :333 forbids '.aieos' in handoff_file's docstring. Purity pins: test_cli_launch.py :509-:519 and test_handoff_file.py
+#     :285-:286 ban the imports tempfile, sqlite3, shutil (and subprocess in the first) and the name open, and test_launcher.py's header says no test writes a file; so a test over a real temporary store cannot live in those unit
+#     files: it lives in tests/integration/test_writer_files.py, one of the three files that aieos-checks.yml :1564-:1571 lets import tempfile and sqlite3 (a new module would be refused, :1673-:1674); the scan of that file's helpers and of any pin on its text is the first step of the task. Workflow rules for new src code (aieos-checks.yml :1648-:1696): no name open, exec,
+#     eval, compile or input, no one-argument .replace, no '.aieos' string, no import outside the standard library and aieos_bootstrap. (3) tests/unit/test_writer.py (9 hits,
+#     TASK087WriteHandoff) and tests/integration/test_base_inputs_repo.py (1 hit) mention handoff but need no change by this design. (4) .github/workflows/aieos-checks.yml has no rule that names handoff_file.
+#     Consequence: the lookup does NOT import records (that would change the :259 import pin). Ruled in D-4299: no records import; the parse follows check_log's reading by AC1 (E7).
+task: TASK-111
+contract_version: v1
+task_type: implementation
+objective: >-
+  handoff_file.write gains a keyword fencing_token (default None). When it is a mapping, write finds the session's submitted commit in the same log it already reads: the task.submitted events of task_id, not duplicates,
+  with payload compensating false and a fencing_token whose canonical JSON text equals the given token's. Exactly one such event with a commit of 40 lowercase hexadecimal characters gives that commit; none gives
+  commit None with no finding (as today); two or more, or a commit out of form, give commit None and a finding. The commit argument must then be None (any other value with a token is an argument refusal). A compensating
+  task.submitted is never matched (stated limit). launcher._launch_finish passes the grant's token by keyword; a handoff result of "written" or "none" now has its findings added to the launch's findings. Nothing else in
+  start, end, end_outside or launch_outside changes.
+traces_to:
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#7
+  - docs/specs/spec-02-aieos-file-format.md#5.2
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md#7
+  - docs/plan/m8-plan.md#7
+  - docs/Deferred/DEF-0095-the-handoff-file-of-the-claim-tools-for-the-launcher.md
+input_state:
+  # base_commit is the head of main when the contract is approved (now b81343775c9ccc9c051807be178ce6d063143b08); the executor of commit C refuses unless it equals HEAD, refs/heads/main and refs/remotes/origin/main;
+  # commit C has it as its one parent.
+  base_commit: b81343775c9ccc9c051807be178ce6d063143b08
+  depends_on: [TASK-025, TASK-079, TASK-087, TASK-094, TASK-108]
+  intent_versions:
+    # sha256 of each file at base_commit, filled by script (fill script) at the approval request
+    docs/specs/spec-07-cli-and-zero-friction-path.md: e7e47d70fa6b6c11e5f32f28c8a4120acb1a567434b826f3a90f6622d3363de7
+    docs/specs/spec-06-mcp-protocol-and-work-orders.md: ff2f80e24e8b519d3cb4ab7904e613f6dfb6c5c3a991c63bf38de4826def8b69
+    docs/specs/spec-02-aieos-file-format.md: e7c427b06775069a43d5e6d317a61c1974e5be921aee08a581c1918572a37a61
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/Deferred/DEF-0095-the-handoff-file-of-the-claim-tools-for-the-launcher.md: d8d94130ca3edb42b6bfd3df68a07a0fcce7b6303fbf73d2612f2819d32d2ebf
+    docs/plan/m8-plan.md: 564d9b74e0a4b118ce32cb6d9ff32aaf389aae118411b24233ee8c01cd10ecf7
+    docs/tasks/TASK-025.yaml: 0a467afc1a4e1356a992ff9566071b761aceaa10a510a5c4a6a5a0765c0119d7
+    docs/tasks/TASK-079.yaml: fc4b414da14ddf8dd8cace72751b9a44e8ef85ae134eb0f5a00a17ff6f620c0b
+    docs/tasks/TASK-087.yaml: de594d58e7a391c688f4ab44f46a154746722715d5d9eb815d2608f990c13367
+    docs/tasks/TASK-094.yaml: bafc711ae3b23fc3372e3f8b201cdf53f07ec475e7a5d57db9aeed6acd86ab34
+    docs/tasks/TASK-108.yaml: 6552680a01fc299bd29210bc6cb05b6954bdb278b2d64bd8fbaf27fddbdac65e
+write_set:
+  paths:
+    - src/aieos_bootstrap/handoff_file.py
+    - src/aieos_bootstrap/launcher.py
+    # the lookup, write's new keyword, the docstring pins (F8 (1))
+    - tests/unit/test_handoff_file.py
+    # World.write_handoff takes the keyword; the :143 argument pin (F8 (2))
+    - tests/unit/test_cli_launch.py
+    # only if the scan of the final text shows a pin to amend (F8 (2) says none now); may leave
+    - tests/unit/test_launcher.py
+    # the composed-path test over a real temporary store: only the three writer test files may import tempfile and sqlite3 (.github/workflows/aieos-checks.yml :1564-:1571, revision 7; a new module is refused at :1673-:1674), so the test joins this file and no module is made (D-4301)
+    - tests/integration/test_writer_files.py
+    # tests/unit/test_writer.py and the other integration modules join only by a contract revision.
+  # reasons: handoff_file.py: the keyword, the lookup, the docstring limits :17-:20 and :25 (they become untrue); launcher.py: the call and the findings, and its docstring at :197-:206; tests follow the pinned names.
+  # A file may leave after the pin scan, none may join without a contract revision.
+read_set: {paths: [docs/Deferred/, docs/plan/m8-plan.md, docs/specs/, src/aieos_bootstrap/, tests/, .github/workflows/], interfaces: [aieos_bootstrap.handoff_file.write, aieos_bootstrap.records.check_log, aieos_bootstrap.launcher.launch_outside], schemas: []}
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - bench/**
+  - native/**
+  - docs/**
+  - tests/conformance/**
+  - tests/run_tests.py
+  - src/aieos_bootstrap/writer.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/cli.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/mcp_server.py
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The lookup. A pure function of handoff_file.py takes (log bytes, task_id, token) and returns (commit or None, findings); it parses each line with json.loads with an object_pairs_hook that refuses a repeated key and a parse_constant that refuses NaN and Infinity (records.py :752's reading), with no new import (F8 (1)); blank lines are skipped as compose does; any other line that is not UTF-8, is refused by json.loads or those hooks (ValueError or RecursionError), or is not a JSON object gives (None, a finding) and no commit (fail closed, as check_log refuses and base_inputs._log_events raises on any finding in the log, records.py :753-:755, :819-:822; base_inputs.py :472-:477); tokens are compared by the text json.dumps(token, sort_keys=True, separators=(',', ':'), ensure_ascii=True, allow_nan=False), the form of eventlog._canonical (eventlog.py :79-:81); among matching events an event_id repeated with identical content counts once, identity being the text of records._without_order (records.py :718-:724: the line's object without seq and appended_at, json.dumps(..., sort_keys=True) with its other arguments at their defaults, as records.py :722; a line whose identity text cannot be made (None at :721-:724) gives (None, a finding)), and one repeated with other content gives commit None and a finding (records.py :783-:789's reading); the lookup does not check the token's form (records._check_fence, :678-:689, refuses an out-of-form token line for the whole log), only its text (stated limit). Tests with stand-in logs: a matching line with a repeated key is not matched; a log whose only refused line does not match gives (None, a finding); an identical repeat gives the commit; a same-event_id repeat with other content gives (None, a finding); the lookup's token text equals eventlog._token_text on every test token; on every well-formed stand-in log the lookup's commit equals the one found in the test through records.check_log's lines with duplicate_of None (the test file may import records and eventlog); and: none -> (None, []); one match -> the commit; two matches -> (None, one finding); a commit out of form
+      -> (None, a finding); a match on another task or another token is ignored; a compensating event with the token is ignored; two tokens with the same canonical text but different key order match; a token that cannot be written
+      as canonical JSON gives a finding and no commit; the function raises nothing.
+  - AC2: >-
+      write. With fencing_token a mapping and commit None, write reads the log once, looks up the commit, composes with it and writes once, as today; the result keys are unchanged (WRITE_KEYS); the lookup's findings ride in
+      the result's findings for every result, "written", "none" and "refused" (today "none" carries no findings, handoff_file.py :188-:189); with fencing_token a mapping and commit not None, write refuses with reason "argument" and writes nothing; a fencing_token that is neither None nor a mapping is refused with reason "argument" and nothing is written (the launcher can pass the raw answer of an out-of-form grant that has a str session id, launcher.py :1194, :1197-:1202); with fencing_token None the behavior is byte-for-byte today's.
+  - AC3: >-
+      The launcher. _launch_finish calls write_handoff(root, task_id, session_id, None, fencing_token=token) by keyword, the token being the grant's (state['token'], launcher.py :1194, :1197) as it is, on every path that reaches write_handoff (the else branch at :1122-:1123 is reached after a grant when the write set is None, :1212-:1213, so it passes the grant's token too; no path without a grant reaches write_handoff, returns at :1164, :1192, :1201); the findings of a handoff result "written" or "none" are added to
+      the launch's findings (strings only); a refused handoff is handled as today. World.write_handoff of test_cli_launch.py takes the keyword and its :143 pin is amended. A composed-path test, in tests/integration/test_writer_files.py (F8 (2b)), with the real launcher.end path, using the real
+      writer.release_lease_token, writer.session_leases and writer.end_session over a temporary store (writer.py :512-:513 deletes the row), with a stand-in only for the git read of submit (and a stand-in for observe_gone that records its call and
+      asserts its reason GONE_WHY[1] if the scan of that module's helpers shows the real one cannot run there; then the record's content is not asserted and the contract names that limit), shows what end gives after a submission has released the
+      lease (path "gone", the record by observe_gone, adapter.end's release refusal "none" or "token" not an error) and that the handoff file's text then holds that commit; the expected result is "done". If the test
+      shows a refusal, the task stops and is split (an end-path task first).
+  - AC4: >-
+      The stated limits. The docstrings of handoff_file.py (:17-:20, :25) and launcher.py (:197-:206) are updated in plain words: the file is written after a submission with the matched commit; the match is on the fence token
+      only; a compensating submission (recovery's) is never matched; a session that submitted twice gets commit None and a finding; a commit with no usable AIEOS-Fence trailer is not refused by submit (submit.py :161-:163) and is passed to the append with
+      fencing_token None (:195); records.py :679-:681 makes that line out of form; in every case no event carries the grant's token, so commit None (and eventlog.append refuses a task.submitted with no fencing_token at the fence: eventlog.py :112-:114, :132-:133, :218-:229); abnormal ends still write none (the launcher writes only after a done end, launcher.py :1124-:1126); a session that submitted but made no handoff call gets no file, so its commit is in no handoff; with two matches the file is written with commit null and the launch still reports "done" with the finding in its findings; the end of a session that submitted takes the "gone" path because the submission released the lease first, so its read-set record carries the reason 'lease gone (released or expired)' (read_set_record.py :216) and not the fenced path's, and this task changes no record; the lookup refuses per log as stated in AC1 and differs from check_log only on malformed logs (blank lines skipped; a leading byte-order mark or a CR byte not refused, records.py :819-:822; the token's form unchecked); how the file reaches Git stays open (DEF-0095 (b)); the :25 limit is rewritten, not deleted: the pinned phrase "the caller's commit" stays in a true sentence (with no fencing_token, write writes the caller's commit as given); :18-:20's "nothing calls write after a submission" is replaced; 'calls write after the launcher' stays. Pinned docstring phrases of both files stay byte-exact (the scan lists them).
+  - AC5: >-
+      Pins and purity. The pin scan (the first step, reads only, listed in the map of commit X) names every test that pins handoff_file.py's or launcher.py's imports, docstring phrases, callee orders or the
+      write_handoff stand-ins' signature; each is amended as TASK-110 amended its pins, with 'amended by TASK-111' in the docstring. No new import in either src file; the import pin of test_handoff_file.py stays; no state-directory name as a string in a
+      changed src file; no new process form; none of the effect labels MEASURED, ENFORCED, GUARANTEED outside a cited decision-matrix line (OPS-003).
+  - AC6: >-
+      The text. Specification 7 revision 9 (before this contract, as S) says in section 7 (lines 62, 66), section 10 and the revision history that the write after a submission is built by TASK-111, with the lookup rule, and
+      the matching decision-matrix row; the items of DEF-0095's log that revision 7 already settled (the unclaimed-file choice, the TASK-105 name, spec 7 :117) are checked in the scan and not repeated. DEF-0095's Log
+      line is written by its own decision after landing (it stays open for (b) and (c)).
+  - AC7: >-
+      Evidence and CI. Unit, integration and property tests as the scan shows are needed; static analysis and the deterministic rule report no finding; every job and step of aieos-checks and aieos-native succeeds on the accepted commit
+      and on main after the records commit, read by run id; each push and each job-data read is a decision of the decision agent.
+  - AC8: >-
+      The records and acceptance. Per-article records through records.check_record and the governor shadow over a dry list at the approval request, with raw output; expected NEEDS_REWORK at the GOV-003 row. GOV-003: proposed as a stated departure as TASK-102 to TASK-110; ruled at the C request on the governor
+      shadow's raw output (D-4297 C3 (f); the compensating controls named in D-4271; DEF-0107 points 2 to 5); the way-2 review and the reviews on Haiku 5.5 only (no other model without the owner; no Fable).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+# risk: R3: src/** and tests/** fail closed as high (risk-rules section 2 point 3); no critical rule matches the write set (no docs/specs/**, no .github/**); to be confirmed by script in the approval request.
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1200k, wall_time: 8h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC5]}
+  - {gate: G3, check: constitution, args: [AC4, AC6, AC7, AC8, INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the risk class is satisfied AND one approval record counts AND the CI runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false: edits to source and tests in the write set; no runtime is launched in this task; launching a real tool would be its own decision under DM A73.
+owner_kept_act: false
