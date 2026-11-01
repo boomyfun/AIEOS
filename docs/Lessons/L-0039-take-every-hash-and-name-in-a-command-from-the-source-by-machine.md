@@ -15,6 +15,8 @@ A decision's condition quoted a SHA-256 with one character missing, and the chec
 - **2026-10-30 (session 578ea88b, D-3892 C7, D-3890).** `python -I` was prescribed twice; run in the guard form `timeout 110 python <file> < /dev/null` and disclosed.
 - **2026-10-30 (session 578ea88b, D-3899).** The summary of the (2b) command in a request had a caret; the command as typed had none (main transcript :7224).
 - **2026-10-31 (session 85a45f06, D-3968 C1, D-3970 C2, D-3970 request).** The gate hash in two of the decision agent's commands differed from the machine value by one character, and my request retyped the hash of a dry-run output with the tail of the definition hash; the machine value was used and the slips disclosed.
+- **2026-11-01 (session a048abb9, D-4339, D-4341, D-4391).** A hash typed from memory in a checkpoint sentence (D-4339), the hash-from-memory slips of the R111 stretch (D-4341) and a wrong test-file hash in the first draft of TASK-112's acceptance text (D-4391); each caught by a check or replaced by the sha256sum value before use.
+- **2026-11-01 (session a048abb9, D-4401, D-4403).** Counts taken by eye or by grep hits and not by machine from the right object: the notes of the page builder were 26, not 27 (the checkpoint said 27), and the copies of the D-4293 hand-back were one, not five (grep hits in other instances' search results were counted as hand-backs); the builder's own count lines (`copies 1`, `pages 109`) were the check that showed it.
 
 ## Why it happens
 Long hashes and commands are retyped from memory or from a previous message, and the decision agent repeats what the request says; the guard's forbidden forms are not in the decision agent's view.

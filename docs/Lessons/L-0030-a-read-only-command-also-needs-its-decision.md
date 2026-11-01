@@ -43,6 +43,8 @@ Seven, in session 87e2584b's later part (../History/2026-10/2026-10-29-0446-the-
 - **2026-10-31 (session 85a45f06, D-3968, D-3981, D-3984).** A stray no-op `sed -n 1p /dev/null`, a no-op variable assignment in a grep and a listing piped through sed and tr; read-only, disclosed and accepted as harmless.
 - **2026-11-01 (session 79c5920b, D-4193, D-4194, D-4203).** A read-only command in the step of D-4193 (hashes, rev-parse, status) was not named by a decision; disclosed in D-4194, ruled harmless, and cited here by command and transcript line (main transcript :582) as D-4203 ruled.
 - **2026-11-01 (session 79c5920b, step (a) of D-4232, disclosed in D-4233).** One ls and one cat of refs in a read-only step, disclosed; no more of them in read-only steps.
+- **2026-11-01 (session a048abb9, D-4303, D-4331, D-4349).** Two extra read-only pipelines in a C4 command on the scratchpad diff (D-4303, line 46); an over-wide ls of the temp folder while looking for an old script (brought as D-4331, line 147); the decision matrix at main read with `git show` into /tmp/dm_main.txt, a file outside the scratchpad (D-4349, line 230); all disclosed.
+- **2026-11-01 (session a048abb9, D-4402, D-4403, D-4404).** Three greps over the transcripts of the decision agent's instances after stops of the page builder (the 60-character limit missed the longest ID-line note; the second counted hits instead of hand-back calls and said "five" for one hand-back), read-only, reported in the requests and accepted; the counts are lesson L-0039's.
 
 ## Why it happens
 A read is not felt as an act, and right after a compaction the habits of the call form are weakest.

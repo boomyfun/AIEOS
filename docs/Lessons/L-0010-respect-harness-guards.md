@@ -299,6 +299,14 @@ Occurrences in session 2026-11-01-0412 (../History/2026-11/2026-11-01-0412-m8-st
 - **2026-11-01 (D-4269).** A byte-compile check added to a sum and hash command; refused (R2, R3); the sum and hash ran without it.
 - **2026-11-01 (D-4272).** A command that held a here-document creating an unneeded file; refused (R1); not redone.
 
+Occurrences in session 2026-11-01-1050 (../History/2026-11/2026-11-01-1050-m8-stage-8-task-111-and-task-112-the-handoff-write-and-the-metrics-report.md), each my incorrect command, refused before it ran and not redone in the refused form (six disclosures; checkpoint lines 36, 104, 122, 318, 454 and the request of D-4406; the decision is the one in whose result the checkpoint reports it):
+- **2026-11-01 (D-4300).** A stray `python -c pass` at the end of a command; refused (R2, R3); the same diff and hash commands ran without that piece.
+- **2026-11-01 (D-4318, brought in D-4319).** `python --version` in a command; refused (R2, R3); the other parts ran without it.
+- **2026-11-01 (D-4323, brought in D-4324).** A `python -I -c` syntax check; refused; not redone.
+- **2026-11-01 (D-4365).** A `python -c` form without timeout in a Bash call; refused; not retried.
+- **2026-11-01 (line 454, brought in D-4391).** A command that carried Python's version flag and its module flag; refused (R2, R3); nothing of it ran and the form was not retried.
+- **2026-11-01 (D-4405, reported in the request of D-4406).** A search whose pattern text held the forbidden `python -c` form; refused (R2, R3); the search was redone without it. (The decision agent's own command form `python -u`, D-4325 C3, line 133, was refused too; it is the decision agent's, not counted above.)
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
