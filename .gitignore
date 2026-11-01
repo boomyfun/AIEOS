@@ -1,0 +1,2 @@
+# The local store of leases, sessions and reads is never committed (specification 2, section 3).
+.aieos/local/
