@@ -56,6 +56,9 @@ One incident in session 2026-10-09-0514 (../History/2026-10/2026-10-09-0514-fixt
 One incident in session 2026-10-09-0637 (../History/2026-10/2026-10-09-0637-fixtures-accepted-and-landed.md):
 - **2026-10-09 (:562; before D-205).** Scratchpad work done while a request was open and before its decision: copies of the review briefs after the D-203 request was sent, and the TB-3 draft before D-205. Both were in the scratchpad only and were disclosed in the next request, not before.
 
+Six incidents in session 2026-11-01-2202 (../History/2026-11/2026-11-01-2202-m8-stage-8-task-113-the-ignore-rule-for-the-local-store.md):
+- **2026-11-02 (session bdca08a6, D-4452, D-4456, D-4457, D-4458, D-4461, D-4468).** A raw diff was promised or called raw and a hunk list, a list of changed lines, a tail -4 or a bracketed abbreviation was given: the cp30 entry said the raw text was in the request of D-4452; the request of D-4456 listed changed lines; the tail -4 of D-4457 hid the other hunks; the diff of D-4458 was partly paraphrased; the request of D-4461 abbreviated long lines; the cp46 entry said a raw diff was returned where a hunk list was (corrected in cp47). Each was stated later by the worker or found by the decision agent, which read the files itself. Why the rule did not stop them: the rule asks for the disclosure in the first lines of the turn, and each request disclosed the abbreviation only in a later sentence or not at all; the word "raw" was used as a label, not tested against the tool output. The same kind was recorded here on 2026-10-08 (D-164: a block called "machine output, unedited" whose first line had been replaced); one Prevention line is added (D-4475).
+
 ## Why it happens
 - Claude wants to keep momentum, and disclosure feels like an admission.
 - A note in a log is mistaken for telling the owner.
@@ -64,3 +67,4 @@ One incident in session 2026-10-09-0637 (../History/2026-10/2026-10-09-0637-fixt
 - Start each deliverable with a "Departures and limits" section, even if it says "none".
 - When an agent runs as a different type than intended, say so in the same message.
 - Distinguish "I checked" from "I believe" in every report.
+- Call a diff, a log or a listing "raw" only when it is pasted whole from the tool's output; otherwise say "summary" in the same sentence and name the file that holds the whole output.
