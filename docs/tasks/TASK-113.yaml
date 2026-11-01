@@ -1,0 +1,80 @@
+# Task contract TASK-113, r5 (draft of session bdca08a6; r5 by Edit of a copy of r4 under D-4432 C2; r0 by a new file in the layout of TASK-112's; r1 by Edit of a copy of r0 under D-4430 C2: the exact bytes of the file, the state-file wording slimmed, spec 7 bound; r2 = r1 with four hashes filled by fill113.py; r3 by Edit of a copy of r2 under D-4431 E1 to E8; r4 = r3 filled by fill113b.py; scratchpad only;the layout that base_inputs._parse_contract_text reads: every comment on its own line, lists as blocks).
+# Why: D-4428 ruled that M8 does not exit until a real event log exists and the report has run on it; D-4429 ruled that the ignore rule for the local store comes before the first `aieos init` on E:\AIEOS. writer.py:25-26 states the carry of the ignore rule to the task that first creates a real project-state directory, and DEF-0030 Log (:25, :26) holds the phrase "listed as ignored by Git"; TASK-095 wrote no ignore rule (m7-exit-review :69).
+# Facts read (file:line, main 3a5c4c22): spec-02 :40 and :44 (the line `.aieos/local/` goes in the repository's root .gitignore, written by the user and never by the core) and :39 (events.jsonl committed, a proposed reading); risk-rules :40 and :75 (R4: .gitignore is high); spec-07 :49 (the step "root" leaves `.aieos` out of the status read; whether and when state files are committed is the state-file rule's question); DEF-0105 Log :26-27 (who commits the files under the state folder's tasks and handoffs is unsettled).
+# E:\AIEOS has no .gitignore today (Glob). This task creates it. No src file, no spec and no workflow changes.
+task: TASK-113
+contract_version: v1
+task_type: implementation
+objective: >-
+  Create the repository's root file .gitignore holding one comment line and the line .aieos/local/ (spec-02 section 3, :40 and :44), so that the local store (SQLite: leases, sessions, reads) that the writer creates under .aieos/local/ is not swept into a commit. Nothing else is ignored. The task decides nothing about whether, when or by whom the other files under .aieos/ are committed. It adds no capability and changes no code.
+traces_to:
+  - docs/plan/m8-plan.md#7
+  - docs/plan/m8-plan.md#9
+  - docs/specs/spec-02-aieos-file-format.md#3
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#5
+  - docs/Deferred/DEF-0030-event-log-writer-and-workflow-revision-6.md
+  - docs/Deferred/DEF-0105-the-zero-friction-paths-open-links.md
+input_state:
+  # base_commit is the head of main when the contract is approved (now 3a5c4c221f4e28d9ec7d345f72092d4481a2ef01); the executor of commit C refuses unless it equals HEAD, refs/heads/main and refs/remotes/origin/main.
+  base_commit: 3a5c4c221f4e28d9ec7d345f72092d4481a2ef01
+  depends_on: [TASK-016, TASK-095]
+  intent_versions:
+    # sha256 of each file at base_commit, filled by script (fill script) at the approval request; one key for each depends_on task file and each text the contract is bound by. The DEF-0030 and DEF-0105 files are traced, not bound: their Log lines are appended in the end records, which would make a bound hash stale at once.
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/tasks/TASK-016.yaml: c4b7a32058ede2bfdc48c26ed46f8328a69d932c2b6df952fd74f5d00b86c55a
+    docs/tasks/TASK-095.yaml: fafcc27e4c92df276d18b2aee4294b4f98fd9854de45ba33ccb59fde7a25c9db
+    docs/specs/spec-02-aieos-file-format.md: e7c427b06775069a43d5e6d317a61c1974e5be921aee08a581c1918572a37a61
+    docs/specs/spec-07-cli-and-zero-friction-path.md: e7e47d70fa6b6c11e5f32f28c8a4120acb1a567434b826f3a90f6622d3363de7
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/plan/m8-plan.md: a8555c54a02a5d2ded782e1f6e198ad86654e617e0d958de8a647a3cddb0f65b
+write_set:
+  paths:
+    # the one new file; no test file (D-4430 (b)); a test file joins only by a contract revision
+    - .gitignore
+read_set: {paths: [docs/plan/, docs/specs/, docs/Deferred/, src/aieos_bootstrap/writer.py, src/aieos_bootstrap/cli.py, .github/workflows/], interfaces: [], schemas: []}
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - src/**
+  - tests/**
+  - bench/**
+  - native/**
+  - docs/**
+# INV-009 is not listed: its scope is the event log (constitution :70), which this task neither reads nor writes.
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The file. The new root file .gitignore holds exactly two lines, in this order, each ended by one LF, with no other byte: line 1 is "# The local store of leases, sessions and reads is never committed (specification 2, section 3)." and line 2 is ".aieos/local/". The executor compares the bytes before the task commit. The task commit's changed paths are exactly the root path .gitignore; the executor refuses any other path (a G0 pattern without a slash also matches a nested .gitignore). After the commit, `git check-ignore -v .aieos/local/state.sqlite` names the file, line 2 and the pattern; `git check-ignore -v .aieos/events.jsonl` prints nothing and exits 1 (the log is not ignored). The raw outputs are kept as evidence; each command is read-only and its own decision.
+  - AC2: >-
+      What the file does not decide. Not ignored by this file: everything else under .aieos/ (spec-02 :28-39; that events.jsonl is committed is spec-02's proposed reading). Whether, when and by whose decision state files are committed is not settled by this task (spec-07 :49, "the state-file rule's question"; DEF-0105 stays open). No state file is committed except by a decision of its own. The state-file rule (spec 7 section 10 or spec 2 section 3, with its DM row) comes as a specification revision before the first commit of any file under .aieos/, not before this task (D-4430 C3). The Log line for DEF-0105 is written in the end records, under its own decision, not in this task.
+  - AC3: >-
+      Carries and non-changes. (a) `aieos init` still writes no ignore rule (TASK-095's limit stands); that `init` should write the line for product projects is named as a carry, not done. (b) DEF-0041 (c), never give an earlier store's epoch to a recreated store, is not touched by this file; it stays a requirement on the first task that calls the store. (c) First `aieos init` on E:\AIEOS: nothing moves; the interim documents under docs/plan/ and docs/specs/ stay where they are (spec-07 :28, section 10 stays open). (d) The stale texts of cli.py (:67, :90-91, :102-103) and spec-07 :35 and :50 on whose act a launch, an import or a run is, which predate DM A73, are named here for a later docs fix and not changed. (e) The step "root" of the launcher leaves .aieos out of its status read (spec-07 :49), so this file does not make a launch refuse.
+  - AC4: >-
+      Evidence and CI. The risk class is high, so the evidence profile is medium's entries (unit_test, deterministic_rule) plus integration_test, static_security_analysis and the cross-model pair of reviews (assurance-model section 5, :82, and section 3, :50). The tool entries are expected to be met by the CI's own steps on the accepted commit; if the governor shadow's raw output at the approval request shows any profile entry unmet, the task stops and comes back to the decision agent, no test is added except by a contract revision, and no workaround is used. The cross-model pair is a way-2 review on Haiku 5.5 (no other model without the owner) and a separate decision_agent_review that stands for that entry, both bound to the evaluated commit and the intent versions. The way-2 record names the implementer's model, the model of the session that makes the task commit (expected claude-sonnet-5-5), and the reviewer's model (Haiku 5.5); if the two are the same, the pair counts nothing and the task stops and comes back to the decision agent. The aieos-checks and aieos-native runs succeed on the accepted commit and on main after the records commit, read by run id; G0 scope sees only .gitignore; the risk class is high (R4). Per-article records through records.check_record and the governor shadow over a dry list at the approval request, with raw output; GOV-003 is expected to read as for TASK-102 to TASK-112 (stated departure) or, for a one-file non-code change, as the governor gives it: the decision agent rules it on the raw output.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [.gitignore]}
+  shell: {allow: []}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+# risk: R4 (.gitignore): high (risk-rules :40, :75); to be confirmed by script in the approval request.
+risk: high
+autonomy:
+  # budgets are sized for one file, not copied from TASK-112
+  max_level: L1
+  budgets: {tokens: 300k, wall_time: 4h, retries: 3, human_attention: 0m}
+# G0 and G3 only: no test and no G1 or G2 gate (D-4430); the high profile's tool entries are met by CI records (assurance-model :50, :78-85).
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G3, check: constitution, args: [AC1, AC2, AC3, AC4, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the risk class is satisfied AND one approval record counts AND the CI runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false: one new repository file; no runtime is launched, no `aieos init` is run in this task.
+owner_kept_act: false
