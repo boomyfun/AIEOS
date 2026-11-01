@@ -1,0 +1,116 @@
+# Task contract TASK-112, r4 (draft of session a048abb9, D-4365 to D-4369; r1 by Edit of r0 under D-4366, r2 by Edit of r1 with F1, F2 and the review findings of D-4367, r3 by Edit of r2 under D-4368 C2, r4 by Edit of r3 under D-4369; r0 made by a new file in the layout of TASK-111's r9, the layout that base_inputs._parse_contract_text reads: every comment on its own line, lists as blocks).
+# M8 plan section 8: a read-only report over the event log for the metrics of concept section 12 (lines 810-821), as its own task, after section 7's links (all three done: DEF-0105, DEF-0101, DEF-0095 = TASK-111).
+# The report is a pure function under src/; it adds no event type, no command and changes no write path. Running it on the project's real log is a separate, later read-only decision (D-4365 (v)). A CLI subcommand is its own decision with DM A66's consequence stated (D-4365 (vi)).
+# Facts read (file:line, main 3871b3d1): events records.py :89-92; decisions :118-121; acceptance keys :122-125 (next_task_state, profile_used, uncovered, rests_on_ai); profile item keys :126; source classes :99-101; audit copies :111-114;
+#  LineReport(number, event, findings, duplicate_of) :163-169 (event is None when the line has a finding); LogReport(text_findings, lines) :180-194; check_log :806-827 (bytes or str; raises TypeError otherwise); a duplicate is an identical repeat, a repeat with other content is a finding :783-789;
+#  corrects must name an earlier event_id :795-798; the retry counter (spec-01 :73); fence refusal record eventlog.py :56, :117-122 (evidence_type 'refused_submission'), :217-229; governor.py :232, :408-410, :450-482 (decision and next_task_state; ACCEPT not reached at L1); drift warnings: drift.detected is emitted by scope_drift.py :68 and scope_reconcile.py :105, violation.detected by drift.py :51 and violation.py.
+# Metric statuses (D-4365): mechanical / needs_judgement (AI-judged under CR-002 K6, master-plan :112) / no_source (uncovered, concept :819, no estimate).
+task: TASK-112
+contract_version: v1
+task_type: implementation
+objective: >-
+  A new module src/aieos_bootstrap/metrics_report.py holds a pure function report(log) that takes an event log (bytes, bytearray or str), reads it with records.check_log, and returns a mapping with exactly the keys ok, findings, corrections_present and metrics.
+  If check_log gives any finding (text or line), ok is false, findings lists them as strings and metrics is empty (fail closed: no figure from a log that is not clean). Otherwise ok is true and metrics holds the eight metrics of concept
+  section 12, each as a mapping with status (mechanical, needs_judgement or no_source), the figures its definition gives, sources (event types and payload keys with file:line) and limits (plain words); a metric with status
+  no_source carries no value of its own (a context count sits under its own named key, AC3). Duplicate lines (duplicate_of not None) are ignored; the function reads no clock, no file and no environment, and raises nothing but the TypeError of an argument that check_log refuses (anything but bytes, bytearray or str, records.py :812-817).
+traces_to:
+  - docs/plan/m8-plan.md#8
+  - docs/plan/master-plan.md#8
+  - AIEOS-concept.md#12
+  - docs/specs/spec-01-state-and-event-model.md#5
+  - docs/specs/spec-01-state-and-event-model.md#6
+input_state:
+  # base_commit is the head of main when the contract is approved (now 3871b3d19c75fb45592f49c92a77b68933123ee3); the executor of commit C refuses unless it equals HEAD, refs/heads/main and refs/remotes/origin/main; commit C has it as its one parent.
+  base_commit: 3871b3d19c75fb45592f49c92a77b68933123ee3
+  # TASK-001: records.py, its check_log and the form of events and records (TASK-001.yaml objective); TASK-004: governor.evaluate, which makes the decision.acceptance payloads (decision, next_task_state, profile_used, missing_gates, failed_gates, blocking: TASK-004.yaml :180-181);
+  # TASK-007: eventlog.py, the writer of the log and eventlog.refusal_record, the fence refusal form; TASK-029: the risk_class audit-copy records (TASK-029.yaml objective).
+  depends_on: [TASK-001, TASK-004, TASK-007, TASK-029]
+  intent_versions:
+    # sha256 of each file at base_commit, filled by script (fill script) at the approval request; one key for each file the contract depends on (the four depends_on task files) and each text it traces to or is bound by
+    docs/specs/spec-01-state-and-event-model.md: c79897a1f82590046e1f49c3753e934e0b3df2893f0c627dd6ac90c8b8c6eebb
+    docs/specs/spec-02-aieos-file-format.md: e7c427b06775069a43d5e6d317a61c1974e5be921aee08a581c1918572a37a61
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/plan/m8-plan.md: a8555c54a02a5d2ded782e1f6e198ad86654e617e0d958de8a647a3cddb0f65b
+    docs/plan/master-plan.md: 334334b6427802822caa97972d5ba7ddbba93476ff968b769f10a4e95984aa02
+    AIEOS-concept.md: 19cfa266334aa20d1ac1bc15f5cf92d0fc6d3bbbd98c13cfcb42ad6fd5a8357c
+    docs/tasks/TASK-001.yaml: b6e43e7341915796dd5f5a793c184236a6f99dbdba76b5010d16acbd9031d4c9
+    docs/tasks/TASK-004.yaml: d74f2af9435f7bad11f3eaa876689bbff201c9b5040da0c6d5bb3a60391b1130
+    docs/tasks/TASK-007.yaml: 453717fa8363d132765a3f64d4b6cfec52612fb3031e119e0f0f2b7dd5e2ec31
+    docs/tasks/TASK-029.yaml: 2220d91ed18944b80a49cdfef767f31dcf46a6e32d530cc45607dc84b8a14840
+write_set:
+  paths:
+    # the pure function and its helpers (a new module: no import pin; the workflow rules for new src code, aieos-checks.yml :1648-:1696, apply and are read in the pin scan, the first step)
+    - src/aieos_bootstrap/metrics_report.py
+    # unit tests on synthetic logs built in the test, one test per article of the definitions below; every test names 'TASK-112 AC' in its docstring
+    - tests/unit/test_metrics_report.py
+    # a test that lists the src modules, or a workflow rule that names modules, may join only by a contract revision after the pin scan names it
+  # reasons: the module is the whole feature; the test file is its evidence. No other file changes.
+read_set: {paths: [docs/plan/, docs/specs/, AIEOS-concept.md, src/aieos_bootstrap/, tests/, .github/workflows/], interfaces: [aieos_bootstrap.records.check_log, aieos_bootstrap.records.LogReport, aieos_bootstrap.records.LineReport], schemas: []}
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - bench/**
+  - native/**
+  - docs/**
+  - tests/conformance/**
+  - tests/run_tests.py
+  - src/aieos_bootstrap/writer.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/cli.py
+  - src/aieos_bootstrap/launcher.py
+  - src/aieos_bootstrap/handoff_file.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/mcp_server.py
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The frame. report(log) reads with records.check_log and no second parser. Any text finding or line finding gives ok false, the findings as strings (line number and finding) and metrics empty. An argument that check_log refuses (anything but bytes, bytearray or str, records.py :812-817) raises its TypeError. Lines with duplicate_of not None are skipped
+      (an identical repeat; a repeat with other content is already a finding). Lines that carry corrects are counted as they stand. The report does not apply corrections, as base_inputs.py :40 does not read corrects either. Their number is reported as the top-level key corrections_present (beside ok, findings and metrics; a mapping with the number of such lines and the sorted event ids that are corrected, the corrects targets, so that a double count is visible; with ok false it is null); every metric's limits say that corrections are not applied and that a corrected and a correcting decision are both counted. Every join of an event to a task uses the envelope task_id (records.py :97); an event without a task_id is counted apart as without_task_id and is attributed to no task. The metrics are separate cuts of the same events: no figure is added to another metric's figure, and an event may appear under two metrics' names (for example a REWORK decision in caught_rate and in rework_before_acceptance). The result's key order and the metric names are fixed: caught_rate, first_pass_acceptance, drift_false_positive_rate, escaped_defects, human_time_per_task, evidence_coverage, cost_per_accepted_task, rework_rate. Each metric has the keys status, sources, limits and its own figures (AC2 to AC4). The pin scan, the first step, confirms that LineReport.event is the parsed envelope (event_id, type, appended_at, seq, task_id, payload, fencing_token, corrects) for every line without findings; if it is not, the task stops and the choice comes back to the decision agent.
+  - AC2: >-
+      Caught rate (status mechanical for the counts; its sub-field reason_share has status needs_judgement and no number). submissions = the task.submitted events whose payload compensating is not true. The outcome of a submission is read from the first decision.acceptance of the same task_id after it and before that task's next task.submitted, by its next_task_state (records.py :122-125; at L1 the governor never gives decision ACCEPT, governor.py :474-475, and an accepted task has decision NEEDS_REVIEW with next_task_state ACCEPTED, :476-482): blocked = REWORK, REJECTED or ESCALATED; not_blocked = IN_REVIEW or ACCEPTED, which at L1 means waiting for approval or approved, not accepted, and is split by the decision value into not_blocked_needs_review (NEEDS_REVIEW, governor.py :477) and not_blocked_insufficient_human (INSUFFICIENT_EVIDENCE whose only missing types are human ones, governor.py :470-473); undecided = no such decision; a decision whose decision is null (an error record, governor.py :232) is counted as undecided_error and is not in blocked. The headline is blocked out of submissions, with not_blocked (and its split), undecided and undecided_error beside it. violation_detected (the count of violation.detected events) and fence_refusals (the count of record.added events whose payload evidence_type is 'refused_submission', the form of eventlog.refusal_record, eventlog.py :117-122) are two further counts, never added into the headline; the pin scan confirms from eventlog.py :217-229 that a refused submission is not appended as a task.submitted, and if it is, the task stops and the choice comes back to the decision agent. compensating_submissions is a count of its own. The share of blocked
+      submissions with a correct reason is reported as 'needs judgement (AI-judged, CR-002 K6), not estimated' and carries no number. First-pass acceptance (status mechanical; concept :815, every gate passed at the first submission): the denominator is the tasks with at least one non-compensating task.submitted whose first such submission has a decision.acceptance before the task's next task.submitted; the numerator is the tasks whose first decision.acceptance in that same window (after the first submission and before the task's next task.submitted) has decision NEEDS_REVIEW or ACCEPT (rows 4 and 5 of the governor, reached only when no earlier row applied, governor.py :474-477) with missing_gates, failed_gates and blocking all empty and every profile_used item's missing_types empty (governor.py :430-431, :450-455, :493-495). Tasks with no task.submitted are counted and listed (task ids sorted). Tasks whose first submission has no decision yet, and tasks whose first decision in the window has decision null (an error record, governor.py :232), are counted apart as without_decision and first_decision_error. None of these groups is in the denominator. The raw figure is reported as it is.
+  - AC3: >-
+      Drift, escaped defects and human time. Drift false positive rate: status no_source for the rate; drift_warning_counts (a context count under its own name, not the rate) gives the counts by event type, drift.detected and violation.detected separately (the envelope has no emitter field, so the split is by event type only; the sources name the emitters: drift.detected by scope_drift.py :68 and scope_reconcile.py :105, violation.detected by drift.py :51 and violation.py), counted apart and never summed; the same violation.detected events are also the violation_detected count of caught_rate, and the two are never added;
+      the limit says that no record in the log judges a warning right or wrong. Escaped defects: status no_source, no number; the limit says that no event or record says a defect was found after DONE. Human time per task by risk: status no_source, no number; beside it, under the key human_authority_records_by_risk_class (a name that cannot be read as time), the count of record.added events whose payload source_class is human_authority, grouped by the risk class of the task (the latest risk_class audit-copy record of the task, the last in log order: a record.added whose payload evidence_type is 'risk_class', whose source_class is one of the audit-copy sources and whose subject is the task, its payload key risk_class giving the class, records.py :106-114; a task with none is grouped unknown); the limit says that in the self-build most approvals are the decision agent's, and the count is not a time.
+  - AC4: >-
+      Evidence coverage, cost and rework. Evidence coverage (status mechanical): for the LAST decision.acceptance of each task whose decision is not null and whose profile_used is non-empty (governor.py :450-455), a dimension is satisfied when its item has missing_types empty (records.py :126; the governor's reading is checked in the pin scan, governor.py, L-0034); the figures are the dimensions satisfied out of the dimensions required over those decisions, and the union of the payloads' uncovered lists, sorted, so that uncovered zones are listed (concept :819); a last decision with a null decision or an empty or absent profile_used is counted apart. Cost per accepted task (status mechanical for wall_seconds; its sub-field tokens has status no_source and no number; an accepted task here means a task that has a task.done): wall_seconds = appended_at of the task's first task.approved to appended_at of its task.done, for the tasks that have both (the core's UTC time, spec-01 :49), as a list per task id and the median and maximum (null for an empty set); tasks with a task.done but no task.approved, and tasks with neither done, are counted apart and excluded;
+      the figure is labelled wall time that includes idle time; tokens are no_source with no number. Rework (status mechanical under its own name rework_before_acceptance): per task the number of decision.acceptance events with next_task_state REWORK since the task's last task.approved (spec-01 :73; for a task with a decision and no task.approved in the log the window starts at the first line and the task is counted in without_approved) and the total; the concept's rework rate (DONE tasks reopened or reverted) is status no_source in metric rework_rate and carries no number; the rework_before_acceptance figure is never placed in rework_rate.
+  - AC5: >-
+      Purity and honesty. report is a function of its argument only: no import beyond the standard library and aieos_bootstrap.records, no name open, exec, eval, compile or input, no one-argument .replace, no '.aieos' string, no clock or environment read, no write; the result is the same for the same bytes. Every no_source metric has no numeric value of its own (its value field is null); a context count (drift_warning_counts, human_authority_records_by_risk_class) sits under its own named key and is labelled a count, not the metric; every needs_judgement figure is a label, not a number; every status is one of the three words. The words MEASURED, ENFORCED and GUARANTEED do not appear in the module (OPS-003). The module docstring says in plain words: the figures are descriptive over a small self-build log, the judged parts are AI-judged under CR-002 K6 and no basis for the product's L1 default or any level, and no measurement of the trust boundary is involved (master-plan :113).
+  - AC6: >-
+      Pins and no write-path change. The pin scan (the first step, reads only) names every test or workflow rule that pins the list of src modules, the module docstrings or the test files; each is amended only by a contract revision. No event type is added; writer.py, eventlog.py, records.py and every write path are not touched (they are in forbidden). Tests build their logs in the test with fixed text; no test writes a file (only the three writer test files may import tempfile and sqlite3, aieos-checks.yml :1564-:1571).
+  - AC7: >-
+      Evidence and CI. Unit tests on synthetic logs cover each AC (a clean log of several tasks with accepted, blocked, rework and approved-done paths; a log with a finding giving ok false and no metrics; a duplicate line; a compensating submission; a task with no submission; a decision without profile_used; human_authority records with and without a risk class; a task accepted at L1 (NEEDS_REVIEW, then NEEDS_REVIEW with next_task_state ACCEPTED); an ESCALATED decision; an error decision (decision null); a line with corrects; a fence refusal record built by eventlog.refusal_record); static analysis and the deterministic rule report no finding; every job and step of aieos-checks and aieos-native succeeds on the accepted commit and on main after the records commit, read by run id; each push and each job-data read is a decision of the decision agent.
+  - AC8: >-
+      The records and acceptance. Per-article records through records.check_record and the governor shadow over a dry list at the approval request, with raw output; expected NEEDS_REWORK at the GOV-003 row as TASK-102 to TASK-111. GOV-003: proposed as a stated departure as TASK-102 to TASK-111; ruled at the C request on the governor shadow's raw output (the compensating controls named in D-4271; DEF-0107 points 2 to 5); the way-2 review and the reviews on Haiku 5.5 only (no other model without the owner; no Fable). Proposed DEF texts (each its own decision, not written here): a record kind that judges a drift warning (metric 3), a defect-found record (metric 4), a human-attention time record (metric 5), a token-count source (metric 7), a reopened-or-reverted event for DONE tasks (metric 8).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+# risk: R3: src/** and tests/** fail closed as high (risk-rules section 2 point 3); no critical rule matches the write set (no docs/specs/**, no .github/**); to be confirmed by script in the approval request.
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1200k, wall_time: 8h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5]}
+  - {gate: G3, check: constitution, args: [AC6, AC7, AC8, INV-001, INV-002, INV-003, INV-004, INV-009, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the risk class is satisfied AND one approval record counts AND the CI runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false: edits to source and tests in the write set; no runtime is launched and no real log is read in this task; running the report on the project's real log is its own later read-only decision.
+owner_kept_act: false
