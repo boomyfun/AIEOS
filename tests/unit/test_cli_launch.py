@@ -65,6 +65,7 @@ class World:
         self.clocks = [NOW, NOW + datetime.timedelta(minutes=5)] if clocks is GOOD else list(clocks)
         self.calls = []
         self.begin_kwargs = []
+        self.handoff_kwargs = []
 
     def _give(self, name, args):
         self.calls.append((name, args))
@@ -93,7 +94,8 @@ class World:
     def finish_outside(self, *args):
         return self._give('finish_outside', args)
 
-    def write_handoff(self, *args):
+    def write_handoff(self, *args, **kwargs):
+        self.handoff_kwargs.append(kwargs)
         return self._give('write_handoff', args)
 
     def starter(self, *args):
@@ -130,8 +132,9 @@ class TASK094AC1Composition(unittest.TestCase):
         self.assertEqual(out['findings'], ['gone_records: one line', 'end: a line'])
 
     def test_the_arguments(self):
-        """TASK-094 AC1: begin, contract_at, finish and write_handoff get the contract's arguments: max_risk None,
-        the lease of LAUNCH_LEASE, the grant's head, the contract's paths, the allowlist [] and commit None."""
+        """TASK-094 AC1 (amended by TASK-111): begin, contract_at, finish and write_handoff get the contract's
+        arguments: max_risk None, the lease of LAUNCH_LEASE, the grant's head, the contract's paths, the allowlist []
+        and commit None, and write_handoff also the grant's token by the keyword fencing_token."""
         world = World()
         launch(world)
         later = NOW + datetime.timedelta(minutes=5)
@@ -141,6 +144,7 @@ class TASK094AC1Composition(unittest.TestCase):
         self.assertEqual(world.args('contract_at'), [(ROOT, HEAD, TASK)])
         self.assertEqual(world.args('finish'), [(ROOT, TASK, SESSION, TOKEN, later, PATHS, [], RECORDER)])
         self.assertEqual(world.args('write_handoff'), [(ROOT, TASK, SESSION, None)])
+        self.assertEqual(world.handoff_kwargs, [{'fencing_token': TOKEN}])
         self.assertEqual(launcher.LAUNCH_LEASE, datetime.timedelta(hours=2))
 
     def test_a_base_is_passed_to_begin_by_keyword(self):
@@ -564,6 +568,58 @@ class TASK094AC6Docs(unittest.TestCase):
         self.assertGreater(len(tests), 20)
         for node in tests:
             self.assertIn('TASK-094 AC', ast.get_docstring(node) or '', node.name)
+
+
+class TASK111Token(unittest.TestCase):
+    def test_the_token_goes_by_keyword(self):
+        """TASK-094 AC1 (amended by TASK-111): write_handoff gets the same four positional arguments as before and the
+        grant's token as the keyword fencing_token."""
+        world = World()
+        launch(world)
+        self.assertEqual(world.args('write_handoff'), [(ROOT, TASK, SESSION, None)])
+        self.assertEqual(world.handoff_kwargs, [{'fencing_token': TOKEN}])
+
+    def test_the_finish_outside_branch_passes_the_token_too(self):
+        """TASK-094 AC1 (amended by TASK-111): after a grant whose contract cannot be read, the end is finish_outside
+        and write_handoff still gets the grant's token, as it is (a token that is not a mapping included)."""
+        world = World(contract_at=RuntimeError('c'))
+        out = launch(world)
+        self.assertIn('finish_outside', world.names())
+        self.assertEqual(world.handoff_kwargs, [{'fencing_token': TOKEN}])
+        self.assertEqual(out['reason'], 'contract')
+        world = World(begin=granted(fencing_token='junk'))
+        launch(world)
+        self.assertEqual(world.handoff_kwargs, [{'fencing_token': 'junk'}])
+
+    def test_no_handoff_is_asked_for_without_a_grant(self):
+        """TASK-094 AC2 (amended by TASK-111): a refusal at the start, a start that is not a mapping, a bad first
+        clock and an argument refusal each call no write_handoff."""
+        world = World(begin=granted(result='refused', reason='base'))
+        launch(world)
+        self.assertEqual(world.handoff_kwargs, [])
+        world = World(begin='not a mapping')
+        launch(world)
+        self.assertEqual(world.handoff_kwargs, [])
+        world = World(clocks=[RuntimeError('c1')])
+        launch(world)
+        self.assertEqual(world.handoff_kwargs, [])
+        world = World()
+        launch(world, base='bad base!')
+        self.assertEqual(world.handoff_kwargs, [])
+
+    def test_a_handoffs_findings_join_the_launch_findings(self):
+        """TASK-094 AC2 (amended by TASK-111): the findings of a handoff "written" or "none" (str items only) join the
+        launch's findings and the launch stays "done"; a refused handoff keeps reason "handoff" and its findings."""
+        for result in ('written', 'none'):
+            with self.subTest(result=result):
+                out = launch(World(write_handoff=handoff(result, findings=('lookup: a finding', 7))))
+                self.assertEqual((out['result'], out['reason']), ('done', None))
+                self.assertIn('lookup: a finding', out['findings'])
+                self.assertNotIn(7, out['findings'])
+        out = launch(World(write_handoff=handoff('refused', 'claims', findings=('lookup: a finding',))))
+        self.assertEqual((out['result'], out['reason']), ('refused', 'handoff'))
+        self.assertIn('handoff: refused claims', out['findings'])
+        self.assertIn('lookup: a finding', out['findings'])
 
 
 if __name__ == '__main__':

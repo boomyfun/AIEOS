@@ -10,19 +10,40 @@ result, path, text and findings: "none" when the session made no handoff (no fil
 text, or "refused" with findings. The text is specification 2 section 5.2's front matter: task, session and commit,
 then the six lists in HANDOFF_LISTS order, each item a JSON string, with no body.
 
-``write(root, task_id, session_id, commit, read_log=None, write_handoff=None)`` reads the log once, composes, and on
-"composed" writes the file once through writer.write_handoff; it returns a mapping with exactly the keys result
-("written", "none" or "refused"), reason, findings and path. Each callee defaults at call time.
+``write(root, task_id, session_id, commit, read_log=None, write_handoff=None, fencing_token=None)`` reads the log once,
+composes, and on "composed" writes the file once through writer.write_handoff; it returns a mapping with exactly the
+keys result ("written", "none" or "refused"), reason, findings and path. Each callee defaults at call time. With a
+fencing_token (a mapping, with commit None; task TASK-111) it first looks in the same log for the commit the session
+submitted: the task.submitted events of the task that carry that token and are not compensating. Exactly one such
+event with a commit id in form gives that commit; none gives commit None with no finding; more than one such event, a
+matching event repeated under one event id with other content, a commit out of form, a token that cannot be written as
+canonical JSON or a log line that cannot be read gives commit None and a finding, and the findings ride in the result.
 
 Stated limits (the contract's):
-- launcher.launch_outside (task TASK-094) calls write after the launcher's end with commit None, so nothing calls
-  write after a submission, and the shipped command, which has no runtime starter, does not write the handoff file
-  in a real session;
+- launcher.launch_outside (task TASK-094) calls write after the launcher's end, and since task TASK-111 it passes the
+  grant's fencing token, so the commit the session submitted is found in the log; the shipped command, which has no
+  runtime starter, does not write the handoff file in a real session;
+- the match is on the fence token only: a compensating submission (recovery's) is never matched; a session that
+  submitted but made no handoff call gets no file; with two matches the file is written with commit null and a
+  finding; the lookup reads the log's lines as records.check_log does (a repeated key, NaN and Infinity refused) but
+  skips blank lines, does not refuse a CR byte (JSON takes it as white space; a byte-order mark at the start of a line
+  is refused by the JSON reader and gives a finding), does not check the token's form, and checks a repeated event id
+  only among the events that carry the token (records.check_log refuses the whole log for an event id repeated with
+  other content anywhere); it reads each line's JSON only, so it does not check what check_log also checks (the
+  envelope keys, seq continuity, appended_at, the forms of task_id, token and payload): a matching task.submitted that
+  check_log would flag still gives its commit, and a task.submitted of the task that carries the token but whose payload
+  is not an object, or whose compensating is not the boolean false, is not matched and gives no finding (check_log
+  flags it); eventlog.append itself refuses a task.submitted with no fencing_token at the fence (eventlog.py
+  _needs_lease, lines 112-114), so such an event is not appended; it takes a commit id as 40 lowercase hexadecimal characters only
+  (records.py also accepts 64); a commit with no usable AIEOS-Fence trailer leaves no event with the grant's token, so
+  the commit is null; abnormal ends still write none; a grant whose token is None (an out-of-form grant) takes the
+  path without a token: commit null and no finding;
 - the file is not committed by the core; how it reaches Git and how it stays out of a later session's commit stay
   open;
 - the Work Order's reader reads the last handoff elsewhere at the base, so the reader's place and the last handoff
   stay open (DEF-0095);
-- it writes the caller's commit as given, since the log ties no submission to a session;
+- with no fencing_token it writes the caller's commit as given, since the log ties no submission to a session without
+  a token;
 - a handoff cut off at any point is composed as a complete one with fewer items, since the records carry no item
   count;
 - create-only is the writer's size check after opening in append mode, not an exclusive create;
@@ -165,12 +186,80 @@ def _str_items(value):
     return []
 
 
-def write(root, task_id, session_id, commit, read_log=None, write_handoff=None):
+def _pairs(pairs):
+    """The object hook of the lookup: a repeated key in one object is refused (records.py's reading)."""
+    keys = [k for k, _ in pairs]
+    if len(set(keys)) != len(keys):
+        raise ValueError('a repeated key')
+    return dict(pairs)
+
+
+def _constant(name):
+    """The constant hook of the lookup: NaN and Infinity are refused (records.py's reading)."""
+    raise ValueError('a non-finite constant')
+
+
+def _canonical(value):
+    """The text two fencing tokens are compared by (eventlog.py's form)."""
+    return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=True, allow_nan=False)
+
+
+def submitted_commit(log, task_id, token):
+    """(the commit the session submitted or None, findings) from the log's bytes (task TASK-111): the task.submitted
+    events of the task that carry the token and are not compensating; never raises."""
+    if not isinstance(log, bytes):
+        return None, ['lookup: the log is not bytes']
+    try:
+        want = _canonical(token)
+    except Exception:
+        return None, ['lookup: the fencing token cannot be written as canonical JSON']
+    seen = {}
+    for number, raw in enumerate(log.split(b'\n'), 1):
+        if not raw.strip():
+            continue
+        try:
+            event = json.loads(raw.decode('utf-8'), object_pairs_hook=_pairs, parse_constant=_constant)
+        except Exception:
+            return None, ['lookup: log line %d cannot be read' % number]
+        if not isinstance(event, dict):
+            return None, ['lookup: log line %d is not a JSON object' % number]
+        payload = event.get('payload')
+        if (event.get('type') != 'task.submitted' or event.get('task_id') != task_id or not isinstance(payload, dict)
+                or payload.get('compensating') is not False or 'fencing_token' not in event):
+            continue
+        try:
+            same = _canonical(event['fencing_token']) == want
+            identity = json.dumps({k: v for k, v in event.items() if k not in ('seq', 'appended_at')}, sort_keys=True)
+        except Exception:
+            return None, ['lookup: log line %d cannot be compared' % number]
+        if not same:
+            continue
+        event_id = event.get('event_id')
+        if not isinstance(event_id, str):
+            return None, ['lookup: log line %d has no event id' % number]
+        if event_id in seen and seen[event_id][0] != identity:
+            return None, ['lookup: an event id is repeated with other content']
+        seen.setdefault(event_id, (identity, payload.get('commit')))
+    if not seen:
+        return None, []
+    if len(seen) > 1:
+        return None, ['lookup: more than one task.submitted of the task carries the token']
+    commit = list(seen.values())[0][1]
+    if not (isinstance(commit, str) and _HEX40.fullmatch(commit)):
+        return None, ['lookup: the commit of the task.submitted is out of form']
+    return commit, []
+
+
+def write(root, task_id, session_id, commit, read_log=None, write_handoff=None, fencing_token=None):
     """Read the log once, compose, and write the file once through the writer on "composed"; never raises."""
     try:
         findings = _argument_findings(task_id, session_id, commit)
         if not (isinstance(root, str) and root):
             findings.append('argument: root')
+        if fencing_token is not None and not isinstance(fencing_token, dict):
+            findings.append('argument: fencing_token')
+        elif fencing_token is not None and commit is not None:
+            findings.append('argument: commit with a fencing_token')
         for name, callee in (('read_log', read_log), ('write_handoff', write_handoff)):
             if callee is not None and not callable(callee):
                 findings.append('argument: %s' % name)
@@ -184,22 +273,25 @@ def write(root, task_id, session_id, commit, read_log=None, write_handoff=None):
             return _write_result('refused', 'log', ['log: the read raised %s' % type(e).__name__])
         if not isinstance(log, bytes):
             return _write_result('refused', 'log', ['log: the read gave no bytes'])
+        lookup = []
+        if fencing_token is not None:
+            commit, lookup = submitted_commit(log, task_id, fencing_token)
         composed = compose(log, task_id, session_id, commit)
         if composed['result'] == 'none':
-            return _write_result('none')
+            return _write_result('none', findings=lookup)
         if composed['result'] != 'composed':
-            return _write_result('refused', 'claims', composed['findings'])
+            return _write_result('refused', 'claims', composed['findings'] + lookup)
         try:
             answer = put(root, task_id, session_id, composed['text'])
         except Exception as e:
-            return _write_result('refused', 'write', ['write: the write raised %s' % type(e).__name__])
+            return _write_result('refused', 'write', ['write: the write raised %s' % type(e).__name__] + lookup)
         try:
             done = isinstance(answer, writer.StoreResult) and answer.result == 'done'
             more = [] if done else _str_items(getattr(answer, 'findings', None))
         except Exception as e:
-            return _write_result('refused', 'write', ['write: an answer that raised %s' % type(e).__name__])
+            return _write_result('refused', 'write', ['write: an answer that raised %s' % type(e).__name__] + lookup)
         if done:
-            return _write_result('written', path=composed['path'])
-        return _write_result('refused', 'write', ['write: not done'] + more)
+            return _write_result('written', path=composed['path'], findings=lookup)
+        return _write_result('refused', 'write', ['write: not done'] + more + lookup)
     except Exception as e:
         return _write_result('refused', 'argument', ['write: an unexpected %s' % type(e).__name__])

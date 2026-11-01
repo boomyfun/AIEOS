@@ -3,11 +3,12 @@ store, a session, a grant, appends under the lease, a refused submission recorde
 bytes and the store's held leases, and expiry."""
 
 import datetime
+import json
 import os
 import tempfile
 import unittest
 
-from aieos_bootstrap import records, recovery, writer
+from aieos_bootstrap import handoff_file, launcher, read_set_record, records, recovery, submit, writer
 
 UTC = datetime.timezone.utc
 T0 = datetime.datetime(2026, 10, 11, 12, 0, 0, tzinfo=UTC)
@@ -894,6 +895,59 @@ class RunEndToEnd(unittest.TestCase):
             self.assertEqual(rc, 1, out)
             self.assertIn('finding: run: refused layout\n', out)
             self.assertFalse(os.path.lexists(os.path.join(root, writer.STATE_DIR)))
+
+
+class SubmissionThenHandoffFiles(unittest.TestCase):
+
+    def test_an_end_after_a_submission_is_done_and_the_handoff_holds_the_commit(self):
+        """TASK-111 AC3: over a real temporary store: a session is granted a lease, makes a handoff claim, submits a
+        commit (submit.submit with a stand-in for the git read only), which releases the lease; launcher.end then takes
+        the "gone" path and gives "done"; handoff_file.write with the grant's token writes the handoff file whose
+        front matter holds the submitted commit."""
+        task = 'TASK-111'
+        sub = '3' * 40
+        with tempfile.TemporaryDirectory() as root:
+            store = writer.open_store(root)
+            self.assertEqual(writer.start_session(root, 's-1', 'agent-1', T0).result, 'done')
+            self.assertEqual(writer.append_event(root, 'task.drafted', {'contract_version': 'v1', 'contract_hash': H64},
+                                                 'ev-1', T0, REC, task_id=task).result, 'appended')
+            lease = writer.grant_lease(root, task, 'READY', 'agent-1', 's-1', T0, T0 + datetime.timedelta(hours=1)).value
+            token = lease['fencing_token']
+            claim = {'record_id': 'mcp-claim/done-1', 'fact_kind': 'claim', 'source_class': 'agent_declared',
+                     'recorder': 'aieos mcp_server, session s-1', 'subject': task, 'session': 's-1', 'text': 'did it',
+                     'refers_to': 'handoffs/%s-s-1.md#done/1' % task}
+            self.assertEqual(writer.append_event(root, 'record.added', claim, 'ev-claim',
+                                                 T0 + datetime.timedelta(minutes=1), REC, task_id=task,
+                                                 fencing_token=token).result, 'appended')
+            message = 'Work\n\nbody\n\nAIEOS-Task: %s\nAIEOS-Fence: %s:%d\n' % (task, store['epoch'], token['counter'])
+            commit_bytes = ('tree %s\nauthor A <a@b.c> 1 +0000\ncommitter A <a@b.c> 1 +0000\n\n%s' % ('4' * 40, message)
+                            ).encode('utf-8')
+
+            def read(repo, args, *rest):
+                out = b'commit\n' if args[1] == '-t' else commit_bytes
+                return {'exit': 0, 'out': out, 'err': b'', 'error': None}
+
+            sent = submit.submit(root, root, sub, task, 'ev-sub', REC, T0 + datetime.timedelta(minutes=2), read=read)
+            self.assertEqual((sent['result'], sent['findings']), ('submitted', []))
+            self.assertIsNone(writer.held_lease(root, task))
+            # the recorder must hold the session id (read_set_record._gone_findings refuses otherwise), as the real callers
+            # and test_launcher_end.py build it
+            ended = launcher.end(root, task, 's-1', token, T0 + datetime.timedelta(minutes=3), [], [],
+                                 'aieos-launcher (integration) s-1')
+            self.assertEqual((ended['result'], ended['reason'], ended['path']), ('done', None, 'gone'))
+            # the record by observe_gone (the real one), with the reason of a gone session
+            self.assertEqual(ended['record']['result'], 'written')
+            self.assertIn(read_set_record.GONE_WHY[1], json.dumps(ended['record'], sort_keys=True))
+            # adapter.end's release refusal ("none": the submission released the lease) is no error
+            self.assertEqual((ended['end']['result'], ended['end']['released']), ('done', None))
+            self.assertEqual([f for f in ended['end']['findings'] if f.startswith('release: nothing released (')],
+                             ['release: nothing released (none)'])
+            got = handoff_file.write(root, task, 's-1', None, fencing_token=token)
+            self.assertEqual((got['result'], got['findings']), ('written', []))
+            with open(os.path.join(root, writer.STATE_DIR, 'handoffs', '%s-s-1.md' % task), 'rb') as f:
+                text = f.read().decode('utf-8')
+            self.assertIn('commit: "%s"\n' % sub, text)
+            self.assertIn('  - "did it"\n', text)
 
 
 if __name__ == '__main__':

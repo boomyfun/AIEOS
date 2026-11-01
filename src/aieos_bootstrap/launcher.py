@@ -199,8 +199,17 @@ outside the runtime and returns a mapping with exactly LAUNCH_KEYS; it never rai
 max_risk None, so it grants nothing until a measured tier backs a declaration; on a grant it reads the contract's write
 set by base_inputs.contract_at at the grant's head, calls the caller's starter with a copy of the environment, ends the
 session in every case after a grant (end, or end_outside where end cannot take the session: launch_outside is a second
-caller of end_outside beside `aieos end`), and writes the handoff file by handoff_file.write, with commit None, after
-an end that gave "done". The shipped command passes no starter, so it starts no runtime. launch_outside reads the
+caller of end_outside beside `aieos end`), and writes the handoff file by handoff_file.write after an end that gave
+"done", passing the grant's fencing token by the keyword fencing_token (task TASK-111) so that the commit the session
+submitted is found in the event log (handoff_file.py's docstring states the lookup and its limits); the handoff's
+findings, for "written" and "none" as for a refusal, join the launch's findings. A session that submitted ends by the
+"gone" path, because the submission released its lease first; that is open (specification 7 section 7); the read-set
+record of such a session carries the reason 'lease gone (released or expired)', and task TASK-111 changes no record.
+With two task.submitted events that carry the token the launch still reports "done", with the lookup's finding among its
+findings and the commit null. A grant whose token is None (an out-of-form grant with a str session id) takes
+handoff_file.write's path without a token: commit null and no finding; a grant token that is neither None nor a mapping
+is refused by handoff_file.write with reason "argument" and handled as any refused handoff. The shipped
+command passes no starter, so it starts no runtime. launch_outside reads the
 caller's clock twice and calls the caller's starter, the two exceptions to "reads no clock" and "starts no process but
 through gitread" above: the starter does whatever the caller's code does; the core's own code starts no process. A
 BaseException from the starter is re-raised after the end and the handoff.
@@ -1127,7 +1136,7 @@ def _launch_finish(state, clock, finish, finish_outside, write_handoff):
         findings.append(_LAUNCH_NOT_WRITTEN)
     else:
         try:
-            got = write_handoff(root, task_id, session_id, None)
+            got = write_handoff(root, task_id, session_id, None, fencing_token=state['token'])
         except Exception as exc:
             got = None
             findings.append('handoff: a step raised %s' % type(exc).__name__)
@@ -1141,6 +1150,8 @@ def _launch_finish(state, clock, finish, finish_outside, write_handoff):
             if handoff is not None:
                 findings.append('handoff: %s %s' % (handoff.get('result'), handoff.get('reason')))
                 findings.extend(_launch_strs(handoff.get('findings')))
+        else:
+            findings.extend(_launch_strs(handoff.get('findings')))
     return _launch_result('done' if reason is None else 'refused', reason, findings, session_id, state['started'],
                           state['run'], ended, handoff)
 
