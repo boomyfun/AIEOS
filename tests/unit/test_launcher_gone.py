@@ -108,8 +108,8 @@ def run(listing=(S1,), **answers):
 
 
 def ok_head(repo, args, timeout=30):
-    """HEAD for every form but the status form (TASK-109), which answers clean."""
-    out = b'' if args[0] == 'status' else (HEAD + '\n').encode('ascii')
+    """HEAD for every form but the status form (TASK-109) and the config form (TASK-110), which answer clean."""
+    out = b'' if args[0] in ('status', 'config') else (HEAD + '\n').encode('ascii')
     return {'exit': 0, 'out': out, 'err': b'', 'error': None}
 
 
@@ -370,12 +370,15 @@ class TASK090AC6Findings(Base):
 
 class TASK090AC6TheRootStep(Base):
     def test_a_gone_session_is_processed_before_a_root_non_grant(self):
-        """TASK-090 AC6 and TASK-090 AC4 (amended by TASK-109): with one gone session listed and a dirty root, the gone
-        session's callees come first, then the expiry, then the three reads (HEAD, the base tip and the status, the
-        status the third); the result is "not granted" with reason "root", the gone session's line comes first in the
-        findings, and read_log, adapter.start and adapter.end are never called."""
+        """TASK-090 AC6 and TASK-090 AC4 (amended by TASK-109 and TASK-110): with one gone session listed and a dirty root,
+        the gone session's callees come first, then the expiry, then the four reads (HEAD, the base tip, the
+        configuration and the status, the status the fourth); the result is "not granted" with reason "root", the gone
+        session's line comes first in the findings, and read_log, adapter.start and adapter.end are never called."""
         def dirty(repo, args, timeout=30):
-            out = b'?? x\0' if args[0] == 'status' else (HEAD + '\n').encode('ascii')
+            if args[0] == 'config':
+                out = b''
+            else:
+                out = b'?? x\0' if args[0] == 'status' else (HEAD + '\n').encode('ascii')
             return {'exit': 0, 'out': out, 'err': b'', 'error': None}
         c = Calls({'read_sessions': store(value=[S1]), 'session_leases': leases([]),
                    'stored_reads': store(value=list(READS)), 'observe_gone': recorded(),
@@ -388,11 +391,42 @@ class TASK090AC6TheRootStep(Base):
         self.assert_form(r)
         self.assertEqual((r['result'], r['reason']), ('not granted', 'root'))
         self.assertEqual(c.names(), ['read_sessions', 'session_leases', 'stored_reads', 'observe_gone',
-                                     'remove_reads', 'expire', 'read', 'read', 'read'])
-        self.assertEqual(c.of('read')[2][1][1][0], 'status')
+                                     'remove_reads', 'expire', 'read', 'read', 'read', 'read'])
+        self.assertEqual(c.of('read')[2][1][1][0], 'config')
+        self.assertEqual(c.of('read')[3][1][1][0], 'status')
         self.assertTrue(r['findings'][0].startswith('gone_records: %s: ' % S1), r['findings'])
         self.assertTrue(any(f.startswith('root: 1 entries (') for f in r['findings'][1:]), r['findings'])
         self.assertIn("root: b'x'", r['findings'])
+        self.assertIsNone(r['environment'])
+        self.assertEqual(r['head_commit'], HEAD)
+        for name in ('read_log', 'start', 'end'):
+            self.assertEqual(c.of(name), [], name)
+
+    def test_a_gone_session_is_processed_before_a_config_non_grant(self):
+        """TASK-090 AC6 and TASK-090 AC4 (amended by TASK-110): with one gone session listed and a configuration that
+        names a filter key, the gone session's callees come first, then the expiry, then three reads (HEAD, the base tip
+        and the configuration); the result is "not granted" with reason "root", the gone session's line comes first in
+        the findings, the key follows, the status is never read, and read_log, adapter.start and adapter.end are never
+        called."""
+        def filtered(repo, args, timeout=30):
+            out = b'filter.lfs.clean\nvalue\0' if args[0] == 'config' else (HEAD + '\n').encode('ascii')
+            return {'exit': 0, 'out': out, 'err': b'', 'error': None}
+        c = Calls({'read_sessions': store(value=[S1]), 'session_leases': leases([]),
+                   'stored_reads': store(value=list(READS)), 'observe_gone': recorded(),
+                   'remove_reads': store(value=2), 'expire': [], 'read': filtered, 'read_log': b'', 'start': None,
+                   'end': None})
+        kw = {name: c.make(name, real) for name, real in REAL}
+        r = launcher.start(ROOT, REPO, TASK, 'unit', 'critical', 'agent-1', REC, NOW, LATER,
+                           read=c.make('read', gitread.run), read_log=c.make('read_log', writer.read_log),
+                           start=c.make('start', adapter.start), end=c.make('end', adapter.end), **kw)
+        self.assert_form(r)
+        self.assertEqual((r['result'], r['reason']), ('not granted', 'root'))
+        self.assertEqual(c.names(), ['read_sessions', 'session_leases', 'stored_reads', 'observe_gone',
+                                     'remove_reads', 'expire', 'read', 'read', 'read'])
+        self.assertEqual(c.of('read')[2][1][1][0], 'config')
+        self.assertTrue(r['findings'][0].startswith('gone_records: %s: ' % S1), r['findings'])
+        self.assertIn('root: configuration names filter driver or work tree keys: 1', r['findings'][1:])
+        self.assertIn("root: key b'filter.lfs.clean'", r['findings'])
         self.assertIsNone(r['environment'])
         self.assertEqual(r['head_commit'], HEAD)
         for name in ('read_log', 'start', 'end'):

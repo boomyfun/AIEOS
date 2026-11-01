@@ -1,5 +1,5 @@
 """Integration test of aieos_bootstrap.gitread over this repository's history (task TASK-024, rule R7, AC8): read
-only, with the five pinned forms (the fifth added by TASK-109), on fixed commits of main; it needs the repository's full history (a shallow clone
+only, with the six pinned forms (the fifth added by TASK-109, the sixth by TASK-110), on fixed commits of main; it needs the repository's full history (a shallow clone
 fails it). The results are data about accepted commits: they reopen nothing. Each test names its criteria in its own
 docstring."""
 
@@ -78,6 +78,16 @@ class RepositoryHistory(unittest.TestCase):
         entries, found = launcher._root_entries(r['out'])
         self.assertIsNone(found)
         self.assertIsInstance(entries, list)
+
+    def test_the_config_form_runs_on_this_clone(self):
+        """TASK-024 AC8 and TASK-024 AC1, amended by TASK-110: the config form is accepted, runs on this clone and gives
+        exit 0, no error and bytes that the launcher's parser reads, whatever the clone holds, so CI's git accepts the
+        form; nothing of the answer is compared or shown."""
+        r = gitread.run(ROOT, list(gitread.CONFIG_LIST))
+        self.assertIsNone(r['error'], 'the config form gave an error')
+        self.assertEqual(r['exit'], 0, 'the config form gave a non-zero exit')
+        keys, found = launcher._config_keys(r['out'])
+        self.assertIsNone(found, 'the parser found the answer out of form')
 
 
 if __name__ == '__main__':

@@ -2,7 +2,7 @@
 section 12 point 4; DEF-0030): the first piece of the core's caller, and INV-001's single process wrapper.
 
 INV-001 allows a process only "through one wrapper with a pinned list of allowed executables". This module is that
-wrapper. Its pinned list is [git], and git runs only with one of five read-only subcommands, each in one fixed form:
+wrapper. Its pinned list is [git], and git runs only with one of six read-only subcommands, each in one fixed form:
 
 - rev-parse: ["rev-parse", "--verify", "--end-of-options", <name>], the name an object id, HEAD, or "refs/heads/" followed by
   one branch name that is_base_name accepts (specification 7 revision 5, section 5: the launcher's base-tip check; TASK-106);
@@ -14,10 +14,12 @@ wrapper. Its pinned list is [git], and git runs only with one of five read-only 
   ["status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all", "--ignore-submodules=all", "--", "."],
   followed by exactly one argument, ":(exclude)" and a name that is_state_name accepts (the project-state directory,
   which the caller builds; this module holds no such name);
+- config (TASK-110, DEF-0101, specification 7 revision 8: the launcher's configuration read, made before the status
+  read): the constant CONFIG_LIST, ["config", "--list", "-z"], and nothing else;
 
 where an object id is 40 or 64 lowercase hexadecimal characters. Anything else is refused before any process starts
 (fail closed). A further executable or subcommand is a change to this module and to the workflow's pattern rule for
-it (the CI workflow's revision 8), each under its own decision.
+it (the CI workflow's revision 8, now revision 17), each under its own decision.
 
 ``run(repo, args, timeout)`` starts git with no shell, the standard input closed, a pinned working directory (the
 repository given) and a timeout, and closes git's own ways of starting other programs by fixed options: no pager,
@@ -51,15 +53,27 @@ as given once every entry of it is absolute; on Windows the program search does 
 the refusal of an empty or relative PATH entry closes that route on POSIX only; the repository's own configuration
 is still read by git, and the fixed options override only the keys named above; GIT_NO_LAZY_FETCH is ignored by a
 git older than 2.44, and GIT_CONFIG_GLOBAL by one older than 2.32; core.hooksPath has no test of effect, since none
-of the five subcommands runs a hook; output is not capped in size, and cat-file reads whatever object an id names;
+of the six subcommands runs a hook; output is not capped in size, and cat-file reads whatever object an id names;
 the repository path is the caller's; the parsers check form, not that a commit exists or is reachable;
-no caller exists yet. The fifth form (TASK-109) adds one limit: ``status`` is the first form that can make git start a program
-named in configuration. No repository content can define a filter driver, but a driver named in the clone's own
-.git/config (or a file it includes, or the configuration a linked worktree shares) is started for files whose
-attributes name it when their stat data changed, and this module cannot override driver names it does not know; the
-fixed options above do not close that route. Refusing the launch when .gitattributes at HEAD holds "filter=" was not
-taken (it misses .git/info/attributes and costs a tree read), and neither were -c core.attributesFile and git's
---attr-source (each closes only part of the risk and would change the existing forms and the line-ending handling).
+no caller exists yet (as TASK-024 first stated; the launcher has called this module since TASK-086). The fifth form
+(TASK-109) adds one limit: ``status`` is the first form that can make git start a program named in configuration. No
+repository content can define a filter driver, but a driver named in the clone's own .git/config (or a file it
+includes, or the configuration a linked worktree shares) is started for files whose attributes name it when their stat
+data changed, and this module cannot override driver names it does not know; the fixed options above do not close that
+route. Since TASK-110 the launcher reads the configuration first, with the sixth form, and refuses the launch when a
+key begins with "filter." or equals "core.worktree" (matched on the key text only; the limits of that read are the
+launcher's, in specification 7 revision 8, section 5). The limits of that read, in plain words: (1) the configuration
+and the status are two reads made one after the other, not atomically; (2) a key is matched by its text, never by
+whether a file uses the driver, so a clone that names a driver and uses none is refused; (3) other keys change what
+the status read counts and are not refused (an ignore, sparse-checkout, line-ending or attributes key among them);
+(4) the user's own global ignore file is meant not to be read, and whether git on a machine finds a home directory
+is not checked; (5) if a later git removes the ``--list`` spelling the read fails and the launch is refused (per git's
+documentation, not run here); (6) a bare clone is not refused by the configuration read, since the status read refuses
+it; (7) a partial clone can make a git before 2.44 start a lazy fetch, which can start the programs the transport names
+(per git's documentation, not run here), and refusing partial-clone keys is not done. Three other ways were weighed and are not used, because each
+closes only part of the risk: a read of .gitattributes at HEAD (it misses .git/info/attributes and costs a tree read),
+-c core.attributesFile and git's --attr-source (each would also change the existing forms and the line-ending
+handling).
 INV-001's text is unchanged; this is a limit for its review part, carried to DEF-0101. The name
 rule accepts any name that begins with "." (such as ".github"), so the caller must pass the right name. The status
 form needs a git that honours GIT_OPTIONAL_LOCKS (2.15 or later; that floor is for this variable only) and accepts
@@ -74,13 +88,14 @@ import os
 import re
 import subprocess
 
-SUBCOMMANDS = ('cat-file', 'diff-tree', 'rev-list', 'rev-parse', 'status')
+SUBCOMMANDS = ('cat-file', 'diff-tree', 'rev-list', 'rev-parse', 'status', 'config')
 MAX_TIMEOUT = 120
 OBJECT_ID = re.compile(r'[0-9a-f]{40}|[0-9a-f]{64}')
 DIFF_TREE = ['diff-tree', '--no-commit-id', '--name-only', '-r', '--no-renames', '--no-ext-diff', '--no-textconv', '-z',
              '--root']
 STATUS_HEAD = ['status', '--porcelain=v1', '-z', '--no-renames', '--untracked-files=all', '--ignore-submodules=all', '--',
                '.']
+CONFIG_LIST = ['config', '--list', '-z']
 EXCLUDE_MAGIC = ':(exclude)'
 FIXED_OPTIONS = ['--no-pager', '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=' + os.devnull, '-c',
                  'diff.external=', '-c', 'core.pager=cat']
@@ -152,9 +167,13 @@ def form_error(repo, args, timeout):
         ok = len(args) == 5 and args[1:4] == ['--parents', '-n', '1'] and _is_id(args[4])
     elif sub == 'diff-tree':
         ok = len(args) == len(DIFF_TREE) + 1 and args[:-1] == DIFF_TREE and _is_id(args[-1])
-    else:
+    elif sub == 'status':
         ok = (len(args) == len(STATUS_HEAD) + 1 and args[:-1] == STATUS_HEAD and args[-1].startswith(EXCLUDE_MAGIC)
               and is_state_name(args[-1][len(EXCLUDE_MAGIC):]))
+    elif sub == 'config':
+        ok = args == CONFIG_LIST
+    else:
+        ok = False
     if not ok:
         return 'args are not the fixed form of %s' % sub
     return None

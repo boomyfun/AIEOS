@@ -26,6 +26,7 @@ FORMS = [
     ['cat-file', '-t', C],
     ['rev-list', '--parents', '-n', '1', A],
     DIFF + [A],
+    ['config', '--list', '-z'],
 ]
 
 
@@ -105,8 +106,8 @@ class BranchRefForm(unittest.TestCase):
 
 class PinnedForms(unittest.TestCase):
     def test_each_pinned_form_starts_one_process(self):
-        """TASK-024 AC1 and TASK-024 AC12: each of the six pinned forms is accepted and calls the process function
-        once."""
+        """TASK-024 AC1 and TASK-024 AC12: each of the seven pinned forms of this table (the last, the configuration
+        form, added by TASK-110) is accepted and calls the process function once."""
         for f in FORMS:
             r, s = call(list(f))
             self.assertEqual(len(s.calls), 1, f)
@@ -402,11 +403,13 @@ class StatusForm(unittest.TestCase):
                  '.a b', '.(a)', '!.a', '.a!', ':.a', '^.a', ':(exclude).a']
 
     def test_the_status_form_is_pinned(self):
-        """TASK-024 AC1, amended by TASK-109: the constant STATUS_HEAD is the contract's list, the fifth subcommand is
-        in the pinned tuple, and the options of the form are, as a table, exactly the contract's."""
+        """TASK-024 AC1, amended by TASK-109 and by TASK-110: the constant STATUS_HEAD is the contract's list, the fifth
+        subcommand is in the pinned tuple (the last one is now the sixth, config), and the options of the form are, as
+        a table, exactly the contract's."""
         self.assertEqual(gitread.STATUS_HEAD, STATUS)
         self.assertIs(type(gitread.STATUS_HEAD), list)
-        self.assertEqual(gitread.SUBCOMMANDS[-1], 'status')
+        self.assertEqual(gitread.SUBCOMMANDS[-1], 'config')
+        self.assertEqual(gitread.SUBCOMMANDS[-2], 'status')
         self.assertEqual(gitread.STATUS_HEAD[1:7], ['--porcelain=v1', '-z', '--no-renames', '--untracked-files=all',
                                        '--ignore-submodules=all', '--'])
 
@@ -474,6 +477,91 @@ class StatusForm(unittest.TestCase):
         self.assertIs(kw['shell'], False)
         self.assertEqual(kw['cwd'], REPO)
         self.assertEqual(kw['stdin'], gitread.subprocess.DEVNULL)
+
+
+CONFIG = ['config', '--list', '-z']
+
+
+class ConfigForm(unittest.TestCase):
+    def test_the_config_form_is_pinned(self):
+        """TASK-024 AC1 (amended by TASK-110): the constant CONFIG_LIST is the contract's list, a list, and the sixth
+        subcommand is the last of the pinned tuple, which has exactly the six names in order."""
+        self.assertEqual(gitread.CONFIG_LIST, CONFIG)
+        self.assertIs(type(gitread.CONFIG_LIST), list)
+        self.assertEqual(gitread.SUBCOMMANDS, ('cat-file', 'diff-tree', 'rev-list', 'rev-parse', 'status', 'config'))
+
+    def test_the_config_form_is_accepted(self):
+        """TASK-024 AC1 and TASK-024 AC12 (amended by TASK-110): exactly the configuration form starts one process, with
+        git's fixed options, the repository and the arguments in order, and form_error gives no error for it."""
+        self.assertIsNone(gitread.form_error(REPO, list(CONFIG), 30))
+        r, s = call(list(CONFIG))
+        self.assertEqual(len(s.calls), 1)
+        self.assertIsNone(r['error'])
+        self.assertEqual(s.calls[0][0][0], ['git'] + gitread.FIXED_OPTIONS + ['-C', REPO] + CONFIG)
+
+    def test_every_deviation_from_the_config_form_is_refused(self):
+        """TASK-024 AC1 and TASK-024 AC3 (amended by TASK-110): another option, a different order, a missing or extra
+        argument, another case, a non-str element, a tuple, a bare str and the subcommand alone are refused with no call
+        to the process function and the one fixed message."""
+        bad = [
+            ['config'], ['config', '--list'], ['config', '-z'], ['config', '-z', '--list'], ['config', '--list', '-z', '-z'],
+            ['config', '--list', '-z', ''], ['config', '--list', '-z', 'core.worktree'],
+            ['config', '--list', '-z', '--show-origin'], ['config', '--show-origin', '--list', '-z'],
+            ['config', '-l', '-z'], ['config', '--list', '--null'], ['config', 'list', '-z'], ['config', 'list'],
+            ['config', '--local', '--list', '-z'], ['config', '--global', '--list', '-z'],
+            ['config', '--system', '--list', '-z'], ['config', '--file', 'x', '--list', '-z'],
+            ['config', '--get', 'core.worktree'], ['config', '--get-regexp', 'filter'], ['config', 'core.worktree'],
+            ['config', '--list', '-z', '--includes'], ['config', '--list', '-z', '--no-includes'],
+            ['config', '--list', '-z', '--blob', 'HEAD'], ['config', '--list', 'z'], ['config', '--list', '-Z'],
+            ['CONFIG', '--list', '-z'], ['config ', '--list', '-z'], ['Config', '--list', '-z'],
+            ['config', '--list', b'-z'], ['config', '--list', None], ['config', '--list', 3], ['config', None, '-z'],
+            ['--list', '-z'], ['-z', '--list', 'config'], ['config', '--list', '-z\n'],
+            ('config', '--list', '-z'), 'config', 'config --list -z', None, 3, [],
+        ]
+        for b in bad:
+            r, s = call(b if type(b) is not list else list(b))
+            self.assertEqual(s.calls, [], b)
+            self.assertTrue(r['error'], b)
+            self.assertEqual(r['exit'], None, b)
+        self.assertEqual(gitread.form_error(REPO, ['config', '--list'], 30), 'args are not the fixed form of config')
+        self.assertEqual(gitread.form_error(REPO, ['CONFIG', '--list', '-z'], 30), 'subcommand not in the pinned list')
+
+    def test_no_subcommand_falls_through_to_a_form(self):
+        """TASK-024 AC1 and TASK-024 AC3 (amended by TASK-110): a name that the pinned tuple does not hold is refused
+        before any process, and so is a name that a test injects into the tuple, since no branch of form_error takes
+        it (no subcommand falls into the status branch or any other)."""
+        r, s = call(['log', '--oneline'])
+        self.assertEqual(s.calls, [])
+        self.assertEqual(r['error'], 'subcommand not in the pinned list')
+        for name in ('log', 'show', 'fetch', 'reflog'):
+            with mock.patch.object(gitread, 'SUBCOMMANDS', gitread.SUBCOMMANDS + (name,)):
+                for args in ([name], [name] + STATUS + [EXCLUDE + '.state'], [name] + CONFIG, [name, '--list', '-z']):
+                    r, s = call(list(args))
+                    self.assertEqual(s.calls, [], args)
+                    self.assertEqual(r['error'], 'args are not the fixed form of ' + name, args)
+
+    def test_the_config_form_is_not_taken_for_the_status_form(self):
+        """TASK-024 AC1 (amended by TASK-110): the status head with the exclude argument is refused as the config
+        subcommand, and the config form is refused as the status subcommand, with no call to the process function."""
+        for args in (['config'] + STATUS[1:] + [EXCLUDE + '.state'], ['status', '--list', '-z']):
+            r, s = call(list(args))
+            self.assertEqual(s.calls, [], args)
+            self.assertTrue(r['error'], args)
+
+    def test_the_config_command_is_one_real_shape(self):
+        """TASK-024 AC1 and TASK-024 AC2 (amended by TASK-110): the one process started for the configuration form is
+        git with the fixed options first, then -C and the repository, then the form, with no shell, a closed standard
+        input and the repository as the working directory; the constant is not changed by the call."""
+        before = list(gitread.CONFIG_LIST)
+        r, s = call(list(gitread.CONFIG_LIST))
+        (cmd,), kw = s.calls[0]
+        self.assertEqual(cmd[:1], ['git'])
+        self.assertEqual(cmd[1:1 + len(gitread.FIXED_OPTIONS)], gitread.FIXED_OPTIONS)
+        self.assertEqual(cmd[1 + len(gitread.FIXED_OPTIONS):], ['-C', REPO] + before)
+        self.assertIs(kw['shell'], False)
+        self.assertEqual(kw['cwd'], REPO)
+        self.assertEqual(kw['stdin'], gitread.subprocess.DEVNULL)
+        self.assertEqual(gitread.CONFIG_LIST, before)
 
 
 def source(name):
@@ -545,13 +633,13 @@ class SingleWrapper(unittest.TestCase):
 
     def test_docstring_and_package(self):
         """TASK-024 AC6 and TASK-024 AC10: the docstring names INV-001's single wrapper, the pinned list and the
-        workflow's revision 8, and states the limits; the package lists the module; SUBCOMMANDS is the pinned tuple (the five of it amended by TASK-109)."""
+        workflow's revision 8, and states the limits; the package lists the module; SUBCOMMANDS is the pinned tuple (the five of it amended by TASK-109, the six by TASK-110)."""
         doc = ast.get_docstring(ast.parse(source('gitread.py')))
         for s in ('single process wrapper', 'pinned list is [git]', 'revision 8', 'Limits (TASK-024 AC10)',
                   'trusted as the operating system finds it', "repository's own", 'no caller exists yet', 'POSIX only',
                   'not capped in size', 'GIT_NO_LAZY_FETCH'):
             self.assertIn(s, doc)
-        self.assertEqual(gitread.SUBCOMMANDS, ('cat-file', 'diff-tree', 'rev-list', 'rev-parse', 'status'))
+        self.assertEqual(gitread.SUBCOMMANDS, ('cat-file', 'diff-tree', 'rev-list', 'rev-parse', 'status', 'config'))
         self.assertIn("'gitread'", source('__init__.py'))
 
 

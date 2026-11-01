@@ -33,7 +33,15 @@ expiry, then the Resume Check, then the grant):
    row opened and read_log, held, start and end not called. Only the local ref is read, nothing is fetched, and the
    ref can move after the read; a base out of form was refused in step 1 with reason "argument".
 3b. The root (task TASK-109; specification 7 revision 7, section 5; DEF-0101): right after the base check and before
-   the log read, the status of the repository is read once through read by gitread's status form (gitread.STATUS_HEAD
+   the log read, the repository's configuration and then its status are read, each once through read. First the
+   configuration (task TASK-110; specification 7 revision 8, section 5), by gitread's sixth form (gitread.CONFIG_LIST):
+   an answer that is not a mapping, an error, a non-zero exit, output that is not bytes, a non-empty output that does
+   not end in a NUL or a record with an empty key gives "refused" with reason "root" and a fixed finding that holds no
+   byte of the answer; only then, any key (the text of a record up to its first newline, ASCII-lowercased) that begins
+   with "filter." or equals "core.worktree" gives "not granted" with reason "root", the finding "root:
+   configuration names filter driver or work tree keys: <n>" and at most 20 findings "root: key <repr of the key's
+   bytes, cut to 80>", never a value; with no such key the status is read next. The status is read through gitread's
+   status form (gitread.STATUS_HEAD
    followed by ":(exclude)" and writer.STATE_DIR, so the project-state directory is left out). A clean answer (no
    error, exit 0, no output) goes on. Any entry (a change against HEAD in the index or the working tree, or an
    untracked file) gives "not granted" with reason "root", the finding "root: <n> entries (changes against HEAD in
@@ -125,31 +133,42 @@ for `aieos end`; a raising start_session gives "session" with the row possibly p
 the hash of HEAD's resume_check.py, not of the imported module that runs. Two starts of one task in the same second
 at the same HEAD make the same session id, and the second is refused "started". One run at a time (the writer's
 limit); the expiry's result is not checked against the task; every limit of git_inputs, log_inputs, adapter.start and
-execute holds here. The root check's limits (TASK-109), in plain words: (1) the status is read once, before the
-grant, so a change between that read and the grant is not seen (the log, the view and the inputs come after it), and
-that the session leaves the root untouched afterwards is not checked and stays open (DEF-0101); (2) the project-state
+execute holds here. The root check's limits (TASK-109 and TASK-110), in plain words: (1) the configuration and then
+the status are read, each once and one after the other, not atomically, before the grant: a change between the two
+reads is acted on by the status read itself, a change after them is not seen (the log, the view and the inputs come
+after them), and that the session leaves the root untouched afterwards is not checked and stays open (DEF-0101); (2) the project-state
 directory is left out, so a change to a tracked file inside it is not counted (only the task's own contract there is
 covered, by check 0), and gitread's name rule accepts any name that begins with ".", and that this module passes
 writer.STATE_DIR is pinned by a test only; (3) the ignore set is the repository's own ignore files and the clone's own
-.git/info/exclude, the user's global ignore file is not read, so an untracked file those files do not list, a cache or
+.git/info/exclude, the user's own global ignore file is meant not to be read (whether
+git on a machine finds a home directory is not checked), so an untracked file those files do not list, a cache or
 a tool file among them, refuses the launch, as does any uncommitted edit of the owner's; (4) a change of mode only, of
 a symbolic link, of case only, of line endings only, a file flagged assume-unchanged or skip-worktree, a change inside
 a submodule, a path outside the root, an unfinished merge, rebase or cherry-pick, stashes and other refs may not be
 counted or are not looked at; (5) status is the first form of gitread that can make git start a program named in
 configuration: no repository content can define a filter driver, but a driver named in the clone's own .git/config (or
 a file it includes, or the configuration a linked worktree shares) is started for files whose attributes name it when
-their stat data changed, and gitread cannot override driver names it does not know; refusing the launch when
-.gitattributes at HEAD holds "filter=" was not taken (it misses .git/info/attributes and costs a tree read), and
-neither were -c core.attributesFile and git's --attr-source (each closes only part of the risk and would change the
-existing forms and the line-ending handling); this is a stated limit and a review finding for INV-001, not a change to
-it, and it is carried to DEF-0101; (6) the workflow's check of
-gitread.SUBCOMMANDS, which accepts four subcommands or five since its revision 15, first runs on this task's branch,
-and a later decision under DM A66 narrows it to the five after this task lands; (7) the form needs a git that honours
+their stat data changed, and gitread cannot override driver names it does not know; since TASK-110 the
+configuration read refuses the launch when a key begins with "filter." or equals "core.worktree", matched on the key
+text only, so a clone that names a driver and uses none is refused (for example after git lfs install --local), and
+other keys that change what the status read counts are not refused (core.excludesFile, core.ignoreStat,
+core.sparseCheckout, core.sparseCheckoutCone, index.sparse, core.autocrlf, core.eol, core.attributesFile,
+core.checkStat, core.trustctime, and attr.tree, which makes git read .gitattributes from a named tree (git 2.40 and
+later; per git's documentation, not run here)), and the limits above still hold; this is a stated limit and a review
+finding for INV-001, not a change to it, and it is carried to DEF-0101; (6) the workflow's check of
+gitread.SUBCOMMANDS accepts exactly the six subcommands since its revision 17 (decision A66; revision 16 accepted
+exactly the five); (7) the form needs a git that honours
 GIT_OPTIONAL_LOCKS (2.15 or later; that floor is for this variable only) and accepts --no-renames,
 --untracked-files=all and --ignore-submodules=all on status; the version in which each option appeared is not stated
 here, no floor is claimed for the whole form, and the version is not checked; a git that refuses an option exits
 non-zero, which refuses the launch with reason "root"; (8) the self-build's own use: the project root must be clean
-to be launched from, so the owner's uncommitted edits refuse the launch.
+to be launched from, so the owner's uncommitted edits refuse the launch; (9) the configuration read (TASK-110) has
+its own limits: a bare clone is not refused by it, since the status read exits non-zero there and refuses the launch;
+git's newer spelling ``git config list`` exists beside ``--list``, and if ``--list`` is ever removed the read fails and
+the launch is refused (per git's documentation, not run here); and a partial clone can make git start a lazy fetch,
+which can start the programs the transport names (per git's documentation, not run here): GIT_NO_LAZY_FETCH closes it
+only from git 2.44, so a git before 2.44 is not closed, and refusing partial-clone keys would change the refused set
+and is not done here.
 
 Purity: it opens no file, reads no clock and no environment, and starts no process but through gitread; __init__.py
 is not changed.
@@ -383,8 +402,45 @@ def _root_entries(output):
     return entries, None
 
 
+_CONFIG_SHOWN = 20
+_CONFIG_KEY_CUT = 80
+
+
+def _config_keys(output):
+    """Step 3b (TASK-110 AC3): (the refused keys of git config --list -z in output order, None) or (None, a finding). A
+    key is refused when, ASCII-lowercased, it begins with b'filter.' or equals b'core.worktree'. The output must be
+    bytes, end in a NUL (b'' is zero records) and hold no record with an empty key; each record is a key and a value
+    split at the first newline, a record with no newline being a key with no value. A malformed answer gives a finding
+    whatever keys it holds, and a finding holds no byte of the answer. Pure; raises nothing."""
+    if not isinstance(output, bytes):
+        return None, 'root: the configuration answer is not bytes'
+    parts = output.split(b'\0')
+    if parts[-1] != b'':
+        return None, 'root: the configuration answer does not end in NUL'
+    refused = []
+    for part in parts[:-1]:
+        key = part.split(b'\n', 1)[0]
+        if key == b'':
+            return None, 'root: the configuration answer has an empty key'
+        low = key.lower()
+        if low.startswith(b'filter.') or low == b'core.worktree':
+            refused.append(key)
+    return refused, None
+
+
 def _root(read, repo):
-    """Step 3b (TASK-109): (None, None) when the root is untouched, else ("refused" or "not granted", findings)."""
+    """Step 3b (TASK-109, TASK-110): (None, None) when the root is untouched, else ("refused" or "not granted",
+    findings). The configuration is read first, once; only a clean answer lets the status be read."""
+    c = read(repo, list(gitread.CONFIG_LIST), TIMEOUT)
+    if not (isinstance(c, dict) and c.get('error') is None and c.get('exit') == 0):
+        shown = (c.get('error'), c.get('exit')) if isinstance(c, dict) else type(c).__name__
+        return 'refused', ['root: git config gave no answer (%r)' % (shown,)]
+    keys, found = _config_keys(c.get('out'))
+    if found is not None:
+        return 'refused', [found]
+    if keys:
+        return 'not granted', (['root: configuration names filter driver or work tree keys: %d' % len(keys)] +
+                               ['root: key ' + repr(k[:_CONFIG_KEY_CUT]) for k in keys[:_CONFIG_SHOWN]])
     r = read(repo, list(gitread.STATUS_HEAD) + [':(exclude)' + writer.STATE_DIR], TIMEOUT)
     if not (isinstance(r, dict) and r.get('error') is None and r.get('exit') == 0 and isinstance(r.get('out'), bytes)):
         shown = (r.get('error'), r.get('exit')) if isinstance(r, dict) else r
