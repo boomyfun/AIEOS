@@ -291,6 +291,14 @@ Occurrences in session 2026-10-31-2135 (../History/2026-10/2026-10-31-2135-m8-st
 - **2026-11-01 (D-4161).** A parse check of a new script written as an interpreter call with an option string, not in the required form; refused (R2, R3); the script was only hashed, not parse-checked; disclosed in the request.
 - **2026-11-01 (D-4176).** A search whose text held the forbidden form (the end records' lesson search); refused (R2); redone with another search word.
 
+Occurrences in session 2026-11-01-0412 (../History/2026-11/2026-11-01-0412-m8-stage-8-task-110-the-filter-route-of-the-untouched-root-check.md), each my incorrect command, refused before it ran and not redone in the refused form (six disclosures; checkpoint lines 110, 125, 172, 174, 178, 184):
+- **2026-11-01 (D-4236).** A parse check of a draft written as an interpreter call with a dash; refused (R2, R3); the same diff, hash and search ran without it.
+- **2026-11-01 (D-4243).** A disclosure appended with a here-document; refused (R1); the text was written with the Edit tool instead.
+- **2026-11-01 (D-4266).** An append joined with a file list written by a here-document; refused (R1); the list was written with the Write tool and the append ran as its own command.
+- **2026-11-01 (D-4267).** A diff command with a stray interpreter call; refused (R2, R3); the same diff, scan, sum and hash ran without it.
+- **2026-11-01 (D-4269).** A byte-compile check added to a sum and hash command; refused (R2, R3); the sum and hash ran without it.
+- **2026-11-01 (D-4272).** A command that held a here-document creating an unneeded file; refused (R1); not redone.
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

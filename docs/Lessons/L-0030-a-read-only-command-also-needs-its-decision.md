@@ -41,6 +41,8 @@ Seven, in session 87e2584b's later part (../History/2026-10/2026-10-29-0446-the-
 - **D-3556.** A Read of place_end.py, a Glob of the five lesson files and two Greps of them, to write the placement script, not named by a decision; they only read.
 - **2026-10-30 (session 578ea88b).** I ran read-only commands (greps, lists, hashes, diffs, git status) during steps that a decision approved, which no decision had named one by one; disclosed in the end-records request of D-3903.
 - **2026-10-31 (session 85a45f06, D-3968, D-3981, D-3984).** A stray no-op `sed -n 1p /dev/null`, a no-op variable assignment in a grep and a listing piped through sed and tr; read-only, disclosed and accepted as harmless.
+- **2026-11-01 (session 79c5920b, D-4193, D-4194, D-4203).** A read-only command in the step of D-4193 (hashes, rev-parse, status) was not named by a decision; disclosed in D-4194, ruled harmless, and cited here by command and transcript line (main transcript :582) as D-4203 ruled.
+- **2026-11-01 (session 79c5920b, step (a) of D-4232, disclosed in D-4233).** One ls and one cat of refs in a read-only step, disclosed; no more of them in read-only steps.
 
 ## Why it happens
 A read is not felt as an act, and right after a compaction the habits of the call form are weakest.

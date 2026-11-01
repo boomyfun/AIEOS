@@ -62,6 +62,8 @@ Seven, in session 87e2584b's later part (../History/2026-10/2026-10-29-0446-the-
 - **2026-10-30 (session 9dbe9c67, TASK-103; mine).** A `test ! -e` guard failed because an old output file was read as new; instead of stopping, the command was run again with a new output name without a decision. Disclosed and accepted in D-3822: a failed guard is a stop, and a changed command comes back as a request.
 - **2026-10-30 (session 9dbe9c67, D-3830 C4(c)/(d), D-3833; the decision agent's).** The approved landing plan pushed the records commit to the task branch, which G0 fails by construction (TASK-099, TASK-102). I checked the plan against the landing form of D-3402 and D-3712 before any act and brought it back; the plan was corrected in D-3833.
 - **2026-10-30 (session 578ea88b).** The hash and command slips of this session (L-0039) went to the decision agent as requests (D-3892 C7, D-3894, D-3896); no new failure of the rule.
+- **2026-11-01 (session 79c5920b, D-4243, D-4244; mine).** run_p1a.py (the three gitread test modules, read-only) was run once after the real copy, because the previous decision's NEXT line said to bring the copy output "together with the two local runs"; it should have waited for a decision. The result was accepted; from then on a NEXT line "bring X to me" means a decision is needed before X runs.
+- **2026-11-01 (session 79c5920b, D-4211, D-4212; mine).** The push scripts for the specification commit were edited after the condition of D-4211 that forbade it and before D-4212; no command had run on them; accepted by D-4212.
 
 ## Why it happens
 - Claude treats a step as mechanical (a display, a change of order, a turn end) and does not see it as a decision.
