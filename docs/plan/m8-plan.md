@@ -44,7 +44,7 @@
 ## 7. The open links, in M8's order
 
 - After task 2, each its own task, in this order: DEF-0105 (the reader of `.aieos/tasks`, import's root form, G2); DEF-0101 (the base-tip check, check 0, max_risk: needed before any runtime launch); DEF-0095 (the handoff file after a submission). DEF-0098, DEF-0100, DEF-0102, DEF-0104 and DEF-0106 are taken up when a task touches them.
-- Owner acts, none scheduled here, each asked separately (A51 item (4)): a real runtime starter (`aieos launch`); connecting the MCP server to a runtime; real use of the commands; hooks and settings; any measurement.
+- Acts of the self-build, none scheduled here, each its own decision (A51 item (4), as amended by A73): a real runtime starter (`aieos launch`); connecting the MCP server to a runtime; real use of the commands; hooks and settings; any measurement. Since A73 the decision agent decides these for the self-build, each its own decision, the owner told afterwards. They stay with the owner: permission prompts; whatever Claude's safety rules or the owner's command guard require the owner to permit; accounts, passwords, keys and money; the decision agent's own authority; changes to the measurement protocol, CR-002 and other concept errata.
 
 ## 8. The metrics of §7
 

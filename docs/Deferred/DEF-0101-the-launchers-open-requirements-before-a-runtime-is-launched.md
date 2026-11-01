@@ -43,10 +43,10 @@ adapter.start and adapter.end, and starts no runtime. Before a runtime is launch
   keys that change what status counts are not refused; and the partial-clone lazy fetch is a separate route by which git
   can start a transport program, closed only from git 2.44, not a limit of the filter refusal (launcher.py's
   docstring);
-- launching with a runtime, the owner's act, is not before this item's open points are closed: the root's state after the
+- launching with a runtime (for the self-build the decision agent's decision since A73; permission prompts and what Claude's safety rules or the owner's command guard require the owner to permit stay the owner's) is not before this item's open points are closed: the root's state after the
   check, and max_risk; this is a statement, not a lock;
-- max_risk is the caller's: a caller passing a non-null max_risk declares the runtime's tier, which only the owner's
-  measurement can back (C6, P-LOC); the self-build passes null until then, so the launcher never grants (decision
+- max_risk is the caller's: a caller passing a non-null max_risk declares the runtime's tier, which only a measurement
+  under the measurement protocol can back (the protocol stays the owner's; approving its findings for the self-build is the decision agent's under A73) (C6, P-LOC); the self-build passes null until then, so the launcher never grants (decision
   D-2673 ruling 2);
 - closed: a stand-in start giving a non-list truthy findings value would raise past the launcher's step guard; end's
   own findings handling was fixed in TASK-089, and start's two places by TASK-090, which keep only a list's or a
