@@ -164,6 +164,22 @@ def record_of(intent_id='INT-001', source_class=CLASS, intent=INTENT):
     return r
 
 
+GOLDEN_RUN_CONTRACT = '\n'.join((
+    'task: TASK-7', 'contract_version: v1', 'task_type: implementation', 'objective: >-',
+    '  Make the change that intent INT-001 states, within the write set.', 'traces_to: []', 'input_state:',
+    '  base_commit: cccccccccccccccccccccccccccccccccccccccc', '  depends_on: []', '  intent_versions: {}',
+    'write_set:', '  paths:', '    - docs/a.md', 'read_set:', '  paths:', '    - "**"', '  interfaces: []',
+    '  schemas: []', 'forbidden:', '  - .aieos/**', 'constitution: []', 'acceptance_criteria:', '  - AC1: >-',
+    '      The change does what intent INT-001 states, within the write set.', '  - AC2: >-',
+    '      No other path is changed.', 'capabilities:',
+    '  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}',
+    '  shell: {allow: []}', '  network: {allow: []}',
+    '  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}',
+    '  secrets: deny', '  external_side_effects: deny', 'risk: low', 'autonomy:', '  max_level: L1',
+    '  budgets: {tokens: 400k, wall_time: 2h, retries: 1, human_attention: 0m}', 'verification_plan:',
+    '  - {gate: G0, check: scope}', '  - {gate: G1, check: build}', '  - {gate: G3, check: review, args: [AC1, AC2]}',
+    'exit_conditions:', '  success: the change is made within the write set and nothing else changed',
+    '  escalate: [needs_out_of_scope_change, needs_owner_act]', 'owner_kept_act: true')) + '\n'
 PATH = '.aieos/tasks/%s.yaml' % TASK
 H1 = digest(expected_single())
 H2 = digest(expected_drafting())
@@ -735,11 +751,13 @@ class TASK098AC2IntentRefusals(unittest.TestCase):
 class Stand:
     def __init__(self, answer=GOOD, raises=None):
         self.calls = []
+        self.kwargs = []
         self.answer = answer
         self.raises = raises
 
-    def __call__(self, *args):
+    def __call__(self, *args, **kwargs):
         self.calls.append(args)
+        self.kwargs.append(kwargs)
         if self.raises is not None:
             raise self.raises
         return self.answer
@@ -942,7 +960,7 @@ class TASK098AC6Docs(unittest.TestCase):
         main's environ sentence naming run, and not the replaced COMMANDS phrase; USAGE names run; COMMANDS ends with
         run."""
         text = doc('cli.py')
-        for phrase in ('aieos run', 'TASK-098', 'records the intent', 'drafts nothing', 'not run on any real project',
+        for phrase in ('aieos run', 'TASK-098', 'records the intent', 'drafts nothing', 'is not decided by this text',
                        'COMMANDS, tasks, end, status, init, launch, approve, edit, reject, import or run',
                        'end and init call it after the parse', 'run also calls it after the parse'):
             self.assertIn(phrase, text)
@@ -950,7 +968,7 @@ class TASK098AC6Docs(unittest.TestCase):
         main_doc = ' '.join(cli.main.__doc__.split())
         self.assertIn('edit, reject, import and run, after the parse, through in_runtime', main_doc)
         self.assertIn('run <task> <intent> --root <path> --class <decision_agent|human_authority> '
-                      '--by <decision id or name> [--write <path>]... [--json]', cli.USAGE)
+                      '--by <decision id or name> [--owner-kept-act false] [--write <path>]... [--json]', cli.USAGE)
         self.assertEqual(cli.COMMANDS[-1], 'run')
 
     def test_every_test_names_its_criteria(self):
@@ -961,6 +979,237 @@ class TASK098AC6Docs(unittest.TestCase):
         self.assertGreater(len(tests), 20)
         for node in tests:
             self.assertIn('TASK-098 AC', ast.get_docstring(node) or '', node.name)
+
+
+REFUSED_STATEMENTS = (False, True, 'True', 'true', 'False', 'FALSE', '', ' false', 'false ', 0, 1, b'false')
+STATEMENT_ARGV = ['run', 'TASK-1', 'do it', '--root', ROOT, '--class', 'decision_agent', '--by', 'D-1']
+RUN_USAGE_LINE = ('run <task> <intent> --root <path> --class <decision_agent|human_authority> '
+                  '--by <decision id or name> [--owner-kept-act false] [--write <path>]... [--json]')
+
+
+class TASK115AC1Statement(unittest.TestCase):
+    def refused_at_argument(self, w, out, clock, label):
+        self.assertEqual((out['result'], out['reason']), ('refused', 'argument'), label)
+        self.assertTrue(out['findings'][0].startswith('argument:'), label)
+        self.assertEqual(clock.calls, 0, label)
+        self.assertEqual(w.calls, [], label)
+
+    def test_the_unchanged_text(self):
+        """TASK-115 AC1 (the run of TASK-098 AC1): without the statement one fixed call writes exactly
+        GOLDEN_RUN_CONTRACT, captured from the code before this change, ending owner_kept_act: true."""
+        self.assertEqual(GOLDEN_RUN_CONTRACT, expected_single())
+        w = World()
+        self.assertEqual(go(w)['result'], 'done')
+        self.assertEqual(written(w)[0][3], GOLDEN_RUN_CONTRACT)
+
+    def test_the_statement_none_is_the_unchanged_text(self):
+        """TASK-115 AC1 (the run of TASK-098 AC1): with the statement None the same fixed call writes exactly
+        GOLDEN_RUN_CONTRACT."""
+        w = World()
+        self.assertEqual(go(w, owner_kept_act=None)['result'], 'done')
+        self.assertEqual(written(w)[0][3], GOLDEN_RUN_CONTRACT)
+
+    def test_the_statement_false_decision_agent(self):
+        """TASK-115 AC1 (the run of TASK-098 AC1): the text false with decision_agent writes the golden text with
+        its last line owner_kept_act: false and nothing else different."""
+        w = World()
+        out = go(w, owner_kept_act='false')
+        self.assertEqual(out['result'], 'done')
+        text = written(w)[0][3]
+        self.assertTrue(text.endswith('owner_kept_act: false\n'))
+        self.assertEqual(text, GOLDEN_RUN_CONTRACT[:-len('owner_kept_act: true\n')] + 'owner_kept_act: false\n')
+
+    def test_the_statement_refused_values(self):
+        """TASK-115 AC1 (the run of TASK-098 AC1): each other value (the booleans, the texts true, True, False,
+        FALSE, an empty text, spaces around false, the numbers 0 and 1, the bytes false) is refused with reason
+        argument before the clock, the log, any write or any append; falsy values are refused, not read as absent."""
+        for value in REFUSED_STATEMENTS:
+            w, clock = World(), Clock()
+            out = go(w, clock=clock, owner_kept_act=value)
+            self.refused_at_argument(w, out, clock, repr(value))
+
+    def test_the_statement_refused_human_authority(self):
+        """TASK-115 AC1 (the run of TASK-098 AC1): the text false with source_class human_authority is refused with
+        reason argument at the same step."""
+        w, clock = World(), Clock()
+        out = go(w, clock=clock, source_class='human_authority', owner_kept_act='false')
+        self.refused_at_argument(w, out, clock, 'human_authority')
+
+    def test_the_statement_refused_with_github_paths(self):
+        """TASK-115 AC1 (the run of TASK-098 AC1): the text false with decision_agent is refused with reason argument
+        when a path of write is under .github/, in any case."""
+        for path in ('.github/workflows/x.yml', '.GITHUB/x', '.Github/a/b.yml'):
+            for write in ((path,), ('docs/a.md', path)):
+                w, clock = World(), Clock()
+                out = go(w, write=write, clock=clock, owner_kept_act='false')
+                self.refused_at_argument(w, out, clock, write)
+
+    def test_the_statement_refused_with_the_measurement_protocol(self):
+        """TASK-115 AC1 (the run of TASK-098 AC1): the text false with decision_agent is refused with reason argument
+        when a path of write is docs/pre-genesis/measurement-protocol.md, in any case."""
+        for path in ('docs/pre-genesis/measurement-protocol.md', 'DOCS/PRE-GENESIS/MEASUREMENT-PROTOCOL.MD'):
+            for write in ((path,), ('docs/a.md', path)):
+                w, clock = World(), Clock()
+                out = go(w, write=write, clock=clock, owner_kept_act='false')
+                self.refused_at_argument(w, out, clock, write)
+
+    def test_without_the_statement_the_paths_are_checked_as_before(self):
+        """TASK-115 AC1 (the run of TASK-098 AC1): without the statement the same write sets behave as without the
+        keyword: the answer and the text written are those of a call that gives none."""
+        for write in (('.github/workflows/x.yml',), ('.GITHUB/x',), ('docs/pre-genesis/measurement-protocol.md',),
+                      ('DOCS/PRE-GENESIS/MEASUREMENT-PROTOCOL.MD',)):
+            w1, w2 = World(), World()
+            out1 = go(w1, write=write)
+            out2 = go(w2, write=write, owner_kept_act=None)
+            self.assertEqual(out1, out2, write)
+            self.assertEqual(written(w1), written(w2), write)
+            self.assertFalse(written(w1) and written(w1)[0][3].endswith('owner_kept_act: false\n'), write)
+
+    def test_the_keyword_is_in_the_signature(self):
+        """TASK-115 AC1 (the run of TASK-098 AC1): run_task has the keyword owner_kept_act, default None."""
+        parameter = inspect.signature(launcher.run_task).parameters.get('owner_kept_act')
+        self.assertIsNotNone(parameter)
+        self.assertIsNone(parameter.default)
+
+
+class TASK115AC2Flag(unittest.TestCase):
+    def test_the_call_with_the_flag(self):
+        """TASK-115 AC2 (the command of TASK-098 AC4): --owner-kept-act false, anywhere among the flags, calls
+        run_task with the same positional tuple as before and the keyword owner_kept_act='false'; without the flag no
+        keyword is passed."""
+        rc, _, stand, clock = run(STATEMENT_ARGV + ['--owner-kept-act', 'false'])
+        self.assertEqual((rc, stand.calls, stand.kwargs),
+                         (0, [(ROOT, 'TASK-1', 'do it', 'decision_agent', 'D-1', (), clock)],
+                          [{'owner_kept_act': 'false'}]))
+        rc, _, stand, clock = run(['run', 'TASK-1', 'do it', '--write', 'b.md', '--owner-kept-act', 'false',
+                                   '--root', ROOT, '--class', 'decision_agent', '--by', 'D-1', '--json'])
+        self.assertEqual((rc, stand.calls, stand.kwargs),
+                         (0, [(ROOT, 'TASK-1', 'do it', 'decision_agent', 'D-1', ('b.md',), clock)],
+                          [{'owner_kept_act': 'false'}]))
+        rc, _, stand, clock = run(STATEMENT_ARGV)
+        self.assertEqual((rc, stand.calls, stand.kwargs),
+                         (0, [(ROOT, 'TASK-1', 'do it', 'decision_agent', 'D-1', (), clock)], [{}]))
+
+    def test_the_flag_usage_errors(self):
+        """TASK-115 AC2 (the command of TASK-098 AC4): a repeat, a missing value, any value but false (true, False,
+        FALSE, empty, one that begins with --), the flag with --class human_authority and the flag on a command
+        other than run each give exit 2 and USAGE with neither the clock nor run_task called."""
+        bad = [STATEMENT_ARGV + ['--owner-kept-act', 'false', '--owner-kept-act', 'false'],
+               STATEMENT_ARGV + ['--owner-kept-act'],
+               STATEMENT_ARGV + ['--owner-kept-act', 'true'],
+               STATEMENT_ARGV + ['--owner-kept-act', 'False'],
+               STATEMENT_ARGV + ['--owner-kept-act', 'FALSE'],
+               STATEMENT_ARGV + ['--owner-kept-act', ''],
+               STATEMENT_ARGV + ['--owner-kept-act', '--json'],
+               STATEMENT_ARGV + ['--owner-kept-act', '--write', 'a.md'],
+               ['run', 'TASK-1', 'do it', '--root', ROOT, '--class', 'human_authority', '--by', NAME,
+                '--owner-kept-act', 'false'],
+               ['tasks', '--root', ROOT, '--owner-kept-act', 'false'],
+               ['status', '--root', ROOT, '--owner-kept-act', 'false'],
+               ['end', 'SESSION-1', '--root', ROOT, '--owner-kept-act', 'false'],
+               ['init', '--root', ROOT, '--owner-kept-act', 'false'],
+               ['launch', 'TASK-1', '--root', ROOT, '--owner-kept-act', 'false'],
+               ['approve', 'TASK-1', '--root', ROOT, '--class', 'decision_agent', '--by', 'D-1',
+                '--owner-kept-act', 'false'],
+               ['edit', 'TASK-1', '--root', ROOT, '--class', 'decision_agent', '--by', 'D-1', '--note', 'n',
+                '--owner-kept-act', 'false'],
+               ['reject', 'TASK-1', '--root', ROOT, '--class', 'decision_agent', '--by', 'D-1',
+                '--owner-kept-act', 'false'],
+               ['import', 'TASK-1', '--root', ROOT, '--owner-kept-act', 'false']]
+        for argv in bad:
+            for environ in ({}, {'AIEOS_ROOT': 'x'}):
+                rc, out, stand, clock = run(argv, environ=environ)
+                self.assertEqual((rc, out, stand.calls, stand.kwargs, clock.calls), (2, cli.USAGE, [], [], 0), argv)
+
+    def test_the_usage_line(self):
+        """TASK-115 AC2 (the command of TASK-098 AC4): the run line of USAGE is the new line, and cli.py's parser
+        description names the flag."""
+        self.assertIn('python -m aieos_bootstrap.cli ' + RUN_USAGE_LINE, cli.USAGE)
+        self.assertIn('--owner-kept-act', doc('cli.py'))
+
+
+class TASK115AC3Meet(unittest.TestCase):
+    def approve(self, text):
+        h = digest(text)
+        contract = base_inputs._parse_contract_text(text)
+        w = World(log=Log().add('task.drafted', {'contract_version': 'v1', 'contract_hash': h}, TASK))
+        return launcher.approval_act(ROOT, TASK, 'approve', 'decision_agent', WHO, None, lambda: NOW, read=w.read,
+                                     read_log=w.read_log, append=w.append,
+                                     contract_at=lambda root, head, task: ((contract, h), None))
+
+    def test_the_text_reads_as_the_statement(self):
+        """TASK-115 AC3 (the run of TASK-098 AC1): the contract read back by the subset parser holds the text false
+        with the statement, and the text true without it."""
+        w = World()
+        go(w, owner_kept_act='false')
+        self.assertEqual(base_inputs._parse_contract_text(written(w)[0][3])['owner_kept_act'], 'false')
+        w = World()
+        go(w)
+        self.assertEqual(base_inputs._parse_contract_text(written(w)[0][3])['owner_kept_act'], 'true')
+
+    def test_approval_act_meets_the_statement(self):
+        """TASK-115 AC3 (the run of TASK-098 AC1): a decision_agent approval of the contract made with the statement
+        is done; of the contract made without it, refused at the step owner_kept_act."""
+        w = World()
+        go(w, owner_kept_act='false')
+        out = self.approve(written(w)[0][3])
+        self.assertEqual((out['result'], out['reason']), ('done', None), out['findings'])
+        w = World()
+        go(w)
+        out = self.approve(written(w)[0][3])
+        self.assertEqual((out['result'], out['reason']), ('refused', 'owner_kept_act'))
+        self.assertEqual(out['findings'], ['owner_kept_act: a decision_agent approval of a task whose '
+                                           'owner_kept_act is set is refused'])
+
+
+class TASK115AC4Stale(unittest.TestCase):
+    def test_the_stale_texts_are_gone(self):
+        """TASK-115 AC4 (the docstring of TASK-098 AC6): cli.NO_STARTER no longer says a runtime is started by the
+        owner, and cli.py's docstring no longer says the commands are not run on any real project."""
+        self.assertNotIn('a runtime is started by the owner', cli.NO_STARTER)
+        self.assertNotIn('not run on any real project', doc('cli.py'))
+        self.assertIn('is not decided by this text', doc('cli.py'))
+
+    def test_the_ten_replaced_sentences(self):
+        """TASK-115 AC4 (the docstrings of TASK-098 AC6): over each source file with its whitespace folded, each of
+        the ten NEW sentences of the contract is present (the sentence of items 3 and 5 twice in cli.py), each OLD
+        sentence is absent, and cli.NO_STARTER is the NEW text of item 7."""
+        text = {name: ' '.join((SRC / name).read_bytes().decode('utf-8').split())
+                for name in ('cli.py', 'launcher.py', 'writer.py')}
+        used = "Its use on a real project is not decided by this text."
+        old_used = "It is not run on any real project: its real use is the owner's, asked separately."
+        pairs = (
+            ('cli.py', "As shipped, launch starts no runtime: starting one stays the owner's (spec 7 :35).",
+             'As shipped, launch starts no runtime; who decides starting one, and building a starter, is set by '
+             'specification 7 :35.', 1),
+            ('cli.py', "it drafts nothing: reading the repository and drafting the proposals are a launched session's,"
+             " the owner's.",
+             "it drafts nothing: reading the repository and drafting the proposals are a launched session's.", 1),
+            ('cli.py', old_used, used, 2),
+            ('cli.py', "it drafts nothing: doing the change or drafting the proposal set is a launched session's, the "
+             "owner's.",
+             "it drafts nothing: doing the change or drafting the proposal set is a launched session's.", 1),
+            ('cli.py', "Nothing runs this module but its tests and the owner's own use.",
+             'Nothing runs this module but its tests and its uses on a real project, each decided on its own.', 1),
+            ('launcher.py', "It starts no runtime: no process but through gitread, no hook placed, no setting changed;"
+             " running `aieos launch` with a runtime stays the owner's (DM A51 item (4)).",
+             'It starts no runtime: no process but through gitread, no hook placed, no setting changed; who decides '
+             'running `aieos launch` with a runtime, and building a starter, is set by specification 7 :35.', 1),
+            ('launcher.py', "Reading the repository and drafting the proposals are a launched session's, and every "
+             "launch is the owner's.",
+             "Reading the repository and drafting the proposals are a launched session's, and every launch is decided "
+             "as specification 7 :35 says.", 1),
+            ('writer.py', 'No caller in the core yet; ``.gitignore`` is not changed here (carried to the task that '
+             'first creates a real project-state directory).',
+             "Its callers are the core's modules (every write of the project-state directory goes through it); "
+             "``.gitignore`` is not changed here.", 1))
+        for name, old, new, count in pairs:
+            self.assertEqual(text[name].count(new), count, new)
+            self.assertNotIn(old, text[name], old)
+        self.assertEqual(cli.NO_STARTER, 'launch: no runtime starter is shipped (specification 7 :35, DEF-0101)')
+        self.assertNotIn('launch: no runtime starter (a runtime is started by the owner; specification 7 :35, '
+                         'DEF-0101)', text['cli.py'])
+        self.assertIn('no runtime starter', doc('cli.py'))
 
 
 if __name__ == '__main__':

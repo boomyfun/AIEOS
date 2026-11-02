@@ -13,7 +13,9 @@ What it does:
   reject, import and run their task as argv[1]; run takes its intent as argv[2] (a non-empty value not beginning
   "--"); the flags are --root <path> (required, once, a non-empty value not beginning "--") and --json (optional,
   once); approve, edit and reject also take --class and --by (each required, once) and edit --note (required, once,
-  edit only); run also takes --class and --by (each required, once) and --write <path> (any number of times).
+  edit only); run also takes --class and --by (each required, once), --write <path> (any number of times) and
+  --owner-kept-act false (optional, once, only with --class decision_agent: the caller's statement that the task's
+  contract ends owner_kept_act: false).
   Anything else gives exit 2 and USAGE, with neither the clock nor a command's callee called.
 - tasks calls the clock once, then execution.list_tasks(root, now) once, looked up at each call. A list gives exit 0
   and one line "<task> <state> <contract_hash> lease=<lease>" per item (or "no task may be taken"), or under --json
@@ -64,7 +66,8 @@ What it does:
   or under --json one JSON line of session_id and findings; "not granted" and "refused" give exit 1 and the findings
   "launch: <result> <reason>" then the answer's findings; an answer out of form, its types checked exactly, gives
   LAUNCH_OUT_OF_FORM; a raise in launch_outside gives "launch: a step raised <type>", and a raise in _render_launch
-  "cli: a step raised <type>". As shipped, launch starts no runtime: starting one stays the owner's (spec 7 :35).
+  "cli: a step raised <type>". As shipped, launch starts no runtime; who decides starting one, and building a
+  starter, is set by specification 7 :35.
 - approve <task>, edit <task> and reject <task> (task TASK-096; specification 7 section 4, specification 1 section
   12), ``aieos approve``, ``aieos edit`` and ``aieos reject``, record an approval, an edit note or a rejection of the
   task's drafted contract version through launcher.approval_act, which writes through the writer. --class is
@@ -81,17 +84,16 @@ What it does:
 - import <task> (task TASK-097; specification 7 section 3 :29), ``aieos import``, makes and records a drafting task
   through launcher.import_task, which fills a fixed template with the task and HEAD, writes the contract through the
   writer and appends task.drafted; it drafts nothing: reading the repository and drafting the proposals are a
-  launched session's, the owner's. After the parse it is refused inside a runtime: in_runtime(environ) true gives exit
+  launched session's. After the parse it is refused inside a runtime: in_runtime(environ) true gives exit
   1 and the one finding IMPORT_RUNTIME_REFUSAL; else launcher.import_task(root, task, clock) once, looked up at each
   call. "done" gives exit 0 and the lines "contract: <path> <hash>" and "event: <id> <appended or duplicate>", then
   "finding: <text>" per finding, or under --json one JSON line of path, contract_hash, event_id, append and findings;
   "refused" gives exit 1 and the findings "import: refused <reason>" then the answer's findings; an answer out of form,
   its types checked exactly, gives IMPORT_OUT_OF_FORM; a raise in import_task gives "import: a step raised <type>",
-  and a raise in _render_import "cli: a step raised <type>". It is not run on any real project: its real use is the
-  owner's, asked separately.
+  and a raise in _render_import "cli: a step raised <type>". Its use on a real project is not decided by this text.
 - run <task> <intent> (task TASK-098; specification 7 section 3 :30), ``aieos run``, records the intent and makes
   and records its task through launcher.run_task, which classes the --write paths at the base and fills a fixed
-  template; it drafts nothing: doing the change or drafting the proposal set is a launched session's, the owner's.
+  template; it drafts nothing: doing the change or drafting the proposal set is a launched session's.
   After the parse it is refused inside a runtime: in_runtime(environ) true gives exit 1 and the one finding
   RUN_RUNTIME_REFUSAL; else launcher.run_task(root, task, intent, class, who, write, clock) once, looked up at each
   call, who being --by, the decision id (decision_agent) or the name (human_authority), as approve's is (r3).
@@ -99,8 +101,7 @@ What it does:
   "event: <id> <appended or duplicate>" twice, then "finding: <text>" per finding, or under --json one sorted JSON
   line; "refused" gives exit 1 and the findings "run: refused <reason>" then the answer's findings; an answer out of
   form, its types checked exactly, gives RUN_OUT_OF_FORM; a raise in run_task gives "run: a step raised <type>", and
-  a raise in _render_intent_run "cli: a step raised <type>". It is not run on any real project: its real use is the
-  owner's, asked separately.
+  a raise in _render_intent_run "cli: a step raised <type>". Its use on a real project is not decided by this text.
 - RUNTIME_VARS and in_runtime(environ): outside any runtime means none of the three names is in the environment.
   in_runtime is true when any of them is present; AIEOS_BASE is counted beside the session id and the root, and a
   name whose value is '' counts as present (two stated choices, both fail-closed); an environment whose membership
@@ -112,7 +113,7 @@ Limits, stated: a determined agent can start a nested runtime with an environmen
 value beginning "--" cannot be given; a root that names no folder gives only list_tasks' "a step raised" finding; a
 non-ASCII value in the text form on a stdout in a legacy code page raises at the write (exit 1); a stdout in Windows
 text mode writes CRLF. __init__.py is not changed, and its module list stays as it was. Nothing runs this module but
-its tests and the owner's own use.
+its tests and its uses on a real project, each decided on its own.
 """
 
 import datetime
@@ -139,7 +140,8 @@ USAGE = ('usage: python -m aieos_bootstrap.cli tasks --root <path> [--json]\n'
          '--by <decision id or name> [--json]\n'
          '       python -m aieos_bootstrap.cli import <task> --root <path> [--json]\n'
          '       python -m aieos_bootstrap.cli run <task> <intent> --root <path> '
-         '--class <decision_agent|human_authority> --by <decision id or name> [--write <path>]... [--json]\n'
+         '--class <decision_agent|human_authority> --by <decision id or name> [--owner-kept-act false] '
+         '[--write <path>]... [--json]\n'
          '  tasks          the tasks that may be taken\n'
          '  end <session>  end a crashed session from outside the runtime\n'
          '  status         the status of the project\n'
@@ -155,6 +157,8 @@ USAGE = ('usage: python -m aieos_bootstrap.cli tasks --root <path> [--json]\n'
          '  --by <who>     the decision id (decision_agent) or the name (human_authority)\n'
          '  --note <text>  the edit note (edit only)\n'
          '  --write <path> a file the run task may change (run only; any number of times)\n'
+         '  --owner-kept-act false  the caller\'s statement that the run task ends owner_kept_act: false (run only; '
+         'once; with --class decision_agent)\n'
          '  --json         one JSON line in place of text lines\n')
 OUT_OF_FORM = 'tasks: list_tasks gave an answer out of form'
 NO_FINDING = 'tasks: list_tasks gave no finding'
@@ -173,7 +177,7 @@ INIT_RUNTIME_REFUSAL = ('init: refused inside a runtime (it writes; specificatio
                         'is refused for the same reason)')
 INIT_OUT_OF_FORM = 'init: init_project gave an answer out of form'
 LAUNCH_RUNTIME_REFUSAL = 'launch: refused inside a runtime (spec 7 :34)'
-NO_STARTER = 'launch: no runtime starter (a runtime is started by the owner; specification 7 :35, DEF-0101)'
+NO_STARTER = 'launch: no runtime starter is shipped (specification 7 :35, DEF-0101)'
 LAUNCH_OUT_OF_FORM = 'launch: launch_outside gave an answer out of form'
 APPROVAL_COMMANDS = ('approve', 'edit', 'reject')
 APPROVAL_RUNTIME_REFUSAL = ('%s: refused inside a runtime (it writes; specification 7 :34 names end and launch, and %s '
@@ -204,10 +208,11 @@ def _session_in_form(session):
 
 
 def _parse(argv):
-    """(command, session or task, root, as_json, source_class, who, note, write) for a well-formed argv, else None (a
-    usage error); source_class, who and note are None except for approve, edit and reject, and for run, whose
-    --class is source_class, whose --by is who and whose intent is in the note's place; write is run's --write paths,
-    a tuple, () for every other command."""
+    """(command, session or task, root, as_json, source_class, who, note, write, owner_kept_act) for a well-formed
+    argv, else None (a usage error); source_class, who and note are None except for approve, edit and reject, and for
+    run, whose --class is source_class, whose --by is who and whose intent is in the note's place; write is run's
+    --write paths, a tuple, () for every other command; owner_kept_act is None, or the text false when run was given
+    --owner-kept-act false (once, with --class decision_agent only; it is kept out of the required flags)."""
     if type(argv) is not list or not argv or any(type(a) is not str for a in argv):
         return None
     if argv[0] not in COMMANDS:
@@ -230,11 +235,12 @@ def _parse(argv):
         allowed = _APPROVAL_FLAGS if command == 'edit' else _APPROVAL_FLAGS[:2]
     elif command == 'run':
         allowed = _APPROVAL_FLAGS[:2]
-    root, as_json, values, write, i = None, False, {}, [], 0
+    root, as_json, values, write, kept, i = None, False, {}, [], None, 0
     while i < len(rest):
         flag = rest[i]
-        if flag == '--root' or flag in allowed or (command == 'run' and flag == '--write'):
-            if (flag == '--root' and root is not None) or flag in values or i + 1 >= len(rest):
+        if flag == '--root' or flag in allowed or (command == 'run' and flag in ('--write', '--owner-kept-act')):
+            if ((flag == '--root' and root is not None) or flag in values or i + 1 >= len(rest)
+                    or (flag == '--owner-kept-act' and kept is not None)):
                 return None
             value = rest[i + 1]
             if not value or value.startswith('--'):
@@ -243,6 +249,10 @@ def _parse(argv):
                 root = value
             elif flag == '--write':
                 write.append(value)
+            elif flag == '--owner-kept-act':
+                if value != 'false':
+                    return None
+                kept = value
             else:
                 values[flag] = value
             i += 2
@@ -256,8 +266,10 @@ def _parse(argv):
         return None
     if (command in APPROVAL_COMMANDS or command == 'run') and values['--class'] not in launcher.APPROVAL_CLASSES:
         return None
+    if kept is not None and values['--class'] != 'decision_agent':
+        return None
     note = intent if command == 'run' else values.get('--note')
-    return (command, session, root, as_json, values.get('--class'), values.get('--by'), note, tuple(write))
+    return (command, session, root, as_json, values.get('--class'), values.get('--by'), note, tuple(write), kept)
 
 
 def _findings(texts, as_json):
@@ -630,12 +642,16 @@ def _render_intent_run(answer, as_json):
     return ''.join(line + '\n' for line in lines)
 
 
-def _intent_run(task, intent, root, source_class, who, write, as_json, environ, clock):
+def _intent_run(task, intent, root, source_class, who, write, as_json, environ, clock, owner_kept_act=None):
     """(the exit code, the whole output) of run."""
     if in_runtime(environ):
         return 1, _findings([RUN_RUNTIME_REFUSAL], as_json)
     try:
-        answer = launcher.run_task(root, task, intent, source_class, who, write, clock)
+        if owner_kept_act is None:
+            answer = launcher.run_task(root, task, intent, source_class, who, write, clock)
+        else:
+            answer = launcher.run_task(root, task, intent, source_class, who, write, clock,
+                                       owner_kept_act=owner_kept_act)
     except Exception as exc:
         return 1, _findings(['run: a step raised %s' % type(exc).__name__], as_json)
     try:
@@ -657,7 +673,7 @@ def _run(argv, environ, clock, starter=None):
         return 1, _findings(['cli: a step raised %s' % type(exc).__name__], False)
     if parsed is None:
         return 2, USAGE
-    command, session, root, as_json, source_class, who, note, write = parsed
+    command, session, root, as_json, source_class, who, note, write, owner_kept_act = parsed
     if command == 'end':
         try:
             return _end(session, root, as_json, environ, clock)
@@ -690,7 +706,8 @@ def _run(argv, environ, clock, starter=None):
             return 1, _findings(['cli: a step raised %s' % type(exc).__name__], as_json)
     if command == 'run':
         try:
-            return _intent_run(session, note, root, source_class, who, write, as_json, environ, clock)
+            return _intent_run(session, note, root, source_class, who, write, as_json, environ, clock,
+                               owner_kept_act)
         except Exception as exc:
             return 1, _findings(['cli: a step raised %s' % type(exc).__name__], as_json)
     code, kind, payload = _tasks(root, clock)

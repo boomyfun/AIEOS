@@ -646,7 +646,7 @@ class TASK097AC6Docs(unittest.TestCase):
         """TASK-097 AC6, as TASK-098 AC6 widens it: cli.py's docstring holds the import phrases and the COMMANDS
         phrase, and not the two replaced ones; USAGE names import; COMMANDS ends with import, then run."""
         text = doc('cli.py')
-        for phrase in ('aieos import', 'TASK-097', 'drafts nothing', 'not run on any real project',
+        for phrase in ('aieos import', 'TASK-097', 'drafts nothing', 'is not decided by this text',
                        'COMMANDS, tasks, end, status, init, launch, approve, edit, reject, import or run',
                        'end and init call it after the parse', 'import also calls it after the parse'):
             self.assertIn(phrase, text)

@@ -1,7 +1,8 @@
 """The launcher's core path of gov-AIEOS (task TASK-086; specification 7 revision 2, section 5; specification 5
 revision 5, section 11 point 7; specification 3 revision 5, sections 1 and 2): start and end of one session over
 adapter.start and adapter.end (TASK-051), callable by tests. It starts no runtime: no process but through gitread, no
-hook placed, no setting changed; running `aieos launch` with a runtime stays the owner's (DM A51 item (4)).
+hook placed, no setting changed; who decides running `aieos launch` with a runtime, and building a starter, is set
+by specification 7 :35.
 
 ``start(root, repo, task_id, adapter_name, max_risk, holder, recorder, now, expires_at, ...)`` returns a mapping with
 exactly START_KEYS and never raises. In order (specification 7 :47's order: the gone sessions' records, then the
@@ -230,7 +231,8 @@ returns a mapping with exactly IMPORT_KEYS; it never raises an Exception. It dra
 template with the task id and HEAD only (HEAD read through start's own reader, _head, and refused unless it is 40
 lowercase hex), writes it through writer.write_contract and then appends task.drafted with the text's hash through
 writer.append_event, and refuses a task id that already has events in the log. Reading the repository and drafting
-the proposals are a launched session's, and every launch is the owner's. base_inputs is not changed, so the contract
+the proposals are a launched session's, and every launch is decided as specification 7 :35 says. base_inputs is not
+changed, so the contract
 it writes is not yet read by launch or approve. import_task reads the caller's clock once, an exception to "reads no
 clock" above, and writes through writer.write_contract and writer.append_event, the writer being the one module that
 opens a file. Since task TASK-104 its root is an absolute Windows or POSIX path, as run_task's is, and TASK-097's limit
@@ -1701,7 +1703,7 @@ verification_plan:
 %(gates)sexit_conditions:
   success: %(success)s
   escalate: [needs_out_of_scope_change, needs_owner_act]
-owner_kept_act: true
+owner_kept_act: %(kept)s
 '''
 _RUN_HEAD = '''task: %(task)s
 contract_version: v1
@@ -1799,6 +1801,24 @@ def _run_argument_findings(root, task_id, intent, source_class, who, write, cloc
     return found
 
 
+def _run_statement_findings(source_class, write, owner_kept_act):
+    """Step 1, the caller's statement (task TASK-115): none, or exactly the text false with decision_agent and no
+    write path under .github/ or equal to the measurement protocol, each compared without regard to case."""
+    if owner_kept_act is None:
+        return []
+    if not (type(owner_kept_act) is str and owner_kept_act == 'false'):
+        return ['argument: owner_kept_act is not None or the text false']
+    if source_class != 'decision_agent':
+        return ['argument: owner_kept_act false is accepted only with source_class decision_agent']
+    if isinstance(write, (list, tuple)):
+        for path in write:
+            if isinstance(path, str) and (path.lower().split('/')[0] == '.github'
+                                          or path.lower() == 'docs/pre-genesis/measurement-protocol.md'):
+                return ['argument: owner_kept_act false is refused for a write path under .github/ or the '
+                        'measurement protocol']
+    return []
+
+
 def _run_log(log, task_id):
     """Steps 4 and 5: the log's report, or a stop with reason "log" or "exists"."""
     if type(log) is not bytes:
@@ -1882,15 +1902,17 @@ def _run_conflict(report, log, record, claim_event, moment):
             'one (intent %s, recorder %s); the subject alone can cause this' % tuple(named)]
 
 
-def _run_contract(kind, task_id, head, intent_id, write):
-    """Step 8: the template of the kind, filled with the task id, the head, the intent id and the write set."""
+def _run_contract(kind, task_id, head, intent_id, write, owner_kept_act=None):
+    """Step 8: the template of the kind, filled with the task id, the head, the intent id and the write set; the
+    contract ends owner_kept_act: true unless the statement is the text false."""
     form = _RUN_SINGLE if kind == 'single' else _RUN_DRAFTING
     paths = list(write) if kind == 'single' else ['docs/proposals/%s-%s.md' % (intent_id, p) for p in _RUN_PROPOSALS]
     values = {'task': task_id, 'head': head, 'intent': intent_id, 'state': writer.STATE_DIR}
     filled = dict((k, v % values) if k in ('objective', 'criteria') else (k, v) for k, v in form.items())
     text = _RUN_HEAD % dict(values, kind=filled['kind'], objective=filled['objective'], criteria=filled['criteria'],
                             paths=''.join('    - %s\n' % p for p in paths))
-    return text + _RUN_TAIL % {'risk': filled['risk'], 'gates': filled['gates'], 'success': filled['success']}
+    return text + _RUN_TAIL % {'risk': filled['risk'], 'gates': filled['gates'], 'success': filled['success'],
+                               'kept': 'false' if owner_kept_act == 'false' else 'true'}
 
 
 def _run_append(append, root, event_type, payload, event_id, now, recorder, task_id, stuck):
@@ -1911,7 +1933,7 @@ def _run_append(append, root, event_type, payload, event_id, now, recorder, task
 
 
 def run_task(root, task_id, intent, source_class, who, write, clock, read=None, read_log=None, read_base=None,
-             write_contract=None, append=None):
+             write_contract=None, append=None, owner_kept_act=None):
     """Record an intent and make and record its task (task TASK-098; `aieos run`, specification 7 section 3 :30): a
     mapping with exactly RUN_KEYS; it never raises an Exception. Its steps, each step's name being the reason of a
     refusal or a raise at it: argument (who as approval_act checks it, r3); clock; head (start's own reader, _head, 40
@@ -1926,7 +1948,8 @@ def run_task(root, task_id, intent, source_class, who, write, clock, read=None, 
     intent_id = claim_id = kind = risk = path = contract_hash = None
     event_ids, appends = [], []
     try:
-        bad = _run_argument_findings(root, task_id, intent, source_class, who, write, clock, callees)
+        bad = (_run_argument_findings(root, task_id, intent, source_class, who, write, clock, callees)
+               + _run_statement_findings(source_class, write, owner_kept_act))
         if bad:
             raise _import_stop('argument', bad)
         write = tuple(write)
@@ -1956,7 +1979,7 @@ def run_task(root, task_id, intent, source_class, who, write, clock, read=None, 
         if clash is not None:
             raise _import_stop('intent', clash)
         kind = 'single' if risk == 'low' else 'drafting'
-        text = _run_contract(kind, task_id, head, intent_id, write)
+        text = _run_contract(kind, task_id, head, intent_id, write, owner_kept_act)
         digest = hashlib.sha256(text.encode('utf-8')).hexdigest()
         step = 'write'
         path = _import_write(write_contract, root, task_id, text)

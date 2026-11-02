@@ -22,8 +22,8 @@ Limits (AC10):
   read-back after an append raises and repairs nothing.
 - No lock beyond SQLite's own transaction (v0.1 runs one task at a time, concept line 951).
 - The caller runs the Resume Check before a grant and gives the task's state; the store projects no state from the log.
-- No caller in the core yet; ``.gitignore`` is not changed here (carried to the task that first creates a real
-  project-state directory).
+- Its callers are the core's modules (every write of the project-state directory goes through it); ``.gitignore``
+  is not changed here.
 - ``session_lease`` (task TASK-066) reads the store only, through SQLite's read-only mode and a deferred transaction:
   it writes, creates and removes nothing, takes only a shared lock at its first read, and refuses ("unreadable") when
   a writer holds an exclusive or pending lock longer than its timeout, or when a hot journal or a journal or WAL state
