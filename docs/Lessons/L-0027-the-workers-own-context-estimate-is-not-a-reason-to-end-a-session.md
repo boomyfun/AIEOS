@@ -30,6 +30,7 @@ The worker cannot see the context level; its estimate, counted from the conversa
   publishing was interrupted: "tại sao lại dừng rồi, tiếp tục đi"). Afterwards each next step went on in the same
   turn: a CI list read is asked for at once, and the drafts for the following step are written while a run is in
   progress.
+- 2026-11-02 (../History/2026-11/2026-11-02-0522-m8-stage-8-task-114-the-ci-path-for-a-contract-the-core-writes.md, transcript :5727, :5738; cp63 :314): the closing reply approved in D-4484 was an occurrence of this lesson's kind; ruled in D-4485.
 
 ## Why it happens
 The level is shown to the owner by the app, not to the worker. The worker counts what it has read and written, and that count runs high (long tool outputs and agent reports weigh less than they seem, or the window is larger than assumed). Which of these holds is a guess.

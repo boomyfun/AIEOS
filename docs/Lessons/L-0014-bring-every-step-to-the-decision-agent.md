@@ -66,6 +66,7 @@ Seven, in session 87e2584b's later part (../History/2026-10/2026-10-29-0446-the-
 - **2026-11-01 (session 79c5920b, D-4211, D-4212; mine).** The push scripts for the specification commit were edited after the condition of D-4211 that forbade it and before D-4212; no command had run on them; accepted by D-4212.
 - **2026-11-01 (session a048abb9, D-4357, D-4358; mine).** `bash exec_111d_b.sum` was run by mistake before the dry run of the push of commit D (a sum file given to bash, stderr to /dev/null); it printed nothing and changed nothing; reported with the request of D-4358. From then on a command is typed from the approved line, not from the previous one.
 - **2026-11-01 (session a048abb9, D-4346 C7, D-4349; mine).** I ran `rm -f` on two draft files while the request of D-4349 was prepared, after D-4346 C7 had answered my first rm of two sum files ("if a file must be replaced, write file.new and ask"); reported in that request (see L-0043).
+- 2026-11-02 (../History/2026-11/2026-11-02-0522-m8-stage-8-task-114-the-ci-path-for-a-contract-the-core-writes.md, transcript :13551, :13558): I ended a turn asking the owner whether to send the H drafts to the decision agent, work D-4562 had already named; the owner answered "Gửi đi". The D-4563 request did not disclose it; the decision agent found it.
 
 ## Why it happens
 - Claude treats a step as mechanical (a display, a change of order, a turn end) and does not see it as a decision.
