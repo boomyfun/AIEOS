@@ -4,7 +4,8 @@
 # Records: this run's log, its step summary, its annotations and each step's conclusion. Its results are advisory (DM
 # A29; C7 is TBD): the job runs code that the pushed commits change, and that code can write to the log, the
 # annotations and the conclusions of the steps after it. A code task's commits carry the trailer "AIEOS-Task: <id>";
-# their contract is the file docs/tasks/<id>.yaml, added on main by its own commit; the task steps judge only such
+# their contract is the file docs/tasks/<id>.yaml or, for a contract the core wrote, .aieos/tasks/<id>.yaml (revision 18),
+# added on main by its own commit; the task steps judge only such
 # commits. Revision 3 adds: the conformance base run (the runner, the frozen set, the fixtures, the bound scenario file
 # and the records, all from the base) and, right after it, the candidate run (the same base inputs with only the head's
 # governor files), each written as one annotation; the conformance inputs and the records on GOV-003's list; the pinned
@@ -139,6 +140,13 @@
 # src/aieos_bootstrap/gitread.py; the five-subcommand tuple is no longer accepted. The added subcommand, config, is a read-only listing of the repository's own configuration (one fixed form,
 # pinned by gitread.py and its tests, not by this rule). Nothing else is loosened or removed; it grants no write access, uses no secret and changes no setting. Limits: as in revisions 15 and 16,
 # the rule pins the tuple, not the arguments passed; and between this revision and the landing of the task that adds the form, the check on a task push needs the six-tuple (the order of TASK-110's contract).
+# Revision 18 (TASK-114; the decision agent's own decision under DM A66; DEF-0105 link 1; specification 7 section 10 item 17, its revision 11 to follow) LOOSENS the check G0 detect, in both of its copies, and says so plainly: besides docs/tasks/<id>.yaml it now
+# accepts, as the task's contract, .aieos/tasks/<id>.yaml, the file the core writes into the project-state directory. The contract commit must still be on main, have
+# one parent equal to the contract's base_commit and change nothing but the contract file, except that a state contract may share its commit with .aieos/events.jsonl
+# (the core writes both); the same id added in both folders is a failure (as specification 7 section 6 rules for the readers, revision 6). The pinned list of GOV-003 gains '.aieos/tasks/**' in both
+# copies, so that a later change to a core-written contract is reported as an evaluator change, like docs/tasks/**. Nothing is removed. It grants no write access,
+# uses no secret or token and changes no setting. Limits: a state commit holding two contracts or any third path is refused as a contract commit; detect does not check that the
+# event-log change only appends; a task's own commits that change .aieos/ stay refused by the INV-004 rule; an event log committed to main is public once pushed.
 name: aieos-checks
 
 on:
@@ -197,7 +205,8 @@ jobs:
           # commit. Modes (argument, or the environment variable AIEOS_ARGS):
           #   detect: find the task named by the "AIEOS-Task:" trailer of the pushed commits that main does not hold; find its
           #           contract commit C on main (the one
-          #           commit that adds docs/tasks/<id>.yaml, changes nothing else, has one parent equal to the contract's
+          #           commit that adds docs/tasks/<id>.yaml or .aieos/tasks/<id>.yaml (not both: that fails), changes nothing
+          #           else (a state contract may share its commit with .aieos/events.jsonl), has one parent equal to the contract's
           #           base_commit); print the SHA-256 of the contract bytes read at C (the approval check compares it with the
           #           approved contract_hash); write ../task.json and ../range-base.txt (the task's commits, oldest first, or
           #           empty when there is no task).
@@ -291,8 +300,19 @@ jobs:
               if len(ids) != 1 or 'MANY' in ids:
                   raise SystemExit('G0 FAIL: the pushed commits name more than one task: ' + ', '.join(sorted(ids)))
               tid = ids.pop()
-              path = 'docs/tasks/' + tid + '.yaml'
-              adds = git('log', '--format=%H', '--diff-filter=A', 'HEAD', '--', path).decode().split()
+              docs_path = 'docs/tasks/' + tid + '.yaml'
+              state_path = '.aieos/tasks/' + tid + '.yaml'
+              found = {}
+              for cand in (docs_path, state_path):
+                  added = git('log', '--format=%H', '--diff-filter=A', 'HEAD', '--', cand).decode().split()
+                  if added:
+                      found[cand] = added
+              if len(found) > 1:
+                  raise SystemExit('G0 FAIL: the contract of %s is added in both folders: %s and %s' % (tid, docs_path, state_path))
+              if not found:
+                  raise SystemExit('G0 FAIL: commits adding %s or %s: 0 (expected 1 in one folder)' % (docs_path, state_path))
+              path = list(found)[0]
+              adds = found[path]
               if len(adds) != 1:
                   raise SystemExit('G0 FAIL: commits adding %s: %d (expected 1)' % (path, len(adds)))
               c = adds[0]
@@ -301,8 +321,9 @@ jobs:
               parents = git('log', '-1', '--format=%P', c).decode().split()
               changed = git('diff-tree', '--no-commit-id', '--name-only', '-r', '--no-renames', c).decode().split('\n')
               changed = [x for x in changed if x]
-              if len(parents) != 1 or changed != [path]:
-                  raise SystemExit('G0 FAIL: the contract commit must have one parent and change only ' + path)
+              allowed = [path] if path == docs_path else sorted([path, '.aieos/events.jsonl'])
+              if len(parents) != 1 or (changed != [path] and sorted(changed) != allowed):
+                  raise SystemExit('G0 FAIL: the contract commit must have one parent and change only ' + path + ('' if path == docs_path else ' (and at most .aieos/events.jsonl)'))
               body = git('show', c + ':' + path)
               k = parse_contract(body.decode('utf-8'))
               if k['task'] != tid or k['base_commit'] != parents[0]:
@@ -460,7 +481,7 @@ jobs:
           EVALUATOR = ['.github/**', 'src/aieos_bootstrap/**', 'tests/conformance/**',
                        'docs/pre-genesis/conformance-scenarios-initial.md', 'docs/records/**',
                        'docs/specs/risk-rules-gov-aieos.md', 'docs/pre-genesis/constitution.md',
-                       'docs/tasks/**',
+                       'docs/tasks/**', '.aieos/tasks/**',
                        'tests/unit/**', 'tests/integration/**', 'tests/property/**', 'tests/run_tests.py',
                        '**/Pipfile', '**/Pipfile.lock', '**/poetry.lock', '**/uv.lock', '**/constraints*.txt',
                        '**/MANIFEST.in', '**/tox.ini', '**/pytest.ini', '**/conftest.py', '**/.python-version',
@@ -530,7 +551,7 @@ jobs:
           EVALUATOR = ['.github/**', 'src/aieos_bootstrap/**', 'tests/conformance/**',
                        'docs/pre-genesis/conformance-scenarios-initial.md', 'docs/records/**',
                        'docs/specs/risk-rules-gov-aieos.md', 'docs/pre-genesis/constitution.md',
-                       'docs/tasks/**',
+                       'docs/tasks/**', '.aieos/tasks/**',
                        'tests/unit/**', 'tests/integration/**', 'tests/property/**', 'tests/run_tests.py',
                        '**/Pipfile', '**/Pipfile.lock', '**/poetry.lock', '**/uv.lock', '**/constraints*.txt',
                        '**/MANIFEST.in', '**/tox.ini', '**/pytest.ini', '**/conftest.py', '**/.python-version',
@@ -632,7 +653,8 @@ jobs:
           # commit. Modes (argument, or the environment variable AIEOS_ARGS):
           #   detect: find the task named by the "AIEOS-Task:" trailer of the pushed commits that main does not hold; find its
           #           contract commit C on main (the one
-          #           commit that adds docs/tasks/<id>.yaml, changes nothing else, has one parent equal to the contract's
+          #           commit that adds docs/tasks/<id>.yaml or .aieos/tasks/<id>.yaml (not both: that fails), changes nothing
+          #           else (a state contract may share its commit with .aieos/events.jsonl), has one parent equal to the contract's
           #           base_commit); print the SHA-256 of the contract bytes read at C (the approval check compares it with the
           #           approved contract_hash); write ../task.json and ../range-base.txt (the task's commits, oldest first, or
           #           empty when there is no task).
@@ -726,8 +748,19 @@ jobs:
               if len(ids) != 1 or 'MANY' in ids:
                   raise SystemExit('G0 FAIL: the pushed commits name more than one task: ' + ', '.join(sorted(ids)))
               tid = ids.pop()
-              path = 'docs/tasks/' + tid + '.yaml'
-              adds = git('log', '--format=%H', '--diff-filter=A', 'HEAD', '--', path).decode().split()
+              docs_path = 'docs/tasks/' + tid + '.yaml'
+              state_path = '.aieos/tasks/' + tid + '.yaml'
+              found = {}
+              for cand in (docs_path, state_path):
+                  added = git('log', '--format=%H', '--diff-filter=A', 'HEAD', '--', cand).decode().split()
+                  if added:
+                      found[cand] = added
+              if len(found) > 1:
+                  raise SystemExit('G0 FAIL: the contract of %s is added in both folders: %s and %s' % (tid, docs_path, state_path))
+              if not found:
+                  raise SystemExit('G0 FAIL: commits adding %s or %s: 0 (expected 1 in one folder)' % (docs_path, state_path))
+              path = list(found)[0]
+              adds = found[path]
               if len(adds) != 1:
                   raise SystemExit('G0 FAIL: commits adding %s: %d (expected 1)' % (path, len(adds)))
               c = adds[0]
@@ -736,8 +769,9 @@ jobs:
               parents = git('log', '-1', '--format=%P', c).decode().split()
               changed = git('diff-tree', '--no-commit-id', '--name-only', '-r', '--no-renames', c).decode().split('\n')
               changed = [x for x in changed if x]
-              if len(parents) != 1 or changed != [path]:
-                  raise SystemExit('G0 FAIL: the contract commit must have one parent and change only ' + path)
+              allowed = [path] if path == docs_path else sorted([path, '.aieos/events.jsonl'])
+              if len(parents) != 1 or (changed != [path] and sorted(changed) != allowed):
+                  raise SystemExit('G0 FAIL: the contract commit must have one parent and change only ' + path + ('' if path == docs_path else ' (and at most .aieos/events.jsonl)'))
               body = git('show', c + ':' + path)
               k = parse_contract(body.decode('utf-8'))
               if k['task'] != tid or k['base_commit'] != parents[0]:
