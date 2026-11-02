@@ -10,6 +10,7 @@
 3. Then the open links of section 7, each its own task.
 4. **The native risk derivation, shadow**, after section 7's links: a Go port of the governor's `derive_inputs` (risk and evidence profile), traced to `risk-rules-gov-aieos.md` and `governor-spec.md` §3.2. Master Plan :84 names only the governor and the Resume Check as reaching shadow in v0.1; risk is next in the takeover order and is not needed for M8's exit (D-3336).
 - The order is the Master Plan's (:84: "governor, Resume Check, risk"). The stateful writer stays in the bootstrap; it is not ported in v0.1 (:84).
+- From TASK-115 on, a code task's X is pushed to `refs/heads/task/<id>` before it goes to main (or a re-made copy of X, if X is already on main), and the CI step records of the task cite only a run whose log shows "G0 detect: task <id>" (DEF-0115; decisions D-4526, D-4531).
 
 ## 2. What "shadow" means
 
