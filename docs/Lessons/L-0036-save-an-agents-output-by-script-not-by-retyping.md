@@ -21,6 +21,7 @@ but not equal, and a records script that compares it with the transcript stops.
   review_save2.py (the last handback of the agent, "xb", hash printed), the records script found each reviewer by the
   hash of its saved text in the agent transcripts, and the decision pages were built and copied by scripts with hash
   checks. No retyped copy.
+- 2026-11-03 (../History/2026-11/2026-11-02-2326-m8-stage-8-task-116-the-first-contract-the-core-wrote-not-accepted.md, D-4686, D-4687; checkpoint cp268): the G3 review and the SEC-002 review of TASK-116 were saved with the Write tool from the displayed hand-back text, which lacks the spaces at the ends of lines, so the saved files were not byte-identical to the hand-back texts (first differences at 7028 and 1131 characters); I called them saved unedited; the first dry run of the records maker stopped at its own check; the maker now takes the text from the hand-back and asserts that the saved file equals it after the spaces at the ends of lines are removed (D-4687: no re-make needed). The rule broken: "by a script that reads its handback from the transcript and writes the bytes unchanged, never by retyping it with the Write tool".
 
 ## Why it happens
 A copy that reads the same is taken for a copy that is the same.

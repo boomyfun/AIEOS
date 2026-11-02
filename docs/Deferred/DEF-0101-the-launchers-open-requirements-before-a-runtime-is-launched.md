@@ -104,3 +104,6 @@ TASK-051 (adapter); specification 5 section 11 points 7 and 10, specification 7 
 - 2026-11-03: TASK-116, the first task whose contract the core wrote (`aieos run`, decision D-4674; the contract is
   under `.aieos/tasks/`), is launched by no session, because `aieos launch` ships no runtime starter (cli.py NO_STARTER,
   specification 7 :35); this item's subject is unchanged; this item stays open (session 08342c65; decision D-4674).
+- 2026-11-03: the entry above (TASK-116) was put on main by TASK-116's own task commit b202e609 before the task was accepted, and
+  TASK-116 was not accepted (decision D-4685, DEF-0118: functional lint has no producer); the statement of the entry is
+  unchanged by this; this item stays open (session 08342c65; decisions D-4685 and D-4692).

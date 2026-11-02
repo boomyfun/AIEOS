@@ -21,3 +21,4 @@ TASK-115; the Finding-A DEF.
 
 ## Log
 - 2026-11-02: opened (session 08342c65), at the acceptance of TASK-115.
+- 2026-11-03 (session 08342c65): TASK-116 is the first low-risk task, a docs-only change made from a contract `aieos run` wrote (decisions D-4674 and D-4677); its result was read; it was not accepted at its task commit T b202e609 (D-4685: functional lint has no producer, DEF-0118), so the governor's evaluation of a run-made contract at acceptance was not exercised; this item stays open.
