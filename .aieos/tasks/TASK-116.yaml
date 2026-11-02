@@ -1,0 +1,45 @@
+task: TASK-116
+contract_version: v1
+task_type: implementation
+objective: >-
+  Make the change that intent INT-001 states, within the write set.
+traces_to: []
+input_state:
+  base_commit: c20b71c4564338fdf495b473ede0c9e3905ffa81
+  depends_on: []
+  intent_versions: {}
+write_set:
+  paths:
+    - docs/Deferred/DEF-0101-the-launchers-open-requirements-before-a-runtime-is-launched.md
+read_set:
+  paths:
+    - "**"
+  interfaces: []
+  schemas: []
+forbidden:
+  - .aieos/**
+constitution: []
+acceptance_criteria:
+  - AC1: >-
+      The change does what intent INT-001 states, within the write set.
+  - AC2: >-
+      No other path is changed.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [the write_set paths]}
+  shell: {allow: []}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: low
+autonomy:
+  max_level: L1
+  budgets: {tokens: 400k, wall_time: 2h, retries: 1, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G3, check: review, args: [AC1, AC2]}
+exit_conditions:
+  success: the change is made within the write set and nothing else changed
+  escalate: [needs_out_of_scope_change, needs_owner_act]
+owner_kept_act: false
