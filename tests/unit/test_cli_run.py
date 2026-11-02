@@ -1064,6 +1064,18 @@ class TASK115AC1Statement(unittest.TestCase):
             self.assertEqual(out1, out2, write)
             self.assertEqual(written(w1), written(w2), write)
             self.assertFalse(written(w1) and written(w1)[0][3].endswith('owner_kept_act: false\n'), write)
+            self.assertNotEqual(out1['reason'], 'argument', write)
+            self.assertEqual(out1['result'], 'done', write)
+            self.assertTrue(written(w1)[0][3].endswith('owner_kept_act: true\n'), write)
+
+    def test_the_launcher_texts_name_the_statement(self):
+        """TASK-115 AC1 (the texts of TASK-098 AC6): launcher.py's docstring no longer says both templates end
+        owner_kept_act true without the statement, its run_task paragraph names TASK-115, and run_task's own
+        docstring names owner_kept_act at the argument step."""
+        text = doc('launcher.py')
+        self.assertNotIn('both with owner_kept_act true', text)
+        self.assertIn('TASK-115', text[text.index('run_task (task TASK-098;'):])
+        self.assertIn('owner_kept_act', ' '.join(launcher.run_task.__doc__.split()))
 
     def test_the_keyword_is_in_the_signature(self):
         """TASK-115 AC1 (the run of TASK-098 AC1): run_task has the keyword owner_kept_act, default None."""
@@ -1126,6 +1138,14 @@ class TASK115AC2Flag(unittest.TestCase):
         description names the flag."""
         self.assertIn('python -m aieos_bootstrap.cli ' + RUN_USAGE_LINE, cli.USAGE)
         self.assertIn('--owner-kept-act', doc('cli.py'))
+
+    def test_the_run_description_names_the_flag(self):
+        """TASK-115 AC2 (the docstring of TASK-098 AC6): the run bullet of cli.py's docstring, from "- run <task>
+        <intent>" to "- RUNTIME_VARS", names the flag and the keyword the call passes with it."""
+        text = doc('cli.py')
+        bullet = text[text.index('- run <task> <intent>'):text.index('- RUNTIME_VARS')]
+        self.assertIn('--owner-kept-act false', bullet)
+        self.assertIn("owner_kept_act='false'", bullet)
 
 
 class TASK115AC3Meet(unittest.TestCase):

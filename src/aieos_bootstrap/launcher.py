@@ -244,8 +244,9 @@ as a claim and makes and records one task; it returns a mapping with exactly RUN
 It drafts nothing and runs no model: it classes the caller's literal write set at the base through
 scope_reconcile.read_base, rules_from_policy and scope_drift.path_class, each path in its own form and in its
 lowercased form against the rules with their patterns lowercased, failing closed to no class; a low class gives a
-single task from a fixed template, anything else a drafting task from another fixed template, both with
-owner_kept_act true. It writes the contract through writer.write_contract before any
+single task from a fixed template, anything else a drafting task from another fixed template, both ending owner_kept_act: true, or owner_kept_act: false
+when the caller states the text false (task TASK-115: accepted only with source_class decision_agent, and refused when
+a write path is under .github/ or is the measurement protocol). It writes the contract through writer.write_contract before any
 append, then appends the intent's claim and task.drafted through writer.append_event; the claim names who stated the
 intent, as approval_act's records do, with decision_ref for decision_agent (r3). run_task reads the caller's
 clock once, an exception to "reads no clock" above. Since task TASK-104 it refuses with reason "intent", before
@@ -1936,7 +1937,8 @@ def run_task(root, task_id, intent, source_class, who, write, clock, read=None, 
              write_contract=None, append=None, owner_kept_act=None):
     """Record an intent and make and record its task (task TASK-098; `aieos run`, specification 7 section 3 :30): a
     mapping with exactly RUN_KEYS; it never raises an Exception. Its steps, each step's name being the reason of a
-    refusal or a raise at it: argument (who as approval_act checks it, r3); clock; head (start's own reader, _head, 40
+    refusal or a raise at it: argument (who as approval_act checks it, r3; the statement owner_kept_act, None or the
+    text false, TASK-115); clock; head (start's own reader, _head, 40
     lowercase hex); log (read_log, then records.check_log); exists (any event of the task in the log); the class at the
     base (never a refusal); the intent's id and claim; intent (a dry run of eventlog.append: a claim that would answer
     "conflict" is refused before anything is written, TASK-104); the kind and its template; write (write_contract,

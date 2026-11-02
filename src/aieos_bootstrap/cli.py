@@ -97,7 +97,9 @@ What it does:
   After the parse it is refused inside a runtime: in_runtime(environ) true gives exit 1 and the one finding
   RUN_RUNTIME_REFUSAL; else launcher.run_task(root, task, intent, class, who, write, clock) once, looked up at each
   call, who being --by, the decision id (decision_agent) or the name (human_authority), as approve's is (r3).
-  "done" gives exit 0 and the lines "intent: <id> <claim id>", "contract: <path> <hash> <kind> <risk or none>" and
+  With --owner-kept-act false (task TASK-115) the call also passes the keyword owner_kept_act='false', and run_task
+  writes the contract ending owner_kept_act: false; without the flag no keyword is passed and the contract ends
+  owner_kept_act: true. "done" gives exit 0 and the lines "intent: <id> <claim id>", "contract: <path> <hash> <kind> <risk or none>" and
   "event: <id> <appended or duplicate>" twice, then "finding: <text>" per finding, or under --json one sorted JSON
   line; "refused" gives exit 1 and the findings "run: refused <reason>" then the answer's findings; an answer out of
   form, its types checked exactly, gives RUN_OUT_OF_FORM; a raise in run_task gives "run: a step raised <type>", and
