@@ -1,0 +1,85 @@
+# Task contract TASK-114, r6 DRAFT (session bdca08a6; r6 by Edit of a copy of r5 under D-4515 C3 (E6 to E8: this line, the shadow at the acceptance request, the second decision_agent_review), not reviewed by any model; r0 by a new file; r1 by Edit under D-4510 K; r2 = r1 filled by fill114.py under D-4511 C2; r3 by Edit of a copy of r2 under D-4511 C3; r4 by Edit of a copy of r3 under D-4512 C3, reviewed by the round-2 review R114c; r5 by Edit of a copy of r4 under D-4514 C3 (the R114c fixes F1, F2, F3 and F7), not reviewed by any model after R114c; scratchpad only; not approved; not committed). Layout of TASK-113's contract (the layout that base_inputs._parse_contract_text reads: every comment on its own line, lists as blocks). The keys were compared one by one with TASK-113.yaml (L-0031): task, contract_version, task_type, objective, traces_to, input_state (base_commit, depends_on, intent_versions), write_set, read_set, forbidden, constitution, acceptance_criteria, capabilities, risk, autonomy, verification_plan, exit_conditions, owner_kept_act.
+# Why: D-4508 ruled route (C') for the first core run: P1 (this task) lets CI read a contract that the core wrote, P2 (TASK-115) lets `aieos run` declare owner_kept_act false and removes the stale texts, then the first docs-only low core run. D-4509 chose P1-a: G0 detect accepts .aieos/tasks/<id>.yaml beside docs/tasks/<id>.yaml (spec 7 section 10 item 17, DEF-0105 link 1). Facts read (file:line, main 0723c786): aieos-checks.yml :281-317 and the second copy :716-752 (detect), :460 and :530 (the EVALUATOR lists), :436-441 (the SEC-003 record step), header :82-141 (revisions 10 to 17); constitution.md :122-125 (SEC-003 revision 4); governor.py :585-590; spec-07 :57 and :76.
+# Risk: critical. R9 (.github/**) is critical (risk-rules section 3, :54). Every path of the write set is a GOV-003 evaluator path ('.github/**', 'tests/integration/**'). Change class: critical_cr.
+# Authority. The change of the workflow is the decision agent's own decision under DM A66 and constitution SEC-003 revision 4 ("for gov-AIEOS, a decision of the decision agent that approves exactly that change as its own decision, changes that remove or loosen a check included"). This change LOOSENS what G0 detect accepts (a second place for a task's contract) and the decision says so. It grants no write access, uses no secret or token, changes no setting (AC5). owner_kept_act false, as TASK-103's contract reads A66 (TASK-103.yaml :22-29); nothing under governor.py or the workflow's pinned checks routes .github/ to the owner (D-4509 section 4 finding): the only owner-routed path check is OPS-002 for the measurement protocol (aieos-checks.yml :471); DEF-0031's open texts (Master Plan section 9 item 1, governor-spec :165, :196, :200) are documents, not a live routing.
+# The workflow's revision number: the header holds revisions up to 17, so this change is revision 18.
+task: TASK-114
+contract_version: v1
+task_type: implementation
+objective: >-
+  Let G0 detect accept a task's contract at .aieos/tasks/<id>.yaml (the file the core writes) beside docs/tasks/<id>.yaml, in both copies of detect in .github/workflows/aieos-checks.yml: the contract commit must be on main, have one parent equal to the contract's base_commit and change only the contract file, except that a state contract may share its commit with .aieos/events.jsonl; the same id added in both folders is a failure. Add '.aieos/tasks/**' to both pinned GOV-003 lists, update the header comments and add the revision 18 paragraph that names the loosening. Add tests/integration/test_g0_detect_copies.py, which checks the text of both copies of detect and of both lists. No other check changes.
+traces_to:
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#7
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#10
+  - docs/Deferred/DEF-0105-the-zero-friction-paths-open-links.md
+  - docs/Deferred/DEF-0031-texts-that-keep-github-changes-with-the-owner.md
+  - docs/pre-genesis/constitution.md#SEC-003
+input_state:
+  # base_commit is the head of main when the contract is approved (now 0723c786782ec82d1104fd905567bd4b45c3d502); the executor of commit C refuses unless it equals HEAD, refs/heads/main and refs/remotes/origin/main.
+  base_commit: 0723c786782ec82d1104fd905567bd4b45c3d502
+  depends_on: [TASK-103, TASK-113]
+  intent_versions:
+    # sha256 of each file at base_commit, filled by script at the approval request; one key for each depends_on task file and each text the contract is bound by.
+    docs/tasks/TASK-103.yaml: 467a238ecf7f037ec4d6ffe31c18183bedf95714f22f1861d39df99d957e233a
+    docs/tasks/TASK-113.yaml: 2474b23d43ea51ef5db84378fe4ce51d7e0a14ba32350cfb15a07de9db65470f
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+    docs/specs/spec-07-cli-and-zero-friction-path.md: c8963885d4e350bc7accd086c5091b64c53cf62666209471cf4648e5f4368f2c
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    .github/workflows/aieos-checks.yml: c945703e52e06cbda0a174eb72cde3186e86dc7ff2bbac4793fc9bc57148687e
+write_set:
+  paths:
+    - .github/workflows/aieos-checks.yml
+    - tests/integration/test_g0_detect_copies.py
+read_set: {paths: [docs/plan/, docs/specs/, docs/Deferred/, docs/pre-genesis/, src/aieos_bootstrap/, tests/, .github/workflows/], interfaces: [], schemas: []}
+forbidden:
+  - .github/workflows/aieos-native.yml
+  - .github/workflows/aieos-bench.yml
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - src/**
+  - bench/**
+  - native/**
+  - docs/**
+  - tests/unit/**
+  - tests/property/**
+  - tests/conformance/**
+  - tests/run_tests.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The two copies. Both copies of detect (the first in the step "G0 task detection (the contract commit on main)", the second in the step "G0 scope (V0)") are byte-equal when dedented, and so are the two G0 scripts from their header comment to the end of detect (the imports and every line before detect included); both pinned EVALUATOR lists hold '.aieos/tasks/**' directly after 'docs/tasks/**' and are equal (the step "GOV-003 evaluator lists equal" passes); the header comment at the top of the file and the two comments in the scripts name the second folder; a revision 18 paragraph in the header states that the change LOOSENS detect, what it accepts, and the limits (a state commit with two contracts or any third path is refused as a contract commit; the event-log change is not checked to be append-only; a task's own commits that change .aieos/ stay refused by INV-004; a committed log is public once pushed). The unified diff of the workflow against main is exactly the diff the decision agent approved (its SHA-256 is bound in the approval). Raw output of scope_reconcile.evaluator_from_workflow on the new text shows the full list with '.aieos/tasks/**', and on the base text the old list (as TASK-103 AC2); this output is produced at the approval request, and the step "GOV-003 evaluator lists equal" is shown passing only by the CI run of the accepted commit.
+  - AC2: >-
+      The accepted cases, as evidence from outside the repository. A scratchpad harness, never committed, extracts the first copy of detect and runs it in temporary Git repositories that have a local refs/remotes/origin/main. It is not committed because deterministic_rule refuses subprocess, tempfile, exec, compile and open under tests/ (aieos-checks.yml at base_commit: the lists DENY_MODULES and DENY_NAMES :1551-1555 and the function check_source :1648-1696). The worker runs it under the decision agent's decision (D-4510 C3), once on the built workflow (all pass) and once on the base workflow (the docs case passes, the two state cases fail). A contract added at docs/tasks/<id>.yaml by a commit that changes only it is accepted (unchanged behaviour); a contract added at .aieos/tasks/<id>.yaml by a commit that changes only it is accepted; the same with .aieos/events.jsonl in the same commit is accepted; in each the output names the task, the contract commit and the base equal to the parent. Both raw outputs and the harness's SHA-256 go in the acceptance record. This is same-lineage evidence, and CI does not run it.
+  - AC3: >-
+      The refused cases, from the same scratchpad runs, each a "G0 FAIL: " message with no task.json, and the text test. The harness shows these fail closed with the workflow's own message: a state contract commit that also changes a third path; a docs/tasks contract commit that also changes .aieos/events.jsonl; the same id added in both folders, in one commit and in two; no contract in either folder; a state contract added, removed and added again (two adds); a contract commit that origin/main does not hold; a contract whose base_commit is not the parent; a contract added by a merge commit (two parents), refused at the zero-adds step with "0 (expected 1 in one folder)" because git log without -m lists no merge as adding a file; the one-parent test of detect is kept as a defence; under git's default log output (a merge is not listed as adding a file) it can fire only for a root commit, which the harness does not build, and no run shows that branch firing. In the repository, tests/integration/test_g0_detect_copies.py (which passes deterministic_rule) checks the text of both copies of detect, of the two G0 scripts from their header comment to the end of detect, and of both lists (text only: it does not show that a line is reached), and its own tests each name "TASK-114 ACn" in their docstrings.
+  - AC4: >-
+      Evidence and CI. The risk class is critical, so the evidence profile is the critical profile of assurance-model section 5: unit_test and integration_test (this task's test is an integration test and the CI runs the existing unit tests unchanged), deterministic_rule, static_security_analysis and ai_review (cross-model), plus functional [property/fuzz] (met by property_test records) and architecture [human_review] (met by a second decision_agent_review, which is never also the cross-model half: assurance-model section 5), as for TASK-103. The tool entries are met by the CI's own steps on the accepted commit; if the governor shadow's raw output in the records dry run at the acceptance request (as for TASK-113) shows any entry unmet, the task stops and comes back to the decision agent, and no workaround is used. The cross-model pair is a way-2 review on Haiku 5.5 (no other model without the owner) of the diff and the test, and a separate decision_agent_review that stands for that entry, both bound to the evaluated commit and the intent versions; the way-2 record names the implementer's model, the model of the session that makes the task commit (expected claude-sonnet-5-5) and the reviewer's model (Haiku 5.5); if the reviewer's model equals either of the other two, the pair counts nothing and the task stops. The aieos-checks and aieos-native runs succeed on the accepted commit and on main after the records commit, read by run id. The checks that touch the contract path (detect, scope) are run on this task's own push with its contract at docs/tasks/TASK-114.yaml by the changed workflow (the job runs the head's code) on its docs path; the state path is exercised only by the scratch harness until the first core-written contract is pushed.
+  - AC5: >-
+      Limits of the change. It grants no write access, adds no permission block, no secret, no token, no new action and no setting; it uses no network. It removes no check. It loosens exactly one: what detect accepts as a task's contract (a second folder, with an event log beside it). The decision that approves the change says this in plain words (SEC-003, "changes that remove or loosen a check included"). No other path is changed: G0 scope sees only the two write-set paths. It does not decide whether any task is run with `aieos run` (TASK-115 and the first core run are their own decisions), changes no spec text (spec 7 revision 11, which describes this behaviour, is a docs commit after this task is accepted), and does not touch DEF-0031 (its Log gets the D-4509 finding at the end records).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [.github/workflows/aieos-checks.yml, tests/integration/test_g0_detect_copies.py]}
+  shell: {allow: []}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+# risk: R9 (.github/**): critical (risk-rules section 3, :54); to be confirmed by script in the approval request.
+risk: critical
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 6h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3]}
+  - {gate: G3, check: constitution, args: [AC4, AC5, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the risk class is satisfied AND one approval record counts AND the CI runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false: the one act is a change of the workflow, which A66 and SEC-003 revision 4 give to the decision agent for the self-build (TASK-103.yaml :22-29); no runtime is launched and nothing of A51 item (4) that stays with the owner is carried out.
+owner_kept_act: false
