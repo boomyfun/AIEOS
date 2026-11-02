@@ -101,3 +101,6 @@ TASK-051 (adapter); specification 5 section 11 points 7 and 10, specification 7 
   step "root" reads it before the status read; GOV-003 'does not hold' is a stated departure of the acceptance
   (DEF-0107 points 2 to 5, the compensating controls named in D-4271); the way-2 review R110 found INV-001 holds with its
   stated limits; the part of the check after the grant stays open (session 79c5920b; decisions D-4203 to D-4279).
+- 2026-11-03: TASK-116, the first task whose contract the core wrote (`aieos run`, decision D-4674; the contract is
+  under `.aieos/tasks/`), is launched by no session, because `aieos launch` ships no runtime starter (cli.py NO_STARTER,
+  specification 7 :35); this item's subject is unchanged; this item stays open (session 08342c65; decision D-4674).
