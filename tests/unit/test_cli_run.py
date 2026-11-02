@@ -1053,6 +1053,21 @@ class TASK115AC1Statement(unittest.TestCase):
                 out = go(w, write=write, clock=clock, owner_kept_act='false')
                 self.refused_at_argument(w, out, clock, write)
 
+    def test_the_statement_refused_with_the_measurements_folder(self):
+        """TASK-115 AC1 (the run of TASK-098 AC1; tightened by D-4636 and D-4637): the text false with decision_agent
+        is refused with reason argument when a path of write is the folder docs/pre-genesis/measurements or under it,
+        in any case; a sibling name that only begins with the folder's name is not refused."""
+        for path in ('docs/pre-genesis/measurements/P-1.md', 'DOCS/PRE-GENESIS/MEASUREMENTS/x/y.md',
+                     'docs/pre-genesis/measurements', 'Docs/Pre-Genesis/Measurements/a.txt'):
+            for write in ((path,), ('docs/a.md', path)):
+                w, clock = World(), Clock()
+                out = go(w, write=write, clock=clock, owner_kept_act='false')
+                self.refused_at_argument(w, out, clock, write)
+        w = World()
+        out = go(w, write=('docs/pre-genesis/measurements-notes.md',), owner_kept_act='false')
+        self.assertEqual(out['result'], 'done')
+        self.assertTrue(written(w)[0][3].endswith('owner_kept_act: false\n'))
+
     def test_without_the_statement_the_paths_are_checked_as_before(self):
         """TASK-115 AC1 (the run of TASK-098 AC1): without the statement the same write sets behave as without the
         keyword: the answer and the text written are those of a call that gives none."""
@@ -1132,6 +1147,8 @@ class TASK115AC2Flag(unittest.TestCase):
             for environ in ({}, {'AIEOS_ROOT': 'x'}):
                 rc, out, stand, clock = run(argv, environ=environ)
                 self.assertEqual((rc, out, stand.calls, stand.kwargs, clock.calls), (2, cli.USAGE, [], [], 0), argv)
+        rc, _, stand, clock = run(STATEMENT_ARGV + ['--owner-kept-act', 'false'])   # the positive control: the same argv without a fault is a good call
+        self.assertEqual((rc, stand.kwargs), (0, [{'owner_kept_act': 'false'}]))
 
     def test_the_usage_line(self):
         """TASK-115 AC2 (the command of TASK-098 AC4): the run line of USAGE is the new line, and cli.py's parser

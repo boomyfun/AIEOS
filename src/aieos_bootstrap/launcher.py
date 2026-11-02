@@ -246,7 +246,7 @@ scope_reconcile.read_base, rules_from_policy and scope_drift.path_class, each pa
 lowercased form against the rules with their patterns lowercased, failing closed to no class; a low class gives a
 single task from a fixed template, anything else a drafting task from another fixed template, both ending owner_kept_act: true, or owner_kept_act: false
 when the caller states the text false (task TASK-115: accepted only with source_class decision_agent, and refused when
-a write path is under .github/ or is the measurement protocol). It writes the contract through writer.write_contract before any
+a write path is under .github/, is the measurement protocol or is under docs/pre-genesis/measurements/). It writes the contract through writer.write_contract before any
 append, then appends the intent's claim and task.drafted through writer.append_event; the claim names who stated the
 intent, as approval_act's records do, with decision_ref for decision_agent (r3). run_task reads the caller's
 clock once, an exception to "reads no clock" above. Since task TASK-104 it refuses with reason "intent", before
@@ -1804,7 +1804,8 @@ def _run_argument_findings(root, task_id, intent, source_class, who, write, cloc
 
 def _run_statement_findings(source_class, write, owner_kept_act):
     """Step 1, the caller's statement (task TASK-115): none, or exactly the text false with decision_agent and no
-    write path under .github/ or equal to the measurement protocol, each compared without regard to case."""
+    write path under .github/, equal to the measurement protocol, or equal to or under docs/pre-genesis/measurements
+    (the folder the CI routes to the owner), each compared without regard to case."""
     if owner_kept_act is None:
         return []
     if not (type(owner_kept_act) is str and owner_kept_act == 'false'):
@@ -1814,9 +1815,11 @@ def _run_statement_findings(source_class, write, owner_kept_act):
     if isinstance(write, (list, tuple)):
         for path in write:
             if isinstance(path, str) and (path.lower().split('/')[0] == '.github'
-                                          or path.lower() == 'docs/pre-genesis/measurement-protocol.md'):
-                return ['argument: owner_kept_act false is refused for a write path under .github/ or the '
-                        'measurement protocol']
+                                          or path.lower() == 'docs/pre-genesis/measurement-protocol.md'
+                                          or path.lower() == 'docs/pre-genesis/measurements'
+                                          or path.lower().startswith('docs/pre-genesis/measurements/')):
+                return ['argument: owner_kept_act false is refused for a write path under .github/, the '
+                        'measurement protocol or the measurements folder']
     return []
 
 
