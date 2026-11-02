@@ -306,6 +306,7 @@ Occurrences in session 2026-11-01-1050 (../History/2026-11/2026-11-01-1050-m8-st
 - **2026-11-01 (D-4365).** A `python -c` form without timeout in a Bash call; refused; not retried.
 - **2026-11-01 (line 454, brought in D-4391).** A command that carried Python's version flag and its module flag; refused (R2, R3); nothing of it ran and the form was not retried.
 - **2026-11-01 (D-4405, reported in the request of D-4406).** A search whose pattern text held the forbidden `python -c` form; refused (R2, R3); the search was redone without it. (The decision agent's own command form `python -u`, D-4325 C3, line 133, was refused too; it is the decision agent's, not counted above.)
+- 2026-11-02 (../History/2026-11/2026-11-02-1252-m8-stage-8-task-115-the-explicit-owner-kept-act-statement-for-aieos-run.md, D-4609, D-4610, D-4616, D-4651; checkpoint lines 1258, 1308, 1619): the first baseline command, in a python flag form that D-4608 prescribed (`python -B`), was refused by the owner's guard before it ran and was not retried in that form (D-4610 gave the guard-compliant form); a stray `python -c pass` in one command (D-4616) and a here-document for a pin file (D-4651) were refused before they ran; the pin file was written with the Write tool; D-4652 ruled the last under DM A71.
 
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
