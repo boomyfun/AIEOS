@@ -32,6 +32,11 @@ Occurrences in session 08342c65, second part (../History/2026-11/2026-11-03-0157
 - D-4730: a pins check run from the wrong folder (cp line 2165).
 - D-4731: the pins check after the edit (cp line 2173).
 
+Occurrences in session a0a0bdef (../History/2026-11/2026-11-04-2049-m8-stage-8-task-117-the-core-reads-the-declaration-at-the-base-a0a0bdef.md; the evidence lines are the worker's checkpoint lines and decision-file lines named in each item; the worker's own claim until checked):
+- 2026-11-04 (D-4753:35): the edits E1 to E8 of the end-records drafts of session 08342c65 were made with no .orig copies; disclosed and stated as a departure.
+- 2026-11-05 (D-4779, D-4780): the gate of the real records maker run was built as a chain with `grep -vc` pipes; a failed `sha256sum -c pins_d4778.sum` (cp23_draft.md had been edited after it was pinned) did not stop the chain and the real maker ran anyway. It wrote only the scratchpad output that the approved run wrote, and the decision agent accepted it as a stated departure (D-4780). Why the rule did not stop it: the rule says to run a script behind `sha256sum -c`; it does not say that the gate itself must be able to stop the run, and a pipe returns the status of its last command. Added to the Prevention lines: each gate is its own call with the exit status read, or a `set -e` script with a plain `sha256sum -c`; never a pipe or `;` between the check and the run.
+- 2026-11-05 (checkpoint lines 218 and 247; D-4782): a check script stopped on CRLF line ends and was fixed in place and rerun (cp line 218); the first `sed` of the header of write_dec_4781.py left an unterminated string, and an Edit and a `sed -i` fixed it, so three dry runs of that writer failed before anything was written (cp line 247). No gate was passed wrongly.
+
 ## Why it happens
 A new file has no hash until it exists, so the first run is done before a gate can be written; the Edit tool changes the file in place.
 
@@ -39,3 +44,4 @@ A new file has no hash until it exists, so the first run is done before a gate c
 - Make the file, hash it in its own call, then run it gated in the next call.
 - Before editing a script under review: `cp -n x x.orig`; bring `diff x.orig x`.
 - Before running `sha256sum -c`, `cd` to the folder that the sum file's paths are relative to; a "No such file" or "FAILED open or read" line is a folder slip, never a pass.
+- A gate is its own call whose exit status is read, or a line under `set -e`; never a pipe or `;` that lets a failure pass (D-4780 C5).

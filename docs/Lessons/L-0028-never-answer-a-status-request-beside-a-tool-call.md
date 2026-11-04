@@ -102,6 +102,12 @@ Session 9dbe9c67 (2026-10-30; TASK-103):
 Occurrences in session 08342c65, second part (../History/2026-11/2026-11-03-0157-m8-stage-8-the-continuation-08342c65-part-2-the-tier-answer-route-p1-and-the-task-117-contract.md; the evidence lines are the worker's checkpoint lines, decision-file lines and transcript lines named in each item; the worker's own claim until checked):
 - The text-block hook's refusal text occurs on :10048, :12475, :13276, :13611 (whether each is a refusal or a quotation is not checked).
 
+Occurrences in session a0a0bdef (2026-11-04 to 2026-11-05; ../History/2026-11/2026-11-04-2049-m8-stage-8-task-117-the-core-reads-the-declaration-at-the-base-a0a0bdef.md; transcript lines taken by `gather_h_117.py` from the main transcript and checked by the decision agent's Grep (D-4790); the worker's own claim until checked):
+- The text-block hook refused eight calls because a sentence of mine stood beside them: main transcript :1588, :1690, :3706, :4501, :5646, :5874, :6565 and :6650; each call was resent alone at once and the slips were reported in the requests that followed. Several were answers to the app's status request. (facts.txt also lists :6722 and :6723; those lines are the text of the facts script itself, not refusals.)
+- The command guard refused a heredoc append at :4722 (not a text slip); I did not retry it and wrote the file with the Write tool. The guard's name also occurs on :96, :98, :109 and :112; those are quotations of an earlier session's refusal (D-4749) in files I read, not refusals.
+- While the end records were drafted, a status sentence for the owner (answering the app's request) went out beside a Glob; the hook did not refuse it. Disclosed in the next request.
+- While the end records were corrected, the hook refused a Grep because a sentence of mine stood beside it (main transcript :6997); it was resent alone and disclosed in the next request (D-4791).
+
 ## Why it happens
 The app's request reads as asking for words now, and the worker adds them to the call it is about to send.
 
