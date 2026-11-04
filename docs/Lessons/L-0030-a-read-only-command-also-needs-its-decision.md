@@ -49,6 +49,14 @@ Seven, in session 87e2584b's later part (../History/2026-10/2026-10-29-0446-the-
 - 2026-11-02 (../History/2026-11/2026-11-02-0522-m8-stage-8-task-114-the-ci-path-for-a-contract-the-core-writes.md, D-4520, D-4530, D-4532, D-4534, D-4535, D-4540, D-4541; clone reads in cp135, the D-4551 request): `bash -n` after a decision said not to; two `git log` reads; a `git status | wc -l`; an `ls` of a source folder and a pycache count; `ls -d out4504` more than once; five read-only git reads in the scratch clone. Each was disclosed in the request named.
 - 2026-11-02 (../History/2026-11/2026-11-02-1252-m8-stage-8-task-115-the-explicit-owner-kept-act-statement-for-aieos-run.md, D-4620, D-4656; checkpoint lines 1350, 1662): a copy made to produce a diff (msg_115x2.old, accepted in D-4621); the `gh run list` repeated with `-R` and the repository name after it failed for lack of a repository, a change to the named command (accepted in D-4657 as an occurrence).
 
+Occurrences in session 08342c65, second part (../History/2026-11/2026-11-03-0157-m8-stage-8-the-continuation-08342c65-part-2-the-tier-answer-route-p1-and-the-task-117-contract.md; the evidence lines are the worker's checkpoint lines, decision-file lines and transcript lines named in each item; the worker's own claim until checked):
+- D-4712/D-4713 C4: Bash sed, grep -o, cut over matrix rows and the workflow in E:\AIEOS (cp line 2046, 2050).
+- D-4722/D-4723: `git show -s` of the new commit (cp line 2106).
+- D-4730/D-4731: `ls /e/AIEOS/.git/hooks` (cp line 2167).
+- D-4737/D-4738: `uname -s`, `wc -c` (cp line 2224, 2227); D-4738/D-4739: `sed -n 178,186p` (cp lines 2229, 2233).
+- D-4739/D-4740: show_d4739.py and a /tmp file (cp lines 2233, 2238).
+- D-4750: extract_relays.py named only after it ran, a process failure under D-4739 (D-4750 file line 33).
+
 ## Why it happens
 A read is not felt as an act, and right after a compaction the habits of the call form are weakest.
 

@@ -99,6 +99,9 @@ Session 9dbe9c67 (2026-10-30; TASK-103):
 - **2026-11-02 (session bdca08a6, D-4460, D-4475).** The text-block hook refused one call because a sentence of mine stood beside it: the Read of build_pages_4418.py before the request of D-4460 (main transcript :3733 to :3735; the refusal text occurs once in the main transcript, counted by a narrow Grep -o at D-4475); it was resent alone at once, without a decision. Why the rule did not stop it: the sentence was a plan line ("Now read the 4418 page builder ...") added out of habit in a long run of tool-only messages.
 - 2026-11-02 (../History/2026-11/2026-11-02-0522-m8-stage-8-task-114-the-ci-path-for-a-contract-the-core-writes.md, transcript :6255, :7522, :7966, :7968, :10566, :10602): the hook refused tool calls that had a sentence of mine beside them; each call was resent alone. Whether :7968 is a separate call is not decided. Lines :4976, :4979, :13461 and :13463 are quotations, not refusals.
 
+Occurrences in session 08342c65, second part (../History/2026-11/2026-11-03-0157-m8-stage-8-the-continuation-08342c65-part-2-the-tier-answer-route-p1-and-the-task-117-contract.md; the evidence lines are the worker's checkpoint lines, decision-file lines and transcript lines named in each item; the worker's own claim until checked):
+- The text-block hook's refusal text occurs on :10048, :12475, :13276, :13611 (whether each is a refusal or a quotation is not checked).
+
 ## Why it happens
 The app's request reads as asking for words now, and the worker adds them to the call it is about to send.
 

@@ -287,6 +287,9 @@ Occurrence in session 2026-10-17-1653 (../History/2026-10/2026-10-17-1653-def-00
 Occurrences in session 2026-10-29-0446 (../History/2026-10/2026-10-29-0446-m8-starts-task-099-task-100-and-the-def-triage.md):
 - **2026-10-29 (D-3458).** After the first compaction, several turn-final replies were in English, against the start message; the owner wrote at :7450 "hãy Trả lời tôi bằng tiếng Việt, không dùng từ kỹ thuật"; replies were in Vietnamese from the next one.
 
+Occurrences in session 08342c65, second part (../History/2026-11/2026-11-03-0157-m8-stage-8-the-continuation-08342c65-part-2-the-tier-answer-route-p1-and-the-task-117-contract.md; the evidence lines are the worker's checkpoint lines, decision-file lines and transcript lines named in each item; the worker's own claim until checked):
+- :13469 "hãy sử dụng tiếng Việt để phản hồi cho tôi" (2026-11-03T01:16:19Z); :15159 "hãy sử dụng tiếng Việt cho lời nhắc phiên sau" (02:29:44Z).
+
 ## Why it happens
 The working language of the requests and documents is English, and short lines written between tool calls are not checked the way a turn-final reply is.
 

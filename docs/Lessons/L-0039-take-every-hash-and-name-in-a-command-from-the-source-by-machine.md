@@ -21,6 +21,11 @@ A decision's condition quoted a SHA-256 with one character missing, and the chec
 - 2026-11-02 (../History/2026-11/2026-11-02-0522-m8-stage-8-task-114-the-ci-path-for-a-contract-the-core-writes.md, D-4513, D-4526, D-4535, D-4549): two values typed from memory in cp94; tasks 109 to 112 said to have pushed X to main when only 112 to 114 did; the hash of cp118.md given as the hash of cp118.sum; a draft naming X's own run id and "7 failing tests" for 10.
 - 2026-11-02 (../History/2026-11/2026-11-02-1252-m8-stage-8-task-115-the-explicit-owner-kept-act-statement-for-aieos-run.md, D-4635, D-4636; checkpoint lines 1486, 1493): the R115w launch prompt was composed by hand and held two words that the brief does not hold, and my claim that it equalled the brief was wrong; found in D-4636, and the save script then compared with that one replacement stated.
 
+Occurrences in session 08342c65, second part (../History/2026-11/2026-11-03-0157-m8-stage-8-the-continuation-08342c65-part-2-the-tier-answer-route-p1-and-the-task-117-contract.md; the evidence lines are the worker's checkpoint lines, decision-file lines and transcript lines named in each item; the worker's own claim until checked):
+- D-4721: "9 lines" for a sum file with 8 (cp line 2097).
+- D-4728: the typed part of row A74 v2 (cp lines 2141, 2146).
+- D-4705/D-4704: `python -I` prescribed twice and run in the guard form `timeout 110 python <file>` with the reason (cp lines 1990, 1995).
+
 ## Why it happens
 Long hashes and commands are retyped from memory or from a previous message, and the decision agent repeats what the request says; the guard's forbidden forms are not in the decision agent's view.
 

@@ -27,6 +27,11 @@ A script that was just made is run in the same call as its diff and hash, or an 
 - 2026-11-02 (../History/2026-11/2026-11-02-0522-m8-stage-8-task-114-the-ci-path-for-a-contract-the-core-writes.md, D-4504, D-4512, D-4535, D-4563): the pin check of p2.sum run from the wrong folder; the check before the first dry run of the records maker run from the wrong folder (7 non-OK lines) in the same command that ran the dry run, which went ahead; a global replace of 25 by 17 turned sha256sum into sha176sum, found in my own diff before any run; today the h_drafts.sum check run from the scratchpad root ("No such file"), then from t114\h where it passed.
 - 2026-11-02 (../History/2026-11/2026-11-02-1252-m8-stage-8-task-115-the-explicit-owner-kept-act-statement-for-aieos-run.md, D-4607, D-4635, D-4652; checkpoint lines 1251, 1482, 1625): the D-4268 slip again, three times: a `sha256sum -c` was run from the wrong folder (ci115c.sum from t115 instead of t115/ci; the first R115w pin check; pins_d4651.sum from a sub-folder); each rerun from the right folder was all OK.
 
+Occurrences in session 08342c65, second part (../History/2026-11/2026-11-03-0157-m8-stage-8-the-continuation-08342c65-part-2-the-tier-answer-route-p1-and-the-task-117-contract.md; the evidence lines are the worker's checkpoint lines, decision-file lines and transcript lines named in each item; the worker's own claim until checked):
+- D-4715, D-4728: real copy scripts made with `sed -i` (cp lines 2066, 2149); D-4715: a token sed that also changed the scan pattern (cp line 2069).
+- D-4730: a pins check run from the wrong folder (cp line 2165).
+- D-4731: the pins check after the edit (cp line 2173).
+
 ## Why it happens
 A new file has no hash until it exists, so the first run is done before a gate can be written; the Edit tool changes the file in place.
 

@@ -71,6 +71,9 @@ Seven, in session 87e2584b's later part (../History/2026-10/2026-10-29-0446-the-
 - 2026-11-03 (same page, D-4690, D-4691; mine; checkpoints cp270 and cp271): I appended cp270, extended with the D-4690 result, right after the push, although D-4690 C4 said that decision did not cover that append; D-4691 let it stand as a disclosed slip and named a second one: cp270 as appended differs from the version pinned in D-4690 C1.
 - 2026-11-03 (same page, D-4691 C1; mine; cp271): I edited cp271 before running the pins check that C1 named first, so the check printed FAILED and I re-pinned by machine in a new file (accepted in D-4692).
 
+Occurrences in session 08342c65, second part (../History/2026-11/2026-11-03-0157-m8-stage-8-the-continuation-08342c65-part-2-the-tier-answer-route-p1-and-the-task-117-contract.md; the evidence lines are the worker's checkpoint lines, decision-file lines and transcript lines named in each item; the worker's own claim until checked):
+- D-4731 C1, D-4732: cp308 edited before its pins check ran; a named lapse, a second one a breach (cp lines 2173, 2178).
+
 ## Why it happens
 - Claude treats a step as mechanical (a display, a change of order, a turn end) and does not see it as a decision.
 - The request checklist of the decision agent's definition was not applied before sending.

@@ -309,6 +309,9 @@ Occurrences in session 2026-11-01-1050 (../History/2026-11/2026-11-01-1050-m8-st
 - 2026-11-02 (../History/2026-11/2026-11-02-1252-m8-stage-8-task-115-the-explicit-owner-kept-act-statement-for-aieos-run.md, D-4609, D-4610, D-4616, D-4651; checkpoint lines 1258, 1308, 1619): the first baseline command, in a python flag form that D-4608 prescribed (`python -B`), was refused by the owner's guard before it ran and was not retried in that form (D-4610 gave the guard-compliant form); a stray `python -c pass` in one command (D-4616) and a here-document for a pin file (D-4651) were refused before they ran; the pin file was written with the Write tool; D-4652 ruled the last under DM A71.
 - 2026-11-03 (../History/2026-11/2026-11-02-2326-m8-stage-8-task-116-the-first-contract-the-core-wrote-not-accepted.md, transcript :7270, 2026-11-02T18:20:07Z): a command of mine that held a here-string and a `python -` form was refused before it ran (R1, R2, R3) and the read-only checks ran again without it.
 
+Occurrences in session 08342c65, second part (../History/2026-11/2026-11-03-0157-m8-stage-8-the-continuation-08342c65-part-2-the-tier-answer-route-p1-and-the-task-117-contract.md; the evidence lines are the worker's checkpoint lines, decision-file lines and transcript lines named in each item; the worker's own claim until checked):
+- D-4749: `timeout 1500 python -B` refused by the command guard before it ran (R2, R3); not run, reworded or retried; the fault was the plan text of the decision agent (D-4749 file lines 14, 25-26; cp line 2299).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

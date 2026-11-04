@@ -59,6 +59,13 @@ One incident in session 2026-10-09-0637 (../History/2026-10/2026-10-09-0637-fixt
 Six incidents in session 2026-11-01-2202 (../History/2026-11/2026-11-01-2202-m8-stage-8-task-113-the-ignore-rule-for-the-local-store.md):
 - **2026-11-02 (session bdca08a6, D-4452, D-4456, D-4457, D-4458, D-4461, D-4468).** A raw diff was promised or called raw and a hunk list, a list of changed lines, a tail -4 or a bracketed abbreviation was given: the cp30 entry said the raw text was in the request of D-4452; the request of D-4456 listed changed lines; the tail -4 of D-4457 hid the other hunks; the diff of D-4458 was partly paraphrased; the request of D-4461 abbreviated long lines; the cp46 entry said a raw diff was returned where a hunk list was (corrected in cp47). Each was stated later by the worker or found by the decision agent, which read the files itself. Why the rule did not stop them: the rule asks for the disclosure in the first lines of the turn, and each request disclosed the abbreviation only in a later sentence or not at all; the word "raw" was used as a label, not tested against the tool output. The same kind was recorded here on 2026-10-08 (D-164: a block called "machine output, unedited" whose first line had been replaced); one Prevention line is added (D-4475).
 
+Occurrences in session 08342c65, second part (../History/2026-11/2026-11-03-0157-m8-stage-8-the-continuation-08342c65-part-2-the-tier-answer-route-p1-and-the-task-117-contract.md; the evidence lines are the worker's checkpoint lines, decision-file lines and transcript lines named in each item; the worker's own claim until checked):
+- D-4694 request: "for each of the nine" pre-gates, six checked (cp line 1931).
+- D-4708: I said the whole dry-run output was read after cutting it with head -c 1500 (cp line 2016).
+- D-4728: the words "the text of D-4727 C2 exactly" withdrawn; row A74 v2 missed one space (cp line 2146).
+- D-4703: my CI statement on OPS-003 wrong (cp line 1986); D-4695: a parenthesis of my CI statement read backwards (cp line 1937).
+- D-4719 to D-4734 owner relays dropped from the owed lists from cp317 on, found at D-4750 (D-4750 file lines 26-31; cp line 2317).
+
 ## Why it happens
 - Claude wants to keep momentum, and disclosure feels like an admission.
 - A note in a log is mistaken for telling the owner.
