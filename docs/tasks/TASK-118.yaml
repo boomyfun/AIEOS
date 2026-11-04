@@ -1,0 +1,89 @@
+# Task contract TASK-118, r2 DRAFT (r2 = r1 corrected after one read-only Haiku 5.5 review of r1 (t118/review118_r1.txt), by D-4812; session a0a0bdef; a new file in the layout of TASK-117.yaml r8; written in the scratchpad; NOT approved, NOT in the repository). Whether this text is approved is recorded only in the decision agent's decision that names its SHA-256, not in this file.
+# Why: DEF-0122 (opened at the acceptance of TASK-117, D-4776): launcher.LAUNCH_ADAPTER is 'claude_code' (launcher.py:1068) and launcher.start gives that name to the step "declaration" (launcher.py:651 calls _declaration (:512), whose line :518 is read_declaration(repo, head, adapter_name)), whose grammar (adapter_declaration.py g5; spec-02:237) accepts only a lowercase ASCII word or words joined by single hyphens, so `aieos launch` ends at the step "declaration" with no lease whatever the base holds, and the state commit P1-3 of the declaration for 'claude-code' (TASK-117 AC6) is useless until the two names agree. D-4810 ruled the TASK-118 read-only search and a contract kept to the minimum DEF-0122 names.
+# Facts read (the search of D-4810; Grep and Glob at main 00ad2b4e): in src the only string use of the id is launcher.py:1068 `LAUNCH_ADAPTER = 'claude_code'`, used at launcher.py:1237 `begin(root, root, task_id, LAUNCH_ADAPTER, LAUNCH_HOLDER, LAUNCH_RECORDER, now, now + LAUNCH_LEASE, ...)`; the other `claude_code` hits in src (88 in 16 files) and tests (368 in 31 files) are module names (claude_code.py, claude_code_hook.py, ...); the only test that asserts the id is tests/unit/test_cli_launch.py:143 (`'claude_code'` as the fourth argument of the begin call); the hyphen form `claude-code` is the adapter id in tests/unit/test_adapter_declaration.py and tests/unit/test_writer.py:2895, in AIEOS-concept.md:633 (`adapter: claude-code`) and in the declaration to be committed at P1-3 (TASK-117 AC6); `.aieos/events.jsonl` and `.aieos/tasks/TASK-116.yaml` hold neither form (Grep of `claude_code|claude-code|adapter` there: no match); the persisted contracts and records under docs/tasks and docs/records name `claude_code` as module names, except the history text of docs/tasks/TASK-094.yaml (:38 `LAUNCH_ADAPTER = 'claude_code'`, :490 the begin call with 'claude_code') and docs/tasks/TASK-106.yaml:182 (the constant LAUNCH_ADAPTER by name), which record what those tasks did, stay unchanged and are opened by no test; the long lines docs/tasks/TASK-117.yaml:90 (the AC6 declaration text, `  - adapter: claude-code`) and docs/records/TASK-065.jsonl:27 and TASK-068.jsonl:27 (prose naming the Claude Code adapter's modules) were read in part by the decision agent (D-4811) and hold no underscore id; the adapter name flows into the Resume Check input runtime.adapter (launcher.py:504; resume_check.py:257, :690), which accepts any non-empty string; `begin` in launch_outside is launcher.start itself (launcher.py:1225 `begin = start if begin is None else begin`), so the name reaches only the step "declaration" (_declaration, :651; read_declaration at :518) and the Resume Check input (:504, :671) and, through its record, the records the Resume Check writes; adapter.py does not take the name (Grep of adapter_name|adapter in adapter.py: only docstring hits at lines 1, 3, 49); these reads answer where the name flows.
+# Risk: critical (launcher.py is in src/aieos_bootstrap/**, a GOV-003 evaluator path, so D-4580 sets critical; same route as TASK-117).
+# Authority: a self-build change under DM A41/A51; the grammar route (a grammar that accepted an underscore) is NOT taken: it would need a spec-02 revision and widen the id form; the canonical id is the hyphen form that spec-02:237, the concept (AIEOS-concept.md:633), the declaration and the tests already use. No spec text changes.
+# Settled before this draft (decisions of the decision agent, kept outside the repository): the id pattern of adapter_declaration.py:80, which admits an id of digits only, stays unchanged and a note is added to DEF-0122's Log (AC3); where the name flows is answered by the Facts above; the agreement test is kept (AC2). No question is open.
+task: TASK-118
+contract_version: v1
+task_type: implementation
+objective: >-
+  Make the launcher's adapter name agree with the declaration grammar: (1) launcher.LAUNCH_ADAPTER becomes 'claude-code' (launcher.py:1068), the only change to src; (2) the test that asserts the begin call (tests/unit/test_cli_launch.py:143) is changed to the new name and a new test in tests/unit/test_launcher.py pins that launcher.LAUNCH_ADAPTER is accepted by adapter_declaration.declared_max_risk as an adapter id (a text with one item for that id gives result low, so the step "declaration" does not refuse the launcher's own name); (3) DEF-0122 is closed at acceptance by a docs commit (its own decision). No spec text and no grammar change. One observable result changes: today `aieos launch` refuses at the step "declaration" because the name is not a valid id (adapter_declaration.py:228-229); after the change, at a base with no declaration (.aieos/project.yaml absent, as at base_commit) the read gives "absent" (adapter_declaration.py:236-237), max_risk is None and the Resume Check stops with "the runtime has no declaration" (launcher.py:512-523); either way no lease is granted, only the refusal and its reason change. No other behaviour changes; any other finding becomes a DEF entry.
+traces_to:
+  - docs/Deferred/DEF-0122-the-launchers-adapter-name-has-an-underscore-and-the-declaration-grammar-refuses-it.md
+  - docs/specs/spec-02-aieos-file-format.md#7
+  - docs/specs/spec-05-adapter-contract.md#3
+  - docs/pre-genesis/constitution.md#INV-004
+input_state:
+  # base_commit is the head of main when the contract is approved (now 00ad2b4efd4ef6a2c1a8282810ee6a34f4604883); the executor refuses unless it equals HEAD, refs/heads/main and refs/remotes/origin/main.
+  base_commit: 00ad2b4efd4ef6a2c1a8282810ee6a34f4604883
+  # TASK-117: the declaration step and its grammar; TASK-086: the launcher and its tests; TASK-094: launch_outside, the constant and the begin-args pin.
+  depends_on: [TASK-117, TASK-086, TASK-094]
+  intent_versions:
+    # sha256 of each file at base_commit, filled by script at the approval request (FILL_BY_SCRIPT).
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/specs/spec-02-aieos-file-format.md: ab56bc5a7be484663d188f984f4946450de5306bf1839401799fdb4172143b15
+    docs/specs/spec-05-adapter-contract.md: 5a0d6f03130b973d137fbf2012ab2d3436c37ef4663296479603fb8af9802056
+    docs/Deferred/DEF-0122-the-launchers-adapter-name-has-an-underscore-and-the-declaration-grammar-refuses-it.md: 396dd579dcd4233dce1ed2df851b2c1938074c0debdb0ce04e3b834516555e41
+    src/aieos_bootstrap/launcher.py: 51e97d58b07aacbd5e714bc6cd1664de2fb3dce61c854b11e0a0c6445302575e
+    src/aieos_bootstrap/adapter_declaration.py: 9e1cc814ce58492cfbd28a8957ebd6e40f3e18b2cf92212e0187ff2d7187ca73
+    tests/unit/test_launcher.py: b04d94b068a40e7867fe96cf424be1f88442ad2ea7ce31827972224398e8efde
+    tests/unit/test_cli_launch.py: ebac67cc5174c554b2c26c0c6ebbfcaed7f675282fa028679f9892de19e93a70
+    .github/workflows/aieos-checks.yml: 5c5bd2fcc8e0847f878756852805ad5d6d53b59465f518df7c912d5262c9a45a
+write_set:
+  paths:
+    - src/aieos_bootstrap/launcher.py
+    - tests/unit/test_launcher.py
+    - tests/unit/test_cli_launch.py
+read_set: {paths: [docs/plan/, docs/specs/, docs/Deferred/, docs/pre-genesis/, src/aieos_bootstrap/, tests/, .github/workflows/], interfaces: [], schemas: []}
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/adapter_declaration.py
+  - src/aieos_bootstrap/writer.py
+  - bench/**
+  - native/**
+  - docs/pre-genesis/**
+  - docs/plan/**
+  - docs/specs/**
+  - tests/conformance/**
+  - tests/property/**
+  - tests/run_tests.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, GOV-004, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The constant. launcher.py:1068 reads `LAUNCH_ADAPTER = 'claude-code'`; no other line of src changes (a docstring of launcher.py that names the old string, if any, is corrected; the search found none). launcher.py holds no '.aieos' anywhere, comments included (tests/unit/test_launcher.py:1378). The begin call at launcher.py:1237 is unchanged in shape. tests/unit/test_cli_launch.py:143 (the begin-args pin) changes to 'claude-code' and the docstring of that test (test_the_arguments, tests/unit/test_cli_launch.py:134-139) begins "TASK-094 AC1 (amended by TASK-111), as TASK-117 AC3 and TASK-118 AC1 change it:" (the module's naming rule: "TASK-094 AC" in every test, :569-576).
+  - AC2: >-
+      The agreement test. A test in tests/unit/test_launcher.py, named "TASK-086 AC... as TASK-118 AC2 adds it" under the module's naming rule (:1409-1416), carries its own literal declaration text with the one item of TASK-117 AC6 (written in the test; no helper is imported from tests/unit/test_adapter_declaration.py, as tests/unit/test_launcher.py:3-5 requires; no file, no Git) and asserts that adapter_declaration.declared_max_risk(text, launcher.LAUNCH_ADAPTER) gives result low and max_risk 'low'; and a second assertion that the old name 'claude_code' gives error. The test uses the module's existing import of adapter_declaration (tests/unit/test_launcher.py:17); no new import is added to launcher.py, whose import set stays as tests/unit/test_launcher.py:1356-1360 pins it. Tests first, a red run before the change.
+  - AC3: >-
+      The limits of the change. No spec text, no grammar, no writer, no CI file changes; the full test suite in parts is green as at the base (the count and the one integration skip that the run at base_commit reports, plus the new test); the CI deterministic rule gives 0 findings on the changed files; no persisted record, event or contract changes (no record under docs/records and nothing under .aieos holds the id; the history text of docs/tasks/TASK-094.yaml :38 and :490 that names 'claude_code' stays as written). DEF-0122 is closed by a docs commit after acceptance (its Status and a Log line), and a note is added to its Log that the id pattern (adapter_declaration.py:80) admits an id of digits only and is kept unchanged; P1-3 and every scripted launch stay later, each its own decision.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [src/aieos_bootstrap/launcher.py, tests/unit/test_launcher.py, tests/unit/test_cli_launch.py]}
+  shell: {allow: []}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: critical
+autonomy:
+  max_level: L1
+  budgets: {tokens: 400k, wall_time: 6h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2]}
+  - {gate: G3, check: constitution, args: [AC3, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, GOV-004, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the risk class is satisfied AND one approval record counts AND the CI runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false: the one act is a change of one constant and two test files of the self-build, which the decision agent decides under A51/A66; nothing of A51 item (4) that stays with the owner is carried out.
+owner_kept_act: false
