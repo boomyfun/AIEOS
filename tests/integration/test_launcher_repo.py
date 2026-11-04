@@ -10,7 +10,7 @@ import pathlib
 import types
 import unittest
 
-from aieos_bootstrap import adapter, eventlog, gitread, launcher, resume_check, resume_inputs, writer
+from aieos_bootstrap import adapter, adapter_declaration, eventlog, gitread, launcher, resume_check, resume_inputs, writer
 
 REPO = str(pathlib.Path(__file__).resolve().parents[2])
 ROOT = str(pathlib.Path(__file__).resolve().parents[2] / 'no-such-launcher-root')
@@ -62,6 +62,12 @@ class Intercept:
         return gitread.run(repo, args, timeout)
 
 
+def absent(*args, **kwargs):
+    """The stand-in of the declaration read (TASK-117 AC3): no declaration for the adapter at the base (the repository
+    holds no policy file at the commit), the existing path to check 7."""
+    return {'result': 'absent', 'max_risk': None, 'findings': []}
+
+
 def written(*args, **kwargs):
     return writer.WriteResult(types.SimpleNamespace(result='appended', reason=None, seq=1, line=b'', findings=()))
 
@@ -87,12 +93,13 @@ class TASK086AC11Repository(unittest.TestCase):
         cls.c = Calls({'read_log': lambda root: log, 'expire': [], 'held': None,
                        'start_session': writer.StoreResult('done'), 'append': written,
                        'grant': writer.StoreResult('done'), 'release': writer.StoreResult('done'),
-                       'start': adapter.start, 'end': ended})
+                       'start': adapter.start, 'end': ended, 'read_declaration': absent})
         kw = {name: cls.c.make(name, real) for name, real in (
             ('read_log', writer.read_log), ('expire', writer.expire_leases), ('held', writer.held_lease),
             ('start_session', writer.start_session), ('append', writer.append_event), ('grant', writer.grant_lease),
-            ('release', writer.release_lease_token), ('start', adapter.start), ('end', adapter.end))}
-        cls.result = launcher.start(ROOT, REPO, TASK, 'integration', None, 'agent-1', REC, NOW, LATER, read=cls.read,
+            ('release', writer.release_lease_token), ('start', adapter.start), ('end', adapter.end),
+            ('read_declaration', adapter_declaration.read_declaration))}
+        cls.result = launcher.start(ROOT, REPO, TASK, 'integration', 'agent-1', REC, NOW, LATER, read=cls.read,
                                     **kw)
 
     def record(self):
@@ -127,12 +134,13 @@ class TASK086AC11Repository(unittest.TestCase):
         c = Calls({'read_log': lambda root: r.line, 'expire': [], 'held': None,
                    'start_session': writer.StoreResult('done'), 'append': written,
                    'grant': writer.StoreResult('done'), 'release': writer.StoreResult('done'),
-                   'start': adapter.start, 'end': ended})
+                   'start': adapter.start, 'end': ended, 'read_declaration': absent})
         kw = {name: c.make(name, real) for name, real in (
             ('read_log', writer.read_log), ('expire', writer.expire_leases), ('held', writer.held_lease),
             ('start_session', writer.start_session), ('append', writer.append_event), ('grant', writer.grant_lease),
-            ('release', writer.release_lease_token), ('start', adapter.start), ('end', adapter.end))}
-        out = launcher.start(ROOT, REPO, TASK, 'integration', None, 'agent-1', REC, NOW, LATER, read=Intercept(), **kw)
+            ('release', writer.release_lease_token), ('start', adapter.start), ('end', adapter.end),
+            ('read_declaration', adapter_declaration.read_declaration))}
+        out = launcher.start(ROOT, REPO, TASK, 'integration', 'agent-1', REC, NOW, LATER, read=Intercept(), **kw)
         record = next(call[1][2] for call in c.of('append') if call[1][1] == 'decision.execution')
         self.assertIsNone(record['decision'])
         self.assertEqual(record['error'], 'check 0: the contract at HEAD is not the approved contract')
@@ -154,6 +162,17 @@ class TASK086AC11Repository(unittest.TestCase):
         self.assertEqual(self.c.of('grant'), [])
         self.assertEqual(len(self.c.of('end')), 1)
         self.assertIsNone(self.c.of('end')[0][1][3])
+
+    def test_the_declaration_is_read_at_the_head_with_the_repo(self):
+        """TASK-086 AC11, as TASK-117 AC3 changes it: start has no tier argument; the declaration seam is called once
+        with the repo path, the head commit that step "head" gave (f216376e) and the adapter name, and no run; the
+        stand-in answers "absent", so the runtime's max_risk reaches the inputs as None and check 7 fires with "the
+        runtime has no declaration" (the existing path); the tier is not a caller's."""
+        calls = self.c.of('read_declaration')
+        self.assertEqual(len(calls), 1)
+        self.assertEqual((calls[0][1], calls[0][2]), ((REPO, COMMIT, 'integration'), {}))
+        args = self.c.of('start')[0][1]
+        self.assertEqual(args[4]['runtime'], {'adapter': 'integration', 'max_risk': None})
 
 
 if __name__ == '__main__':

@@ -80,6 +80,17 @@ append mode ('ab'), not an exclusive create, with the same limits: two concurren
 write cut off part-way leaves a non-empty file that every later write refuses. Core-only; launcher.import_task calls
 it.
 
+Task TASK-117 (specification 2 section 7.1; specification 5 section 11 point 14) adds ``write_policy(root, text)``: the
+writer also creates ``<root>/.aieos/project.yaml``, create-only, holding the policy file's text with the runtime's
+declaration, a fifth kind of file in the project-state directory, so the sentence above on "exactly two files" stays,
+qualified by this paragraph and by the ones before it. Create-only is the same size check after opening in append mode
+('ab') as write_contract's: an existing empty file is written, a non-empty one is refused ("exists"). It refuses
+("layout") unless the project-state directory exists, and makes no folder; it refuses ("link") a link or a path resolving
+elsewhere; its text is a non-empty str of at most 1 MiB that encodes as UTF-8 and holds none of the characters a private
+copy of the rule in this module refuses ("argument"). It has no caller in the task: the state commit that puts the file
+into Git comes after the task's acceptance, and changing a declaration needs a later task (the function cannot replace
+a file).
+
 Readings of the specifications that the contract marks "(reading)" are noted where they are applied.
 """
 
@@ -1295,6 +1306,77 @@ def write_contract(root, task_id, text):
     except Exception as e:
         return _named('unwritable', e)
     return StoreResult('done', value='%s/%s/%s' % (STATE_DIR, _CONTRACT_DIR, name))
+
+
+# ---- write_policy (task TASK-117) ----
+
+_POLICY_FILE = 'project.yaml'
+_POLICY_CAP = 1 << 20
+# A private copy of the character rule of the policy reader (no import is added to this module): no U+FEFF, no C0
+# control but LF, no DEL, no C1 control, no U+2028 or U+2029.
+_POLICY_FORBIDDEN = re.compile('[\\x00-\\x09\\x0b-\\x1f\\x7f-\\x9f\\ufeff\\u2028\\u2029]')
+_POLICY_LAYOUT = 'layout: the project-state directory is not an existing folder'
+_POLICY_LINK = 'link: a link, or a path that resolves elsewhere'
+_POLICY_EXISTS = 'exists: the policy file is not empty'
+
+
+def _write_policy_links(root, path):
+    """True when root, root/.aieos or the path is a link, os.path.islink being called on each of the three whether or
+    not it exists, or when the path's realpath, normcased, differs from the normcased realpath of root joined with the
+    project-state directory and the file name (write_contract's form)."""
+    for p in (root, os.path.join(root, STATE_DIR), path):
+        if os.path.islink(p):
+            return True
+    expected = os.path.join(os.path.realpath(root), STATE_DIR, os.path.basename(path))
+    return os.path.normcase(os.path.realpath(path)) != os.path.normcase(expected)
+
+
+def write_policy(root, text):
+    """Create <root>/.aieos/project.yaml holding the text's UTF-8 bytes, create-only (task TASK-117; specification 2
+    section 7.1). Core-only; it has no caller in its own task.
+
+    In order: text a non-empty str that encodes as UTF-8 in at most 1 MiB and holds none of the characters of
+    _POLICY_FORBIDDEN ("argument"); root an existing folder ("root"); root/.aieos an existing folder, else "layout" with
+    nothing made; the link check (_write_policy_links) before the open ("link"); the open in append mode, and a size
+    above 0 at f.tell() refuses ("exists") with nothing written, so an existing EMPTY file is written; then the bytes
+    are written, flushed and synced, and read back, which must give the same bytes ("unwritable", the file then
+    staying). Create-only is a size check after opening in append mode, not an exclusive create (write_contract's
+    limit). The result is a StoreResult: "done" with value ".aieos/project.yaml", or "refused" with one finding naming
+    an exception's type, never caller text. No exception escapes."""
+    try:
+        if not (isinstance(text, str) and text):
+            raise TypeError('text is not a non-empty str')
+        data = text.encode('utf-8')
+        if len(data) > _POLICY_CAP:
+            raise ValueError('text is over the cap')
+        if _POLICY_FORBIDDEN.search(text) is not None:
+            raise ValueError('text holds a forbidden character')
+    except Exception as e:
+        return _named('argument', e)
+    try:
+        _check_root(root)
+    except Exception as e:
+        return _named('root', e)
+    folder = os.path.join(root, STATE_DIR)
+    path = os.path.join(folder, _POLICY_FILE)
+    try:
+        if not os.path.isdir(folder):
+            return _refused('layout', _POLICY_LAYOUT)
+        if _write_policy_links(root, path):
+            return _refused('link', _POLICY_LINK)
+        with open(path, 'ab') as f:
+            if f.tell() > 0:
+                return _refused('exists', _POLICY_EXISTS)
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        with open(path, 'rb') as f:
+            back = f.read()
+        if back != data:
+            return _refused('unwritable', 'unwritable: the read-back differs')
+    except Exception as e:
+        return _named('unwritable', e)
+    return StoreResult('done', value='%s/%s' % (STATE_DIR, _POLICY_FILE))
 
 
 # ---- the read-only lookup of the store (task TASK-066) ----

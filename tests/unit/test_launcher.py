@@ -14,7 +14,9 @@ import types
 import unittest
 from unittest import mock
 
-from aieos_bootstrap import adapter, eventlog, execution, gitread, launcher, resume_check, resume_inputs
+from aieos_bootstrap import adapter, adapter_declaration, eventlog, execution, gitread, launcher, resume_check
+from aieos_bootstrap import resume_inputs
+from aieos_bootstrap import claude_code_shell_allow as shell_allow
 from aieos_bootstrap import resume_log_inputs, writer
 
 HERE = pathlib.Path(__file__).resolve()
@@ -44,13 +46,13 @@ POLICY = '\n'.join(['# A stand-in policy', '', '## 3. The rules', '', '```yaml',
                     'risk_rules:', '  - match: { paths: ["src/**"] }', '    risk: medium', '```']) + '\n'
 
 
-def contract(base, depends):
+def contract(base, depends, risk='high'):
     lines = ['task: %s' % TASK, 'contract_version: v1', 'task_type: implementation', 'traces_to:',
              '  - docs/specs/s.md#1', 'input_state:', '  base_commit: %s' % base,
              '  depends_on: [%s]' % ', '.join(depends), '  intent_versions:', '    docs/specs/s.md: %s' % S_HASH,
              'write_set:', '  paths:', '    - src/aieos_bootstrap/mod.py', 'read_set:', '  paths:',
              '    - src/aieos_bootstrap/mod.py', '  interfaces: []', 'constitution: [INV-001]', 'acceptance_criteria:',
-             '  - AC1: >-', '      One.', 'risk: high', 'autonomy:', '  budgets: {tokens: 600k, retries: 2}']
+             '  - AC1: >-', '      One.', 'risk: %s' % risk, 'autonomy:', '  budgets: {tokens: 600k, retries: 2}']
     return '\n'.join(lines) + '\n'
 
 
@@ -131,14 +133,14 @@ class Repo:
         return ok(self.objects[oid][1])
 
 
-def world(depends=()):
+def world(depends=(), risk='high'):
     """base (one source file) and head (adds the contract, the intent file, the constitution, the policy and a
     stand-in resume_check.py with non-ASCII text); the repo's head is head."""
     repo = Repo()
     base = repo.commit({'src/aieos_bootstrap/mod.py': 'X = 1\n'}, message='base')
     tree = {'src/aieos_bootstrap/mod.py': 'X = 1\n', 'docs/specs/s.md': S_TEXT,
             'docs/pre-genesis/constitution.md': CONSTITUTION, 'docs/specs/risk-rules-gov-aieos.md': POLICY,
-            'src/aieos_bootstrap/resume_check.py': RC_TEXT, 'docs/tasks/%s.yaml' % TASK: contract(base, depends)}
+            'src/aieos_bootstrap/resume_check.py': RC_TEXT, 'docs/tasks/%s.yaml' % TASK: contract(base, depends, risk)}
     repo.head = repo.commit(tree, [base], 'head')
     return repo
 
@@ -225,13 +227,31 @@ def calls_for(repo, log, **answers):
     return Calls(base)
 
 
+def declared(max_risk):
+    """The answer a test gives for adapter_declaration.read_declaration (TASK-117 AC3): absent for None, else low with
+    the tier the test names. A test-only seam: the real read never gives a tier above low, the Resume Check still
+    compares any tier."""
+    if max_risk is None:
+        return {'result': 'absent', 'max_risk': None, 'findings': []}
+    return {'result': 'low', 'max_risk': max_risk, 'findings': []}
+
+
+def absent_declaration(repo, base, adapter_name, run=None):
+    """A stand-in for the declaration read that finds no declaration (TASK-117 AC3)."""
+    return declared(None)
+
+
 def launch(c, max_risk='critical', stub=(), **over):
     """launcher.start with every store function and the read a recording stand-in; the names in stub also replace
-    adapter.start ('start') and adapter.end ('end'). TASK-090's step is given a read_sessions stand-in that records
+    adapter.start ('start') and adapter.end ('end'). TASK-117 AC3: launcher.start has no max_risk argument; max_risk
+    here is the tier the recording stand-in of read_declaration answers (declared(max_risk)), unless the test put its
+    own answer under 'read_declaration' in c. TASK-090's step is given a read_sessions stand-in that records
     nothing and lists no session, unless the test gives its own, and per-session stand-ins that record any call into a
     list; that list must stay empty, so launch raises AssertionError after start returns otherwise (TASK-090 AC7)."""
     kw = {name: c.make(name, real) for name, real in STORE}
     kw['read'] = c.make('read', gitread.run)
+    c.answers.setdefault('read_declaration', declared(max_risk))
+    kw['read_declaration'] = c.make('read_declaration', adapter_declaration.read_declaration)
     if 'start' in stub:
         kw['start'] = c.make('start', adapter.start)
     if 'end' in stub:
@@ -240,8 +260,8 @@ def launch(c, max_risk='critical', stub=(), **over):
     kw['read_sessions'] = lambda root, task_id: store(value=[])
     for name in ('session_leases', 'stored_reads', 'remove_reads', 'observe_gone'):
         kw[name] = lambda *a, name=name, **k: stray.append(name)
-    args = dict(root=ROOT, repo=REPO, task_id=TASK, adapter_name='unit', max_risk=max_risk, holder='agent-1',
-                recorder=REC, now=NOW, expires_at=LATER)
+    args = dict(root=ROOT, repo=REPO, task_id=TASK, adapter_name='unit', holder='agent-1', recorder=REC, now=NOW,
+                expires_at=LATER)
     args.update(kw)
     args.update(over)
     r = launcher.start(**args)
@@ -288,12 +308,13 @@ class Base(unittest.TestCase):
 class TASK086AC1Arguments(Base):
     def test_each_wrong_argument_is_refused_before_any_call(self):
         """TASK-086 AC1: each argument out of form, a relative root such as "x/y" among them, gives "refused" with
-        reason "argument" and zero callee calls; TASK-090 AC7: the five new callees out of form among them."""
+        reason "argument" and zero callee calls; TASK-090 AC7: the five new callees out of form among them; TASK-117
+        AC3: max_risk is no argument any more, and a read_declaration out of form is among them."""
         repo = world()
         later = NOW + datetime.timedelta(seconds=1)
         for over in ({'root': 'x/y'}, {'root': ''}, {'root': 1}, {'repo': 'x/y'}, {'repo': REPO + '/no-such-dir'},
-                     {'task_id': 'TASK-x'}, {'task_id': None}, {'adapter_name': ''}, {'max_risk': 'huge'},
-                     {'max_risk': 1}, {'holder': ''}, {'recorder': None}, {'now': NOW.replace(tzinfo=None)},
+                     {'task_id': 'TASK-x'}, {'task_id': None}, {'adapter_name': ''},
+                     {'read_declaration': 'x'}, {'read_declaration': 1}, {'holder': ''}, {'recorder': None}, {'now': NOW.replace(tzinfo=None)},
                      {'now': NOW.replace(microsecond=5)}, {'expires_at': NOW}, {'expires_at': later.replace(
                          tzinfo=datetime.timezone(datetime.timedelta(hours=1)))}, {'read': 'x'}, {'start': 1},
                      {'end_session': 'y'}, {'read_sessions': 'x'}, {'session_leases': 1}, {'stored_reads': 'x'},
@@ -351,7 +372,8 @@ class TASK086AC1Arguments(Base):
                                      (writer, 'read_log', 'log')):
             with mock.patch.object(writer, 'expire_leases', lambda root, now: []), \
                     mock.patch.object(gitread, 'run', repo), mock.patch.object(module, name, mark(name)):
-                r = launcher.start(ROOT, REPO, TASK, 'unit', None, 'agent-1', REC, NOW, LATER)
+                r = launcher.start(ROOT, REPO, TASK, 'unit', 'agent-1', REC, NOW, LATER,
+                                   read_declaration=absent_declaration)
             self.closed(r)
             self.assertEqual(r['reason'], reason)
         self.assertEqual(marks, ['expire_leases', 'run', 'read_log'])
@@ -363,7 +385,8 @@ class TASK086AC1Arguments(Base):
                 c = calls_for(repo, log)
                 kw = {n: c.make(n, real) for n, real in STORE}
                 kw['read'] = c.make('read', gitread.run)
-                launcher.start(ROOT, REPO, TASK, 'unit', None, 'agent-1', REC, NOW, LATER, **kw)
+                kw['read_declaration'] = absent_declaration
+                launcher.start(ROOT, REPO, TASK, 'unit', 'agent-1', REC, NOW, LATER, **kw)
             self.assertEqual(seen, [name])
 
 
@@ -403,7 +426,7 @@ class TASK086AC1BaseTip(Base):
         self.assertEqual(repo.calls[1], (REPO, BASE_ARGS, 30))
         self.assertEqual(repo.calls[2], (REPO, CONFIG_ARGS, 30))
         self.assertEqual(repo.calls[3], (REPO, STATUS_ARGS, 30))
-        self.assertEqual(c.names()[:6], ['expire', 'read', 'read', 'read', 'read', 'read_log'])
+        self.assertEqual(c.names()[:7], ['expire', 'read', 'read', 'read', 'read', 'read_declaration', 'read_log'])
         self.assertIsNone(gitread.form_error(*repo.calls[1]))
 
     def test_a_non_default_base_names_its_own_ref(self):
@@ -511,7 +534,7 @@ class TASK086AC1Root(Base):
         self.assertEqual(repo.calls[3], (REPO, list(gitread.STATUS_HEAD) + [':(exclude)' + writer.STATE_DIR], 30))
         self.assertEqual([a for _, a, _ in repo.calls[:4]], [HEAD_ARGS, BASE_ARGS, CONFIG_ARGS, STATUS_ARGS])
         self.assertIsNone(gitread.form_error(*repo.calls[3]))
-        self.assertEqual(c.names()[:6], ['expire', 'read', 'read', 'read', 'read', 'read_log'])
+        self.assertEqual(c.names()[:7], ['expire', 'read', 'read', 'read', 'read', 'read_declaration', 'read_log'])
         self.assertEqual(sum(1 for _, a, _ in repo.calls if a[0] == 'status'), 1)
 
     def test_a_clean_root_goes_on(self):
@@ -643,7 +666,7 @@ class TASK086AC1RootConfig(Base):
         self.assertEqual([a for _, a, _ in repo.calls[:4]], [HEAD_ARGS, BASE_ARGS, CONFIG_ARGS, STATUS_ARGS])
         self.assertEqual(sum(1 for _, a, _ in repo.calls if a[0] == 'config'), 1)
         self.assertEqual(sum(1 for _, a, _ in repo.calls if a[0] == 'status'), 1)
-        self.assertEqual(c.names()[:6], ['expire', 'read', 'read', 'read', 'read', 'read_log'])
+        self.assertEqual(c.names()[:7], ['expire', 'read', 'read', 'read', 'read', 'read_declaration', 'read_log'])
 
     def test_a_clean_configuration_goes_on_to_the_status_read(self):
         """TASK-086 AC1 (amended by TASK-110): no output, and records none of which is a refused key (a valueless key, a
@@ -773,8 +796,9 @@ class TASK086AC1RootConfig(Base):
 
 class TASK086AC2Order(Base):
     def test_the_order(self):
-        """TASK-086 AC2 (amended by TASK-109 and TASK-110): expire, then read (HEAD), then read (the base ref), then
-        read (the configuration), then read (the status of the root), then read_log, then held (the one held call before adapter.start),
+        """TASK-086 AC2 (amended by TASK-109 and TASK-110, and by TASK-117 AC3): expire, then read (HEAD), then read (the
+        base ref), then read (the configuration), then read (the status of the root), then read_declaration (the step
+        "declaration", between "root" and "log"), then read_log, then held (the one held call before adapter.start),
         then the readers' reads, then adapter.start, then adapter.end when no token was granted and the row was
         opened; execute's own second read_log and held calls come inside adapter.start. TASK-090 AC7: with a recording
         read_sessions, it is called first, before expire."""
@@ -782,22 +806,23 @@ class TASK086AC2Order(Base):
         c = calls_for(repo, approved_log(repo), start=ended(), end=ended())
         r = launch(c, stub=('start', 'end'))
         names = c.names()
-        self.assertEqual(names[:7], ['expire', 'read', 'read', 'read', 'read', 'read_log', 'held'])
+        self.assertEqual(names[:8], ['expire', 'read', 'read', 'read', 'read', 'read_declaration', 'read_log', 'held'])
         self.assertEqual(names[-2:], ['start', 'end'])
-        self.assertTrue(set(names[7:-2]) == {'read'} and len(names) > 10, names)
+        self.assertTrue(set(names[8:-2]) == {'read'} and len(names) > 10, names)
         self.assert_form(r)
         self.assertEqual(r['result'], 'not granted')
         c = calls_for(repo, approved_log(repo))
         r = launch(c, max_risk=None)
         names = c.names()
-        self.assertEqual(names[:7], ['expire', 'read', 'read', 'read', 'read', 'read_log', 'held'])
+        self.assertEqual(names[:8], ['expire', 'read', 'read', 'read', 'read', 'read_declaration', 'read_log', 'held'])
         first = names.index('start_session')
         self.assertEqual(names[first:first + 3], ['start_session', 'read_log', 'held'])
         self.assertEqual(names[-1], 'end_session')
         self.assertEqual(r['result'], 'not granted')
         c = calls_for(repo, approved_log(repo), read_sessions=store(value=[]))
         r = launch(c, max_risk=None, read_sessions=c.make('read_sessions', writer.read_sessions))
-        self.assertEqual(c.names()[:8], ['read_sessions', 'expire', 'read', 'read', 'read', 'read', 'read_log', 'held'])
+        self.assertEqual(c.names()[:9], ['read_sessions', 'expire', 'read', 'read', 'read', 'read', 'read_declaration',
+                                         'read_log', 'held'])
         self.assertEqual(c.of('read_sessions')[0][1], (ROOT, TASK))
         self.assertEqual(r['result'], 'not granted')
 
@@ -936,12 +961,15 @@ class TASK086AC6NoGrant(Base):
         return next(call[1][2] for call in c.of('append') if call[1][1] == 'decision.execution')
 
     def test_max_risk_null(self):
-        """TASK-086 AC6: max_risk null, where checks 1 to 6 do not fire, gives check 7 fired with "the runtime has no
-        declaration", decision "STOP: runtime insufficient", "not granted", no environment, and adapter.end called
-        once with no token."""
+        """TASK-086 AC6, as TASK-117 AC3 changes it: a declaration read that finds no declaration (result absent,
+        max_risk null; in the real path no policy file at the base), where checks 1 to 6 do not fire, gives check 7
+        fired with "the runtime has no declaration", decision "STOP: runtime insufficient", "not granted", no
+        environment, and adapter.end called once with no token; the read was made once with start's repo, the head and
+        the adapter name, and no run."""
         repo = world()
         c = calls_for(repo, approved_log(repo), end=ended())
         r = launch(c, max_risk=None, stub=('end',))
+        self.assertEqual([call[1:] for call in c.of('read_declaration')], [((REPO, repo.head, 'unit'), {})])
         self.closed(r, 'not granted')
         self.assertEqual(r['decision'], 'STOP: runtime insufficient')
         record = self.record(c)
@@ -1107,18 +1135,227 @@ class TASK086AC9TaskView(Base):
         self.assertEqual(r['reason'], 'check')
 
 
+class TASK086AC1Declaration(Base):
+    """The step "declaration" (task TASK-117 AC3): the tier comes from the declaration read at the base, not from a
+    caller."""
+
+    def record(self, c):
+        return next(call[1][2] for call in c.of('append') if call[1][1] == 'decision.execution')
+
+    def test_the_signature_and_the_callee_list(self):
+        """TASK-086 AC1, as TASK-117 AC3 changes it: launcher.start has no max_risk parameter and has the keyword
+        read_declaration; _CALLEES holds read_declaration once, not among its last five names (the last five stay
+        read_sessions, session_leases, stored_reads, remove_reads and observe_gone), and the callees tuple that start
+        builds is as long as _CALLEES; a call with the keyword max_risk raises TypeError."""
+        params = inspect.signature(launcher.start).parameters
+        self.assertNotIn('max_risk', params)
+        self.assertIn('read_declaration', params)
+        self.assertEqual(launcher._CALLEES.count('read_declaration'), 1)
+        self.assertLess(launcher._CALLEES.index('read_declaration'), len(launcher._CALLEES) - 5)
+        self.assertEqual(launcher._CALLEES[-5:], ('read_sessions', 'session_leases', 'stored_reads', 'remove_reads',
+                                                  'observe_gone'))
+        self.assertEqual(len(launcher._CALLEES), 19)
+        with self.assertRaises(TypeError):
+            launcher.start(ROOT, REPO, TASK, 'unit', 'agent-1', REC, NOW, LATER, max_risk='low')
+
+    def test_the_default_is_looked_up_at_call_time(self):
+        """TASK-086 AC1, as TASK-117 AC3 changes it: with no read_declaration given, the default is
+        adapter_declaration.read_declaration looked up at call time (a patch after import is the one called), called
+        with start's repo, the head and the adapter name and no run; a raise gives "refused" with reason
+        "declaration" and no later callee call."""
+        repo = world()
+        seen = []
+
+        def raising(*args, **kwargs):
+            seen.append((args, kwargs))
+            raise LookupError('x')
+        c = calls_for(repo, approved_log(repo))
+        with mock.patch.object(adapter_declaration, 'read_declaration', raising):
+            r = launch(c, stub=('start', 'end'), read_declaration=None)
+        self.closed(r)
+        self.assertEqual(r['reason'], 'declaration')
+        self.assertEqual(seen, [((REPO, repo.head, 'unit'), {})])
+        self.assertEqual(c.of('read_log'), [])
+        self.assertEqual(c.of('start'), [])
+        # the same lookup when the patched read ANSWERS: it is the one called, once, and the flow goes on to read_log
+        answered = []
+
+        def answering(*args, **kwargs):
+            answered.append((args, kwargs))
+            return declared('low')
+        c = calls_for(repo, approved_log(repo), end=ended())
+        with mock.patch.object(adapter_declaration, 'read_declaration', answering):
+            launch(c, stub=('start', 'end'), read_declaration=None)
+        self.assertEqual(answered, [((REPO, repo.head, 'unit'), {})])
+        self.assertEqual(len(c.of('read_log')), 1)
+
+    def test_an_answer_out_of_form_gives_no_lease(self):
+        """TASK-086 AC6, as TASK-117 AC3 changes it: an answer of read_declaration that is not a mapping, a result low
+        with a tier out of form (not one of low, medium, high, critical, or not a str), and a result outside absent, low,
+        refused and error (none, present, a non-str) each give "refused" with reason "declaration", a finding that names
+        the step, no lease, no append and no log read."""
+        answers = ('not a mapping', [], 3,
+                   {'result': 'low', 'max_risk': 'T3', 'findings': []},
+                   {'result': 'low', 'max_risk': None, 'findings': []},
+                   {'result': 'low', 'max_risk': 3, 'findings': []},
+                   {'result': 'none', 'max_risk': None, 'findings': []},
+                   {'result': 'present', 'max_risk': 'low', 'findings': []},
+                   {'result': 7, 'max_risk': None, 'findings': ['x']},
+                   {'max_risk': 'low', 'findings': []})
+        for answer in answers:
+            with self.subTest(answer=repr(answer)):
+                repo = world()
+                c = calls_for(repo, approved_log(repo), read_declaration=answer)
+                r = launch(c, stub=('start', 'end'))
+                self.closed(r)
+                self.assertEqual(r['reason'], 'declaration')
+                self.assertTrue(r['findings'] and all(f.startswith('declaration') for f in r['findings']), r['findings'])
+                for name in ('read_log', 'held', 'start', 'start_session', 'append', 'grant', 'end', 'end_session'):
+                    self.assertEqual(c.of(name), [], name)
+
+    def test_the_real_read_inside_start(self):
+        """TASK-086 AC6, as TASK-117 AC3 changes it: with no read_declaration given, start runs the real
+        adapter_declaration.read_declaration (only the base read of the policy text, claude_code_shell_allow
+        .read_policy_text, is a stand-in): a well-formed block with an item for the adapter gives the tier low (a task of
+        risk medium then fires check 7: "STOP: runtime insufficient", and its detail is not "the runtime has no
+        declaration"); a text with no adapters line gives the existing "no declaration" path (check 7 fires too, with
+        the detail "the runtime has no declaration"); a malformed block (a tab-led repeat of the adapter id) gives
+        "refused" with reason "declaration" and no lease."""
+        item = ('  - adapter: unit\n    tier: T3\n    configuration: {runtime: unit, platform: windows-native, version: '
+                '1.0, settings: sha256:abc}\n    capabilities: {}\n    assurance: {preventive: none, runtime: none, '
+                'posthoc: none}\n    max_risk: low\n')
+
+        def served(text):
+            seen = []
+
+            def fake(repo, base, run=None):
+                seen.append((repo, base, run))
+                return {'result': 'present', 'text': text, 'findings': []}
+            return fake, seen
+
+        for text, none in (('adapters:\n' + item, False), ('shell_allow:\n  - git status\n', True)):
+            with self.subTest(text=text[:12]):
+                repo = world(risk='medium')
+                c = calls_for(repo, approved_log(repo), end=ended())
+                fake, seen = served(text)
+                with mock.patch.object(shell_allow, 'read_policy_text', fake):
+                    r = launch(c, stub=('end',), read_declaration=None)
+                self.assertEqual(seen, [(REPO, repo.head, None)])
+                self.closed(r, 'not granted')
+                self.assertEqual(r['decision'], 'STOP: runtime insufficient')
+                seventh = check_of(self.record(c), 7)
+                self.assertEqual(seventh['status'], 'fired')
+                # the two paths give the same decision; the detail tells them apart: with a declaration the tier read
+                # (low) is below the task's risk, with none the runtime "has no declaration"
+                if none:
+                    self.assertEqual(seventh['detail'], 'the runtime has no declaration')
+                else:
+                    self.assertNotEqual(seventh['detail'], 'the runtime has no declaration')
+        repo = world()
+        c = calls_for(repo, approved_log(repo))
+        fake, seen = served('adapters:\n' + item + '\t  - adapter: unit\n')
+        with mock.patch.object(shell_allow, 'read_policy_text', fake):
+            r = launch(c, stub=('start', 'end'), read_declaration=None)
+        self.assertEqual(len(seen), 1)
+        self.closed(r)
+        self.assertEqual(r['reason'], 'declaration')
+        for name in ('read_log', 'start', 'start_session', 'append', 'grant'):
+            self.assertEqual(c.of(name), [], name)
+
+    def test_a_raising_read_gives_a_refusal(self):
+        """TASK-086 AC7, as TASK-117 AC3 changes it: a read_declaration that raises gives "refused" with reason
+        "declaration", a finding that names the step and the exception, no lease, no append and no later call."""
+        repo = world()
+        c = calls_for(repo, approved_log(repo), read_declaration=LookupError('x'))
+        r = launch(c, stub=('start', 'end'))
+        self.closed(r)
+        self.assertEqual(r['reason'], 'declaration')
+        self.assertTrue(any('declaration' in f and 'LookupError' in f for f in r['findings']), r['findings'])
+        self.assertEqual(c.names()[-1], 'read_declaration')
+        for name in ('read_log', 'held', 'start', 'start_session', 'append', 'grant', 'end', 'end_session'):
+            self.assertEqual(c.of(name), [], name)
+
+    def test_a_refused_read_gives_no_lease(self):
+        """TASK-086 AC6, as TASK-117 AC3 changes it: a read that is refused (result refused, no tier) gives "refused"
+        with reason "declaration", its findings kept, no lease, no append, no log read and adapter.start not called;
+        the step order stops at read_declaration."""
+        repo = world()
+        answer = {'result': 'refused', 'max_risk': None, 'findings': ['git: exit 128']}
+        c = calls_for(repo, approved_log(repo), read_declaration=answer)
+        r = launch(c, stub=('start', 'end'))
+        self.closed(r)
+        self.assertEqual(r['reason'], 'declaration')
+        self.assertTrue(any('git: exit 128' in f for f in r['findings']), r['findings'])
+        self.assertEqual(c.names(), ['expire', 'read', 'read', 'read', 'read', 'read_declaration'])
+        for name in ('read_log', 'start', 'start_session', 'append', 'grant', 'end', 'end_session'):
+            self.assertEqual(c.of(name), [], name)
+
+    def test_a_malformed_declaration_gives_no_lease(self):
+        """TASK-086 AC6, as TASK-117 AC3 changes it: a declaration that does not parse (result error, no tier) gives
+        "refused" with reason "declaration", its findings kept, no lease and no append."""
+        repo = world()
+        answer = {'result': 'error', 'max_risk': None, 'findings': ['adapters: a repeated adapter id']}
+        c = calls_for(repo, approved_log(repo), read_declaration=answer)
+        r = launch(c, stub=('start', 'end'))
+        self.closed(r)
+        self.assertEqual(r['reason'], 'declaration')
+        self.assertTrue(any('a repeated adapter id' in f for f in r['findings']), r['findings'])
+        for name in ('read_log', 'start', 'start_session', 'append', 'grant', 'end', 'end_session'):
+            self.assertEqual(c.of(name), [], name)
+
+    def test_a_low_declaration_and_the_task_risk(self):
+        """TASK-086 AC6, as TASK-117 AC3 changes it: a well-formed declaration (result low) is the tier of check 7: a
+        task of risk low passes check 7 and is granted, a task of risk medium gets check 7 fired and the decision
+        "STOP: runtime insufficient", no grant; the tier in the inputs is the declaration's."""
+        # The setup of the first half: the stand-in policy classes src/** medium, so a contract that writes under src/**
+        # is a medium task whatever it declares; here the same tree has the policy's rule for src/** set to low, so the
+        # task is of class low and its declared risk is low.
+        repo = Repo()
+        base = repo.commit({'src/aieos_bootstrap/mod.py': 'X = 1\n'}, message='base')
+        tree = {'src/aieos_bootstrap/mod.py': 'X = 1\n', 'docs/specs/s.md': S_TEXT,
+                'docs/pre-genesis/constitution.md': CONSTITUTION,
+                'docs/specs/risk-rules-gov-aieos.md': POLICY.replace('risk: medium', 'risk: low'),
+                'src/aieos_bootstrap/resume_check.py': RC_TEXT, 'docs/tasks/%s.yaml' % TASK: contract(base, (), 'low')}
+        repo.head = repo.commit(tree, [base], 'head')
+        c = calls_for(repo, approved_log(repo))
+        r = launch(c, max_risk='low', stub=('end',))
+        self.assertEqual(r['result'], 'granted', r['findings'])
+        self.assertEqual(c.of('end'), [])
+        repo = world(risk='medium')
+        c = calls_for(repo, approved_log(repo), end=ended())
+        r = launch(c, max_risk='low', stub=('end',))
+        self.closed(r, 'not granted')
+        self.assertEqual(r['decision'], 'STOP: runtime insufficient')
+        self.assertEqual(check_of(self.record(c), 7)['status'], 'fired')
+        self.assertEqual(c.of('grant'), [])
+
+    def test_the_step_order(self):
+        """TASK-086 AC2, as TASK-117 AC3 changes it: the steps run in the order expire, head, base, root, declaration,
+        log, view, inputs, start: the stand-in of the declaration is called after the four reads of the first
+        steps and before read_log, held and adapter.start."""
+        repo = world()
+        c = calls_for(repo, approved_log(repo), start=ended(), end=ended())
+        launch(c, stub=('start', 'end'))
+        names = c.names()
+        self.assertEqual(names.count('read_declaration'), 1)
+        self.assertLess(names.index('read_declaration'), names.index('read_log'))
+        self.assertLess(names.index('read_log'), names.index('held'))
+        self.assertLess(names.index('held'), names.index('start'))
+        self.assertEqual(names[:6], ['expire', 'read', 'read', 'read', 'read', 'read_declaration'])
+
+
 class TASK086AC10Modules(Base):
     def test_the_import_sets(self):
-        """TASK-086 AC10, as TASK-089 AC10, TASK-094 AC5, TASK-096 AC5 and TASK-098 AC5 change it: by ast,
+        """TASK-086 AC10, as TASK-089 AC10, TASK-094 AC5, TASK-096 AC5, TASK-098 AC5 and TASK-117 AC3 change it: by ast,
         execution.py's import set is the one its tests pin; launcher.py imports only datetime, hashlib and re and
-        aieos_bootstrap's adapter, base_files, base_inputs, eventlog, execution, gitread, handoff_file, read_set_record,
+        aieos_bootstrap's adapter, adapter_declaration, base_files, base_inputs, eventlog, execution, gitread, handoff_file, read_set_record,
         records, resume_check, resume_inputs, resume_log_inputs, scope_drift, scope_reconcile and writer."""
         self.assertEqual(imports(tree_of('execution.py')),
                          {'datetime', 're', 'aieos_bootstrap.records', 'aieos_bootstrap.resume_check',
                           'aieos_bootstrap.writer'})
         self.assertEqual(imports(tree_of('launcher.py')),
                          {'datetime', 'hashlib', 're'} | {'aieos_bootstrap.' + m for m in (
-                             'adapter', 'base_files', 'base_inputs', 'eventlog', 'execution', 'gitread', 'handoff_file',
+                             'adapter', 'adapter_declaration', 'base_files', 'base_inputs', 'eventlog', 'execution', 'gitread', 'handoff_file',
                              'read_set_record', 'records', 'resume_check', 'resume_inputs', 'resume_log_inputs',
                              'scope_drift', 'scope_reconcile', 'writer')})
 
@@ -1144,15 +1381,21 @@ class TASK086AC10Modules(Base):
 
 class TASK086AC12Docstrings(Base):
     def test_the_new_module(self):
-        """TASK-086 AC12, as TASK-089 AC11 and TASK-090 AC10 change it: launcher.py's docstring holds seven of its nine
-        phrases, "not before DEF-0101's open points are closed" in place of "not before TASK-089 lands", and TASK-089's
-        three, and no longer "writes no observed read-set record", whitespace read as single spaces."""
+        """TASK-086 AC12, as TASK-089 AC11, TASK-090 AC10 and TASK-117 AC3 change it: launcher.py's docstring holds seven
+        of its nine phrases, "not before DEF-0101's open points are closed" in place of "not before TASK-089 lands",
+        and TASK-089's three, and no longer "writes no observed read-set record", whitespace read as single spaces; it
+        keeps "max_risk null never grants" and names the declaration read (adapter_declaration and TASK-117) and holds
+        no "max_risk None or one of" (the argument is gone)."""
         text = doc('launcher.py')
         for words in ('starts no runtime', 'never raises', 'not before DEF-0101\'s open points are closed',
                       'the store is the caller\'s',
                       'max_risk null never grants', 'AIEOS_BASE is the head_commit', 'the log is read twice',
                       'this task\'s choice', 'the record before the release', 'no fencing token', 'TASK-090'):
             self.assertIn(words, text)
+        for words in ('adapter_declaration', 'TASK-117', 'step "declaration"'):
+            self.assertIn(words, text)
+        self.assertNotIn('max_risk None or one of', text)
+        self.assertNotIn('both the caller\'s', text)
         self.assertNotIn('writes no observed read-set record', text)
 
     def test_the_paragraph(self):

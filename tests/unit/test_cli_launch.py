@@ -132,13 +132,15 @@ class TASK094AC1Composition(unittest.TestCase):
         self.assertEqual(out['findings'], ['gone_records: one line', 'end: a line'])
 
     def test_the_arguments(self):
-        """TASK-094 AC1 (amended by TASK-111): begin, contract_at, finish and write_handoff get the contract's
-        arguments: max_risk None, the lease of LAUNCH_LEASE, the grant's head, the contract's paths, the allowlist []
-        and commit None, and write_handoff also the grant's token by the keyword fencing_token."""
+        """TASK-094 AC1 (amended by TASK-111), as TASK-117 AC3 changes it: begin, contract_at, finish and
+        write_handoff get the contract's arguments: no tier argument at all (the begin call has eight positional
+        arguments; the runtime's tier comes from the declaration at the base), the lease of LAUNCH_LEASE, the grant's
+        head, the contract's paths, the allowlist [] and commit None, and write_handoff also the grant's token by the
+        keyword fencing_token."""
         world = World()
         launch(world)
         later = NOW + datetime.timedelta(minutes=5)
-        self.assertEqual(world.args('begin'), [(ROOT, ROOT, TASK, 'claude_code', None, 'aieos cli launch',
+        self.assertEqual(world.args('begin'), [(ROOT, ROOT, TASK, 'claude_code', 'aieos cli launch',
                                                 'aieos cli launch', NOW, NOW + launcher.LAUNCH_LEASE)])
         self.assertEqual(world.begin_kwargs, [{'base': 'main'}])
         self.assertEqual(world.args('contract_at'), [(ROOT, HEAD, TASK)])
@@ -148,14 +150,14 @@ class TASK094AC1Composition(unittest.TestCase):
         self.assertEqual(launcher.LAUNCH_LEASE, datetime.timedelta(hours=2))
 
     def test_a_base_is_passed_to_begin_by_keyword(self):
-        """TASK-094 AC1: a non-default base reaches begin as the keyword base with the nine positional arguments
-        unchanged; a base out of the strict rule gives "refused" with reason "argument" and neither the clock nor begin is
-        called."""
+        """TASK-094 AC1, as TASK-117 AC3 changes it: a non-default base reaches begin as the keyword base with the
+        eight positional arguments unchanged; a base out of the strict rule gives "refused" with reason "argument" and
+        neither the clock nor begin is called."""
         world = World()
         out = launch(world, base='release/1.2')
         self.assertEqual(out['result'], 'done')
         self.assertEqual(world.begin_kwargs, [{'base': 'release/1.2'}])
-        self.assertEqual(len(world.args('begin')[0]), 9)
+        self.assertEqual(len(world.args('begin')[0]), 8)
         for bad in ('', 'a..b', '-x', 'a/', 3, None, 'x' * 101):
             world = World()
             out = launch(world, base=bad)
@@ -535,11 +537,15 @@ def doc(file_name):
 
 class TASK094AC6Docs(unittest.TestCase):
     def test_the_launcher_docstring(self):
-        """TASK-094 AC6: launcher.py's docstring holds the paragraph's six phrases."""
+        """TASK-094 AC6, as TASK-117 AC3 changes it: launcher.py's docstring holds the paragraph's phrases; the
+        phrase "max_risk None" is re-pinned by name: it is replaced by "declaration" (the begin call no longer starts
+        with a tier of None; the runtime's tier comes from the declaration at the base) and the docstring no longer
+        says "max_risk None"."""
         text = doc('launcher.py')
-        for phrase in ('launch_outside', 'TASK-094', 'no starter', 'max_risk None', "reads the caller's clock",
+        for phrase in ('launch_outside', 'TASK-094', 'no starter', 'declaration', "reads the caller's clock",
                        'end_outside'):
             self.assertIn(phrase, text)
+        self.assertNotIn('max_risk None', text)
 
     def test_the_cli_docstring_and_usage(self):
         """TASK-094 AC6, as TASK-096 AC6, TASK-097 AC6 and TASK-098 AC6 widen it: cli.py's docstring holds "aieos

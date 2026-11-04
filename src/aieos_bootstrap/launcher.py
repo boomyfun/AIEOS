@@ -4,15 +4,18 @@ adapter.start and adapter.end (TASK-051), callable by tests. It starts no runtim
 hook placed, no setting changed; who decides running `aieos launch` with a runtime, and building a starter, is set
 by specification 7 :35.
 
-``start(root, repo, task_id, adapter_name, max_risk, holder, recorder, now, expires_at, ...)`` returns a mapping with
-exactly START_KEYS and never raises. In order (specification 7 :47's order: the gone sessions' records, then the
-expiry, then the Resume Check, then the grant):
+``start(root, repo, task_id, adapter_name, holder, recorder, now, expires_at, ...)`` returns a mapping with exactly
+START_KEYS and never raises once it is called with its signature (a keyword max_risk, which start no longer has, is a
+TypeError of the call itself). It has no tier argument (TASK-117): the runtime's tier is read from the declaration at the
+base, by the callee read_declaration (adapter_declaration.read_declaration), in the step "declaration" below. In order
+(specification 7 :47's order: the gone sessions' records, then the expiry, then the Resume Check, then the grant):
 
 1. The arguments: root an absolute path (a drive letter followed by ":/" or ":\\", or a leading "/"), repo checked by
    gitread.form_error with the HEAD read's form and TIMEOUT, task_id TASK-<digits>, adapter_name, holder and recorder
-   non-empty strings, max_risk None or one of RISKS, now and expires_at timezone-aware UTC whole seconds with
-   expires_at after now, base (TASK-106; default "main") a str that gitread.is_base_name accepts, every callee None or
-   callable; a wrong one gives "refused" with reason "argument" and no callee called.
+   non-empty strings, now and expires_at timezone-aware UTC whole seconds with expires_at after now, base (TASK-106;
+   default "main") a str that gitread.is_base_name accepts, every callee None or callable; a wrong one gives
+   "refused" with reason "argument" and no callee called. A keyword max_risk is not accepted (the call itself raises
+   TypeError). Production passes no read_declaration, so the tier comes from the declaration read.
 1a. The gone sessions' records, before the expiry (task TASK-090; specification 5 section 11 point 10; specification
    7 :47): read_sessions(root, task_id) lists the sessions that hold stored reads for the task; for each, in order,
    session_leases(root, session_id, now) is read once and the session is skipped when any of its rows is unexpired at
@@ -51,6 +54,13 @@ expiry, then the Resume Check, then the grant):
    entry out of the form [two status characters][space][path][NUL], an unterminated answer or a "##" entry gives
    "refused" with reason "root" (_root_entries parses the answer and raises nothing). Either way no session row is
    opened and read_log, held, start and end are not called.
+3c. The declaration (task TASK-117; specification 2 section 7.1; specification 5 section 11 point 14): right after the
+   root check and before the log read, read_declaration(repo, head, adapter_name) is called once, with the repo
+   path and the head commit that step 3 gave and no run, never with the root argument. Its result "absent" (no
+   declaration for the adapter at the base) gives a runtime tier of null, so check 7 fires with "the runtime has no
+   declaration"; "low" gives the tier "low" (every declaration is read at its weakest, since no measurement resolves
+   through the core); "refused", "error" or an answer out of form gives "refused" with reason "declaration", its
+   findings kept, and no session row is opened and read_log, held, start and end are not called.
 4. The log, read once by read_log(root), then execution.task_view over those bytes: its findings give "refused";
    then a task IN_PROGRESS (a lease still held after the expiry) gives "not granted" with reason "held", and any
    other state outside READY and REWORK gives "not granted" with reason "state"; all before adapter.start, with no
@@ -58,7 +68,8 @@ expiry, then the Resume Check, then the grant):
 5. The session id, "launch-" followed by the first 32 hex characters of the SHA-256 of
    "<task_id> <now.isoformat()> <head_commit>".
 6. The 22 inputs at HEAD: resume_inputs.git_inputs (ten), resume_log_inputs.log_inputs (seven), task_id, runtime
-   {adapter, max_risk} (both the caller's) and task_view's log_seq, task_state and approved_contract_hash;
+   {adapter, max_risk} (the adapter name the caller's, the tier the one step "declaration" gave) and task_view's
+   log_seq, task_state and approved_contract_hash;
    code_sha256 the SHA-256 of src/aieos_bootstrap/resume_check.py's text at HEAD encoded as UTF-8 (base_files).
    A reader's findings give "refused" with no adapter.start call.
 7. adapter.start, which opens the session row and runs execution.execute (the Resume Check, its record, its state
@@ -100,9 +111,13 @@ present gives no removal, and adapter.end is still called, since no row of the s
 
 The rulings, each this task's choice (decisions D-2673, D-2675, D-2681):
 - max_risk null never grants: the Resume Check's check 7 fires with "the runtime has no declaration", and the
-  decision is the highest fired one by its ORDER. max_risk is the caller's: passing a tier declares the runtime's tier,
-  which only the owner's measurement can back; the self-build passes null until then; tests pass a tier only to
-  exercise the path.
+  decision is the highest fired one by its ORDER. The tier is not an argument of start (TASK-117): it is the Resume
+  Check's runtime.max_risk from the answer of read_declaration, run at the base by the step "declaration"; the default
+  read_declaration gives low (the only tier it names), absent (no tier, when there is no declaration), or refused or
+  error (no tier; the launcher then refuses with reason "declaration"), and a declaration is unmeasured and read at
+  its weakest (low), so a task above low is never granted through the core until the owner's measurement is
+  backed; a caller that passes its own read_declaration chooses the answer, as the tests do with a stand-in that may
+  answer a higher tier only to exercise the path.
 - A dependency not DONE makes check 5 fire BLOCKED on the grant path (DEF-0099); a dependency's stale_evidence is
   checked for form only (DEF-0100).
 - Each run, the log is read twice: once here, whose bytes go to task_view and log_inputs, and once by execute; a
@@ -112,8 +127,8 @@ The rulings, each this task's choice (decisions D-2673, D-2675, D-2681):
 Stated limits: the observed read-set record is written at four call places: end writes it at the normal end and for the
 gone session at the end after a violation or an expiry, with the reads' removal (TASK-089), start's step 1a writes it at
 the next start, before the expiry, for a session gone with no end (TASK-090), and end_outside for `aieos end`; launching
-with a runtime is not before DEF-0101's open points are closed: the untouched-root check after the session (the check before the grant is step 3b) and max_risk (a statement, not
-a lock; check 0 is made by the Resume Check at every start and the base-tip check by step 3a). The base's limits
+with a runtime is not before DEF-0101's open points are closed: the untouched-root check after the session (the check before the grant is step 3b) and the declared tier (read at the
+base, unmeasured and advisory: a statement, not a lock; check 0 is made by the Resume Check at every start and the base-tip check by step 3a). The base's limits
 (TASK-106): the hook still makes no check 0 (specification 5 :121; specification 7 revision 5 :49); the base-name rule
 of gitread.is_base_name is stricter than git's own, so a base that git accepts but the rule refuses is refused in step 1
 with reason "argument"; `aieos launch` passes no base, so the default "main" holds, and an option for other bases is
@@ -197,7 +212,8 @@ the writer's.
 
 launch_outside (task TASK-094; `aieos launch`, specification 7 :34-35, sections 5 and 7) composes one launch from
 outside the runtime and returns a mapping with exactly LAUNCH_KEYS; it never raises an Exception. It calls start with
-max_risk None, so it grants nothing until a measured tier backs a declaration; on a grant it reads the contract's write
+no tier argument (TASK-117): the tier is the declaration read at the base, so it grants nothing while the base holds
+no declaration for its adapter, and a declaration reads low at most; on a grant it reads the contract's write
 set by base_inputs.contract_at at the grant's head, calls the caller's starter with a copy of the environment, ends the
 session in every case after a grant (end, or end_outside where end cannot take the session: launch_outside is a second
 caller of end_outside beside `aieos end`), and writes the handoff file by handoff_file.write after an end that gave
@@ -265,6 +281,7 @@ import hashlib
 import re
 
 from aieos_bootstrap import adapter
+from aieos_bootstrap import adapter_declaration
 from aieos_bootstrap import base_files
 from aieos_bootstrap import base_inputs
 from aieos_bootstrap import eventlog
@@ -296,7 +313,8 @@ _ROOT = re.compile(r'[A-Za-z]:[/\\].*|/.*', re.DOTALL)
 _TASK = re.compile(r'TASK-[0-9]+')
 _HEX40 = re.compile(r'[0-9a-f]{40}')
 _ZERO = datetime.timedelta(0)
-_CALLEES = ('read', 'read_log', 'expire', 'start', 'end', 'check', 'append', 'grant', 'release', 'held',
+_CALLEES = ('read', 'read_log', 'read_declaration', 'expire', 'start', 'end', 'check', 'append', 'grant', 'release',
+            'held',
             'start_session', 'end_session', 'release_lease_token', 'read_sessions', 'session_leases', 'stored_reads',
             'remove_reads', 'observe_gone')
 _GONE_FOR = ' at the next start, for session '
@@ -329,8 +347,7 @@ def _base_finding(base):
             'not ending in "." or ".lock"; ".." nowhere)' % shown)
 
 
-def _argument_findings(root, repo, task_id, adapter_name, max_risk, holder, recorder, now, expires_at, callees,
-                       base='main'):
+def _argument_findings(root, repo, task_id, adapter_name, holder, recorder, now, expires_at, callees, base='main'):
     found = []
     if not (isinstance(root, str) and _ROOT.fullmatch(root) is not None):
         found.append('argument: root is not an absolute path')
@@ -342,8 +359,6 @@ def _argument_findings(root, repo, task_id, adapter_name, max_risk, holder, reco
     for name, value in (('adapter_name', adapter_name), ('holder', holder), ('recorder', recorder)):
         if not _text(value):
             found.append('argument: %s is not a non-empty string' % name)
-    if not (max_risk is None or (isinstance(max_risk, str) and max_risk in RISKS)):
-        found.append('argument: max_risk is neither null nor one of low, medium, high and critical')
     base_found = _base_finding(base)
     if base_found is not None:
         found.append(base_found)
@@ -494,6 +509,29 @@ def _inputs(repo, head, task_id, log, read, adapter_name, max_risk, view):
     return inputs, hashlib.sha256(code['text'].encode('utf-8')).hexdigest(), None
 
 
+def _declaration(read_declaration, repo, head, adapter_name):
+    """Step 3c (TASK-117 AC3): (the runtime's max_risk, None) or (None, findings). The seam is called once with the
+    repo, the head commit and the adapter name, and no run. Its result "absent" gives max_risk None (check 7 then fires
+    with "the runtime has no declaration"), "low" gives the tier it names (the real read names only "low"; a test stand-in
+    may name a higher tier, which the Resume Check still compares); "refused", "error" and any answer out of form give
+    findings and no tier, so no lease is granted."""
+    got = read_declaration(repo, head, adapter_name)
+    if not isinstance(got, dict):
+        return None, ['declaration: read_declaration gave %s, not a mapping' % type(got).__name__]
+    result = got.get('result')
+    if result == 'absent':
+        return None, None
+    if result == 'low':
+        tier = got.get('max_risk')
+        if isinstance(tier, str) and tier in RISKS:
+            return tier, None
+        return None, ['declaration: the declaration read gave result low with a tier out of form']
+    given = got.get('findings')
+    more = ['declaration: %s' % f for f in given if isinstance(f, str)] if isinstance(given, (list, tuple)) else []
+    return None, ['declaration: the declaration read gave %s, not absent or low' % (
+        repr(result) if isinstance(result, str) else type(result).__name__)] + more
+
+
 def _gone_session(root, task_id, session_id, now, recorder, session_leases, stored_reads, remove_reads,
                   observe_gone):
     """Step 1a for one listed session (TASK-090 AC4 to AC6): its "gone_records: <session_id>: " lines. _path,
@@ -557,23 +595,26 @@ def _gone_records(root, task_id, now, recorder, read_sessions, session_leases, s
     return lines
 
 
-def start(root, repo, task_id, adapter_name, max_risk, holder, recorder, now, expires_at, read=None, read_log=None,
-          expire=None, start=None, end=None, check=None, append=None, grant=None, release=None, held=None,
-          start_session=None, end_session=None, release_lease_token=None, read_sessions=None, session_leases=None,
-          stored_reads=None, remove_reads=None, observe_gone=None, base='main'):
-    """Start one session (TASK-086 AC1 to AC7; TASK-090 AC3 to AC6; TASK-106 AC1 and AC2, the keyword base): a mapping
-    with exactly START_KEYS; never raises."""
-    callees = (read, read_log, expire, start, end, check, append, grant, release, held, start_session, end_session,
-               release_lease_token, read_sessions, session_leases, stored_reads, remove_reads, observe_gone)
+def start(root, repo, task_id, adapter_name, holder, recorder, now, expires_at, read=None, read_log=None,
+          read_declaration=None, expire=None, start=None, end=None, check=None, append=None, grant=None, release=None,
+          held=None, start_session=None, end_session=None, release_lease_token=None, read_sessions=None,
+          session_leases=None, stored_reads=None, remove_reads=None, observe_gone=None, base='main'):
+    """Start one session (TASK-086 AC1 to AC7; TASK-090 AC3 to AC6; TASK-106 AC1 and AC2, the keyword base; TASK-117
+    AC3, the keyword read_declaration in place of the argument max_risk): a mapping with exactly START_KEYS; never
+    raises once it is called with its signature (a keyword max_risk, which start no longer has, is a TypeError of the
+    call itself)."""
+    callees = (read, read_log, read_declaration, expire, start, end, check, append, grant, release, held,
+               start_session, end_session, release_lease_token, read_sessions, session_leases, stored_reads,
+               remove_reads, observe_gone)
     try:
-        found = _argument_findings(root, repo, task_id, adapter_name, max_risk, holder, recorder, now, expires_at,
-                                   callees, base)
+        found = _argument_findings(root, repo, task_id, adapter_name, holder, recorder, now, expires_at, callees, base)
     except Exception as exc:  # AC1: an argument whose own methods raise
         found = ['argument: checking the arguments raised %s' % type(exc).__name__]
     if found:
         return _result('refused', 'argument', found)
     read = gitread.run if read is None else read
     read_log = writer.read_log if read_log is None else read_log
+    read_declaration = adapter_declaration.read_declaration if read_declaration is None else read_declaration
     expire = writer.expire_leases if expire is None else expire
     start = adapter.start if start is None else start
     end = adapter.end if end is None else end
@@ -606,6 +647,10 @@ def start(root, repo, task_id, adapter_name, max_risk, holder, recorder, now, ex
         outcome, found = _root(read, repo)
         if outcome is not None:
             return _result(outcome, 'root', found, head_commit=head, gone=gone)
+        step = 'declaration'
+        max_risk, found = _declaration(read_declaration, repo, head, adapter_name)
+        if found:
+            return _result('refused', 'declaration', found, head_commit=head, gone=gone)
         step = 'log'
         log = read_log(root)
         if not isinstance(log, bytes):
@@ -1162,7 +1207,8 @@ def _launch_finish(state, clock, finish, finish_outside, write_handoff):
 def launch_outside(root, task_id, clock, starter, begin=None, contract_at=None, finish=None, finish_outside=None,
                    write_handoff=None, base='main'):
     """Launch one session from outside the runtime (task TASK-094; `aieos launch`, specification 7 :34-35, sections 5
-    and 7): start with max_risk None, on a grant the contract's write set at the grant's head, the caller's starter, the
+    and 7): start with no tier argument (the tier is the declaration read at the base, TASK-117), on a grant the
+    contract's write set at the grant's head, the caller's starter, the
     session's end in every case after a grant, then the handoff file after a done end. A mapping with exactly
     LAUNCH_KEYS; it never raises an Exception; a BaseException from the starter is re-raised after the end and the
     handoff. The keyword base (task TASK-106; default "main") names the base branch: a base that gitread.is_base_name
@@ -1188,8 +1234,8 @@ def launch_outside(root, task_id, clock, starter, begin=None, contract_at=None, 
     if not _utc_whole(now):
         return _launch_result('refused', 'clock', [_LAUNCH_BAD_CLOCK])
     try:
-        started = begin(root, root, task_id, LAUNCH_ADAPTER, None, LAUNCH_HOLDER, LAUNCH_RECORDER, now,
-                        now + LAUNCH_LEASE, base=base)
+        started = begin(root, root, task_id, LAUNCH_ADAPTER, LAUNCH_HOLDER, LAUNCH_RECORDER, now, now + LAUNCH_LEASE,
+                        base=base)
     except Exception as exc:
         return _launch_result('refused', 'start', ['start: a step raised %s' % type(exc).__name__])
     if type(started) is not dict:

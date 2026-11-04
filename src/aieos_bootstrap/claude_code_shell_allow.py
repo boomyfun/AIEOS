@@ -55,8 +55,9 @@ Stated limits:
 - git is trusted as gitread trusts it: replace refs, grafts, alternates and an outer repository can change what the
   base reads as.
 
-This module opens no file, starts no process except through gitread.run, and keeps no state between calls. Its one
-caller is claude_code_pretool_hook.
+This module opens no file, starts no process except through gitread.run, and keeps no state between calls. Its callers
+are claude_code_pretool_hook (read_allowlist) and, since task TASK-117, adapter_declaration.read_declaration
+(read_policy_text: the policy file's text at a base commit, in three outcomes: present, absent, refused).
 """
 import re
 
@@ -371,3 +372,39 @@ def read_allowlist(root, base, task_id, run=None):
         return _read(root, base, task_id, run)
     except Exception as e:
         return _result('unreadable', [], [], [], ['entry: ' + type(e).__name__])
+
+
+def _text_result(result, text, findings):
+    return {'result': result, 'text': text, 'findings': list(findings)}
+
+
+def _policy_text(repo, base, run):
+    if type(repo) is not str or gitread.form_error(repo, ['cat-file', '-p', '0' * 40], _TIMEOUT) is not None:
+        return _text_result('refused', '', ['argument: repo'])
+    if type(base) is not str or gitread.OBJECT_ID.fullmatch(base) is None:
+        return _text_result('refused', '', ['argument: base'])
+    runner = gitread.run if run is None else run
+    try:
+        top = _call(runner, repo, _tree_id(_call(runner, repo, base)))
+        state = _look(top, POLICY_DIR, '040000', 'tree', POLICY_DIR)
+        if state is None:
+            return _text_result('absent', '', [])
+        blob = _look(_call(runner, repo, state), POLICY_FILE, '100644', 'blob', 'policy')
+        if blob is None:
+            return _text_result('absent', '', [])
+        return _text_result('present', _bytes_text(_call(runner, repo, blob)), [])
+    except _Refused as r:
+        return _text_result('refused', '', [r.finding])
+
+
+def read_policy_text(repo, base, run=None):
+    """The policy file's text at a base commit (task TASK-117 AC1), by the same git reads and blob checks as
+    read_allowlist and by gitread.run only, never the working tree: a mapping with exactly result, text and findings.
+    result is present (the blob read and checked; text is it), absent (the commit and its root tree were read and
+    there is no state folder at the base, or the folder has no policy file), or refused (a git error, an entry that is
+    not a regular 100644 blob, a failed byte check or a bad argument; text is empty; the finding names the cause).
+    run is the test seam, as in read_allowlist. Never raises an Exception."""
+    try:
+        return _policy_text(repo, base, run)
+    except Exception as e:
+        return _text_result('refused', '', ['entry: ' + type(e).__name__])

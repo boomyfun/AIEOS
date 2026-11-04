@@ -13,8 +13,8 @@ import types
 import unittest
 from unittest import mock
 
-from aieos_bootstrap import adapter, base_files, execution, gitread, launcher, read_set_record, resume_inputs
-from aieos_bootstrap import resume_log_inputs, writer
+from aieos_bootstrap import adapter, adapter_declaration, base_files, execution, gitread, launcher, read_set_record
+from aieos_bootstrap import resume_inputs, resume_log_inputs, writer
 
 HERE = pathlib.Path(__file__).resolve()
 REPO = str(HERE.parents[2])
@@ -33,7 +33,14 @@ WHY = read_set_record.GONE_WHY[1]
 HEAD = 'a' * 40
 REAL = (('read_sessions', writer.read_sessions), ('session_leases', writer.session_leases),
         ('stored_reads', writer.stored_reads), ('remove_reads', writer.remove_reads),
-        ('observe_gone', read_set_record.observe_gone), ('expire', writer.expire_leases))
+        ('observe_gone', read_set_record.observe_gone), ('expire', writer.expire_leases),
+        ('read_declaration', adapter_declaration.read_declaration))
+DECLARED = {'result': 'low', 'max_risk': 'critical', 'findings': []}   # TASK-117 AC3: a test-only tier above low
+
+
+def absent_declaration(repo, base, adapter_name, run=None):
+    """A stand-in for the declaration read that finds no declaration (TASK-117 AC3)."""
+    return {'result': 'absent', 'max_risk': None, 'findings': []}
 
 
 def row(task=TASK, expires=LATER):
@@ -75,6 +82,7 @@ class Calls:
     def __init__(self, answers):
         self.calls = []
         self.answers = dict(answers)
+        self.answers.setdefault('read_declaration', DECLARED)
 
     def make(self, name, real):
         def stand_in(*args, **kwargs):
@@ -102,7 +110,7 @@ def run(listing=(S1,), **answers):
     base.update(answers)
     c = Calls(base)
     kw = {name: c.make(name, real) for name, real in REAL}
-    r = launcher.start(ROOT, REPO, TASK, 'unit', None, 'agent-1', REC, NOW, LATER,
+    r = launcher.start(ROOT, REPO, TASK, 'unit', 'agent-1', REC, NOW, LATER,
                        read=c.make('read', gitread.run), **kw)
     return r, c
 
@@ -123,7 +131,7 @@ def full(c, state='READY', started=None, ended=None, expired=()):
                               lambda *a, **k: (dict.fromkeys(resume_log_inputs.KEYS), None)), \
             mock.patch.object(base_files, 'read_file', lambda *a, **k: ({'text': 'x'}, None)), \
             mock.patch.object(execution, 'task_view', lambda *a, **k: (dict(view), None)):
-        return launcher.start(ROOT, REPO, TASK, 'unit', 'critical', 'agent-1', REC, NOW, LATER, read=ok_head,
+        return launcher.start(ROOT, REPO, TASK, 'unit', 'agent-1', REC, NOW, LATER, read=ok_head,
                               read_log=lambda root: b'', expire=lambda root, now: list(expired),
                               start=lambda *a, **k: started, end=lambda *a, **k: ended, **kw)
 
@@ -155,8 +163,9 @@ class TASK090AC3Callees(Base):
                 mock.patch.object(writer, 'remove_reads', c.make('remove_reads', writer.remove_reads)), \
                 mock.patch.object(read_set_record, 'observe_gone',
                                   c.make('observe_gone', read_set_record.observe_gone)):
-            r = launcher.start(ROOT, REPO, TASK, 'unit', None, 'agent-1', REC, NOW, LATER,
-                               read=lambda *a, **k: None, expire=lambda root, now: 'stop')
+            r = launcher.start(ROOT, REPO, TASK, 'unit', 'agent-1', REC, NOW, LATER,
+                               read=lambda *a, **k: None, expire=lambda root, now: 'stop',
+                               read_declaration=absent_declaration)
         self.stopped(r)
         self.assertEqual(c.names(), ['read_sessions', 'session_leases', 'stored_reads', 'observe_gone',
                                      'remove_reads'])
@@ -175,10 +184,24 @@ class TASK090AC3Callees(Base):
             c = Calls({})
             kw = {n: c.make(n, real) for n, real in REAL}
             kw[name] = 'not callable'
-            r = launcher.start(ROOT, REPO, TASK, 'unit', None, 'agent-1', REC, NOW, LATER, **kw)
+            r = launcher.start(ROOT, REPO, TASK, 'unit', 'agent-1', REC, NOW, LATER, **kw)
             self.assert_form(r)
             self.assertEqual((r['result'], r['reason']), ('refused', 'argument'), name)
             self.assertEqual(c.calls, [], name)
+
+    def test_the_declaration_callee_out_of_form(self):
+        """TASK-090 AC3, as TASK-117 AC3 changes it: a read_declaration given out of form gives "refused" with reason
+        "argument" and zero callee calls, and read_declaration is among the callees of _CALLEES, not among its last
+        five (those stay the five of TASK-090)."""
+        c = Calls({})
+        kw = {n: c.make(n, real) for n, real in REAL}
+        kw['read_declaration'] = 'not callable'
+        r = launcher.start(ROOT, REPO, TASK, 'unit', 'agent-1', REC, NOW, LATER, **kw)
+        self.assert_form(r)
+        self.assertEqual((r['result'], r['reason']), ('refused', 'argument'))
+        self.assertEqual(c.calls, [])
+        self.assertIn('read_declaration', launcher._CALLEES)
+        self.assertNotIn('read_declaration', launcher._CALLEES[-5:])
 
 
 class TASK090AC4TheStep(Base):
@@ -353,7 +376,7 @@ class TASK090AC6Findings(Base):
         granted result; the result has exactly START_KEYS."""
         skip = 'gone_records: %s: skipped, a lease row is unexpired' % S1
         answers = {'read_sessions': store(value=[S1]), 'session_leases': leases([row()])}
-        r = launcher.start(ROOT, REPO, TASK, 'unit', None, 'agent-1', REC, NOW, LATER, read=ok_head,
+        r = launcher.start(ROOT, REPO, TASK, 'unit', 'agent-1', REC, NOW, LATER, read=ok_head,
                            expire=lambda root, now: 'x', **{n: Calls(answers).make(n, real)
                                                              for n, real in REAL if n != 'expire'})
         self.assert_form(r)
@@ -385,13 +408,14 @@ class TASK090AC6TheRootStep(Base):
                    'remove_reads': store(value=2), 'expire': [], 'read': dirty, 'read_log': b'', 'start': None,
                    'end': None})
         kw = {name: c.make(name, real) for name, real in REAL}
-        r = launcher.start(ROOT, REPO, TASK, 'unit', 'critical', 'agent-1', REC, NOW, LATER,
+        r = launcher.start(ROOT, REPO, TASK, 'unit', 'agent-1', REC, NOW, LATER,
                            read=c.make('read', gitread.run), read_log=c.make('read_log', writer.read_log),
                            start=c.make('start', adapter.start), end=c.make('end', adapter.end), **kw)
         self.assert_form(r)
         self.assertEqual((r['result'], r['reason']), ('not granted', 'root'))
         self.assertEqual(c.names(), ['read_sessions', 'session_leases', 'stored_reads', 'observe_gone',
                                      'remove_reads', 'expire', 'read', 'read', 'read', 'read'])
+        self.assertEqual(c.of('read_declaration'), [])
         self.assertEqual(c.of('read')[2][1][1][0], 'config')
         self.assertEqual(c.of('read')[3][1][1][0], 'status')
         self.assertTrue(r['findings'][0].startswith('gone_records: %s: ' % S1), r['findings'])
@@ -416,13 +440,14 @@ class TASK090AC6TheRootStep(Base):
                    'remove_reads': store(value=2), 'expire': [], 'read': filtered, 'read_log': b'', 'start': None,
                    'end': None})
         kw = {name: c.make(name, real) for name, real in REAL}
-        r = launcher.start(ROOT, REPO, TASK, 'unit', 'critical', 'agent-1', REC, NOW, LATER,
+        r = launcher.start(ROOT, REPO, TASK, 'unit', 'agent-1', REC, NOW, LATER,
                            read=c.make('read', gitread.run), read_log=c.make('read_log', writer.read_log),
                            start=c.make('start', adapter.start), end=c.make('end', adapter.end), **kw)
         self.assert_form(r)
         self.assertEqual((r['result'], r['reason']), ('not granted', 'root'))
         self.assertEqual(c.names(), ['read_sessions', 'session_leases', 'stored_reads', 'observe_gone',
                                      'remove_reads', 'expire', 'read', 'read', 'read'])
+        self.assertEqual(c.of('read_declaration'), [])
         self.assertEqual(c.of('read')[2][1][1][0], 'config')
         self.assertTrue(r['findings'][0].startswith('gone_records: %s: ' % S1), r['findings'])
         self.assertIn('root: configuration names filter driver or work tree keys: 1', r['findings'][1:])

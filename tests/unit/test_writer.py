@@ -3,6 +3,7 @@ one failing case, and each test works in its own temporary folder, removed by te
 
 import ast
 import datetime
+import io
 import os
 import sqlite3
 import tempfile
@@ -2110,11 +2111,11 @@ class R23TheNamesAtTheBase(unittest.TestCase):
         return out
 
     def test_only_the_new_function_and_its_helpers_are_added(self):
-        """TASK-078 AC2, as TASK-090 AC2, TASK-087 AC4, TASK-095 AC5 and TASK-097 AC3 widen it: writer.py's top-level
-        names are exactly the base's 94 plus session_leases, read_sessions, write_handoff, init_layout, write_contract
-        and names that begin "_session_leases", "_SESSION_LEASES", "_read_sessions", "_READ_SESSIONS",
-        "_write_handoff", "_HANDOFF", "_init_layout", "_INIT_LAYOUT", "_write_contract" or "_CONTRACT", all above the
-        TASK-066 marker."""
+        """TASK-078 AC2, as TASK-090 AC2, TASK-087 AC4, TASK-095 AC5 and TASK-097 AC3 widen it, and as TASK-117 AC4
+        widens it: writer.py's top-level names are exactly the base's 94 plus session_leases, read_sessions,
+        write_handoff, init_layout, write_contract, write_policy and names that begin "_session_leases",
+        "_SESSION_LEASES", "_read_sessions", "_READ_SESSIONS", "_write_handoff", "_HANDOFF", "_init_layout",
+        "_INIT_LAYOUT", "_write_contract", "_CONTRACT", "_write_policy" or "_POLICY", all above the TASK-066 marker."""
         text = read(os.path.join(SRC, 'writer.py')).decode('utf-8')
         names = self.names(ast.parse(text))
         self.assertEqual(len(self.BASE), 94)
@@ -2125,10 +2126,12 @@ class R23TheNamesAtTheBase(unittest.TestCase):
         self.assertIn('write_handoff', added)
         self.assertIn('init_layout', added)
         self.assertIn('write_contract', added)
-        for name in added - {'session_leases', 'read_sessions', 'write_handoff', 'init_layout', 'write_contract'}:
+        self.assertIn('write_policy', added)
+        for name in added - {'session_leases', 'read_sessions', 'write_handoff', 'init_layout', 'write_contract',
+                             'write_policy'}:
             self.assertTrue(name.startswith(('_session_leases', '_SESSION_LEASES', '_read_sessions', '_READ_SESSIONS',
                                              '_write_handoff', '_HANDOFF', '_init_layout', '_INIT_LAYOUT',
-                                             '_write_contract', '_CONTRACT')), name)
+                                             '_write_contract', '_CONTRACT', '_write_policy', '_POLICY')), name)
         head, part = text.split('# ---- the read-only lookup of the store (task TASK-066) ----', 1)
         for name in added:
             with self.subTest(name=name):
@@ -2883,6 +2886,233 @@ class TASK097WriteContract(unittest.TestCase):
         self.assertGreater(len(names), 10)
         for name in names:
             self.assertIn('TASK-097 AC', getattr(type(self), name).__doc__ or '', name)
+
+
+class TASK117WritePolicy(unittest.TestCase):
+    """writer.write_policy over real temporary folders (task TASK-117 AC4); every test of this class names "TASK-117
+    AC4" in its own docstring."""
+
+    TEXT = 'adapters:\n  - adapter: claude-code\n    max_risk: low\n# caf' + chr(0xe9) + '\n'
+    VALUE = '.aieos/project.yaml'
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = self._tmp.name
+        self.addCleanup(self._tmp.cleanup)
+
+    def walk(self):
+        """(the folders, the files) under the root, as '/'-joined paths relative to it."""
+        folders, files = set(), set()
+        for here, names, leaves in os.walk(self.root):
+            rel = os.path.relpath(here, self.root).replace(os.sep, '/')
+            for name in names:
+                folders.add(name if rel == '.' else rel + '/' + name)
+            for leaf in leaves:
+                files.add(leaf if rel == '.' else rel + '/' + leaf)
+        return folders, files
+
+    def layout(self):
+        """Make the layout by writer.init_layout (the deterministic rule refuses os.mkdir and os.makedirs in a test)
+        and give the path of the policy file."""
+        self.assertEqual(writer.init_layout(self.root).result, 'done')
+        return os.path.join(self.root, '.aieos', 'project.yaml')
+
+    def refused(self, r, reason):
+        self.assertIsInstance(r, writer.StoreResult)
+        self.assertEqual((r.result, r.reason, len(r.findings)), ('refused', reason, 1), r)
+        self.assertTrue(r.findings[0].startswith(reason + ': '), r.findings)
+
+    def test_it_creates_the_policy_file(self):
+        """TASK-117 AC4: over a folder where .aieos exists, "done" with value ".aieos/project.yaml" and no finding; the
+        file holds exactly the text's UTF-8 bytes; the call made no file but that one."""
+        path = self.layout()
+        before = self.walk()[1]
+        r = writer.write_policy(self.root, self.TEXT)
+        self.assertIsInstance(r, writer.StoreResult)
+        self.assertEqual((r.result, r.reason, r.findings, r.value), ('done', None, (), self.VALUE))
+        self.assertEqual(read(path), self.TEXT.encode('utf-8'))
+        self.assertEqual(self.walk()[1], before | {self.VALUE})
+
+    def test_a_second_call_is_refused_and_a_non_empty_file_is_kept(self):
+        """TASK-117 AC4: a second call, with the same text or another, and a non-empty file already there, give
+        "exists" with one finding and the bytes unchanged."""
+        path = self.layout()
+        self.assertEqual(writer.write_policy(self.root, self.TEXT).result, 'done')
+        for text in (self.TEXT, 'other: text\n'):
+            with self.subTest(text=text):
+                self.refused(writer.write_policy(self.root, text), 'exists')
+                self.assertEqual(read(path), self.TEXT.encode('utf-8'))
+
+    def test_an_empty_file_already_there_is_written(self):
+        """TASK-117 AC4: a stated case: the file is opened in 'ab' and refused only when its size is above 0, so an
+        existing EMPTY file is written."""
+        path = self.layout()
+        with open(path, 'ab'):
+            pass
+        self.assertEqual(read(path), b'')
+        r = writer.write_policy(self.root, self.TEXT)
+        self.assertEqual((r.result, r.value), ('done', self.VALUE))
+        self.assertEqual(read(path), self.TEXT.encode('utf-8'))
+
+    def test_a_non_empty_file_there_keeps_its_bytes(self):
+        """TASK-117 AC4: a file holding one byte gives "exists" and keeps that byte."""
+        path = self.layout()
+        with open(path, 'ab') as f:
+            f.write(b'x')
+        self.refused(writer.write_policy(self.root, self.TEXT), 'exists')
+        self.assertEqual(read(path), b'x')
+
+    def test_no_aieos_folder_gives_layout_and_makes_nothing(self):
+        """TASK-117 AC4: no .aieos folder, or .aieos as a file, gives "layout" with one finding; it makes no folder and
+        writes nothing else."""
+        self.refused(writer.write_policy(self.root, self.TEXT), 'layout')
+        self.assertEqual(self.walk(), (set(), set()))
+        with open(os.path.join(self.root, '.aieos'), 'ab') as f:
+            f.write(b'x')
+        self.refused(writer.write_policy(self.root, self.TEXT), 'layout')
+        self.assertEqual(self.walk(), (set(), {'.aieos'}))
+        self.assertEqual(read(os.path.join(self.root, '.aieos')), b'x')
+
+    def test_arguments_out_of_form(self):
+        """TASK-117 AC4: a text that is not a non-empty str encoding as UTF-8, or that holds U+FEFF, a C0 control but
+        LF (tab and CR among them), DEL, a C1 control, U+2028 or U+2029, or that is above 1 MiB, gives "argument" with
+        nothing written; a text of exactly 1 MiB of ASCII is written."""
+        path = self.layout()
+        for text in ('', None, b'x', 3, '\ud800', 'a' + chr(0xfeff), 'a\x00b', 'a\tb', 'a\rb', 'a\x7fb', 'a\x85b',
+                     'a' + chr(0x2028), 'a' + chr(0x2029), 'a' * (1024 * 1024 + 1)):
+            with self.subTest(text=text if not isinstance(text, str) or len(text) < 50 else 'long'):
+                self.refused(writer.write_policy(self.root, text), 'argument')
+        self.assertEqual(self.walk()[1], set())
+        self.assertEqual(writer.write_policy(self.root, 'a' * (1024 * 1024)).result, 'done')
+        self.assertEqual(len(read(path)), 1024 * 1024)
+
+    def test_a_root_out_of_form(self):
+        """TASK-117 AC4: a root that is not a str, is empty, or names no existing folder gives "root" with nothing
+        made."""
+        for root in (None, 3, b'x', '', os.path.join(self.root, 'missing')):
+            with self.subTest(root=root):
+                self.refused(writer.write_policy(root, self.TEXT), 'root')
+        self.assertEqual(self.walk(), (set(), set()))
+
+    def test_a_patched_link_at_each_place(self):
+        """TASK-117 AC4: os.path.islink patched to return True for the root, .aieos or the file's path gives "link"
+        with no file written."""
+        self.layout()
+        places = (self.root, os.path.join(self.root, '.aieos'), os.path.join(self.root, '.aieos', 'project.yaml'))
+        for place in places:
+            with self.subTest(place=place):
+                target = os.path.normcase(place)
+                with mock.patch.object(writer.os.path, 'islink', side_effect=lambda p: os.path.normcase(p) == target):
+                    self.refused(writer.write_policy(self.root, self.TEXT), 'link')
+                self.assertEqual(self.walk()[1], set())
+
+    def test_a_path_that_resolves_elsewhere(self):
+        """TASK-117 AC4: a realpath that resolves the path elsewhere gives "link" with no file written."""
+        self.layout()
+        real = os.path.realpath
+        with mock.patch.object(writer.os.path, 'realpath', side_effect=lambda p: real(p) + 'x'):
+            self.refused(writer.write_policy(self.root, self.TEXT), 'link')
+        self.assertEqual(self.walk()[1], set())
+
+    def test_raises_give_unwritable(self):
+        """TASK-117 AC4: a raise in the link check gives "unwritable" with nothing written; a raise in os.fsync gives
+        "unwritable"; each finding names the exception's type only; no call raises."""
+        self.layout()
+        with mock.patch.object(writer.os.path, 'islink', side_effect=RuntimeError('a')):
+            r = writer.write_policy(self.root, self.TEXT)
+        self.refused(r, 'unwritable')
+        self.assertEqual(r.findings, ('unwritable: RuntimeError',))
+        self.assertEqual(self.walk()[1], set())
+        with mock.patch.object(writer.os, 'fsync', side_effect=OSError('b')):
+            r = writer.write_policy(self.root, self.TEXT)
+        self.refused(r, 'unwritable')
+        self.assertEqual(r.findings, ('unwritable: OSError',))
+
+    def test_a_read_back_mismatch_leaves_the_file_and_gives_unwritable(self):
+        """TASK-117 AC4: when the read-back (an open in 'rb') gives other bytes than were written, the file stays in
+        place and the result is "unwritable" (the stand-in answers the 'rb' open with other bytes)."""
+        path = self.layout()
+
+        def stand_in(file, mode='r', *args, **kwargs):
+            if mode == 'ab':
+                return open(file, 'ab')
+            return io.BytesIO(b'other bytes')
+
+        with mock.patch.object(writer, 'open', stand_in, create=True):
+            r = writer.write_policy(self.root, self.TEXT)
+        self.refused(r, 'unwritable')
+        self.assertEqual(read(path), self.TEXT.encode('utf-8'))
+
+    def test_no_finding_holds_caller_text(self):
+        """TASK-117 AC4: no finding holds the root's or the text's words, for a missing root, a bad text or a raise."""
+        hostile = 'zz-HOSTILE-zz'
+        self.layout()
+        out = [writer.write_policy(os.path.join(self.root, hostile), self.TEXT),
+               writer.write_policy(self.root, hostile + '\ud800')]
+        with mock.patch.object(writer.os.path, 'islink', side_effect=OSError(hostile)):
+            out.append(writer.write_policy(self.root, hostile))
+        for r in out:
+            with self.subTest(r=r):
+                self.assertEqual(r.result, 'refused')
+                self.assertNotIn(hostile, ' '.join(r.findings))
+
+    def test_hostile_arguments_raise_nothing(self):
+        """TASK-117 AC4: no exception escapes write_policy for arguments of any type."""
+        for args in ((None, None), (3, 4), (b'x', b'y'), ([], {}), (self.root, object())):
+            with self.subTest(args=repr(args)):
+                self.assertEqual(writer.write_policy(*args).result, 'refused')
+
+    def test_its_only_open_modes(self):
+        """TASK-117 AC4: by ast, write_policy's open calls are exactly two, in the modes 'ab' and 'rb', each with two
+        positional arguments; the names beginning _write_policy call no open."""
+        tree = ast.parse(read(os.path.join(SRC, 'writer.py')).decode('utf-8'))
+        mine = {n.name: n for n in tree.body if isinstance(n, ast.FunctionDef)
+                and (n.name == 'write_policy' or n.name.startswith('_write_policy'))}
+        self.assertIn('write_policy', mine)
+        for name, node in mine.items():
+            calls = [c for c in ast.walk(node) if isinstance(c, ast.Call)
+                     and ((isinstance(c.func, ast.Name) and c.func.id == 'open')
+                          or (isinstance(c.func, ast.Attribute) and c.func.attr == 'open'))]
+            if name != 'write_policy':
+                self.assertEqual(calls, [], name)
+                continue
+            modes = []
+            for c in calls:
+                self.assertEqual((len(c.args), c.keywords), (2, []), ast.dump(c))
+                self.assertIsInstance(c.args[1], ast.Constant)
+                modes.append(c.args[1].value)
+            self.assertEqual(modes, ['ab', 'rb'])
+
+    def test_its_names_above_the_marker_and_no_new_import(self):
+        """TASK-117 AC4: write_policy, the names beginning _write_policy and the _POLICY constants are defined above
+        the TASK-066 marker, add no "finally:" below it, and writer.py's import names stay the base set (the character
+        rule is a private copy; no import is added)."""
+        text = read(os.path.join(SRC, 'writer.py')).decode('utf-8')
+        head, part = text.split('# ---- the read-only lookup of the store (task TASK-066) ----', 1)
+        self.assertIn('def write_policy(', head)
+        self.assertNotIn('def write_policy(', part)
+        self.assertIn('\n_POLICY', head)
+        self.assertEqual(part.count('finally:'), 2)
+        tree = ast.parse(text)
+        imports = set()
+        for n in tree.body:
+            if isinstance(n, (ast.Import, ast.ImportFrom)):
+                imports.update((a.asname or a.name).split('.')[0] for a in n.names)
+        self.assertEqual(imports, {'datetime', 'eventlog', 'hashlib', 'os', 're', 'secrets', 'sqlite3'})
+
+    def test_the_docstring(self):
+        """TASK-117 AC4: writer.py's module docstring keeps "touches exactly two files" and names write_policy,
+        TASK-117, "create-only" and "'ab'"."""
+        doc = ' '.join(writer.__doc__.split())
+        for phrase in ('touches exactly two files', 'write_policy', 'TASK-117', 'create-only', "'ab'"):
+            self.assertIn(phrase, doc)
+
+    def test_every_test_of_this_class_names_its_criteria(self):
+        """TASK-117 AC4: every test of this class names "TASK-117 AC4" in its own docstring."""
+        names = unittest.TestLoader().getTestCaseNames(type(self))
+        self.assertGreater(len(names), 10)
+        for name in names:
+            self.assertIn('TASK-117 AC4', getattr(type(self), name).__doc__ or '', name)
 
 
 if __name__ == '__main__':
