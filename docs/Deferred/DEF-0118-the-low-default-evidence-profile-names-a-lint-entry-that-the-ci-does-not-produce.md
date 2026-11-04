@@ -25,3 +25,4 @@ TASK-116; DEF-0115 (the branch-first route and the rule that a task's commits go
 
 ## Log
 - 2026-11-03: opened (session 08342c65), at the evaluation of TASK-116 (decisions D-4684 and D-4685).
+- 2026-11-05 (session a0a0bdef): TASK-117's evidence profile also has no lint record (the CI produces none, as at TASK-116); handled in the form of D-4685; acceptance decision D-4776; the status stays open.
