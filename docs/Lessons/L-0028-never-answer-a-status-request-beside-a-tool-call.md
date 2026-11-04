@@ -108,6 +108,9 @@ Occurrences in session a0a0bdef (2026-11-04 to 2026-11-05; ../History/2026-11/20
 - While the end records were drafted, a status sentence for the owner (answering the app's request) went out beside a Glob; the hook did not refuse it. Disclosed in the next request.
 - While the end records were corrected, the hook refused a Grep because a sentence of mine stood beside it (main transcript :6997); it was resent alone and disclosed in the next request (D-4791).
 
+Occurrences in session a0a0bdef, part 2 (2026-11-05; ../History/2026-11/2026-11-05-0204-m8-stage-8-task-118-the-launchers-adapter-name-matches-the-declaration-a0a0bdef.md; main transcript lines holding the hook's refusal text "refused: this message holds text before a tool call", taken by a narrow Grep after line 6731; the worker's own claim until checked):
+- The refusal text occurs on :6831, :6840, :6867, :6870, :6997, :7008, :7009, :7010, :7014, :7024, :7210, :7213, :7290, :7318, :12726, :12799, :13523, :13524, :14139 and :14148, and, after line 14248 (the last line facts.txt counted) during the drafting of these records, on :14297 and :14300. Whether each is a separate refusal, the same refusal on its call line and its result line, or a quotation is not checked; facts.txt's guard list, which matches the hook's name and not its text, names a different set of lines. Each refused call was resent alone at once; several of the sentences answered the app's status request, and in this part the refused calls were mostly Reads, a Grep and a few Bash calls.
+
 ## Why it happens
 The app's request reads as asking for words now, and the worker adds them to the call it is about to send.
 

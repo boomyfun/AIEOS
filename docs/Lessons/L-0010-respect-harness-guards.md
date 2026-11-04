@@ -312,6 +312,10 @@ Occurrences in session 2026-11-01-1050 (../History/2026-11/2026-11-01-1050-m8-st
 Occurrences in session 08342c65, second part (../History/2026-11/2026-11-03-0157-m8-stage-8-the-continuation-08342c65-part-2-the-tier-answer-route-p1-and-the-task-117-contract.md; the evidence lines are the worker's checkpoint lines, decision-file lines and transcript lines named in each item; the worker's own claim until checked):
 - D-4749: `timeout 1500 python -B` refused by the command guard before it ran (R2, R3); not run, reworded or retried; the fault was the plan text of the decision agent (D-4749 file lines 14, 25-26; cp line 2299).
 
+Occurrences in session a0a0bdef, part 2 (2026-11-05; ../History/2026-11/2026-11-05-0204-m8-stage-8-task-118-the-launchers-adapter-name-matches-the-declaration-a0a0bdef.md; the worker's own claim until checked):
+- **2026-11-04T22:17Z (:12105, D-4831 ruled it under A71).** A command of mine with a throwaway shell function and a stray Python-with-a-dash piece, a placeholder with no purpose; refused by rules R2 and R3 before it ran; I did not reword or retry it and made the same preparation with `cp -n` and the Edit tool. The decision agent's lesson: write no placeholder commands.
+- **2026-11-04T22:43Z (:12862, D-4836 ruled it under A71).** A command holding a heredoc, to create a small check script inside a Bash call; refused by rule R1 before it ran; the file was written with the Write tool and run as a separate call. (:12864 also holds the guard's text; whether it is the same refusal's result line is not checked.)
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.
