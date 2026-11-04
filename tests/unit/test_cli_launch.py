@@ -132,15 +132,15 @@ class TASK094AC1Composition(unittest.TestCase):
         self.assertEqual(out['findings'], ['gone_records: one line', 'end: a line'])
 
     def test_the_arguments(self):
-        """TASK-094 AC1 (amended by TASK-111), as TASK-117 AC3 changes it: begin, contract_at, finish and
-        write_handoff get the contract's arguments: no tier argument at all (the begin call has eight positional
-        arguments; the runtime's tier comes from the declaration at the base), the lease of LAUNCH_LEASE, the grant's
-        head, the contract's paths, the allowlist [] and commit None, and write_handoff also the grant's token by the
-        keyword fencing_token."""
+        """TASK-094 AC1 (amended by TASK-111), as TASK-117 AC3 and TASK-118 AC1 change it: begin, contract_at,
+        finish and write_handoff get the contract's arguments: no tier argument at all (the begin call has eight
+        positional arguments; the runtime's tier comes from the declaration at the base; the adapter name is the
+        launcher's LAUNCH_ADAPTER, 'claude-code'), the lease of LAUNCH_LEASE, the grant's head, the contract's paths,
+        the allowlist [] and commit None, and write_handoff also the grant's token by the keyword fencing_token."""
         world = World()
         launch(world)
         later = NOW + datetime.timedelta(minutes=5)
-        self.assertEqual(world.args('begin'), [(ROOT, ROOT, TASK, 'claude_code', 'aieos cli launch',
+        self.assertEqual(world.args('begin'), [(ROOT, ROOT, TASK, 'claude-code', 'aieos cli launch',
                                                 'aieos cli launch', NOW, NOW + launcher.LAUNCH_LEASE)])
         self.assertEqual(world.begin_kwargs, [{'base': 'main'}])
         self.assertEqual(world.args('contract_at'), [(ROOT, HEAD, TASK)])

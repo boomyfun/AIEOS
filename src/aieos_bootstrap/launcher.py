@@ -1065,7 +1065,7 @@ def init_project(root, init_layout=None):
 LAUNCH_KEYS = ('result', 'reason', 'findings', 'session_id', 'start', 'run', 'end', 'handoff')
 LAUNCH_REASONS = ('argument', 'clock', 'start', 'contract', 'run', 'end', 'handoff')
 LAUNCH_LEASE = datetime.timedelta(hours=2)
-LAUNCH_ADAPTER = 'claude_code'
+LAUNCH_ADAPTER = 'claude-code'
 LAUNCH_RECORDER = 'aieos cli launch'
 LAUNCH_HOLDER = 'aieos cli launch'
 _LAUNCH_PATH = re.compile(r'[A-Za-z0-9._*/-]+')

@@ -1343,6 +1343,19 @@ class TASK086AC1Declaration(Base):
         self.assertLess(names.index('held'), names.index('start'))
         self.assertEqual(names[:6], ['expire', 'read', 'read', 'read', 'read', 'read_declaration'])
 
+    def test_the_launchers_adapter_name_is_a_declaration_id(self):
+        """TASK-086 AC1, as TASK-118 AC2 adds it: the adapter name the launcher gives (launcher.LAUNCH_ADAPTER) is a
+        valid adapter id of the declaration grammar: a declaration text with one item for it gives result low and the
+        text low, and the same text with the old name 'claude_code' as the item's id gives result error."""
+        conf = '{runtime: claude-code, platform: windows-native, version: 2.1.309, settings: sha256:1}'
+        item = ('  - adapter: %s\n    tier: T3\n    configuration: ' + conf + '\n    capabilities: {}\n'
+                '    assurance: {preventive: none, runtime: none, posthoc: none}\n    max_risk: low\n')
+        got = adapter_declaration.declared_max_risk('adapters:\n' + item % launcher.LAUNCH_ADAPTER,
+                                                    launcher.LAUNCH_ADAPTER)
+        self.assertEqual((got['result'], got['max_risk']), ('low', 'low'), got)
+        old = adapter_declaration.declared_max_risk('adapters:\n' + item % 'claude_code', 'claude_code')
+        self.assertEqual(old['result'], 'error', old)
+
 
 class TASK086AC10Modules(Base):
     def test_the_import_sets(self):
