@@ -23,3 +23,4 @@ TASK-119 (stopped under AC4); DEF-0118; DEF-0124.
 
 ## Log
 - 2026-11-05: opened (session 6550f093), at the first red run of the lint step (decision D-4902).
+- 2026-11-05 (session 43f86835): TASK-122 removed the unused local variable r at tests/unit/test_runner_rc.py:341 (the call is kept; L 837f4ec3, accepted at D-5016; on main since D-5017). The status stays open until the base run on L has been read at the push of the records commit and a docs commit closes this entry (TASK-122 AC6).
