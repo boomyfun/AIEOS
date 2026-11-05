@@ -24,3 +24,4 @@ TASK-122; DEF-0129 for the workflow file (the same file changes there under A66,
 
 ## Log
 - 2026-11-05: opened (session 43f86835), in the records commit of TASK-122 (decision D-5024 C6).
+- 2026-11-06 (session 43f86835): the docstring of test_the_previous_value_line_and_the_two_pins says the previous value Q is 64 lowercase hex digits; since TASK-123 the workflow value is empty and the test checks only the constant OLD_PIN (found by the TASK-123 way-2 reviews, decision D-5053; the contract keeps that line byte for byte, so the stale statement is recorded here and the status stays open).
