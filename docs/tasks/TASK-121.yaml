@@ -1,0 +1,91 @@
+# Task contract TASK-121, r2 FILLED DRAFT (r2 with the FILL_BY_SCRIPT values filled by script from the blobs at base_commit, nothing else changed; r2 = r1 with the changes C1 to C3 of D-4958 and nothing else, written as a new file; r1 = r0 with the changes M1 to M5 of D-4956; session 43f86835; a new file in the layout of TASK-119.yaml and TASK-120.yaml; written in the scratchpad; NOT approved, NOT in the repository). Whether this text is approved is recorded only in the decision agent's decision that names its SHA-256, not in this file.
+# Why: D-4955 (D2). The check code of the CI conformance steps judges a push to main that changes src/aieos_bootstrap/resume_check.py against ONE pin value P read from the pushed head's own workflow: the pushed file must equal P (aieos-checks.yml:1064-1066 and :1400-1402) and the base run (base = the tip before the push on main, origin/main on a branch) fails unless the base's file and the run's record equal P (:1146-1148 and :1482-1484). A change of the pinned file from h_old to h_new therefore needs P = h_new and P = h_old at once, which is impossible, so every pinned upgrade of the file forces a main commit with P empty. TASK-120's landing needs exactly that, and the push of such a commit (P0) was stopped by the app's classifier (D-4954). This task fixes the defect so that TASK-120 can land with P never empty. The governor pin has the same flaw; it is the owner's (DM A65) and stays untouched.
+# Facts read (main 54fd38de; Read, Grep): aieos-checks.yml:172-179 is the comment of the Resume Check pin (":174-175" the sentence beginning "Pinned:") and :180 is the value line AIEOS_PINNED_RESUME_CHECK; the first conformance step reads PINNED_RC at :906, sets on_main at :1033 (before the `if on_main:` branch at :1034), judges a push to main at :1034-1069 (touched at :1052-1054, the single-trailer rule :1055-1057, the pushed-file check :1064-1066, "no run" without a trailer :1067-1069), takes base = the tip before the push on main and refs/remotes/origin/main on a branch (:1070, :1076), computes rc_sha of the base's file at :1081-1082, and checks the base run at :1146-1148; the second step is a copy: PINNED_RC at :1242, touched at :1388-1390, the pushed-file check :1400-1402, the base check :1482-1484. The base-run check does not depend on on_main, so it applies to a task-branch run too (base = origin/main); this is why the rule below must not depend on the run kind.
+# Risk: critical (a change under .github/ is a GOV-003 evaluator path, and it edits the project's own gate).
+# Authority: a self-build change under DM A41/A51 and DM A66 (changes under .github/, each its own decision, the decision agent reading the exact diff, bound by SHA-256). It ADDS one bounded acceptance to two checks (AC3) and loosens nothing else; the governor pin, its checks, write access, secrets, tokens and settings are untouched (AC4, AC6).
+task: TASK-121
+contract_version: v1
+task_type: implementation
+objective: >-
+  Let a pinned upgrade of the Resume Check file land with the pin never empty, by design (beta): add a second job env value AIEOS_PINNED_RESUME_CHECK_PREVIOUS (empty = off) and, in both conformance steps, accept in the BASE run the previous version as the base's file when, and only when, the previous version is a 64-hex value, the base's file equals it, and the HEAD's file equals AIEOS_PINNED_RESUME_CHECK. The rule does not depend on the run kind (main push or task branch). Every other behaviour of the Resume Check pin stays as at base_commit. A text test, tests/integration/test_ci_resume_pin_logic.py, checks the new text and a reference model of the rule.
+traces_to:
+  - docs/Deferred/DEF-0124-pyflakes-reports-an-unused-import-at-resume-check-py-42-a-pinned-governance-file.md
+  - docs/tasks/TASK-120.yaml#AC4
+  - docs/pre-genesis/constitution.md#SEC-003
+input_state:
+  # base_commit is the head of main when the contract is approved (now 54fd38def4bb7c96891a070374b1fe165fd4f34f); the executor refuses unless it equals HEAD, refs/heads/main and refs/remotes/origin/main.
+  base_commit: 54fd38def4bb7c96891a070374b1fe165fd4f34f
+  depends_on: [TASK-114, TASK-103]
+  intent_versions:
+    # sha256 of each file at base_commit, filled by script at the approval request (FILL_BY_SCRIPT).
+    .github/workflows/aieos-checks.yml: 5c5bd2fcc8e0847f878756852805ad5d6d53b59465f518df7c912d5262c9a45a
+    docs/tasks/TASK-103.yaml: 467a238ecf7f037ec4d6ffe31c18183bedf95714f22f1861d39df99d957e233a
+    docs/tasks/TASK-114.yaml: 376b8ae3bb9f4f3737c2690f6668f701595454cdc1a654318361cbad2004a962
+    docs/tasks/TASK-120.yaml: e53c9f34039a80ff0aaad8ea11ec967875d2b64b4110402c12f86728338e24c1
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/Deferred/DEF-0124-pyflakes-reports-an-unused-import-at-resume-check-py-42-a-pinned-governance-file.md: fb8f9d706ef016d7e22fb2d10b4953fcefbca158f43fb8c7a8b26abe7b88e526
+write_set:
+  paths:
+    - .github/workflows/aieos-checks.yml
+    - tests/integration/test_ci_resume_pin_logic.py
+read_set: {paths: [docs/plan/, docs/specs/, docs/Deferred/, docs/pre-genesis/, src/aieos_bootstrap/, tests/, .github/workflows/], interfaces: [], schemas: []}
+forbidden:
+  - .github/workflows/aieos-native.yml
+  - .github/workflows/aieos-bench.yml
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - src/**
+  - bench/**
+  - native/**
+  - docs/**
+  - tests/unit/**
+  - tests/property/**
+  - tests/conformance/**
+  - tests/run_tests.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, GOV-004, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The env value. The diff of the workflow adds, directly after the line `AIEOS_PINNED_RESUME_CHECK: '<value>'` (:180), one comment block (lines starting with `# `) and the line `      AIEOS_PINNED_RESUME_CHECK_PREVIOUS: ''` (six spaces, single quotes, empty). The lines :172-180 are byte-for-byte as at base_commit (the new comment block is below :180). The new comment block begins by saying that it qualifies the "Pinned:" sentence at :174-175, and says: empty means off; the value holds the version that a pinned upgrade of the Resume Check file leaves; it is accepted only under the rule of AC2; changing it is the decision agent's, each change its own decision (DM A66; D-317). No word `bench/` or `native/` appears in any added line (the isolation tests forbid them in this file).
+  - AC2: >-
+      The code, in both conformance steps (the copies at the places of :906/:1081-1148 and :1242/:1417-1484 at base_commit). The exact text of every new or changed line follows; the indentation is the one of the neighbouring lines at base_commit (10 spaces for the line in (a), 14 spaces for the lines in (b), (c) and (d) and 18 spaces for a continuation or an inner line as shown). Each step has these changes and no other:
+      (a) directly after the line `PINNED_RC = os.environ.get('AIEOS_PINNED_RESUME_CHECK', '')` (:906, :1242), one new line: `PREV_RC = os.environ.get('AIEOS_PINNED_RESUME_CHECK_PREVIOUS', '')`.
+      (b) directly after the line `rc_sha = hashlib.sha256(rc_file).hexdigest() if rc_file is not None else 'absent'` (:1082, :1418), two new lines: `head_rc = blob(head, RESUME_CHECK_FILE)` and `head_rc_sha = hashlib.sha256(head_rc).hexdigest() if head_rc is not None else 'absent'` (head is the HEAD commit that main() already reads, :1032 and the same place in the second step).
+      (c) directly after the two lines of (b), three new lines: `rc_ok = {PINNED_RC}`, then `if HEX.fullmatch(PREV_RC) and rc_sha == PREV_RC and head_rc_sha == PINNED_RC:`, then (18 spaces) `rc_ok.add(PREV_RC)`.
+      (d) the base-run condition and message (:1146-1148, :1482-1484), which read `if mode == 'base' and PINNED_RC and (rc_sha != PINNED_RC or rc_named != PINNED_RC):` followed by `return fail(title, 'the base Resume Check (file %s, run %s) is not the pinned version %s' % (` and `rc_sha, rc_named, PINNED_RC))`, are replaced by exactly these three lines: `if mode == 'base' and PINNED_RC and (rc_sha not in rc_ok or rc_named not in rc_ok):`, then (18 spaces) `return fail(title, 'the base Resume Check (file %s, run %s) is not an accepted version (%s)' % (`, then (22 spaces) `rc_sha, rc_named, ', '.join(sorted(rc_ok))))`.
+      Nothing else in either step changes: the pushed-file check (:1064, :1400), the governor lines (:1060, :1396, :1151, :1487), the single-trailer rule, the "no run" rule and the notices stay byte-for-byte. The exact diff is bound by SHA-256 in the A66 decision, and that diff, read by the decision agent, is the only check that nothing else changed.
+  - AC3: >-
+      One bounded acceptance is added to the base-run rule, independent of the run kind. In terms of the rule (pin P, previous Q, base file hash b, the hash n that the run record names for the Resume Check, HEAD file hash h): the new base-run rule accepts (P, Q, b, n, h) iff P is empty, or (b in S and n in S) where S = {P} plus {Q} exactly when Q is 64 lowercase hex digits and b == Q and h == P. The record term n is part of the rule (rc_named in the code: it is the checked file's hash, 'none' or 'not used', never anything else). With Q empty the rule equals the rule at base_commit for every input (P empty: accepts; P set: accepts iff b == P and n == P). On a push to main h is the pushed file, so the pushed-file check (the pushed file equals P when the file is touched and P is set) is unchanged. If Q == P then S = {P} and the accepted set equals that of base_commit.
+      The bound, stated plainly: every state that the new rule accepts is also accepted at base_commit by the same workflow with P emptied (with P empty the pushed-file check and the base-run check both stop firing). The Q path is strictly narrower than that: the pushed file must equal P, the base's file must equal Q, the run record must name Q, and Q must be 64-hex. P and Q are both declarations of the pushed workflow (a head that sets Q = b and P = h passes any change from b to h); what guards their values is the A66 decision of the decision agent on the exact values and the exact diff, not the code. A raw `diff` of the base text and the new text with the added lines removed, plus the changed condition lines, shows only the AC2 replacements.
+  - AC4: >-
+      The governor pin and its checks are not touched: `AIEOS_PINNED_GOVERNOR` (:171), PINNED (:904/:1240) and the governor lines of the push check and the base check are byte-for-byte as at base_commit, and no governor file is touched (DM A65 keeps the governor pin with the owner).
+  - AC5: >-
+      The text test tests/integration/test_ci_resume_pin_logic.py (standard library only; no subprocess, tempfile, exec, compile, open or eval, as the deterministic rule requires; it reads the workflow with pathlib read_bytes as test_g0_detect_copies.py does; each test names "TASK-121 ACn" in its docstring) checks: (i) the env line and its comment of AC1 and that :172-180 are unchanged in form; (ii) every new or changed line of AC2 (a) to (d) is pinned literally: the test cuts the workflow text into its two conformance steps at the two lines `PINNED_RC = os.environ.get('AIEOS_PINNED_RESUME_CHECK', '')` (the text from the first such line up to the second is step one, the text from the second to the end of the file is step two; the line occurs exactly twice), and in each step each of the exact lines of (a), (b), (c) and (d) appears exactly once and the old condition line `if mode == 'base' and PINNED_RC and (rc_sha != PINNED_RC or rc_named != PINNED_RC):` appears zero times; (iii) the governor lines of AC4 as pinned in the test; and it holds a pure-Python reference function `base_run_accepts(P, Q, b, n, h)` for the AC3 rule with a truth table that covers: a landing that moves the file from the pinned old version to the pinned new version passes (b == Q, n == Q, h == P); the same case as a task-branch run (base = Q, head file = P) passes; a head file other than P with b == Q fails; a base equal to neither P nor Q fails; a run record n equal to neither P nor the accepted Q fails; a non-hex Q is never accepted; an empty Q behaves exactly as the base rule; an empty P accepts; Q is not accepted when h != P; Q == P behaves as the base rule. Plainly: the truth table checks a model of the rule, not the workflow; the workflow's logic is tied to the model only by the literal pins of (ii) and by the A66 diff; "nothing else changes" is checked by the A66 diff read by the decision agent, not by this test. The test does not execute the workflow code.
+  - AC6: >-
+      Limits and first run. No write access, secret or token, repository or security setting is added or changed (no `permissions:` change; no `secrets.`, `GITHUB_TOKEN`, `uses:`, `continue-on-error`, `curl`, `wget` in any added line). The first run of this task is on a task branch (never main first); the change goes to main only after a green branch run and its acceptance; if the push of the change is stopped by the app's classifier, the task stops and the matter goes to the decision agent (DM A71). The value of AIEOS_PINNED_RESUME_CHECK_PREVIOUS stays empty in this task. The first real exercise of the Q path is the CI branch run of the TASK-120 landing commit (base = origin/main, which holds the old file = Q; head file = the new pin), which must be green before that commit's main push; no local execution of extracted code is added. Q stays as set by the TASK-120 landing until the next pin change sets it anew; this is harmless, because after the landing main's file equals P and a push touching it must leave it at P. No other file changes.
+  - AC7: >-
+      Evidence and records. Critical profile (assurance-model section 5, as TASK-119/TASK-120): unit_test and integration_test (the CI), deterministic_rule, static_security_analysis, ai_review cross-model by a way-2 review on Haiku 5.5 (read-only; Read, Grep, Glob only), property_test (existing), architecture human_review by a second decision_agent_review that is not the cross-model half. Because the task changes tests/, the acceptance brings the raw output of 'GOV-003 base tests (report only)' with each base-test failure named. The A66 decision is a precondition of the commit and binds by SHA-256 the built workflow, the base blob, the diff, the test and this contract. After this task lands (it is on main first), TASK-120 gets a revision r3 (its own request, a new file) and the landing commit is not built before r3 is approved. r3 changes in TASK-120.yaml: (1) the forbidden entry `.github/**` is narrowed to allow only the two env value lines AIEOS_PINNED_RESUME_CHECK and AIEOS_PINNED_RESUME_CHECK_PREVIOUS; (2) the write_set gains .github/workflows/aieos-checks.yml, limited to those two lines; (3) the capabilities write list gains the same file; (4) AC6; (5) the AC4 order, replaced by the landing commit of D-4955 C3 with the values P = the SHA-256 of the new src/aieos_bootstrap/resume_check.py and Q = e1578939404da0b61d56d9187521b92c923e7cb841acdf15d0afb7155605a135 (the current pin); (6) the Why; (7) depends_on gains TASK-121; and base_commit is refreshed. The evidence replaces the P1 precondition of TASK-120 AC4 as follows: the landing commit's branch run and its main-push CI run the base with the OLD file (= Q), so their notices show the Q path passing, not the new file passing RC-01 to RC-11; the new file's RC-01 to RC-11 base-run evidence first appears in the base run of the first main push after the landing push (its base already holds the new file). That run must be read and must be green; if it is red the task stops and the matter goes to the decision agent. Nothing else that touches the Resume Check lands before that read.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [.github/workflows/aieos-checks.yml, tests/integration/test_ci_resume_pin_logic.py]}
+  shell: {allow: []}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: critical
+autonomy:
+  max_level: L1
+  budgets: {tokens: 400k, wall_time: 6h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC5]}
+  - {gate: G3, check: constitution, args: [AC3, AC4, AC6, AC7, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, GOV-004, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the risk class is satisfied AND one approval record counts AND the CI runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false: the one act is a change of the CI channel's check code of the self-build, decided under A66 on its exact diff; it grants no write access, uses no secret or token and changes no setting; the governor pin stays the owner's (DM A65).
+owner_kept_act: false
