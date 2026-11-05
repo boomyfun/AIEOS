@@ -1,0 +1,85 @@
+# Task contract TASK-119, r4 DRAFT (r1 = r0 (sha256 d2c4be8bd87c4b7ce825b538c55abd43896381e03d3b492a815e056f5fe17558) by cp -n and Edits under D-4877 C3 (a) to (f); r2 = r1 by cp -n and Edits E1 to E6 under D-4878 C2, reviewed by one read-only round on Haiku 5.5 (D-4878 C4); r3 = r2 by cp -n and Edits F1 to F5 under D-4879 C1; r4 = r3 by cp -n and Edits G1 and G2 under D-4880 C1; the r3 and r4 changes reviewed by no model; session 6550f093; written in the scratchpad; NOT approved, NOT in the repository; a new file in the layout of TASK-114.yaml (the workflow in write_set, aieos-native.yml and aieos-bench.yml named in forbidden, no .github/** in forbidden: D-4875) and of TASK-118.yaml). Whether this text is approved is recorded only in the decision agent's decision that names its SHA-256, not in this file.
+# Why: DEF-0118 (opened at the evaluation of TASK-116, D-4685): the low default evidence profile is functional [build, lint] (assurance-model.md:78; AIEOS-concept.md:701; conformance-scenarios-initial.md:11) and the CI produces a build record but no lint record, so no low task can be accepted without dropping an entry (CR-002 part 4 limit 8; assurance-model.md:95). D-4870 chose way A (a pinned third-party lint step in the CI, by a task contract); way B (changing the profile) is concept-governed (CR-002) and the owner's. D-4875 ruled the contract's shape: the workflow in write_set under the precedent of TASK-103 and TASK-114, with the A66 decision bound by SHA-256 before the commit.
+# Facts read (main 711d7a95; Grep, Read): aieos-checks.yml: runs-on ubuntu-24.04 (:160); the CI python is 3.12.3 (the G1 step's `python3 --version` line in the log of run 41921916719, lines 1545, 7216, 7243, 7270); G1 build is `python3 -m compileall -q src tests` (:1499-1507); the bandit step (:1822-1850) installs into a venv with `pip install --quiet --no-deps --require-hashes --only-binary :all: -r requirements.txt` from a requirements file whose lines carry `--hash=sha256:...`, exits at once with "no task" when task.json holds `"task": null`, and fails the job when a run fails (`[ "$S" = 0 ]`); the two embedded EVALUATOR lists (:481 and :551, equal copies, TASK-103 AC2) start with `.github/**`; the bandit step sets no working-directory, runs `cd "$A"` and calls its tool by the absolute venv path (:1827-1849); no `lint` in aieos-checks.yml or aieos-native.yml (the only `lint` hit under .github is aieos-bench.yml:4, the Rust port's own); `lint` in src occurs only at conformance.py:130 (LOW_PAIRS); governor.py :285-319: a tool-produced type is met by a record of source_class deterministic_tool_external_ci with that evidence_type and the entry's dimension and outcome pass (the gate is not read); the records maker of a task holds a fixed list CI of (step name prefix, gate, evidence_type, dimension) rows (make_records_118.py :209-226). The package index (public JSON, saved raw in the scratchpad): pyflakes 4.0.3, wheel pyflakes-4.0.3-py2.py3-none-any.whl, sha256 330ba92b8c1db2eb0b8f4068f6c58674e2649a99e334769aa50e3e9c5b11c23a, requires_python >=3.10, requires_dist null, uploaded 2026-10-07, not yanked; the downloaded wheel's sha256 equals it. pyflakes 4.1.0 (uploaded 2026-10-28, wheel b2e05e6b...97dc1) was not chosen (D-4871: 8 days old).
+# Risk: critical (docs/specs/risk-rules-gov-aieos.md section 3, rule R9 at :54: the CI channel, and Claude Code's project files, critical, proposed; R9's files are those of acts that A51 item (4) keeps, :77; and a change under .github/ is a GOV-003 evaluator path (aieos-checks.yml :481), so D-4580 sets critical; change class critical_cr) per D-4875.
+# Authority: a self-build change under DM A41/A51 and DM A66 (changes under .github/, each its own decision, the decision agent reading the exact diff; the request binds it to the files by SHA-256 and the executor checks them before the commit). The limits that stay the owner's (A66; DEF-0107 point 7): a workflow that grants write access, uses or adds a secret or a token, or changes a repository or security setting; AC3 forbids all three. The change ADDS a check and loosens none (AC2). Changing the low profile, and what counts as lint for a docs-only change, stay the owner's (concept-governed, CR-002); this task does neither.
+task: TASK-119
+contract_version: v1
+task_type: implementation
+objective: >-
+  Make the CI produce the lint entry of the low default profile: add ONE step to .github/workflows/aieos-checks.yml, after the bandit step, that installs pyflakes 4.0.3 into a venv in the runner's temp folder from the default package index, accepting only the one wheel whose hash is pinned (the form of the bandit step: --no-deps --require-hashes --only-binary :all:) and runs it with its default checks and no ignore or selection option over src and tests of the checked-out work tree, and fails the job when pyflakes reports any message or fails to run. Like the other task-gated steps it exits at once with "no task" when the run has no task. No other line of the workflow changes except a revision 19 paragraph in its header comment. A text test, tests/integration/test_ci_lint_step.py, checks the step's text. The record of the step (evidence_type lint, dimension functional) is made by the records maker of a later task from the run's step; the plan that `aieos run` writes is a later task.
+traces_to:
+  - docs/Deferred/DEF-0118-the-low-default-evidence-profile-names-a-lint-entry-that-the-ci-does-not-produce.md
+  - docs/pre-genesis/assurance-model.md#5
+  - docs/pre-genesis/constitution.md#SEC-003
+input_state:
+  # base_commit is the head of main when the contract is approved (now 711d7a95d83863ee51d12a7ebcb1b6ced4755829, or the records commit of this session if it lands first); the executor refuses unless it equals HEAD, refs/heads/main and refs/remotes/origin/main.
+  base_commit: ca0b1a8ffde21dadbd5476882fca97278c3e6464
+  depends_on: [TASK-114, TASK-103]
+  intent_versions:
+    # sha256 of each file at base_commit, filled by script at the approval request (FILL_BY_SCRIPT).
+    # one key for each depends_on task file and each text the contract is bound by (the rule of TASK-114 :22).
+    .github/workflows/aieos-checks.yml: 5c5bd2fcc8e0847f878756852805ad5d6d53b59465f518df7c912d5262c9a45a
+    docs/tasks/TASK-114.yaml: 376b8ae3bb9f4f3737c2690f6668f701595454cdc1a654318361cbad2004a962
+    docs/tasks/TASK-103.yaml: 467a238ecf7f037ec4d6ffe31c18183bedf95714f22f1861d39df99d957e233a
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/Deferred/DEF-0118-the-low-default-evidence-profile-names-a-lint-entry-that-the-ci-does-not-produce.md: d9dde275f181e462b3473f9cde24369c842107c0fe07e3b29554db4310b00729
+write_set:
+  paths:
+    - .github/workflows/aieos-checks.yml
+    - tests/integration/test_ci_lint_step.py
+read_set: {paths: [docs/plan/, docs/specs/, docs/Deferred/, docs/pre-genesis/, src/aieos_bootstrap/, tests/, .github/workflows/], interfaces: [], schemas: []}
+forbidden:
+  - .github/workflows/aieos-native.yml
+  - .github/workflows/aieos-bench.yml
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - src/**
+  - bench/**
+  - native/**
+  - docs/**
+  - tests/unit/**
+  - tests/property/**
+  - tests/conformance/**
+  - tests/run_tests.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The step. The unified diff of the workflow against main adds exactly one step, placed directly after the step "static_security_analysis (bandit, every package pinned by version and hash)" and named "lint (pyflakes 4.0.3, pinned by version and hash)". It has `if: ${{ !cancelled() }}`, begins with `set -euo pipefail` and exits 0 printing "lint: no task" when task.json holds `"task": null` (the form of the bandit step); it sets no `working-directory`; it sets `A="$RUNNER_TEMP/aieos-lint"` and makes the venv at `$A/venv`; its requirements file holds exactly one line, `pyflakes==4.0.3 --hash=sha256:330ba92b8c1db2eb0b8f4068f6c58674e2649a99e334769aa50e3e9c5b11c23a`; it installs with `--quiet --no-deps --require-hashes --only-binary :all:`; after `cd "$A"`, its last line is exactly `"$A/venv/bin/pyflakes" "$GITHUB_WORKSPACE/work/src" "$GITHUB_WORKSPACE/work/tests"` (default checks, no option; pyflakes reads no configuration file). Blocking is by form: `set -euo pipefail` and that last line as a bare command, so the step's exit status is pyflakes's. The step's text contains none of `continue-on-error`, `||`, `set +e`, `set +o`, `true`, `trap`, `python3 -m pyflakes`; its `run:` text has no `exit` other than the `exit 0` of the "no task" line and no shell `if` other than that line's (the step's `if: ${{ !cancelled() }}` key is outside the `run:` text); in its `run:` text no line names pyflakes other than the requirements line and the last line (the step's name also names it). The text of the step is the text the decision agent approved (its unified diff SHA-256 is bound in the A66 approval). The text test tests/integration/test_ci_lint_step.py (text only: it does not show that a line is reached) checks that the step exists directly after the bandit step, that it has no `working-directory`, the folder line, the exact requirements line, the install flags, the exact last line, the absence of each forbidden token of this AC and of AC3, and the "no task" line; it shows the text only, not that the job fails when pyflakes fails, which follows from the form above; it uses no subprocess, tempfile, exec, compile or open (deterministic_rule, as TASK-114 AC3), and each of its tests names "TASK-119 ACn" in its docstring.
+  - AC2: >-
+      Nothing is loosened. No existing line of the workflow changes (the diff has only added lines); the step list, every `if:`, every pinned list (the GOV-003 evaluator lists, the bandit pins) and the order of the existing steps are byte-for-byte as at base_commit. A raw `diff` of the base text and the new text with the added lines removed is empty. The change adds a check and loosens none; the header comment at the top of the workflow gains a "Revision 19 (TASK-119; ...)" paragraph (the last paragraph there is revision 18, for TASK-114) that says so and names the step (a comment line is an added line). The step 'GOV-003 base tests (report only)' stays the job's last step (TASK-103 AC6); the job's timeout-minutes 15 is not changed; if a branch run hits it, the stop rule of AC4 applies. The revision 19 paragraph is written only after the header (aieos-checks.yml :1-160) has been read in full.
+  - AC3: >-
+      The A66 limits. The step grants no write access (no `permissions:` change), uses no secret or token (no `secrets.` or `GITHUB_TOKEN` reference is added), changes no repository or security setting, adds no third-party action (no `uses:` line), and fetches nothing but the one hash-pinned wheel from the default package index. A Grep of every added line (the revision 19 paragraph included, which is written without these words) for `permissions`, `secrets`, `GITHUB_TOKEN`, `uses:`, `continue-on-error`, `env:`, `PIP_`, `index-url`, `find-links`, `trusted-host`, `curl`, `wget` finds none; the text test checks the same list over the step.
+  - AC4: >-
+      First run and risk. The lint step has never been run on the existing code (the one local trial was denied by the app's classifier before it ran, D-4873, and was ended), so the first run may be red; the contract states that as expected. The first run is on the task branch task/TASK-119 (DEF-0115's branch-first route), never on main; the workflow change goes to main only after a green run on the branch, or after code fixes that are themselves approved by their own decision and task (this task changes no source file, and no test file other than its own new text test tests/integration/test_ci_lint_step.py). The CI's python is 3.12.3 and the local interpreter is 3.14; pyflakes 4.0.3 requires python >=3.10, which both meet; a result on 3.12 may differ from one on 3.14; the CI's result governs. STOP RULE: if the first branch run of the lint step is red, the task stops (exit condition escalate: needs_out_of_scope_change); each finding goes into a new DEF entry; any fix is its own task and its own decision, landing on main before TASK-119 resumes; the step's text is never changed to ignore a finding, because merging a red step would block every later task.
+  - AC5: >-
+      Evidence and records. The risk class is critical, so the evidence profile is the critical profile of assurance-model section 5: unit_test and integration_test (this task's test is an integration test and the CI runs the existing unit tests unchanged), deterministic_rule, static_security_analysis and ai_review (cross-model), plus functional [property/fuzz] (met by property_test records) and architecture [human_review] (met by a second decision_agent_review, which is never also the cross-model half: assurance-model section 5), as for TASK-103 and TASK-114. The tool entries are met by the CI's own steps on the accepted commit; if the governor shadow's raw output in the records dry run at the acceptance request shows any entry unmet, the task stops and comes back to the decision agent, and no workaround is used. The cross-model pair is a way-2 review on Haiku 5.5 (no other model without the owner) of the diff and the test, and a separate decision_agent_review that stands for that entry, both bound to the evaluated commit and the intent versions; the way-2 record names the implementer's model, the model of the session that makes the task commit (expected claude-sonnet-5-5) and the reviewer's model (Haiku 5.5); if the reviewer's model equals either of the other two, the pair counts nothing and the task stops. The lint step's own run is a record. The A66 decision is a precondition of the commit: it is requested after this contract is approved, after the workflow file and the test file are built and before the commit; it binds the SHA-256 of the built workflow file and of the base blob it replaces, of the unified diff of the workflow against base_commit, of the test file, and of this contract as approved; the executor refuses the commit on any mismatch (the route of TASK-114, D-4516 C2). After the first green branch run, the records maker of this task (a copy of the TASK-118 maker) gains one row ('lint (pyflakes', 'G2', 'lint', 'functional') (the gate value is a proposal; the governor does not read the gate); that row is a records-step matter after acceptance and not part of this task's write set. Because the task changes tests/, its acceptance brings the raw output of the step 'GOV-003 base tests (report only)' of the task-branch run and names each base-test failure in its departures (TASK-103 AC4; DEF-0107 point 4 (i)).
+  - AC6: >-
+      Limits. No change to the low profile or to assurance-model.md, to any spec, to any source file, to any test file other than the new tests/integration/test_ci_lint_step.py, or to aieos-native.yml or aieos-bench.yml; no continue-on-error; no tool beyond the one pinned wheel; the plan that `aieos run` writes (DEF-0118's second follow-up) is a later task; what counts as lint for a docs-only change stays the owner's; any finding in the existing code becomes a DEF entry or a task of its own, never an ignore in this step.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [.github/workflows/aieos-checks.yml, tests/integration/test_ci_lint_step.py]}
+  shell: {allow: []}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: critical
+autonomy:
+  max_level: L1
+  budgets: {tokens: 400k, wall_time: 6h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2]}
+  - {gate: G3, check: constitution, args: [AC3, AC4, AC5, AC6, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the risk class is satisfied AND one approval record counts AND the CI runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false, as for TASK-103 and TASK-114 (D-4875): the one act is a change of one workflow file of the self-build, decided under A66 on its exact diff; it grants no write access, uses no secret or token and changes no setting (AC3), which would stay the owner's. Raising any assurance or changing the low profile stays the owner's.
+owner_kept_act: false
