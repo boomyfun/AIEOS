@@ -82,7 +82,6 @@ class R8Imports(unittest.TestCase):
         std = set(sys.stdlib_module_names)
         for name in names:
             self.assertTrue(name.split('.')[0] in std or name == 'aieos_bootstrap.records', name)
-        self.assertIn('aieos_bootstrap.records', names)
         self.assertFalse(any('conformance' in n for n in names))
 
 

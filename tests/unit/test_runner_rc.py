@@ -338,7 +338,7 @@ class R2EntryAndPath(Isolated):
             files[path] = files[conformance.module_path('ACC-01')]
         put_set(files, value)
         asked = []
-        r = go(files, check=stand_in(), asked=asked)
+        go(files, check=stand_in(), asked=asked)
         for sid, cap in (('ADV-02', 'Telemetry'),):
             self.assertEqual(conformance.run_scenario(None, dict(entry, capability=cap), {}, None),
                              (conformance.NOT_RUN, 'the entry point of %s is absent until its milestone' % cap))

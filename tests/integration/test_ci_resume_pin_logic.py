@@ -14,6 +14,7 @@ import unittest
 ROOT = str(pathlib.Path(__file__).resolve().parents[2])
 HEXRE = r'[0-9a-f]{64}'
 OLD_PIN = 'e1578939404da0b61d56d9187521b92c923e7cb841acdf15d0afb7155605a135'
+NEW_PIN = 'b03c0b8a1caaa77c2974da0b512bd38e1f330b5d08dda1bbd85427944eee2e76'
 PIN_LINE = ' ' * 10 + "PINNED_RC = os.environ.get('AIEOS_PINNED_RESUME_CHECK', '')"
 NEW_LINES = {
     'a': [' ' * 10 + "PREV_RC = os.environ.get('AIEOS_PINNED_RESUME_CHECK_PREVIOUS', '')"],
@@ -32,8 +33,8 @@ GOVERNOR_LINES = [
     ' ' * 14 + "if gov_sha != PINNED or value['governor_identity'] != PINNED:",
 ]
 PUSHED_FILE_LINE = ' ' * 18 + 'if PINNED_RC and RESUME_CHECK_FILE in touched and pushed_rc_sha != PINNED_RC:'
-ENV_PIN_LINE = ' ' * 6 + "AIEOS_PINNED_RESUME_CHECK: '" + OLD_PIN + "'"
-ENV_PREVIOUS_LINE = ' ' * 6 + "AIEOS_PINNED_RESUME_CHECK_PREVIOUS: ''"
+ENV_PIN_LINE = ' ' * 6 + "AIEOS_PINNED_RESUME_CHECK: '" + NEW_PIN + "'"
+ENV_PREVIOUS_LINE = ' ' * 6 + "AIEOS_PINNED_RESUME_CHECK_PREVIOUS: '" + OLD_PIN + "'"
 COMMENT_FIRST = ' ' * 6 + '# AIEOS_PINNED_RESUME_CHECK_PREVIOUS qualifies the "Pinned:" sentence above. Empty means off.'
 # Words that must not appear in an added line (AC1, AC6); written in pieces so that this file does not hold them whole.
 FORBIDDEN = ['permis' + 'sions:', 'secr' + 'ets.', 'GITHUB_' + 'TOKEN', 'us' + 'es:', 'continue-on-' + 'error',
@@ -81,7 +82,7 @@ class AC1TheEnvValue(unittest.TestCase):
 
     def test_the_env_line_and_its_comment(self):
         """TASK-121 AC1 and AC6: the pin line is as before; right after it come the comment block, which begins by
-        saying it qualifies the Pinned sentence, and the empty value line; no forbidden word is in the added block."""
+        saying it qualifies the Pinned sentence, and the previous-value line; no forbidden word is in the added block."""
         lines = workflow_lines()
         self.assertEqual(lines.count(ENV_PIN_LINE), 1)
         self.assertEqual(lines.count(ENV_PREVIOUS_LINE), 1)
@@ -105,10 +106,14 @@ class AC1TheEnvValue(unittest.TestCase):
         self.assertTrue(lines[i - 8].startswith(' ' * 6 + "# The pinned Resume Check version's content hash"))
         self.assertTrue(lines[i - 9].startswith(' ' * 6 + "AIEOS_PINNED_GOVERNOR: '"))
 
-    def test_the_value_stays_empty(self):
-        """TASK-121 AC6: the value of AIEOS_PINNED_RESUME_CHECK_PREVIOUS is empty in this task."""
+    def test_the_previous_value_line_and_the_two_pins(self):
+        """TASK-122 AC2(c) and AC4: the one line of AIEOS_PINNED_RESUME_CHECK_PREVIOUS equals ENV_PREVIOUS_LINE; the
+        pin P and the previous value Q are each 64 lowercase hex digits and P differs from Q."""
         hits = [ln for ln in workflow_lines() if ln.strip().startswith('AIEOS_PINNED_RESUME_CHECK_PREVIOUS:')]
         self.assertEqual(hits, [ENV_PREVIOUS_LINE])
+        self.assertRegex(NEW_PIN, '^' + HEXRE + '$')
+        self.assertRegex(OLD_PIN, '^' + HEXRE + '$')
+        self.assertNotEqual(NEW_PIN, OLD_PIN)
 
 
 class AC2TheCode(unittest.TestCase):

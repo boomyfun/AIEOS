@@ -30,7 +30,7 @@ Limits: check reads nothing, so how its inputs are read from Git, the event log,
 not shown here; the events are returned, not appended, and no lease is granted or released. No Resume Check fixture is
 named by the set file until TASK-005b, so no CI conformance run calls check before then.
 
-It imports only the standard library and aieos_bootstrap.records. It opens, writes and removes no file, reads no clock,
+It imports only the standard library. It opens, writes and removes no file, reads no clock,
 starts no process and makes no network call.
 """
 import ast
@@ -38,8 +38,6 @@ import copy
 import hashlib
 import re
 import sys
-
-from aieos_bootstrap import records
 
 INPUT_KEYS = frozenset({
     'task_id', 'log_seq', 'task_state', 'contract', 'contract_hash', 'approved_contract_hash', 'head_commit',
