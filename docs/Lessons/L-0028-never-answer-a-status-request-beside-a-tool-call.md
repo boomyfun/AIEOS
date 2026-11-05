@@ -114,6 +114,9 @@ Occurrences in session a0a0bdef, part 2 (2026-11-05; ../History/2026-11/2026-11-
 Occurrences in session 6550f093 (2026-11-05; ../History/2026-11/2026-11-05-0750-m8-stage-8-p1-3-the-runtime-declaration-on-main-6550f093.md; main transcript lines holding the hook's refusal text "refused: this message holds text before a tool call" as a tool result, found by a narrow Grep and checked by the decision agent at D-4876; the worker's own claim until checked):
 - The text-block hook refused three calls because a sentence of mine stood beside them: main transcript :271 (a Grep), :893 and :933 (two Reads); each call was resent alone. The text also occurs on :77 (a quotation of the previous session's records), :1415 (my own Grep for it) and in the D-4876 request; those are not refusals. My first count, 5, was wrong; D-4876 corrected it.
 
+Multi-call messages, session 6550f093 (2026-11-05; the worker's own claim until checked; the owner's rule "Mỗi tin nhắn chỉ có MỘT lệnh", D-3160):
+- D-4904 C3: a Bash call (the dry run) and a Bash call (the cmp of its output) in one message; D-4905: two Write calls (the two DEF drafts) in one message. Both ran in order; the results were as stated; nothing wrong was written; disclosed to the decision agent at D-4905 and D-4906.
+
 ## Why it happens
 The app's request reads as asking for words now, and the worker adds them to the call it is about to send.
 

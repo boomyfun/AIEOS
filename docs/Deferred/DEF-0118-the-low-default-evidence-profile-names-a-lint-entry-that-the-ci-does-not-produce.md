@@ -26,3 +26,4 @@ TASK-116; DEF-0115 (the branch-first route and the rule that a task's commits go
 ## Log
 - 2026-11-03: opened (session 08342c65), at the evaluation of TASK-116 (decisions D-4684 and D-4685).
 - 2026-11-05 (session a0a0bdef): TASK-117's evidence profile also has no lint record (the CI produces none, as at TASK-116); handled in the form of D-4685; acceptance decision D-4776; the status stays open.
+- 2026-11-05 (session 6550f093): TASK-119 (the pinned lint step) is stopped under its AC4 (escalate: needs_out_of_scope_change): the first CI run on the branch task/TASK-119 (aieos-checks 41965451678, head 5b9330c1) was red on two findings in existing code, DEF-0124 (resume_check.py:42, an unused import) and DEF-0125 (tests/unit/test_runner_rc.py:341, an unused local variable); the fix is its own task landing on main before TASK-119 resumes as an r6 (D-4902); the status stays open.

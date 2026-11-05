@@ -32,6 +32,10 @@ Occurrences in session a0a0bdef, part 2 (2026-11-05; ../History/2026-11/2026-11-
 - D-4842 (the decision agent's slip, D-4841 item 3): a gate prescribed behind a checkpoint hash that the previous item of the same decision had just changed; I gated the writer on the new k file and disclosed it.
 - D-4848 (the decision agent's slip, D-4847 C2): the gather run's gate was written as k90.sum while the same decision's NEXT put cp91, which changes the checkpoint k90 pins, before that run; I gated the run on k91.sum and, needlessly, also ran k90.sum once in the same call, which failed and gated nothing.
 
+Occurrences in session 6550f093 (2026-11-05; ../History/2026-11/2026-11-05-0931-m8-stage-8-task-119-the-lint-step-first-run-red-and-the-stop-6550f093.md; the worker's own claim until checked):
+- D-4859: a hash in my request was typed instead of copied from the tool's printed line; the decision agent caught it by reading the file; from then on the hashes came from the files by machine.
+- D-4899: my request carried a spliced, wrong workflow hash (a printed hash typed by hand); the decision agent returned MODIFY for the A66 element and waited for a clean request with machine-copied hashes (D-4900).
+
 ## Why it happens
 Long hashes and commands are retyped from memory or from a previous message, and the decision agent repeats what the request says; the guard's forbidden forms are not in the decision agent's view.
 
