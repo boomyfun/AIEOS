@@ -57,6 +57,10 @@ Occurrences in session 08342c65, second part (../History/2026-11/2026-11-03-0157
 - D-4739/D-4740: show_d4739.py and a /tmp file (cp lines 2233, 2238).
 - D-4750: extract_relays.py named only after it ran, a process failure under D-4739 (D-4750 file line 33).
 
+Occurrences in session 43f86835, second part (2026-11-06; ../History/2026-11/2026-11-05-2250-m8-stage-8-task-123-the-previous-version-value-of-the-resume-check-pin-emptied-43f86835.md; the worker's own claim until checked):
+- D-5073: I ran the dry copy of a new writer script before the decision agent had released it; it wrote nothing; accepted, with the rule that a dry run of a new script waits for its release.
+- D-5087 step: read-only Bash commands (git log, ls, tail, git show --stat) while I read the forms for the closing drafts, not named one by one.
+
 ## Why it happens
 A read is not felt as an act, and right after a compaction the habits of the call form are weakest.
 

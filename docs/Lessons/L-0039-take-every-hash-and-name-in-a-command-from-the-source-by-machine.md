@@ -40,6 +40,10 @@ Occurrences in session 43f86835 (2026-11-05; ../History/2026-11/2026-11-05-1258-
 - D-5019: the hash of the real copy of the fast-forward script was typed by hand in my request.
 - A full commit hash that I invented in a draft check; found and fixed before the check ran.
 
+Occurrences in session 43f86835, second part (2026-11-06; ../History/2026-11/2026-11-05-2250-m8-stage-8-task-123-the-previous-version-value-of-the-resume-check-pin-emptied-43f86835.md; the worker's own claim until checked):
+- D-5081 (also D-5078 and D-5079): the hash of ci_view_checks_f3_123m.json was typed by hand in the copy script and in two requests (f6d6 for f4d6); the first run of the script stopped at its own hash gate before any copy; the new script took the value by command from the stopped run's output.
+- cp286 and cp286b: a checkpoint entry held a half-typed output hash with an invented tail next to the correct one; cp286b gave the value copied from sha256sum (D-5087).
+
 ## Why it happens
 Long hashes and commands are retyped from memory or from a previous message, and the decision agent repeats what the request says; the guard's forbidden forms are not in the decision agent's view.
 

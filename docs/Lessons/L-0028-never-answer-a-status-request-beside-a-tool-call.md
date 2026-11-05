@@ -117,6 +117,10 @@ Occurrences in session 6550f093 (2026-11-05; ../History/2026-11/2026-11-05-0750-
 Multi-call messages, session 6550f093 (2026-11-05; the worker's own claim until checked; the owner's rule "Mỗi tin nhắn chỉ có MỘT lệnh", D-3160):
 - D-4904 C3: a Bash call (the dry run) and a Bash call (the cmp of its output) in one message; D-4905: two Write calls (the two DEF drafts) in one message. Both ran in order; the results were as stated; nothing wrong was written; disclosed to the decision agent at D-4905 and D-4906.
 
+Occurrences in session 43f86835, second part (2026-11-06; ../History/2026-11/2026-11-05-2250-m8-stage-8-task-123-the-previous-version-value-of-the-resume-check-pin-emptied-43f86835.md; the worker's own claim until checked):
+- D-5069 C5 (cp264): the text-block hook refused one message that held text before two tool calls; the first Read ran, the second was refused; the refused message was not resent in any wording and I went on with tool calls alone.
+- Messages holding more than one tool call: 114 messages of mine in this part held more than one tool call, counted by script from the continuation transcript 4ef0b8d4-73fa-42a1-b5ec-a3d33e8b4fdb.jsonl (the three with most calls: :4284 with 7 calls (Read Read Read Read Read Read Read), :1332 with 6 calls (Bash Edit Edit Edit Edit Edit), :2467 with 6 calls (Edit Edit Edit Edit Edit Edit)).
+
 ## Why it happens
 The app's request reads as asking for words now, and the worker adds them to the call it is about to send.
 

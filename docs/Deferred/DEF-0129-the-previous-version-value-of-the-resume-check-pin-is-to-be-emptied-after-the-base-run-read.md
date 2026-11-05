@@ -1,6 +1,6 @@
 # DEF-0129: the previous-version value of the Resume Check pin is to be emptied after the base-run read (TASK-122)
 
-- Status: open
+- Status: done
 - Opened: 2026-11-05 (session 43f86835-8e74-41ad-8a42-ea9e67c52d9b; TASK-122, decision D-5024 C6)
 - Deferred by: decision agent (A41, A51), D-5024 (the two entries of this records commit), D-5019 C4(d)
 - Decision group: A (self-build), a later change under A66
@@ -19,3 +19,4 @@ TASK-122; the read of the base run on L; DEF-0128 for the same file.
 
 ## Log
 - 2026-11-05: opened (session 43f86835), in the records commit of TASK-122 (decision D-5024 C6).
+- 2026-11-06 (session 43f86835): closed. The previous-version value of the Resume Check pin (AIEOS_PINNED_RESUME_CHECK_PREVIOUS in .github/workflows/aieos-checks.yml) was set back to empty by TASK-123 (task commit 5ec9e3ea on main; accepted at D-5061, pushed to main at D-5062, local main fast-forwarded at D-5063). The push of the records commit 671e5e77 to main ran the conformance base run (aieos-checks run 42091176159; saved in AIEOS-REG0-lite/sessions/43f86835-8e74-41ad-8a42-ea9e67c52d9b/scratchpad-evidence/t123_records/ci_log_checks_f3_123m.txt): line 43 shows AIEOS_PINNED_RESUME_CHECK_PREVIOUS empty; the notice at line 1210 shows outcome pass, base 5ec9e3ea, base resume check file b03c0b8a1caaa77c2974da0b512bd38e1f330b5d08dda1bbd85427944eee2e76, pinned resume check the same value, RC-01 to RC-11 PASS; with an empty value no older file is accepted (the runner takes a previous value only when it matches 64 hexadecimal characters, log line 957). The read was accepted at D-5079. DEF-0128 stays open: TASK-123 added one Log line to it and did not close it.
