@@ -34,7 +34,7 @@ GOVERNOR_LINES = [
 ]
 PUSHED_FILE_LINE = ' ' * 18 + 'if PINNED_RC and RESUME_CHECK_FILE in touched and pushed_rc_sha != PINNED_RC:'
 ENV_PIN_LINE = ' ' * 6 + "AIEOS_PINNED_RESUME_CHECK: '" + NEW_PIN + "'"
-ENV_PREVIOUS_LINE = ' ' * 6 + "AIEOS_PINNED_RESUME_CHECK_PREVIOUS: '" + OLD_PIN + "'"
+ENV_PREVIOUS_LINE = ' ' * 6 + "AIEOS_PINNED_RESUME_CHECK_PREVIOUS: ''"
 COMMENT_FIRST = ' ' * 6 + '# AIEOS_PINNED_RESUME_CHECK_PREVIOUS qualifies the "Pinned:" sentence above. Empty means off.'
 # Words that must not appear in an added line (AC1, AC6); written in pieces so that this file does not hold them whole.
 FORBIDDEN = ['permis' + 'sions:', 'secr' + 'ets.', 'GITHUB_' + 'TOKEN', 'us' + 'es:', 'continue-on-' + 'error',

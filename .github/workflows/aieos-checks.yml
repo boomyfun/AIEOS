@@ -185,7 +185,7 @@ jobs:
       # head's file equals AIEOS_PINNED_RESUME_CHECK (TASK-121 AC2 and AC3); every other behaviour of the pin stays as
       # described above. The one place; changing it is the decision agent's, each change its own decision (DM A66;
       # decision D-317).
-      AIEOS_PINNED_RESUME_CHECK_PREVIOUS: 'e1578939404da0b61d56d9187521b92c923e7cb841acdf15d0afb7155605a135'
+      AIEOS_PINNED_RESUME_CHECK_PREVIOUS: ''
     steps:
       - name: Fetch the pushed commit, its history and main (no third-party action, no token)
         env:
