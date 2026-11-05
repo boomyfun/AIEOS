@@ -1,0 +1,86 @@
+# Task contract TASK-123, DRAFT (session 43f86835, continuation transcript 4ef0b8d4; written in the scratchpad; NOT approved, NOT in the repository). Whether this text is approved is recorded only in the decision agent's decision that names its SHA-256, not in this file. Form model: TASK-122.yaml (a new file in the layout of TASK-121.yaml and TASK-122.yaml).
+# Why: DEF-0129. TASK-122 set the job value AIEOS_PINNED_RESUME_CHECK_PREVIOUS in .github/workflows/aieos-checks.yml to the old Resume Check version Q (e1578939404da0b61d56d9187521b92c923e7cb841acdf15d0afb7155605a135) so that the pinned upgrade of src/aieos_bootstrap/resume_check.py to P (b03c0b8a1caaa77c2974da0b512bd38e1f330b5d08dda1bbd85427944eee2e76) could pass the conformance base run. While the value stays set, the base run also accepts Q as the base's Resume Check file when the pushed head's file is P: that acceptance served the upgrade and, after the upgrade has been read green on main, is a standing loosening. DEF-0129 asks for one change: that value line set back to empty (the value that means off), under A66, its own task, and its CI run read.
+# Facts read (main 82abfc54, by Read and Grep): the workflow holds the value on one line, .github/workflows/aieos-checks.yml:188 `      AIEOS_PINNED_RESUME_CHECK_PREVIOUS: 'e1578939404da0b61d56d9187521b92c923e7cb841acdf15d0afb7155605a135'`, and the pin on :180 (P); the comment block :181-187 says "Empty means off" and describes the previous value, and stays as it is (the stale comment of :177-178 is DEF-0128, not this task; DEF-0129 lists DEF-0128 under "Depends on" for the same file: this task does not wait for DEF-0128 and does not close it, because the value line and the comment are different lines and DEF-0128's own text says that the workflow changes there under A66, each change its own decision; the dependency is waived in this contract and the decision agent rules on that waiver). The code reads the value at :915 and :1257 (PREV_RC = os.environ.get('AIEOS_PINNED_RESUME_CHECK_PREVIOUS', '')) and accepts Q only when `HEX.fullmatch(PREV_RC)`; an empty value is not hex, so the base run is again the base rule: the base's file and the run record's resume_check must both equal P. THE TEST THAT PINS THE LINE: tests/integration/test_ci_resume_pin_logic.py:37 `ENV_PREVIOUS_LINE = ' ' * 6 + "AIEOS_PINNED_RESUME_CHECK_PREVIOUS: '" + OLD_PIN + "'"` and its users :88, :90-91 and :113 (the test whose docstring is at :110) compare the workflow line with it; changing the workflow line alone makes those tests fail, so the test file must change in the same commit, and only :37 (the value becomes empty). Everything else of that file (OLD_PIN :16, the truth table, the reference function) stays. The evidence that DEF-0129's Resume-when condition is met: the push of the records commit of TASK-122 (94bc567d) ran the conformance base run on L (837f4ec3) as the base: aieos-checks run 42046460783, log line 1213 of the saved log (ci_log_checks_f3_122m.txt): base 837f4ec3, base resume check file b03c0b8a... (= P), pinned resume check the same; the same line shows "outcome pass" and its results list shows RC-01 to RC-11 PASS (read and accepted at D-5030). The push of the closing commit (82abfc54) ran aieos-checks 42059754601 (success, "no task"; the line "conformance base run: a push to main whose head commit has 0 trailer lines; no run" is at ci_log_checks_f4_122m.txt:1050; accepted at D-5043).
+# Risk: critical (.github/** is a GOV-003 evaluator path and a change under it is an A66 decision; tests/integration/** is a GOV-003 evaluator path; change class critical_cr). The change TIGHTENS the check (it removes an acceptance); it does not loosen anything.
+# Authority: a self-build change under DM A41/A51 and, for the one env value line of .github/workflows/aieos-checks.yml, DM A66 (its own decision of the decision agent on the exact diff, bound by SHA-256; D-317). The governor pin (AIEOS_PINNED_GOVERNOR) stays the owner's (DM A65) and is untouched. The A66 decision, the commit and the push are their own decisions, not approved by this contract.
+task: TASK-123
+contract_version: v1
+task_type: implementation
+objective: >-
+  Set the job value AIEOS_PINNED_RESUME_CHECK_PREVIOUS in .github/workflows/aieos-checks.yml back to empty (one line, :188, the value becomes the two quote characters with nothing between them), and in the same commit change the one line of tests/integration/test_ci_resume_pin_logic.py that pins it (:37, ENV_PREVIOUS_LINE: the value becomes empty). No other line of any file changes.
+traces_to:
+  - docs/Deferred/DEF-0129-the-previous-version-value-of-the-resume-check-pin-is-to-be-emptied-after-the-base-run-read.md
+  - docs/Deferred/DEF-0128-stale-line-citations-and-comments-after-the-pin-upgrade-of-resume-check-py.md
+  - docs/tasks/TASK-121.yaml
+  - docs/tasks/TASK-122.yaml
+  - docs/pre-genesis/constitution.md#GOV-003
+input_state:
+  # base_commit is the head of main when the contract is approved (now 82abfc5486e68f167dbd4eea7a4ea58d50b212b9); the executor refuses unless it equals HEAD, refs/heads/main and refs/remotes/origin/main.
+  base_commit: 82abfc5486e68f167dbd4eea7a4ea58d50b212b9
+  depends_on: [TASK-121, TASK-122]
+  intent_versions:
+    # sha256 of each file at base_commit, filled by script at the approval request.
+    docs/tasks/TASK-121.yaml: 823926a8a16995971c2c5be4276f6a53fc99a37962cc55c01fb925d8944b9100
+    docs/tasks/TASK-122.yaml: c405881ccc280dc07f7465bbcaef2c15a9d6f7144b405599729b98949d04e0be
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/Deferred/DEF-0129-the-previous-version-value-of-the-resume-check-pin-is-to-be-emptied-after-the-base-run-read.md: 0662692d107e494dc124d43183c31b612a93d727dcd4482ce6a57fa00f3ed892
+    docs/Deferred/DEF-0128-stale-line-citations-and-comments-after-the-pin-upgrade-of-resume-check-py.md: ba8a87ddb9d9ce6bd8bd77e15a1cc6c49411325651eb8bac5c80d2fb074b48f2
+    tests/integration/test_ci_resume_pin_logic.py: 22ade967850efff1e25ab4bb3298767daddcf43169b6c698aa96aed72f249d3a
+    .github/workflows/aieos-checks.yml: d6880183d74b2554b8af4b5b272b747bd8bb40e1fea650ddd17f8c920083e25f
+write_set:
+  paths:
+    - tests/integration/test_ci_resume_pin_logic.py
+    - .github/workflows/aieos-checks.yml
+read_set: {paths: [docs/plan/, docs/specs/, docs/Deferred/, docs/pre-genesis/, src/aieos_bootstrap/, tests/, .github/workflows/], interfaces: [], schemas: []}
+forbidden:
+  - .github/workflows/aieos-native.yml
+  - .github/workflows/aieos-bench.yml
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - src/**
+  - bench/**
+  - native/**
+  - docs/**
+  - tests/unit/**
+  - tests/property/**
+  - tests/conformance/**
+  - tests/run_tests.py
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-005, GOV-002, GOV-003, GOV-004, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The workflow. The diff of .github/workflows/aieos-checks.yml against base_commit has exactly one changed line, :188: `      AIEOS_PINNED_RESUME_CHECK_PREVIOUS: 'e1578939404da0b61d56d9187521b92c923e7cb841acdf15d0afb7155605a135'` becomes `      AIEOS_PINNED_RESUME_CHECK_PREVIOUS: ''` (six spaces of indentation as before). The pin line :180 (P), the comment blocks (:172-179, :181-187), the governor lines, both conformance steps and every other line stay byte for byte. The limit to the one line is checked as a diff in the A66 decision, bound by SHA-256 (a forbidden pattern cannot express single lines).
+  - AC2: >-
+      The test. The diff of tests/integration/test_ci_resume_pin_logic.py against base_commit has exactly one changed line, :37: ENV_PREVIOUS_LINE is built as `' ' * 6 + "AIEOS_PINNED_RESUME_CHECK_PREVIOUS: ''"` (the same indentation, the value empty). OLD_PIN, NEW_PIN, the two pins, the reference function, the truth table and every other test stay byte for byte, and no test is added, removed or renamed (the test at :109 keeps asserting that the one previous-value line equals ENV_PREVIOUS_LINE, and that the constants NEW_PIN and OLD_PIN are 64-hex and differ; plainly, after the change that test is an identity check of the workflow line against the constant, and no test checks what the previous value means in the workflow: the code reads at :915 and :1257 accept a previous version only when `HEX.fullmatch(PREV_RC)`, so an empty value is off, which the CI read of the branch run shows and the model test at :195-202 only models). The docstring of the module (:2) says "(empty = off)", which becomes true. The exact diff is bound by SHA-256 in the A66 decision.
+  - AC3: >-
+      The evidence that the condition of DEF-0129 is met, and what the change does. The acceptance request repeats, unedited, the reads quoted in the facts: the base-run notice of aieos-checks run 42046460783 (log line 1213: base resume check file = pinned version = P, RC-01 to RC-11 PASS, outcome pass) and the "no run" line of run 42059754601 (log line 1050). After the change, a push to main whose head's Resume Check file is P and whose base's is P passes as before; a push to main that changes src/aieos_bootstrap/resume_check.py to any other version still fails, as before TASK-121 (the model in test_ci_resume_pin_logic.py: base_run_accepts with an empty Q is the base rule). The model base_run_accepts in the test file models the rule; it is not the workflow (the test file's own docstring says so), and the measured evidence is the CI read of the branch run and of the main run. The change removes the one acceptance that TASK-121 added, so a later pinned upgrade needs TASK-121's mechanism again, each time its own A66 decision.
+  - AC4: >-
+      The order of landing. The contract TASK-123 on main (a docs-only commit; the executor refuses unless HEAD = main = origin/main = 82abfc54), a task commit built fresh on it on the new branch task/TASK-123 (never to main first), fetched into E:/AIEOS, reviewed; the A66 decision on the exact combined diff (the workflow line and the test line), bound by SHA-256, BEFORE the commit; the push of the branch and the CI read of the branch run (base = origin/main with the Resume Check file P, head's file P: the base rule holds; the run must be green and its base-run notice must show "base resume check file" = P and "pinned resume check" = P; the notice does not print the previous value, and that it is empty is shown by the exact diff of the A66 decision); the acceptance; the push to main as a fast-forward with the one trailer `AIEOS-Task: TASK-123`; the CI read on main; the records commit; and the closing of DEF-0129 by a docs commit (its own decision). Each step its own decision. If any run is red, the task stops and comes back to the decision agent.
+  - AC5: >-
+      Evidence and records. The risk class is critical: the critical profile of assurance-model section 5, as for TASK-121 and TASK-122: unit_test and integration_test (the CI runs the head's tests), deterministic_rule, static_security_analysis, ai_review cross-model by way-2 reviews on Haiku 5.5 of the diff and tests (read-only: Read, Grep and Glob only; no other model without the owner; the brief asks the per-article lines), functional property_test (the existing ones) and architecture human_review by a second decision_agent_review. GOV-003 is recorded as it falls, with the stated departures (DEF-0107 points 2 to 4, DEF-0110) in the acceptance text from the start. The step 'GOV-003 base tests (report only)' of the branch run is brought as raw output and each base-test failure is named (expected: the BASE's tests read the head's workflow, whose value is empty, so test_the_env_line_and_its_comment (:88) and test_the_previous_value_line_and_the_two_pins (:113) fail there, report only; any other failure is named). The change edits the evaluator (a workflow and a test) and only tightens the check; the acceptance text says so from the start.
+  - AC6: >-
+      Limits. No change to any other source, test, workflow, spec or document than the two paths of the write_set; no formatting change; no new import; no `# noqa`; no change of the lint step. No write access, secret, token, repository or security setting is added or changed (no `permissions:` change; no `secrets.`, `GITHUB_TOKEN`, `uses:`, `continue-on-error`, `curl`, `wget` in any added line). DEF-0128 stays open (its stale comment of :177-178 and the citations are not this task; DEF-0128's own text says that the workflow changes there under A66, each its own decision). DEF-0120, DEF-0121, DEF-0123, DEF-0126 and DEF-0127 are untouched. The same tests in the same number pass as at the base.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [tests/integration/test_ci_resume_pin_logic.py, .github/workflows/aieos-checks.yml]}
+  shell: {allow: []}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: critical
+autonomy:
+  max_level: L1
+  budgets: {tokens: 300k, wall_time: 4h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2]}
+  - {gate: G3, check: constitution, args: [AC3, AC4, AC5, AC6, INV-001, INV-002, INV-003, INV-004, INV-005, GOV-002, GOV-003, GOV-004, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the risk class is satisfied AND one approval record counts AND the CI runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false: the one act is a change of one env value line of the self-build's own workflow and one test line, decided under A51 and A66; the governor pin is not touched (DM A65); nothing of A51 item (4) that stays with the owner is carried out.
+owner_kept_act: false
