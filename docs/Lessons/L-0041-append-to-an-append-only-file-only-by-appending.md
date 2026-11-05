@@ -12,6 +12,7 @@ An Edit used the tail of the last line as its anchor and put the new entry in th
 ## Occurrences
 - **2026-10-30 (session 578ea88b, D-3853, D-3854 C1).** The D-3853 entry was first put inside the D-3852 entry; the decision agent had it restored and the entry appended.
 - **2026-10-30 (session 578ea88b, D-3879, D-3880 C1).** The D-3879 entry was added by an Edit anchored in the middle of the D-3878 line; corrected by a note appended at the end (nothing removed).
+- **2026-11-05 (session 43f86835, D-5028).** To find an append anchor, the worker edited the old checkpoint entry cp186 (it inserted the words "[UPDATE cp187 follows below.]" before "Owed:"); disclosed at D-5028 and left in place; the entry cp189 also holds a half-typed phrase, left as it is; all later appends used `printf >>`.
 
 ## Why it happens
 The tool's Edit needs a unique old text, and the last sentence of the last line looks like a safe anchor.

@@ -319,6 +319,12 @@ Occurrences in session a0a0bdef, part 2 (2026-11-05; ../History/2026-11/2026-11-
 Occurrences in session 6550f093 (2026-11-05; ../History/2026-11/2026-11-05-0750-m8-stage-8-p1-3-the-runtime-declaration-on-main-6550f093.md; the worker's own claim until checked):
 - **2026-11-05 (D-4865, D-4867, D-4871; mine and the decision agent's; main transcript :583, :750, :1034).** The command guard refused three calls before they ran: a call of mine that added a `python -I -c` piece and a cd pair to the ordered `gh run list` (D-4865: my needless piece; the ordered command was then run alone); the dry run `python -I -B <file>` that D-4866 C3 ordered (D-4867: the order was at fault, the plain form was used); `python -m venv` (D-4871: the venv was dropped). None was reworded or retried; each was brought to the decision agent. A related needless piece (D-4873): my call of the ordered lint trial carried an unordered `; echo` piece; that call was denied by the app's classifier for another reason (L-0024).
 
+Occurrences in session 43f86835 (2026-11-05; ../History/2026-11/2026-11-05-1258-m8-stage-8-task-121-and-task-122-the-pinned-upgrade-of-the-resume-check-43f86835.md; the worker's own claim until checked):
+- **2026-11-05 (D-4954).** The app's auto-mode classifier denied the push of the commit P0 of TASK-120; not retried in any form; the decision agent stopped that route for good and the landing was redesigned (D-4955, D-4999: TASK-122).
+- **2026-11-05 (D-4966, D-4967).** The owner's command guard refused a test run of mine in a refused Python form before it ran (D-4966; the suite then ran through the approved script run_part121.py), and then refused the checkpoint append that recorded that refusal by quoting the refused form (D-4967). Remedy (D-4967): a record of a guard refusal describes the refused form and points to the transcript; it never quotes the form in a command.
+- **2026-11-05 (D-5024).** A one-line Python syntax check of mine (Python's name followed by a dash) was refused before it ran; not retried in any form.
+- **2026-11-05 (D-5032).** The D-4967 pattern once more: a checkpoint append (cp195) whose text quoted the refused form of D-5024 was refused before it ran; the entry was re-written to describe the form and appended before the decision agent was asked (accepted at D-5032).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

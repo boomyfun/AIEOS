@@ -1,6 +1,6 @@
 # DEF-0124: pyflakes reports an unused import at src/aieos_bootstrap/resume_check.py:42 (aieos_bootstrap.records), a pinned governance file
 
-- Status: open
+- Status: done
 - Opened: 2026-11-05 (session 6550f093-c843-41f2-99ca-c427579f48bf; TASK-119, decision D-4902)
 - Deferred by: decision agent (A41, A51), D-4902
 - Decision group: A (self-build)
@@ -29,3 +29,4 @@ TASK-119 (stopped under AC4); DEF-0118; DEF-0125.
 - 2026-11-05: opened (session 6550f093), at the first red run of the lint step (decision D-4902).
 - 2026-11-05 (session 43f86835): TASK-121, the enabler of the pin handling, landed on main (X c9cb986f, accepted at D-4975): the workflow now holds a job value AIEOS_PINNED_RESUME_CHECK_PREVIOUS (empty) and one bounded acceptance in the base run, so that a pinned upgrade of src/aieos_bootstrap/resume_check.py can pass the base run. The import itself is not yet removed: that comes with TASK-120 (revision r3), whose landing sets the pin and the previous-version value in the workflow under A66. The status stays open.
 - 2026-11-05 (session 43f86835): TASK-122 removed the import (L 837f4ec3, accepted at D-5016; on main since D-5017): the line `from aieos_bootstrap import records` and the words in the docstring that named it are gone from src/aieos_bootstrap/resume_check.py, and the same commit sets the pin to the new file and the previous-version value to the old one in the workflow (decision D-5008, DM A66). The status stays open until the base run on L has been read at the push of the records commit and a docs commit closes this entry (TASK-122 AC6).
+- 2026-11-05 (session 43f86835): closed. The unused import at src/aieos_bootstrap/resume_check.py:42 was removed by TASK-122 (L 837f4ec3, accepted at D-5016); the push of the records commit F 94bc567d to main ran the conformance base run on L (aieos-checks run 42046460783): its notice (ci_log_checks_f3_122m.txt line 1213) shows outcome pass, base 837f4ec3, base resume check file b03c0b8a1caaa77c2974da0b512bd38e1f330b5d08dda1bbd85427944eee2e76, pinned resume check the same value, RC-01 to RC-11 PASS; the read was accepted at D-5030.

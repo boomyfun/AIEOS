@@ -14,6 +14,12 @@ Session 6550f093 (2026-11-05; ../History/2026-11/2026-11-05-0931-m8-stage-8-task
 - D-4884 (shared with the decision agent's reading at D-4883): fetch_p13rec.sh filtered the status lines of the repository with the pattern `^\?\? src/aieos_bootstrap/__pycache__/[A-Za-z0-9_.]+\.pyc$`, written from a reading of the status lines; the four real names (`__init__.cpython-314.pyc`, `eventlog...`, `records...`, `writer...`) contain a hyphen and none matched, so the dry run stopped with "E:/AIEOS is not clean (apart from the lock and the bytecode files)" before anything was fetched; D-4862 had listed those names; a corrected copy (fetch_p13rec2.sh, class `[A-Za-z0-9_.-]+`) ran clean (D-4884).
 - D-4885 (a comment slip, harmless): the header comment of push_p13rec.sh says that the MODE line is line 3; it is line 4 (the real copy was made by an Edit that anchored on the text, not on the number); recorded, not changed. Other header comments of the session's scripts named a wrong MODE line number the same way (harmless).
 
+Session 43f86835 (2026-11-05; ../History/2026-11/2026-11-05-1258-m8-stage-8-task-121-and-task-122-the-pinned-upgrade-of-the-resume-check-43f86835.md; the worker's own claim until checked):
+- D-5013: a broad secret pattern with an unanchored `sk-` matched the words "risk-" and "task-" in six lines; the anchored pattern of D-5013 replaced it.
+- D-5011: the push script's `grep -P` does not work in the shell's locale.
+- D-5012: a request named line 25 for what was line 26.
+Each stopped a script before anything was pushed.
+
 ## Why it happens
 A pattern is written from a look at two or three names, and a comment is written before the last edit of the script; no step runs the pattern against the full listing or the comment against the file.
 

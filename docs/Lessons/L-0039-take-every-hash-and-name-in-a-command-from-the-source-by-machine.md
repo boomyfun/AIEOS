@@ -36,6 +36,10 @@ Occurrences in session 6550f093 (2026-11-05; ../History/2026-11/2026-11-05-0931-
 - D-4859: a hash in my request was typed instead of copied from the tool's printed line; the decision agent caught it by reading the file; from then on the hashes came from the files by machine.
 - D-4899: my request carried a spliced, wrong workflow hash (a printed hash typed by hand); the decision agent returned MODIFY for the A66 element and waited for a clean request with machine-copied hashes (D-4900).
 
+Occurrences in session 43f86835 (2026-11-05; ../History/2026-11/2026-11-05-1258-m8-stage-8-task-121-and-task-122-the-pinned-upgrade-of-the-resume-check-43f86835.md; the worker's own claim until checked):
+- D-5019: the hash of the real copy of the fast-forward script was typed by hand in my request.
+- A full commit hash that I invented in a draft check; found and fixed before the check ran.
+
 ## Why it happens
 Long hashes and commands are retyped from memory or from a previous message, and the decision agent repeats what the request says; the guard's forbidden forms are not in the decision agent's view.
 

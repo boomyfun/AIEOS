@@ -47,6 +47,9 @@ Occurrences in session a0a0bdef, part 2 (2026-11-05; ../History/2026-11/2026-11-
 One occurrence in session 6550f093 (../History/2026-11/2026-11-05-0750-m8-stage-8-p1-3-the-runtime-declaration-on-main-6550f093.md; the worker's own claim until checked):
 - **2026-11-05 (D-4868).** The real copy of the decision-file writer differed from the dry script by two lines: the Edit tool trimmed the trailing space of its new text (`SUB ='...`); brought before it ran and accepted; from then on an Edit's new text does not end in a space (the next copy used an anchor that ends in text). A related stop: D-4861, the count of user.email values stopped a corrected script because of an unrelated global identity; brought, not fixed by the worker.
 
+Occurrences in session 43f86835 (2026-11-05; ../History/2026-11/2026-11-05-1258-m8-stage-8-task-121-and-task-122-the-pinned-upgrade-of-the-resume-check-43f86835.md; the worker's own claim until checked):
+- D-4959, D-4980: the Edit tool trimmed the trailing space of a new text once more: the first real copy of a decision-file writer differed from its dry copy beyond the MODE line; brought before it ran and never run; the next copy used an anchor that ends in text.
+
 ## Why it happens
 A new file has no hash until it exists, so the first run is done before a gate can be written; the Edit tool changes the file in place.
 

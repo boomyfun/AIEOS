@@ -1,6 +1,6 @@
 # DEF-0125: pyflakes reports an unused local variable r at tests/unit/test_runner_rc.py:341
 
-- Status: open
+- Status: done
 - Opened: 2026-11-05 (session 6550f093-c843-41f2-99ca-c427579f48bf; TASK-119, decision D-4902)
 - Deferred by: decision agent (A41, A51), D-4902
 - Decision group: A (self-build)
@@ -24,3 +24,4 @@ TASK-119 (stopped under AC4); DEF-0118; DEF-0124.
 ## Log
 - 2026-11-05: opened (session 6550f093), at the first red run of the lint step (decision D-4902).
 - 2026-11-05 (session 43f86835): TASK-122 removed the unused local variable r at tests/unit/test_runner_rc.py:341 (the call is kept; L 837f4ec3, accepted at D-5016; on main since D-5017). The status stays open until the base run on L has been read at the push of the records commit and a docs commit closes this entry (TASK-122 AC6).
+- 2026-11-05 (session 43f86835): closed. The unused local variable r at tests/unit/test_runner_rc.py:341 was removed by TASK-122 (L 837f4ec3, accepted at D-5016); the base run of the push of the records commit F 94bc567d to main (aieos-checks run 42046460783, notice at log line 1213) passed as stated in the closing line of DEF-0124; the read was accepted at D-5030.
