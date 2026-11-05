@@ -27,3 +27,4 @@ TASK-119 (stopped under AC4); DEF-0118; DEF-0125.
 
 ## Log
 - 2026-11-05: opened (session 6550f093), at the first red run of the lint step (decision D-4902).
+- 2026-11-05 (session 43f86835): TASK-121, the enabler of the pin handling, landed on main (X c9cb986f, accepted at D-4975): the workflow now holds a job value AIEOS_PINNED_RESUME_CHECK_PREVIOUS (empty) and one bounded acceptance in the base run, so that a pinned upgrade of src/aieos_bootstrap/resume_check.py can pass the base run. The import itself is not yet removed: that comes with TASK-120 (revision r3), whose landing sets the pin and the previous-version value in the workflow under A66. The status stays open.
