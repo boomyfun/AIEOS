@@ -316,6 +316,9 @@ Occurrences in session a0a0bdef, part 2 (2026-11-05; ../History/2026-11/2026-11-
 - **2026-11-04T22:17Z (:12105, D-4831 ruled it under A71).** A command of mine with a throwaway shell function and a stray Python-with-a-dash piece, a placeholder with no purpose; refused by rules R2 and R3 before it ran; I did not reword or retry it and made the same preparation with `cp -n` and the Edit tool. The decision agent's lesson: write no placeholder commands.
 - **2026-11-04T22:43Z (:12862, D-4836 ruled it under A71).** A command holding a heredoc, to create a small check script inside a Bash call; refused by rule R1 before it ran; the file was written with the Write tool and run as a separate call. (:12864 also holds the guard's text; whether it is the same refusal's result line is not checked.)
 
+Occurrences in session 6550f093 (2026-11-05; ../History/2026-11/2026-11-05-0750-m8-stage-8-p1-3-the-runtime-declaration-on-main-6550f093.md; the worker's own claim until checked):
+- **2026-11-05 (D-4865, D-4867, D-4871; mine and the decision agent's; main transcript :583, :750, :1034).** The command guard refused three calls before they ran: a call of mine that added a `python -I -c` piece and a cd pair to the ordered `gh run list` (D-4865: my needless piece; the ordered command was then run alone); the dry run `python -I -B <file>` that D-4866 C3 ordered (D-4867: the order was at fault, the plain form was used); `python -m venv` (D-4871: the venv was dropped). None was reworded or retried; each was brought to the decision agent. A related needless piece (D-4873): my call of the ordered lint trial carried an unordered `; echo` piece; that call was denied by the app's classifier for another reason (L-0024).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

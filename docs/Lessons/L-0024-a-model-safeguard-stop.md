@@ -28,6 +28,9 @@ Two, in session 2026-10-19-2233 (../History/2026-10/2026-10-19-2233-the-pages-d1
 - **2026-10-19 (D-1503, D-1504).** A reasoning_extraction refusal of the request after the Write of review entries (:926); not redone; the owner asked for the true cause; an investigation by metadata only (see L-0025).
 - **2026-10-30 (session 578ea88b).** D-3873: the stop happened while saving the Opus reviewer's answer; no redo; the file stays partial; the full text is cited from the reviewer's transcript (pointer file review104_opus.SOURCE.txt).
 
+One occurrence in session 6550f093 (2026-11-05; ../History/2026-11/2026-11-05-0750-m8-stage-8-p1-3-the-runtime-declaration-on-main-6550f093.md; the worker's own claim until checked):
+- **2026-11-05 (D-4873; main transcript :1145).** Not a model safeguard but the app's auto-mode classifier: the one ordered local run of the lint tool (pyflakes loaded from a hash-checked wheel, D-4872 C2) was denied before it ran (reason `Code from External`); not retried or reworded; D-4873 (DM A71) ended the local trial and moved the first run to CI on a task branch. My call also carried an unordered `; echo` piece. The cause is a guess: the run loads code from a downloaded file.
+
 ## Why it happens
 The official refusal documentation says that Opus 5.5 and Sonnet 5.5 carry safety classifiers that can stop a reply, with categories such as "cyber", where benign security work can also trigger a stop, and "reasoning_extraction"; the reason is not shown in the app's notice. The work's text was about blocking hooks, bypass hunts and push blocking, so a "cyber" stop is the likely cause, which stays a guess.
 

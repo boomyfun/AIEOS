@@ -19,3 +19,4 @@ TASK-117 (AC4, AC8); the state commit P1-3.
 
 ## Log
 - 2026-11-05: opened at the acceptance of TASK-117.
+- 2026-11-05 (session 6550f093): P1-3 put the first declaration into Git by writer.write_policy at 711d7a95 (D-4860 to D-4863); the file now exists, so write_policy refuses any change (create-only); a changed declaration, for example a new Claude Code version, needs the later task this item names. The version 2.1.317 in the file is the value re-read at P1-3, not the fixture's 2.1.309 (D-4859); it will go stale at the next runtime update, which nothing compares (spec-02:250). The item stays open.

@@ -44,6 +44,9 @@ Occurrences in session a0a0bdef, part 2 (2026-11-05; ../History/2026-11/2026-11-
 - D-4841 (accepted): place_f3_118_real.sh and commit_f3_118_real.sh already existed when D-4840 ordered `cp -n` of them (cp -n does not overwrite); the same lines were edited in place and the raw diffs against the dry files were the ordered ones; the decision agent's lesson: when an ordered step cannot be done literally, stop and bring it.
 - D-4842, D-4843, D-4845 (accepted): the one-line changes of the gate and of FID in the landing scripts were made by one `sed` pass per file instead of the Edit tool, each against a `cp -n` backup with the raw diffs; the decision agent ruled that the content, not the tool, is what is controlled.
 
+One occurrence in session 6550f093 (../History/2026-11/2026-11-05-0750-m8-stage-8-p1-3-the-runtime-declaration-on-main-6550f093.md; the worker's own claim until checked):
+- **2026-11-05 (D-4868).** The real copy of the decision-file writer differed from the dry script by two lines: the Edit tool trimmed the trailing space of its new text (`SUB ='...`); brought before it ran and accepted; from then on an Edit's new text does not end in a space (the next copy used an anchor that ends in text). A related stop: D-4861, the count of user.email values stopped a corrected script because of an unrelated global identity; brought, not fixed by the worker.
+
 ## Why it happens
 A new file has no hash until it exists, so the first run is done before a gate can be written; the Edit tool changes the file in place.
 
