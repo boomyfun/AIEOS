@@ -178,6 +178,14 @@ jobs:
       # 99cd8c5c). The one place; changing it is the decision agent's, each change its own decision (DM A66;
       # decision D-317).
       AIEOS_PINNED_RESUME_CHECK: 'e1578939404da0b61d56d9187521b92c923e7cb841acdf15d0afb7155605a135'
+      # AIEOS_PINNED_RESUME_CHECK_PREVIOUS qualifies the "Pinned:" sentence above. Empty means off. When a pinned upgrade of
+      # the Resume Check file lands, this holds the version that the upgrade leaves (the SHA-256 of the file before the
+      # upgrade). The conformance base run then also accepts that version as the base's Resume Check file and as the run
+      # record's resume_check, but only when it is 64 lowercase hex digits, the base's file equals it and the pushed
+      # head's file equals AIEOS_PINNED_RESUME_CHECK (TASK-121 AC2 and AC3); every other behaviour of the pin stays as
+      # described above. The one place; changing it is the decision agent's, each change its own decision (DM A66;
+      # decision D-317).
+      AIEOS_PINNED_RESUME_CHECK_PREVIOUS: ''
     steps:
       - name: Fetch the pushed commit, its history and main (no third-party action, no token)
         env:
@@ -904,6 +912,7 @@ jobs:
           PINNED = os.environ.get('AIEOS_PINNED_GOVERNOR', '')
           RESUME_CHECK_FILE = 'src/aieos_bootstrap/resume_check.py'
           PINNED_RC = os.environ.get('AIEOS_PINNED_RESUME_CHECK', '')
+          PREV_RC = os.environ.get('AIEOS_PINNED_RESUME_CHECK_PREVIOUS', '')
           HEX = re.compile(r'[0-9a-f]{64}')
           COMMIT_ID = re.compile(r'[0-9a-f]{40}')
           WATCHED = ['../task.json', '../range-base.txt', '../commits.txt', '../changed-paths.txt', '../before.txt']
@@ -1080,6 +1089,11 @@ jobs:
               gov_sha = hashlib.sha256(gov).hexdigest() if gov is not None else 'absent'
               rc_file = blob(base, RESUME_CHECK_FILE)
               rc_sha = hashlib.sha256(rc_file).hexdigest() if rc_file is not None else 'absent'
+              head_rc = blob(head, RESUME_CHECK_FILE)
+              head_rc_sha = hashlib.sha256(head_rc).hexdigest() if head_rc is not None else 'absent'
+              rc_ok = {PINNED_RC}
+              if HEX.fullmatch(PREV_RC) and rc_sha == PREV_RC and head_rc_sha == PINNED_RC:
+                  rc_ok.add(PREV_RC)
               if mode == 'base':
                   root, commit, note = os.path.abspath('../conformance-base'), base, 'base %s' % base
                   if on_main:
@@ -1143,9 +1157,9 @@ jobs:
               print('%s: outcome %s, record %s' % (title, record['outcome'], record['record_id']))
               if mode == 'base' and gov is None and any(r['result'] == 'PASS' for r in value['results']):
                   return fail(title, 'a PASS with no governor in the base')
-              if mode == 'base' and PINNED_RC and (rc_sha != PINNED_RC or rc_named != PINNED_RC):
-                  return fail(title, 'the base Resume Check (file %s, run %s) is not the pinned version %s' % (
-                      rc_sha, rc_named, PINNED_RC))
+              if mode == 'base' and PINNED_RC and (rc_sha not in rc_ok or rc_named not in rc_ok):
+                  return fail(title, 'the base Resume Check (file %s, run %s) is not an accepted version (%s)' % (
+                      rc_sha, rc_named, ', '.join(sorted(rc_ok))))
               if report_only:
                   return 0
               if gov_sha != PINNED or value['governor_identity'] != PINNED:
@@ -1240,6 +1254,7 @@ jobs:
           PINNED = os.environ.get('AIEOS_PINNED_GOVERNOR', '')
           RESUME_CHECK_FILE = 'src/aieos_bootstrap/resume_check.py'
           PINNED_RC = os.environ.get('AIEOS_PINNED_RESUME_CHECK', '')
+          PREV_RC = os.environ.get('AIEOS_PINNED_RESUME_CHECK_PREVIOUS', '')
           HEX = re.compile(r'[0-9a-f]{64}')
           COMMIT_ID = re.compile(r'[0-9a-f]{40}')
           WATCHED = ['../task.json', '../range-base.txt', '../commits.txt', '../changed-paths.txt', '../before.txt']
@@ -1416,6 +1431,11 @@ jobs:
               gov_sha = hashlib.sha256(gov).hexdigest() if gov is not None else 'absent'
               rc_file = blob(base, RESUME_CHECK_FILE)
               rc_sha = hashlib.sha256(rc_file).hexdigest() if rc_file is not None else 'absent'
+              head_rc = blob(head, RESUME_CHECK_FILE)
+              head_rc_sha = hashlib.sha256(head_rc).hexdigest() if head_rc is not None else 'absent'
+              rc_ok = {PINNED_RC}
+              if HEX.fullmatch(PREV_RC) and rc_sha == PREV_RC and head_rc_sha == PINNED_RC:
+                  rc_ok.add(PREV_RC)
               if mode == 'base':
                   root, commit, note = os.path.abspath('../conformance-base'), base, 'base %s' % base
                   if on_main:
@@ -1479,9 +1499,9 @@ jobs:
               print('%s: outcome %s, record %s' % (title, record['outcome'], record['record_id']))
               if mode == 'base' and gov is None and any(r['result'] == 'PASS' for r in value['results']):
                   return fail(title, 'a PASS with no governor in the base')
-              if mode == 'base' and PINNED_RC and (rc_sha != PINNED_RC or rc_named != PINNED_RC):
-                  return fail(title, 'the base Resume Check (file %s, run %s) is not the pinned version %s' % (
-                      rc_sha, rc_named, PINNED_RC))
+              if mode == 'base' and PINNED_RC and (rc_sha not in rc_ok or rc_named not in rc_ok):
+                  return fail(title, 'the base Resume Check (file %s, run %s) is not an accepted version (%s)' % (
+                      rc_sha, rc_named, ', '.join(sorted(rc_ok))))
               if report_only:
                   return 0
               if gov_sha != PINNED or value['governor_identity'] != PINNED:
