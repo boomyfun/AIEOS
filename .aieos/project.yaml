@@ -1,0 +1,8 @@
+# unmeasured and advisory: the runtime's tier rests on the owner's decision A74 (decision matrix), not on a measurement; written by the core's write_policy under task TASK-117
+adapters:
+  - adapter: claude-code
+    tier: T3
+    configuration: {runtime: claude-code, platform: windows-native, version: 2.1.317, settings: sha256:210052f28a574d4ffdd5ade5b53c4e85f8f10124b24831819523aa1739acc58f}
+    capabilities: {}
+    assurance: {preventive: none, runtime: none, posthoc: none}
+    max_risk: low
