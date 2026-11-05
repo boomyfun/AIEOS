@@ -18,6 +18,18 @@ INSTALL_LINE = ('"$A/venv/bin/pip" install --quiet --no-deps --require-hashes --
                 '-r "$A/requirements.txt"')
 LAST_LINE = '"$A/venv/bin/pyflakes" "$GITHUB_WORKSPACE/work/src" "$GITHUB_WORKSPACE/work/tests"'
 NO_TASK_LINE = 'if grep -q \'"task": null\' task.json; then echo "lint: no task"; exit 0; fi'
+EXPECTED_RUN = [
+    'set -euo pipefail',
+    NO_TASK_LINE,
+    'A="$RUNNER_TEMP/aieos-lint"',
+    'python3 -m venv "$A/venv"',
+    'cat > "$A/requirements.txt" <<\'PINS\'',
+    REQ_LINE,
+    'PINS',
+    INSTALL_LINE,
+    'cd "$A"',
+    LAST_LINE,
+]
 AC1_FORBIDDEN = ['continue-on-error', '||', 'set +e', 'set +o', 'true', 'trap', 'python3 -m pyflakes']
 AC3_FORBIDDEN = ['permissions', 'secrets', 'GITHUB_TOKEN', 'uses:', 'continue-on-error', 'env:', 'PIP_',
                  'index-url', 'find-links', 'trusted-host', 'curl', 'wget']
@@ -90,6 +102,12 @@ class AC1Form(unittest.TestCase):
         self.assertEqual([ln for ln in lines if 'pyflakes' in ln], [REQ_LINE, LAST_LINE])
         self.assertEqual([ln for ln in lines if re.search(r'\bexit\b', ln)], [NO_TASK_LINE])
         self.assertEqual([ln for ln in lines if re.search(r'(^|[;\s])if\s', ln)], [NO_TASK_LINE])
+
+    def test_the_run_text_equals_the_exact_expected_lines(self):
+        """TASK-119 AC1: the step's run lines, blank lines removed, equal exactly the ten lines of the step as approved
+        (the exact-equality guard: any added, removed, reordered or changed line of the step fails here)."""
+        lines = [ln for ln in run_lines(lint_step(workflow())[0][1]) if ln.strip()]
+        self.assertEqual(lines, EXPECTED_RUN)
 
     def test_the_step_holds_none_of_the_forbidden_tokens_of_this_criterion(self):
         """TASK-119 AC1: the text of the step contains none of the tokens that make a step non-blocking or that read

@@ -153,7 +153,7 @@
 # like the other task steps it exits at once with "no task" when the run has no task, and a pyflakes message or a failure to run fails the job. It adds a check and loosens none,
 # removes none, grants no write access, uses no secret or token and changes no setting. Limits: pyflakes finds only what its default checks cover (unused and undefined names and
 # similar faults), not style or logic; the step had never run on the existing code before this revision, so its first run on the task branch may be red, and TASK-119 then stops
-# (its AC4); the wheel is trusted by its hash alone, and the package index is a network read of one file.
+# (its AC4); the wheel is trusted by its hash alone, and the step reads over the network the package index's page for pyflakes and the one wheel, and pip may also read its own version-check page, as the bandit step does.
 name: aieos-checks
 
 on:
