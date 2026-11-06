@@ -1,0 +1,87 @@
+# Task contract TASK-126 (r1; the follow-up task ordered at D-5319 C3 after TASK-125: step 1 of the first-real-run prerequisites, the second half of a1.1; session ce14b08a, 2026-11-07). Drafted in the scratchpad; whether this text is approved is recorded only in the decision agent's decision that names its SHA-256, not in this file. Form: TASK-125 (docs/tasks/); the worker's own claim until checked.
+# Why: TASK-125 made the launch reader refuse a write-set path whose first segment is the project-state directory (in any letter case) or holds "*", and stated the limit in its acceptance: a first segment that differs from the directory name only by a trailing dot, a leading "./", or "."/".." segments are not refused by the launch reader in that task (review finding 1 of D-5319). `aieos run` refuses all of these forms (launcher._run_path_ok), so a hand-written or imported contract whose write set reads src/../<state directory>/x, ./<state directory>/x or <state directory>./x passes the launch reader. This task closes the three forms and the order check (finding 2), before the runtime starter (a2) and before any real launch.
+# Not in this task: the state commit and its automation (option S), the "committed at the base" finding, the root's state after the check (DEF-0101 open part (a)), the runtime starter (a2), a change to the glob rule (a "*" outside the first segment stays allowed to the launch reader), any change to cli.py, writer.py, gitread.py, the hook, base_inputs.py, the workflows, any spec or docs.
+# Risk, change class: high, as TASK-125: R2 reads src/** and tests/** as medium, and R3 cannot be evaluated so it matches every path it could cover (risk-rules section 2 point 3); the change class is critical_cr because the CI's EVALUATOR list holds src/aieos_bootstrap/** and the tests folders.
+task: TASK-126
+contract_version: v1
+task_type: implementation
+objective: >-
+  Make the launch reader refuse the segment forms that `aieos run` already refuses. In src/aieos_bootstrap/launcher.py add one private helper, `_segment_forms_ok(path)`, true when the path does not start with "/" or "./", does not end with "/", and has no segment that is "", "." or ".." or that ends with "." or " " (the test `_run_path_ok` already makes, launcher.py:1829-1833), and use it in two places: `_run_path_ok` (its result for every input stays what it is today) and `_launch_write_set` (in the same condition as the pattern rule, so a path for which the helper is false gives (None, ['contract: a write-set path is outside the pattern rule']), the finding it gives today for a path outside the pattern rule, and launch_outside ends the session without calling the starter, with the reason it already gives for a contract read that does not pass). The order of the checks in `_launch_write_set` stays: the pattern rule and the segment forms first, then a first segment that holds "*", then the exact first-segment test `_under_state_dir`. A "*" in a segment after the first stays allowed to the launch reader. The directory is taken from writer.STATE_DIR; its name is never written as a literal in src. Tests are added to tests/unit/test_cli_launch.py. The docstring limit that TASK-125 wrote in launcher.py is updated to say what is now refused.
+traces_to:
+  - docs/Deferred/DEF-0095-the-handoff-file-of-the-claim-tools-for-the-launcher.md
+  - docs/Deferred/DEF-0101-the-launchers-open-requirements-before-a-runtime-is-launched.md
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#7
+input_state:
+  # base_commit is the head of main when the contract is approved (now 427c5b44636f5cd184e4d81aef1c0c21ba62fd84); the executor refuses unless it equals HEAD, refs/heads/main and refs/remotes/origin/main.
+  base_commit: 427c5b44636f5cd184e4d81aef1c0c21ba62fd84
+  depends_on: [TASK-125]
+  intent_versions:
+    # sha256 of each file at base_commit, computed by script from main (the rule of TASK-114 :22).
+    src/aieos_bootstrap/launcher.py: c82f2f08ee8d61a7a1354ead3fb9b789a849087a5e4bf7b9e49a65cffd803437
+    tests/unit/test_cli_launch.py: 52ff72a06fccb02be55e730b92ebab56e9950c7a1fc69deba22c3657e4c2c76e
+    docs/tasks/TASK-125.yaml: 815a52d6363bc079849bd702afca9cb326cae9f1ca8cbb339e4550264bad3ade
+    docs/specs/spec-07-cli-and-zero-friction-path.md: 38f13754b940a73aa77411f0d0793956a4c38b2672416ccfa3158473849788d0
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/Deferred/DEF-0095-the-handoff-file-of-the-claim-tools-for-the-launcher.md: 1fd9f7aacfc853fc65d619bc31eae181156d91126e6466f34a35cbbda59d3d28
+    docs/Deferred/DEF-0101-the-launchers-open-requirements-before-a-runtime-is-launched.md: b94ad3283981f274c702de7c8e0f37630e04a4e9f85697c2e116ea9ee109e5ba
+write_set:
+  paths:
+    - src/aieos_bootstrap/launcher.py
+    - tests/unit/test_cli_launch.py
+read_set: {paths: [docs/plan/, docs/specs/, docs/Deferred/, docs/pre-genesis/, src/aieos_bootstrap/, tests/, .github/workflows/], interfaces: [], schemas: []}
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - docs/**
+  - src/aieos_bootstrap/cli.py
+  - src/aieos_bootstrap/writer.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - tests/conformance/**
+  - tests/property/**
+  - tests/run_tests.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The refusal. `launcher._launch_write_set` gives (None, ['contract: a write-set path is outside the pattern rule']) when any path of the write set starts with "./", or has a segment "." or ".." or a segment that ends with "." (and, for the form the pattern rule admits, a segment that ends with " " cannot occur because the pattern rule refuses a space already), and gives what it gives today for every other write set (a test passes a list of write sets that today give (paths, None) and a list that today give a refusal, and checks the answers are unchanged, byte for byte). The test cases for the new refusal are `./x`, `a/./b`, `../x`, `a/../b`, `src/../<state directory>/x` (the directory name is taken from writer.STATE_DIR in the test), `./<state directory>/x`, `<state directory>./x`, `a/b./c` and `x.`. The test is made with `launcher.launch_outside` and the `World` stand-ins of tests/unit/test_cli_launch.py, as the TASK-125 tests are: the answer's reason is 'contract', the calls are exactly clock, begin, contract_at, clock, finish_outside, write_handoff in that order, the starter is not called, and the findings hold the finding above. The list of write sets that must be unchanged holds a plain path, a glob after the first segment (`docs/**`, `src/*.py`), a path whose first segment only begins with the directory name, a path that holds the directory name as a later segment, and the paths the TASK-125 tests already pass, and holds none of the new forms (a Grep of docs/tasks at the drafting of this contract must find no write-set item that begins with "./" or holds a "." or ".." segment or a segment ending with "."; its output is brought to the approval).
+  - AC2: >-
+      The order. A test pins the order of the checks in `_launch_write_set`: a path that is both outside the pattern rule (for example a space) and has a first segment holding "*" gives the pattern-rule finding; a path whose first segment holds "*" and that has a segment form the helper refuses (`*/../x`, `*./x`) gives the pattern-rule finding; a path whose first segment is the directory name and that has a segment form the helper refuses (`./<state directory>/x`, `<state directory>/./x`; the name taken from writer.STATE_DIR in the test) gives the pattern-rule finding; a path whose first segment holds "*" and is not outside the pattern rule gives 'contract: a write-set path may cover the project-state directory'; a path whose first segment is the directory name in upper case gives 'contract: a write-set path is under the project-state directory'. The three findings are unchanged from TASK-125 (they are tested there for the single forms; this test pins the order, the segment forms included).
+  - AC3: >-
+      The helper and parity. `_segment_forms_ok` is used by `_run_path_ok` and `_launch_write_set` and by nothing else; `_run_path_ok` gives for every input the answer it gives at base_commit (a test compares it with the base text's behaviour on a list that holds a plain path, the directory itself, a path under it in each letter case, a path with the directory name as a later segment, a path whose first segment only begins with the directory name, and every form the function already refuses, including the forms of AC1).
+  - AC4: >-
+      Purity (INV-001, INV-002, INV-004). The directory's name appears as a string in no changed src file (the string rule of spec 7 :57 and the pinned tests in test_cli_init.py, test_cli_import.py and test_cli_approve.py); no new finding text contains it; no new import; no new process form; no read of the clock or of the file system beyond what the module does today. The new docstring sentences use none of the effect labels MEASURED, ENFORCED and GUARANTEED, and no string constant in a changed src file is exactly "valid", "accepted" or "approved" (aieos-checks.yml :1800-:1813), and no string in a changed src file names the state directory (aieos-checks.yml :1756-:1758; test_cli_init.py :297); the deterministic rule, OPS-003, SEC-001, SEC-002 and bandit report no finding at the task commits; the pinned phrases in the launcher.py docstring that other modules test stay unchanged (the sentences of TASK-109 AC3 and AC6 are not touched).
+  - AC5: >-
+      Tests and records. Each added test function's docstring begins "TASK-094 ACn (amended by TASK-126 ACm)", in the form of TASK125StateDir in tests/unit/test_cli_launch.py, so the module's rule that every test names "TASK-094 AC" still holds; no existing test changes; the whole suite passes locally (`timeout 110 python tests/run_tests.py < /dev/null`) and on the CI; no test starts a runtime or touches this repository's real state. The risk class is high; the evidence profile is that of assurance-model section 5 for high, as for TASK-125 (unit_test, integration_test, deterministic_rule, static_security_analysis, ai_review cross-model by a pair of reviews on Haiku 5.5 and a separate decision_agent_review, plus the profile's other entries); the expected governor shadow result at the GOV-003 row is a stated departure as in TASK-125 AC5 (the change class is critical_cr; the acceptance names it). The raw output of the step 'GOV-003 base tests (report only)' of the task-branch run is brought at acceptance with each base-test failure named. The first run is on the task branch (DEF-0115's route). The limit is stated in the launcher.py docstring in plain words: the launch reader refuses the segment forms that `aieos run` refuses and a first segment holding "*", and it still allows a "*" in a later segment; a contract whose write set is read at the base by another reader (the hook, base_inputs) is not changed here; the state commit is not automated (option S) and the root's state after the check is open (DEF-0101).
+  - AC6: >-
+      Limits. No change to cli.py, writer.py, gitread.py, base_inputs.py, the hook, the workflows, any spec or doc, any DEF file (their Log lines are written by their own decisions after landing: DEF-0095 gets a Log line that the three forms and the order are closed; spec 7 :75's wording follows in a later revision); no launching of a runtime; no change to the autonomy level or the measurement protocol.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [src/aieos_bootstrap/launcher.py, tests/unit/test_cli_launch.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 6h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC5]}
+  - {gate: G3, check: constitution, args: [AC4, AC5, AC6, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts AND the aieos-checks and aieos-native runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false: the task's acts are edits to one source file and one test file in the write set; it never launches a runtime; A51 item (4) keeps launching with a runtime as A73 sets it.
+owner_kept_act: false
