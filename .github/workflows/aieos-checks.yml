@@ -147,6 +147,14 @@
 # copies, so that a later change to a core-written contract is reported as an evaluator change, like docs/tasks/**. Nothing is removed. It grants no write access,
 # uses no secret or token and changes no setting. Limits: a state commit holding two contracts or any third path is refused as a contract commit; detect does not check that the
 # event-log change only appends; a task's own commits that change .aieos/ stay refused by the INV-004 rule; an event log committed to main is public once pushed.
+# Revision 19 (TASK-124; the decision agent's own decision under DM A66; DEF-0118, the low profile's lint entry) adds one blocking step, "lint (pyflakes 4.0.3, pinned by version
+# and hash)", directly after the static_security_analysis step: it installs pyflakes 4.0.3 into a venv in the runner's temporary folder from the default package index, accepting
+# only the one wheel whose SHA-256 is pinned (--no-deps, --require-hashes, --only-binary), and runs it with its default checks and no option over src and tests of the work tree;
+# like the other task steps it exits at once with "no task" when the run has no task, and a pyflakes message or a failure to run fails the job. It adds a check and loosens none,
+# removes none, grants no write access, uses no secret or token and changes no setting. Limits: pyflakes finds only what its default checks cover (unused and undefined names and
+# similar faults), not style or logic; the step ran once before, on the stopped branch of TASK-119, and found two faults that TASK-122 has fixed on main, so its first run on the
+# TASK-124 branch may still be red on a fault not yet seen, and TASK-124 then stops (its AC4); the wheel is trusted by its hash alone, and the step reads over the network the package
+# index's page for pyflakes and the one wheel, and pip may also read its own version-check page, as the bandit step does.
 name: aieos-checks
 
 on:
@@ -1868,6 +1876,20 @@ jobs:
           if [ -e "$GR" ]; then "$A/venv/bin/bandit" "$GR" --ini "$A/empty.bandit" --ignore-nosec --skip B404,B603,B607 -f txt || S=1; fi
           "$A/venv/bin/bandit" -r "$GITHUB_WORKSPACE/work/tests" --ini "$A/empty.bandit" --ignore-nosec --skip B101,B311 -f txt || S=1
           [ "$S" = 0 ]
+
+      - name: lint (pyflakes 4.0.3, pinned by version and hash)
+        if: ${{ !cancelled() }}
+        run: |
+          set -euo pipefail
+          if grep -q '"task": null' task.json; then echo "lint: no task"; exit 0; fi
+          A="$RUNNER_TEMP/aieos-lint"
+          python3 -m venv "$A/venv"
+          cat > "$A/requirements.txt" <<'PINS'
+          pyflakes==4.0.3 --hash=sha256:330ba92b8c1db2eb0b8f4068f6c58674e2649a99e334769aa50e3e9c5b11c23a
+          PINS
+          "$A/venv/bin/pip" install --quiet --no-deps --require-hashes --only-binary :all: -r "$A/requirements.txt"
+          cd "$A"
+          "$A/venv/bin/pyflakes" "$GITHUB_WORKSPACE/work/src" "$GITHUB_WORKSPACE/work/tests"
 
       - name: GOV-003 base tests (report only)
         if: ${{ !cancelled() }}
