@@ -4,6 +4,8 @@
 - Opened: 2026-10-16 (decisions D-1053, D-1054, D-1055)
 - Deferred by: decision agent (A41), D-1053 (dispositions J1 to J8), D-1054 (its own review's residuals) and D-1055 (TASK-055's acceptance).
 - Decision group: A (limits of an accepted task).
+- Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
+- Scheduled in: M8, the verification-path fix task (ac_coverage, ac_tests, stale, drift, reconcile, execution, evaluation, verification_records, scope_reconcile), before the M8 exit review
 
 ## What
 - **J4 (R2):** the rule keys on the outcome value 'fail'; records.py:350 admits only pass, fail and blocking today; a new outcome value would need this rule revisited.
@@ -18,3 +20,4 @@
 
 ## Log
 - 2026-10-16: opened (D-1053, D-1054, D-1055).
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 3, decision D-5266): read in full; evaluation.py is unchanged since TASK-102 and `git log -S'OUTCOMES = frozenset' -- records.py` printed only 0ba0c8e (TASK-001), so the outcome set is unchanged and the event is not met; all of J4, J6, H5, the note of D-1054 and the limits remain (the Log has only the opening). State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the verification-path fix task (ac_coverage, ac_tests, stale, drift, reconcile, execution, evaluation, verification_records, scope_reconcile), before the M8 exit review.

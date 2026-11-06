@@ -4,6 +4,8 @@
 - Opened: 2026-10-16 (decision D-997)
 - Deferred by: decision agent (A41), D-997 (TASK-051's acceptance), with D-996's findings F1 to F3.
 - Decision group: A (limits of an accepted task, carried for later tasks).
+- Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
+- Scheduled in: M8, the adapter, violation-path and Claude Code hook fix task (adapter, replay, violation, claude_code, claude_code_channel, claude_code_reads, claude_code_shell_allow, claude_code_read_hook, claude_code_store, claude_code_pretool_hook, task_contract, session_violation, mcp_server), before the M8 exit review
 
 ## What
 - **F-a** (D-988): the repository has no project-state directory yet, so the replay's empty-log rule cannot tell a fresh scratch root from the self-build's own root before its first event; replay has no caller, and a caller must give a fresh root.
@@ -18,3 +20,4 @@
 
 ## Log
 - 2026-10-16: opened (D-997).
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 2, decision D-5265): read in full; the event 'specification 2's next revision (the observation call)' occurred: `git show 6df1100` (specification 2 revision 6, 2026-10-18) says it answers specification 5 section 11 points 3 and 4 and adds the observed read-set record, two days after the item was opened; whether any code makes the observation call is not shown by that commit; replay.py and adapter.py are unchanged since TASK-102; all What points remain open except the record keys of the fifth bullet. State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the adapter, violation-path and Claude Code hook fix task (adapter, replay, violation, claude_code, claude_code_channel, claude_code_reads, claude_code_shell_allow, claude_code_read_hook, claude_code_store, claude_code_pretool_hook, task_contract, session_violation, mcp_server), before the M8 exit review.

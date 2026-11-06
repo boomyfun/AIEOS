@@ -4,6 +4,8 @@
 - Opened: 2026-10-12 (decision D-626)
 - Deferred by: decision agent (A41), D-626 (the dispositions M1 to M7 of the five round-2 way-2 reviews; M1, M3 and M7 carried) and D-627 (C5).
 - Decision group: A (robustness against hostile stand-ins and a documentation point within the self-build).
+- Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
+- Scheduled in: M8, the state-module fix task (eventlog, recovery, writer, gitread, startup), before the M8 exit review
 
 ## What
 - **M1, a lease list iterated twice** (round-2 reviewer R2): recover iterates the leases read in AC4 once in reconcile and once in the release step; a list subclass whose iteration raises only on its second pass would let an exception leave recover, against AC10. The fix named: take list(held) inside the try that reads the leases.
@@ -22,3 +24,4 @@ DEF-0030 (the core's caller); TASK-026.
 ## Log
 - 2026-10-12 (session 4b3931cd): opened. TASK-026 accepted at 1f6ff6d8 and on `main` (decision D-627; records 325d13c6, D-628). ../History/2026-10/2026-10-12-0833-recovery-at-start-accepted-and-on-main.md
 - 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled M3 (src/aieos_bootstrap/startup.py:48-49); open M1 and M7 (both leave: the contract keeps them out, TASK-102.yaml :24). Status stays open.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 2, decision D-5265): read in full; git log f25b4576..HEAD (TASK-102's task commit) over the paths named in the Resume-when text printed no commit, so the event is not met (startup.py unchanged); open per the Log of 2026-10-30: M1 and M7. State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the state-module fix task (eventlog, recovery, writer, gitread, startup), before the M8 exit review.

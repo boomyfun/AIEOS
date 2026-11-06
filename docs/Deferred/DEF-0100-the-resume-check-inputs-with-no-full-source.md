@@ -5,6 +5,8 @@
 - Deferred by: decision agent (A41, A51), D-2582 ruling 1 (TASK-088 reads every input whose source exists today and
   gives a stated value for the rest; the rest is carried here).
 - Decision group: A (specification 3's next revision is its own decision; nothing here changes a specification).
+- Blocks v0.1: no (the inputs have stated values; check 8 is inert but its fail-closed backstop is stated; no failure is known)
+- Scheduled in: M8, a specification 3 revision task, after the first real run and before the M8 exit review
 
 ## What
 TASK-088's resume_log_inputs.log_inputs gives these inputs a stated value, not a read one:
@@ -52,3 +54,4 @@ conformance-files.md section 9; DEF-0097 (open; it closes at TASK-086's records)
 ## Log
 - 2026-10-24: opened (session 3797498a; decisions D-2582, D-2584).
 - 2026-10-24: written with TASK-088's records (decision D-2662).
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass C decisions D-5257 and D-5258): read in full; git log of resume_check.py since 2026-10-24 printed one commit, 837f4ec (TASK-122, import and pins only), so its second event (a task changing the budget parse) is not met; specification 3 has no revision after 6, and revision 6 (D-3604) is citation only, so its first event (specification 3's next revision) passed without fixing any of the ten points; the observed_read_set point is tied to P-LOC (an owner measurement) and cannot be closed by that task. State: open; Blocks v0.1: no (the inputs have stated values; check 8 is inert but its fail-closed backstop is stated; no failure is known); Scheduled in: M8, a specification 3 revision task, after the first real run and before the M8 exit review.

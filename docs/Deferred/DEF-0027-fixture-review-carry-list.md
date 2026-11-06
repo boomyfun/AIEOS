@@ -4,6 +4,8 @@
 - Opened: 2026-10-10 (decision files D-278 C1 and D-279)
 - Deferred by: decision agent (A41), D-278 C1: TASK-005 is accepted without a fix, since a fix is a new commit that makes every review and the CI run stale (assurance-model.md line 39; D-204, D-212).
 - Decision group: A (test and wording changes in a later fixture task).
+- Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
+- Scheduled in: M8, the conformance and runner test-fix task, before the M8 exit review
 
 ## What
 Non-blocking findings of TASK-005's way-2 reviews, round 2 (commit 61ff86fd15a7ec457f72f9e261d710d89f9b11ee), to settle in TASK-005b's contract or a later task:
@@ -31,3 +33,4 @@ TASK-005 accepted (D-279) and its 11 files frozen (DM F29).
 ## Log
 - 2026-10-10: opened (decision files D-278 and D-279).
 - 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled R1-1 (tests/property/test_conformance_rc_properties.py:39), R5-2 and R5-4 (tests/unit/test_conformance_rc_files.py:395-398 area), R5-5 to R5-9 and the read-set case (test_conformance_rc_files.py:491, :505, :632, :640; test_conformance_rc_properties.py:146; tests/integration/test_conformance_rc_set.py:167); also done though not in the map: R4-2 (the INV-005 to INV-008 test names, tests/property/test_conformance_rc_properties.py:122-156) and R4-3 (rule_risk's docstring, tests/unit/test_conformance_rc_files.py:353); open R5-3 (test_conformance_rc_files.py:385, :458), R4-1 (overtaken), R5-1 (leaves); not shown by the map: R3-2 and the D-278 item on the two integration tests (DEF-0027 :20). Status stays open.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 1, decision D-5264): read in full; the Resume-when text names TASK-005b's contract, and no TASK-005b exists (only docs/tasks/TASK-005.yaml; git log --all finds no TASK-005b file), so the event cannot occur as written; resume_check.py still names TASK-005b in a stale sentence; open per the Log of 2026-10-30: R5-3, R4-1 (overtaken), R5-1 (leaves), R3-2 and the D-278 item. State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the conformance and runner test-fix task, before the M8 exit review.

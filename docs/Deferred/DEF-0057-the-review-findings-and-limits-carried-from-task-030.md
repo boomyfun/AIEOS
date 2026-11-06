@@ -4,6 +4,8 @@
 - Opened: 2026-10-12 (decision D-668)
 - Deferred by: decision agent (A41), D-668 (the dispositions P1 to P10 of the five way-2 reviews; P4 and P5 carried as limits; C3, two points for TASK-031's scope) and D-669 (C2).
 - Decision group: A (limits of the constitution-drift computation within the self-build).
+- Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
+- Scheduled in: M8, the verification-path fix task (ac_coverage, ac_tests, stale, drift, reconcile, execution, evaluation, verification_records, scope_reconcile), before the M8 exit review
 
 ## What
 - **P4, a pathological scope** (reviewer R2): drift.violations calls governor.matches, which is recursive over a pattern's "/" parts, so a scope of about a thousand parts may raise instead of giving a result. The scopes come from the constitution at the base, trusted input; a guard that treats an exception as "scope cannot be evaluated" would change TASK-030 AC2's approved reading. Stated in the module's docstring.
@@ -23,3 +25,4 @@ TASK-030 (accepted, decision D-669); DEF-0051; DEF-0030.
 
 ## Log
 - 2026-10-12: opened (decisions D-668 and D-669; session 9dbc771d).
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 2, decision D-5265 with the correction of D-5266): read in full; the event 'TASK-031's scope note' occurred (TASK-031 accepted, D-681) and TASK-031's contract (docs/tasks/TASK-031.yaml :268-:270, :280-:289, :36-:38) states the source-class filter, the mapping helper rule_results_from_steps and the CI-step-names limit, so both points of the scope note were taken in the contract text (the code of reconcile.py was not read); drift.py is unchanged since TASK-102; the CI step texts limit remains a stated limit. State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the verification-path fix task (ac_coverage, ac_tests, stale, drift, reconcile, execution, evaluation, verification_records, scope_reconcile), before the M8 exit review.

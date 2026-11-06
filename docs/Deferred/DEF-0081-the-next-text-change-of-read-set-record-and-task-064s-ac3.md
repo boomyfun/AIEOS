@@ -4,6 +4,8 @@
 - Opened: 2026-10-18 (session 01f64acc; decision D-1296 C3)
 - Deferred by: decision agent (A41), D-1296, after the way-2 reviews of TASK-064 at its head.
 - Decision group: A (a text and test change of src/aieos_bootstrap/read_set_record.py and its tests, in a task of its own).
+- Blocks v0.1: no (non-blocking text and test points of TASK-064)
+- Scheduled in: M8, the Resume Check and records fix task (with the component-path reading of context_compiler and specification 6 section 11), before the M8 exit review
 
 ## What
 TASK-064's module (src/aieos_bootstrap/read_set_record.py) was accepted with these points carried, each non-blocking:
@@ -20,3 +22,4 @@ TASK-064's module (src/aieos_bootstrap/read_set_record.py) was accepted with the
 ## Log
 - 2026-10-18: opened (session 01f64acc; D-1296).
 - 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled the fence sentence, "from the holder of the token", adapter.submit named, state['passed'] stated (src/aieos_bootstrap/read_set_record.py:21-33, :57-59, :87-88, :191, :246), the integration test's note (tests/integration/test_read_set_record_store.py:6-7) and three untested points (tests/unit/test_read_set_record.py:65, :110, :198); open the contract-header points and TASK-064's AC3 text; the map's "point 15" matches no point of this item; broken copies for the list changed in place and observe's record-is-None check show no change. Status stays open.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass B decision D-5259 (M3)): read in full; `git log f25b4576.. -- read_set_record.py` printed nothing, so the Resume-when event (the next change of that module) is not met; open per the Log of 2026-10-30: the contract-header points and TASK-064's AC3 text; if a task changes the module first, that task takes the item. State: open; Blocks v0.1: no (non-blocking text and test points of TASK-064); Scheduled in: M8, the Resume Check and records fix task (with the component-path reading of context_compiler and specification 6 section 11), before the M8 exit review.

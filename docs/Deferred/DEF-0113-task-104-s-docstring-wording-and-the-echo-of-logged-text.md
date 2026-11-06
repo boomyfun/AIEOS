@@ -4,6 +4,8 @@
 - Opened: 2026-10-30 (session 578ea88b; TASK-104's acceptance, D-3892)
 - Deferred by: decision agent (A41, A51), the acceptance decision of TASK-104 (D-3892)
 - Decision group: A
+- Blocks v0.1: no (wording and presentation points of one task's acceptance; no behaviour)
+- Scheduled in: M8, the launcher text-fix task (launcher, cli), before the M8 exit review
 
 ## What
 Findings of the acceptance review of TASK-104 (a Haiku 5.5 reviewer, D-3890) that change no behaviour and were not fixed in a second task commit:
@@ -24,3 +26,4 @@ TASK-104; DEF-0105.
 
 ## Log
 - 2026-10-30: opened at TASK-104's acceptance (D-3892).
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass E decision D-5258 and the corrections of D-5259 C3 and D-5273 C2): read in full; git log -L over launcher.run_task shows b8b003f and ba83811 (TASK-115, 2026-11-02) after the item was opened (2026-10-30), so the Resume-when event occurred; git show ba83811 (read) leaves unchanged the run_task docstring sentence of point (a) and the finding text of point (c), and no hunk touches (d) or (e); b8b003f and point (b) were not read. State: open; Blocks v0.1: no (wording and presentation points of one task's acceptance; no behaviour); Scheduled in: M8, the launcher text-fix task (launcher, cli), before the M8 exit review.

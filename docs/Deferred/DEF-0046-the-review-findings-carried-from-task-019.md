@@ -4,6 +4,8 @@
 - Opened: 2026-10-11 (decisions D-491 and D-492)
 - Deferred by: decision agent (A41), D-491 (C5: the dispositions F2, F4, F5 and R5's carried case); decision agent (A41), D-492 (the findings recorded in DA-3, none blocking).
 - Decision group: A (tests within the self-build).
+- Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
+- Scheduled in: M8, the conformance and runner test-fix task, before the M8 exit review
 
 ## What
 - F2: the state helper risk_state and its constant RISK_01_SHA256 are copied in four test modules (test_governor_conformance.py, test_runner_rc_run.py, test_runner_risk_run.py, test_runner_run.py), as TASK-013's rc_state is; a copy may drift; a shared helper needs a path outside TASK-019's write set.
@@ -20,3 +22,4 @@ Nothing.
 ## Log
 - 2026-10-11: opened (decisions D-491, D-492; session d662611e).
 - 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled F4 (tests/integration/test_runner_risk_run.py:166) and F5 (test_runner_risk_run.py:182, :195, :207); open F2 (the shared helper stays copied: AC4 withdrawn, D-3599 M2) and the carried R5 case. Status stays open.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 1, decision D-5264): read in full; git log f25b4576..HEAD (TASK-102's task commit) over the paths named in the Resume-when text printed no commit, so the event is not met (the four integration test modules unchanged); open per the Log of 2026-10-30: F2 (the shared helper stays copied: AC4 withdrawn, D-3599 M2) and the carried R5 case. State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the conformance and runner test-fix task, before the M8 exit review.

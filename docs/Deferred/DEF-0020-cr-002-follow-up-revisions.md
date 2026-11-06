@@ -4,6 +4,8 @@
 - Opened: 2026-10-07 (decision files D-086, D-087)
 - Deferred by: decision agent (A41), D-086: the revisions follow CR-002's approval and are not part of it.
 - Decision group: A for the drafting; approvals under A51 with CR-002; any change that weakens evidence requirements is the owner's (CR-002 part 4, limit 8; DM A52).
+- Blocks v0.1: no (the revisions of the list are written as proposals; only the option-b product documents remain)
+- Scheduled in: none
 
 ## What
 - `constitution.md`: way 1 of DM A52, so that what tools can check is checked by tools in the articles that require `ai_review` (INV-001, INV-002, INV-004, GOV-003, SEC-002, OPS-003); narrowing OPS-002 or SEC-002, or changing their evidence type, falls under limit 8; also §4 and §5 point 4.
@@ -30,3 +32,4 @@ DM A52; CR-002.
 - 2026-10-07 (session 283d2006): `governor-spec.md` revision 2 written as a proposal: CR-002 carried into §1 (who produces evidence), §3.2 (inputs for limits 5 and 8 and for whether the delegation is in force), §3.3 (record fields), §4 rules 3 and 5, the §5 routing note, ESCALATED and leaving IN_REVIEW, §6.2 (what rests only on AI review or approval) and §11 points 2, 3 and 9 (CS-31; decision file D-099). Status stays open.
 - 2026-10-07 (session 283d2006): `conformance-methodology.md` revision 2 (scenario approval for gov-AIEOS, CR-002 part 6), `conformance-scenarios-initial.md` revision 2 (ACC-14 and ACC-15) and `genesis-model.md` revision 4 (CR-002 recorded as approved; what stays the owner's in amendments and ratification) written as proposals (CS-32; decision file D-101). Of the list above, only the AIEOS product documents for option b remain; they wait for the §18 specifications. Status stays open.
 - 2026-10-08 (session d7637e4e): the Master Plan lists the option-b product documents as outside the gov-AIEOS scope, waiting for the §18 specifications that their rules need; their placement is open (plan §10). Status stays open. Decision file D-137. ../History/2026-10/2026-10-08-1219-master-plan-ratified.md
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass D decision D-5256): read in full; the revisions CS-28 to CS-32 were written as proposals (Log); the option-b product documents wait for the section 18 specifications, which now exist and are approved (master-plan.md :143 as D-5256 read it); their placement stays open. State: open; Blocks v0.1: no (the revisions of the list are written as proposals; only the option-b product documents remain); Scheduled in: none.

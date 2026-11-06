@@ -4,6 +4,8 @@
 - Opened: 2026-10-04 (../History/2026-10/2026-10-04-1817-idea-to-cs3v2.md)
 - Deferred by: Claude (left for the owner; transcript :48 and :357)
 - Decision group: B (the owner keeps concept questions and moving to another phase; DM A41 and A14)
+- Blocks v0.1: no (the first user, the specification approver, pull and the name are answered at A43; the open items are the owner's)
+- Scheduled in: none
 
 ## What
 - **§17 open questions (:48).** The concept left six. The stack question is handled by A8 and A10 (benchmark before choosing). These have no recorded answer yet:
@@ -37,3 +39,4 @@ The A14 sequence (DM).
 - 2026-10-08 (session cafac455): specification 1 (State & Event Model) is approved in the owner's place and published at `docs/specs/spec-01-state-and-event-model.md` (DM F11, revision 32); specification 2 is drafted in the scratchpad, not yet in the repository. Status stays open. Decision files D-149, D-150. ../History/2026-10/2026-10-08-1702-spec-1-approved-spec-2-drafted.md
 - 2026-10-08 (session 48cbdbd4): specification 2 (DM F12) and the self-build's risk rules (DM F13) are approved in the owner's place and published; with specification 1 (F11), M1's documents are done and M1 has exited (decision D-163). Specifications 3 to 7 remain, in milestones M3 to M7. Status stays open. Decision files D-156, D-157, D-161, D-163. ../History/2026-10/2026-10-08-1825-m1-done-spec-2-and-risk-rules.md
 - 2026-10-08 (session 0b380044): the risk rules revision 2 (DM F15), specification 2's layout part (DM F16) and the Master Plan revision 2 (DM F17) are approved or ratified in the owner's place; the first code task's contract (M2) was drafted and not yet approved (decision D-178). Specifications 3 to 7 remain, in milestones M3 to M7. Status stays open. Decision files D-176 to D-178. ../History/2026-10/2026-10-08-2307-follow-on-texts-and-first-contract-draft.md
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass D decision D-5256): read in full; the files docs/specs/spec-01 to spec-07 exist (Glob) and specifications 3 to 7 are approved in the owner's place under A51, not ratified by the owner (DM F23, F32, F40, F61, F63 and their later revisions, as D-5256 read them); open: open source, historical intelligence and the advisor sources, which are the owner's; the Log stops at 2026-10-08 (M1). State: open; Blocks v0.1: no (the first user, the specification approver, pull and the name are answered at A43; the open items are the owner's); Scheduled in: none.

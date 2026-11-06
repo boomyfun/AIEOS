@@ -4,6 +4,8 @@
 - Opened: 2026-10-12 (decision D-657)
 - Deferred by: decision agent (A41), D-657 (the dispositions P1 to P16 of the five way-2 reviews; P8 and P10 carried as limits) and D-658 (C3).
 - Decision group: A (limits of the audit copies within the self-build).
+- Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
+- Scheduled in: M8, the verification-path fix task (ac_coverage, ac_tests, stale, drift, reconcile, execution, evaluation, verification_records, scope_reconcile), before the M8 exit review
 
 ## What
 - **P8, the order of the two calls** (reviewer R5): evaluation.evaluate_task derives its event id from the task's kept records, and the audit copies are records of the task; so copies written after an evaluation give a rerun of that evaluation a new event id, not a duplicate. The caller calls verification_records.record_evaluation before evaluate_task (stated in the module's docstring). No caller of both exists yet; the core's caller that runs them (DEF-0030) must keep that order or derive the evaluation's event id without the audit copies.
@@ -22,3 +24,4 @@ TASK-029 (accepted, decision D-658); DEF-0030.
 
 ## Log
 - 2026-10-12: opened (decisions D-657 and D-658; session 556c5dd4).
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 2, decision D-5265): read in full; a Grep of src finds no call site of record_evaluation( or evaluate_task( outside their definitions and DEF-0030 is open, so the event is not met; all of P8, P10, the AC12 carries and E1 to AC8 remain (the Log has only the opening). State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the verification-path fix task (ac_coverage, ac_tests, stale, drift, reconcile, execution, evaluation, verification_records, scope_reconcile), before the M8 exit review.

@@ -4,6 +4,8 @@
 - Opened: 2026-10-10 (decision files D-307 and D-308)
 - Deferred by: decision agent (A41), D-307 C3: none of the findings is blocking, and a fix is a new commit that makes the five reviews and the CI run stale (assurance-model.md line 39; D-278 C1).
 - Decision group: A (test and wording changes in a later task touching the runner or its tests; notes to TASK-008 and TASK-005b).
+- Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
+- Scheduled in: M8, the conformance and runner test-fix task, before the M8 exit review
 
 ## What
 Non-blocking findings of TASK-006's five way-2 reviews on claude-sonnet-5-5 (commit 471f4e60be31275f7a15f5255b7aa1b56175c420), and one limit of the entry:
@@ -26,3 +28,4 @@ TASK-006 accepted (D-308) and on `main`.
 - 2026-10-10: opened (decision files D-307 and D-308).
 - 2026-10-10 (session 675f09ef): the limit for TASK-008 is settled by TASK-011's contract (records.check_decision allows specification 3 §9's keys for decision.execution; D-333, D-334), and TASK-008's contract changes the AC8 integration test's absence assertion under its own AC9 (R3-2, R5-2). Added (TASK-012's way-2 R5, D-342): R5CallAndComparison.test_each_not_run_rule compares only the reason string, which any check_decision finding gives, so it cannot tell an unknown-key finding from another; for a later task touching the runner's tests.
 - 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled R5-1 two order cases (tests/unit/test_runner_rc.py:308, :320), R4-4 (tests/property/test_runner_rc_properties.py:184), R4-5/R5-3 (:217), the assertion half of R4-6 (:140, :147), the failing-import test (test_runner_rc.py:376); also done though not in the map: R4-1 to R4-3 (src/aieos_bootstrap/conformance.py:52, :974, :1496) and R4-7 (tests/integration/test_runner_rc_run.py:318); open R3-1, R5-4 (behaviour), the docstring half of R4-6; the point added in the 2026-10-10 log on R5CallAndComparison.test_each_not_run_rule (DEF-0029 :27) is not claimed by the map. Status stays open.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 1, decision D-5264): read in full; the event is partly met: TASK-008's contract changed the AC8 test (Log of 2026-10-10), TASK-005b's contract was never drafted, and tests/unit/test_runner_rc.py was changed by TASK-122 (837f4ec) for the pin only; open per the Log of 2026-10-30: R3-1, R5-4 (behaviour), the docstring half of R4-6, and the test_each_not_run_rule point added on 2026-10-10. State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the conformance and runner test-fix task, before the M8 exit review.

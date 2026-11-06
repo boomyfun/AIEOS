@@ -4,6 +4,8 @@
 - Opened: 2026-10-10 (decision files D-361 and D-363)
 - Deferred by: decision agent (A41), D-361 (the dispositions of TASK-008's way-2 findings) and D-363 (TASK-008 accepted with them carried).
 - Decision group: A (task contracts within the self-build; a specification revision under A51, B9, where a finding needs one).
+- Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
+- Scheduled in: M8, the Resume Check and records fix task (with the component-path reading of context_compiler and specification 6 section 11), before the M8 exit review
 
 ## What
 Non-blocking findings of TASK-008's five way-2 reviews (R1 to R5), carried to TASK-008's next revision or to the task that reads the Resume Check's inputs from Git, the log and the files (DEF-0030):
@@ -33,3 +35,4 @@ TASK-008 accepted (done, D-363).
 - 2026-10-10: opened (decision files D-361 and D-363).
 - 2026-10-24: R5 F4 closed as documentation only by TASK-085's records (decision D-2573); the item stays open for its other points (decision D-2682).
 - 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled the test gaps R2 e and R5 F6 (tests/unit/test_resume_check.py:460-537, class R10CarriedGaps) and R1 3 (tests/integration/test_resume_check_fixtures.py:4-6); open R2 a to d (R2 d with R5 F5), R5 F2, F3, R1 2, R4, R3 (resume_check.py is forbidden). Status stays open.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 1, decision D-5264): read in full; the event 'TASK-008's next revision' occurred: TASK-122 (837f4ec, 2026-11-05) changed resume_check.py; git show 837f4ec shows it removed the unused import of aieos_bootstrap.records, so R1 2 (records imported and unused) is done (DEF-0124 done); the other points were not taken; open per the Log of 2026-10-30: R2 a to d (with R5 F5), R5 F2, F3, R4, R3. State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the Resume Check and records fix task (with the component-path reading of context_compiler and specification 6 section 11), before the M8 exit review.

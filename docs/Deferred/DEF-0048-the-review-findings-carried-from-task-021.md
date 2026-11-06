@@ -4,6 +4,8 @@
 - Opened: 2026-10-11 (decisions D-516 and D-520)
 - Deferred by: decision agent (A41), D-516 (C2: the reading R1 and TASK-004's AC12) and D-520 (Q1 and C3: the dispositions F1 to F11 of the five way-2 reviews).
 - Decision group: A (tests, a checker and a specification text within the self-build).
+- Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
+- Scheduled in: M8, the verification-path fix task (ac_coverage, ac_tests, stale, drift, reconcile, execution, evaluation, verification_records, scope_reconcile), before the M8 exit review
 
 ## What
 - Reading R1 (decision D-516): specification 4 section 6 item 1 says a gate's `args` entry "that names no AC of the contract" is a finding; TASK-021's check allows an entry that is an article of the contract's own `constitution` list, since every G3 plan names articles. For specification 4's next revision. With it, F4: any string in a contract's own constitution list excuses a stray entry, so a contract can silence a stray finding by listing it; a stricter rule would read the article ids from the constitution at the base.
@@ -31,3 +33,4 @@ Nothing.
 ## Log
 - 2026-10-11: opened (decisions D-516 and D-520; session a447d091).
 - 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled F1 (tests/unit/test_ac_coverage.py:212-216), F2 in part (a literal-oracle property added, tests/property/test_ac_coverage_properties.py:80; no change to the key-order property is shown), F3 (src/aieos_bootstrap/ac_coverage.py:29), F5 (ac_coverage.py:116-117), F6 (test_ac_coverage.py:118), F9 (:60), F10 (ac_coverage.py:8), F11 in part (test_ac_coverage.py:220); open F11's no-caller limit (ac_coverage.py:20 says there is no caller in the core, while src/aieos_bootstrap/verification_records.py:120-121 calls it), reading R1 with F4 (for specification 4's next revision), TASK-004's AC12 (an uncovered criterion of an accepted contract), F7, F8, DEF-0042 point 7. Status stays open.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 2, decision D-5265): read in full; git log f25b4576..HEAD (TASK-102's task commit) over the paths named in the Resume-when text printed no commit, so the event is not met (specification 4, TASK-004.yaml, ac_coverage.py and its tests unchanged); open per the Log of 2026-10-30: F11's no-caller limit, reading R1 with F4, TASK-004's AC12, F7, F8, DEF-0042 point 7. State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the verification-path fix task (ac_coverage, ac_tests, stale, drift, reconcile, execution, evaluation, verification_records, scope_reconcile), before the M8 exit review.

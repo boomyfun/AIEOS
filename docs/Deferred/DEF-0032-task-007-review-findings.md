@@ -4,6 +4,8 @@
 - Opened: 2026-10-10 (decision files D-327 and D-328)
 - Deferred by: decision agent (A41), D-327: none of the findings is blocking; nothing is ever appended wrongly (every departure fails closed); no caller exists yet, and the writer task (DEF-0030) defines the first caller; a fix now is a new commit that makes the five reviews and the CI run stale.
 - Decision group: A (code, test and wording changes in a later task touching the event log's append rules or their tests).
+- Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
+- Scheduled in: M8, the state-module fix task (eventlog, recovery, writer, gitread, startup), before the M8 exit review
 
 ## What
 Findings of TASK-007's five way-2 reviews on claude-sonnet-5-5 and of the decision agent's reading (commit 9803593c13dbd34a73710f772a60203450e225c4; D-327 dispositions):
@@ -30,3 +32,4 @@ TASK-007 accepted (D-328) and on `main`.
 - 2026-10-10: opened (decision files D-327 and D-328).
 - 2026-10-11: F-a and F-b resolved and F-d's tests added by TASK-015 (accepted, decision file D-405; c2c9196e on `main`); F-c, F-e, F-f, F-h and F-i stay open. ../History/2026-10/2026-10-11-0121-decision-files-d388-d398-and-task-015.md
 - 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled F-c (src/aieos_bootstrap/eventlog.py:188-189), F-e (tests/unit/test_eventlog.py:422-437), F-f (eventlog.py:186-187, :216-217), F-i (test_eventlog.py:192); F-h (noted) stays open, as DEF-0032 :31 lists it; F-g and R2 F2 are lines in DEF-0024. Status stays open.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 1, decision D-5264): read in full; DEF-0030 (the writer task named by the Resume-when text) is open, and git log f25b4576..HEAD (TASK-102's task commit) over the paths named in the Resume-when text printed no commit, so the event is not met (eventlog.py and tests/unit/test_eventlog.py unchanged); F-a and F-b were resolved by TASK-015 and F-c, F-e, F-f and F-i by TASK-102 (Log); open: F-h (noted). State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the state-module fix task (eventlog, recovery, writer, gitread, startup), before the M8 exit review.

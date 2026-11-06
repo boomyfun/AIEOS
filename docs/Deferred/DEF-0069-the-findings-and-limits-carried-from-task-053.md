@@ -4,6 +4,8 @@
 - Opened: 2026-10-16 (decisions D-1025, D-1028 amendment 1)
 - Deferred by: decision agent (A41), D-1025 (TASK-053's acceptance) and D-1027 amendment 1 (TASK-054's code carried to the next session).
 - Decision group: A (limits of an accepted task; the order of work within an approved contract).
+- Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
+- Scheduled in: M8, the verification-path fix task (ac_coverage, ac_tests, stale, drift, reconcile, execution, evaluation, verification_records, scope_reconcile), before the M8 exit review
 
 ## What
 - **TASK-054** (a blocking record that the evaluation would leave out refuses the evaluation; contract revision 1, commit C 46554bde on main, decisions D-1027 and D-1028 with E1 and E2; run 334 passing): its code is not started. Left: the owner notice before any code (owner item 5), the code in the six write-set paths, the local compiled suite and the scans, the first task commit to task/TASK-054, five way-2 reviews on a model other than the main session's, the decision agent's own review, the acceptance (change class critical_cr; the approval form ruled there, D-492's precedent) and the landing on main.
@@ -18,3 +20,4 @@
 - 2026-10-16: opened (D-1025, D-1028 amendment 1).
 - 2026-10-16: TASK-054's part done (D-1038): accepted and landed on main by a fast-forward to 56675042, after the owner notice (D-1032), five way-2 reviews (D-1034, D-1035), fix H (D-1035, D-1036) and the decision agent's review (D-1037); D1 closed for blocking records; its carried gap for 'fail' records in DEF-0070. The item stays open for TASK-053's carried findings D4, D6, D9, D10 and its limits.
 - 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled D6 (tests/unit/test_adapter.py:368-369); open D4, D9, D10 and TASK-053's AC7 limits. Status stays open.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 3, decision D-5266): read in full; TASK-054's part is done (Log of 2026-10-16); evaluation.py is unchanged since TASK-102 and the named hardening task was never opened, so the event is not met; open per the Log of 2026-10-30: D4, D9, D10 and TASK-053's AC7 limits. State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the verification-path fix task (ac_coverage, ac_tests, stale, drift, reconcile, execution, evaluation, verification_records, scope_reconcile), before the M8 exit review.

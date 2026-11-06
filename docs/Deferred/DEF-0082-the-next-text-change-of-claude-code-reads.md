@@ -4,6 +4,8 @@
 - Opened: 2026-10-18 (session 0c786edd; decision D-1312 C2)
 - Deferred by: decision agent (A41, A51), D-1312, after the way-2 reviews of TASK-065 at its head.
 - Decision group: A (a text and test change of src/aieos_bootstrap/claude_code_reads.py and its tests, in a task of its own).
+- Blocks v0.1: no (non-blocking text and test points of TASK-065)
+- Scheduled in: M8, the adapter, violation-path and Claude Code hook fix task (adapter, replay, violation, claude_code, claude_code_channel, claude_code_reads, claude_code_shell_allow, claude_code_read_hook, claude_code_store, claude_code_pretool_hook, task_contract, session_violation, mcp_server), before the M8 exit review
 
 ## What
 TASK-065's module (src/aieos_bootstrap/claude_code_reads.py) was accepted with these points carried, each non-blocking:
@@ -28,3 +30,4 @@ TASK-065's module (src/aieos_bootstrap/claude_code_reads.py) was accepted with t
 ## Log
 - 2026-10-18: opened (session 0c786edd; D-1312).
 - 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled R4-1/R3-3 (tests/unit/test_claude_code_reads.py:195), R4-2 (src/aieos_bootstrap/claude_code_reads.py:43-44), R4-3 (:27), R4-5 (:55, :128), R2-4 (:47), R2-2/R5-3 (test_claude_code_reads.py:58), R3-1 (:82), R3-4 (:170), R3-5 (:164; tests/property/test_claude_code_reads_properties.py:75, whose edit cannot fail); open R2-3, R3-6, R5-4, R3-2, R4-4, R5-2. Status stays open.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass B decision D-5259 (M3)): read in full; `git log f25b4576.. -- claude_code_reads.py` printed nothing, so the Resume-when event (the next change of that module) is not met; open per the Log of 2026-10-30: R2-3, R3-6, R5-4, R3-2, R4-4 and R5-2 (the last two limits only); if a task changes the module first, that task takes the item. State: open; Blocks v0.1: no (non-blocking text and test points of TASK-065); Scheduled in: M8, the adapter, violation-path and Claude Code hook fix task (adapter, replay, violation, claude_code, claude_code_channel, claude_code_reads, claude_code_shell_allow, claude_code_read_hook, claude_code_store, claude_code_pretool_hook, task_contract, session_violation, mcp_server), before the M8 exit review.

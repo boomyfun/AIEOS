@@ -1,9 +1,11 @@
 # DEF-0108: earlier tasks' GOV-003 "holds" records may overstate
 
-- Status: open
+- Status: done
 - Opened: 2026-10-30 (session 1c1bf794; TASK-102's acceptance, decisions D-3705, D-3706, D-3707)
 - Deferred by: decision agent (A41, A51), at TASK-102's acceptance
 - Decision group: A
+- Blocks v0.1: no (done)
+- Scheduled in: none (done)
 
 ## What
 The gap of DEF-0107 applies to every earlier self-build task that changed or added tests. Some earlier records say GOV-003 "holds" (for example TASK-101, which added `tests/unit/test_export_resume.py`: its GOV-003 record TASK-101-way2-R3-GOV-003 in docs/records/TASK-101.jsonl). Those records may overstate. They are not reopened by TASK-102; they are public and permanent, and a later decision can supersede them.
@@ -20,3 +22,4 @@ DEF-0107.
 ## Log
 - 2026-10-30: opened at TASK-102's acceptance (session 1c1bf794).
 - 2026-10-30: the wording is set by point 6 of DEF-0107's stated policy (D-3740): earlier GOV-003 "holds" records of tasks that changed or added tests do not cover the tests part; no record is edited. Status stays open until DEF-0107 is done; no list of the earlier tasks that changed tests is made unless a later decision asks for it.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass F batch 3, decision D-5269 (c)): read in full; its only trigger (DEF-0107 is taken up) has occurred and DEF-0107's Status line is done (DEF-0107:3); the wording was set by point 6 of DEF-0107's stated policy (D-3740, its Log of 2026-10-30), which says the item stays open until DEF-0107 is done; no record is edited and no list of earlier tasks is made. State: done; Blocks v0.1: no (done); Scheduled in: none (done).

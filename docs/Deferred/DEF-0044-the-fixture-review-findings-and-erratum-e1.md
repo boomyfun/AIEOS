@@ -4,6 +4,8 @@
 - Opened: 2026-10-11 (decision files D-472 and D-473)
 - Deferred by: decision agent (A41, A51), D-472 (the dispositions of the five way-2 reviews; erratum E1 adopted by D-359's route).
 - Decision group: A (test and wording within the self-build).
+- Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
+- Scheduled in: M8, the conformance and runner test-fix task, before the M8 exit review
 
 ## What
 - Erratum E1 (D-472 C3), to be recorded in docs/records/TASK-018.jsonl at acceptance: AC7's list of the other modules that may name tests/conformance/fixtures_risk/ also includes tests/conformance/set.py, whose RISK-01 entry names the fixture's path as data once TASK-020 sets it; AC6 and the header's both-states rule govern (D-461 E2, D-472).
@@ -31,3 +33,4 @@ TASK-018's acceptance.
 - 2026-10-11: opened (decision D-472; session 38c27ccc).
 - 2026-10-11: erratum E1 recorded in docs/records/TASK-018.jsonl (its contract record) at TASK-018's acceptance (decisions D-478, D-479); the fourteen findings stay carried (session b94736f9).
 - 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled the Source-cell point in part (a cell-count assertion, tests/unit/test_conformance_risk_files.py:483) and, though not in the map, the shared readings, the component_tags policy check, the naming cost (stated in naming()'s docstring; the reads are not reduced), the AC2 sub-conditions, the article branch and the minimal INV-005/006 and one-byte properties (tests/property/test_conformance_risk_properties.py:90, :170, :228; tests/integration/test_conformance_risk_set.py:93, :132; test_conformance_risk_files.py:451, :509, :609, :627); open the Source cell content, the "own restatement" point, the contract-header sentence, and the "compile" builtin point. Status stays open.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 1, decision D-5264 and its row 0044 correction in D-5265): read in full; `git log f25b4576..HEAD` over tests/unit/test_conformance_risk_files.py, tests/property/test_conformance_risk_properties.py and tests/integration/test_conformance_risk_set.py printed nothing, so the event (the next change of the Risk Engine fixture's test modules) is not met; open per the Log of 2026-10-30: the Source cell content, the 'own restatement' point, the contract-header sentence, the 'compile' builtin point. State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the conformance and runner test-fix task, before the M8 exit review.

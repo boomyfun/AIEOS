@@ -4,6 +4,8 @@
 - Opened: 2026-10-12 (decision D-639)
 - Deferred by: decision agent (A41), D-639 (the dispositions P1 to P15 of the five way-2 reviews; P4, P6, P8 and P9 carried) and D-640 (C5).
 - Decision group: A (limits of the evaluation path within the self-build).
+- Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
+- Scheduled in: M8, the verification-path fix task (ac_coverage, ac_tests, stale, drift, reconcile, execution, evaluation, verification_records, scope_reconcile), before the M8 exit review
 
 ## What
 - **P4, the retries used** (reviewers R1 and R5): by erratum E1 to AC2 (decision D-636), a decision.acceptance that keeps the state sets nothing, so two REWORK decisions with no other state between them count once, where AC2 and specification 1 line 73 count every REWORK decision after the last approval. Reachable only through a log written outside this path (the module refuses evaluation in REWORK). To decide: whether E1 should say so, or the count follow the decisions.
@@ -23,3 +25,4 @@ DEF-0030 (the core's caller); TASK-027.
 
 ## Log
 - 2026-10-12 (session 3e0b27e1): opened. TASK-027 accepted at ade6fda1 and on `main` (decision D-640; records 3a1acd31, D-641). ../History/2026-10/2026-10-12-0944-the-evaluation-path-accepted-and-on-main.md
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 2, decision D-5265): read in full; evaluation.py is unchanged since TASK-102 and a Grep of src finds no call site of evaluate_task( outside its definition (evaluation.py:341), so the event is not met; all of P4, P6, P8, P9 and the carried limits remain (the Log has only the opening). State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the verification-path fix task (ac_coverage, ac_tests, stale, drift, reconcile, execution, evaluation, verification_records, scope_reconcile), before the M8 exit review.

@@ -4,6 +4,8 @@
 - Opened: 2026-11-01 (session a048abb9; TASK-112 step X, decisions D-4376 to D-4379)
 - Deferred by: decision agent (A41, A51), D-4379 for the text and D-4380 for where it is written (the docs commit after the records commit of TASK-112, not the code commit)
 - Decision group: A
+- Blocks v0.1: no (CI runs the suite in one process and was green; the risk is a hidden coupling that makes a split run fail)
+- Scheduled in: none
 
 ## What
 When the suite is run in eight explicit parts (the scratch runner of TASK-111 and TASK-112, 110 s per command), three tests of `tests/integration/test_runner_run.py` (`RunnerEndToEndTest.test_a_stand_in_that_answers_from_the_expected_values`, `test_a_stand_in_with_one_decision_outside_a_list`, `test_no_governor`) and three of `tests/unit/test_runner.py` (`R1ReaderAndRoot.test_inputs_come_only_through_the_reader`, `R3DoesNotCount.test_the_real_set_counts`, `R4FreezeApproval.test_the_real_approval_and_two_approvals_of_one_hash`) fail unless certain other test modules are loaded in the same process (`test_runner_run.py` fails alone, G3); the three `test_runner.py` tests fail in the lists of G1, G5 and G7. The first failure text is an extra problem, "the Capability Boundaries entry could not be loaded from the root (reading)" (`tests/integration/test_runner_run.py` :250; `src/aieos_bootstrap/conformance.py` :1208-1241 and :1597), and the counts of the real set are empty.
@@ -20,3 +22,4 @@ TASK-112 (the runs G1 to G7, D-4376 to D-4378); the conformance runner tasks tha
 
 ## Log
 - 2026-11-01: opened (session a048abb9; D-4379). Written in the docs commit whose parent is the records commit 960db78f0e3dc35c9b46711b397664b8e25793e1 of TASK-112 (the commit that adds this file only; its own id is not written here, it is the child of that records commit); the code commit of TASK-112 is c68c953ca34cb3c8cae3893e5430b538d4850bbd.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass E decision D-5258): read in full; git log since 2026-11-01 over tests/unit/test_runner.py, tests/integration/test_runner_run.py and src/aieos_bootstrap/conformance.py printed no commit, so the Resume-when event is not met. State: open; Blocks v0.1: no (CI runs the suite in one process and was green; the risk is a hidden coupling that makes a split run fail); Scheduled in: none.

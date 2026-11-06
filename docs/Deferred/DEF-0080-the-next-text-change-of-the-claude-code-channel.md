@@ -4,6 +4,8 @@
 - Opened: 2026-10-18 (session dc541296; decision D-1276 C2)
 - Deferred by: decision agent (A41), D-1276, after the way-2 reviews of TASK-063 at its final head.
 - Decision group: A (a text and test change of src/aieos_bootstrap/claude_code_channel.py and its tests, in a task of its own).
+- Blocks v0.1: no (non-blocking text and test points of TASK-063)
+- Scheduled in: M8, the adapter, violation-path and Claude Code hook fix task (adapter, replay, violation, claude_code, claude_code_channel, claude_code_reads, claude_code_shell_allow, claude_code_read_hook, claude_code_store, claude_code_pretool_hook, task_contract, session_violation, mcp_server), before the M8 exit review
 
 ## What
 TASK-063's module (src/aieos_bootstrap/claude_code_channel.py) was accepted with these points carried, each non-blocking:
@@ -19,3 +21,4 @@ TASK-063's module (src/aieos_bootstrap/claude_code_channel.py) was accepted with
 ## Log
 - 2026-10-18: opened (session dc541296; D-1276).
 - 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled the session sentence, the AC5 reading, the hook_result statement and the subclass note (src/aieos_bootstrap/claude_code_channel.py:18-20, :51-55, :61-62, :87-88) and, though not in the map, two untested points (tests/unit/test_claude_code_channel.py:201; tests/property/test_claude_code_channel_properties.py:98); open the single-branch broken copies for the backslash, leading-slash and empty-text checks of the path test (a comment only, claude_code_channel.py:204) and the contract-header point (under docs/, outside the write set). Status stays open.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass B decision D-5259 (M3)): read in full; `git log f25b4576.. -- claude_code_channel.py read_set_record.py claude_code_reads.py` printed nothing, so the Resume-when event (the next change of that module) is not met; open per the Log of 2026-10-30: the single-branch broken copies for the backslash, leading-slash and empty-text checks of the path test and the contract-header point; if a task changes the module first, that task takes the item. State: open; Blocks v0.1: no (non-blocking text and test points of TASK-063); Scheduled in: M8, the adapter, violation-path and Claude Code hook fix task (adapter, replay, violation, claude_code, claude_code_channel, claude_code_reads, claude_code_shell_allow, claude_code_read_hook, claude_code_store, claude_code_pretool_hook, task_contract, session_violation, mcp_server), before the M8 exit review.

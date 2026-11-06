@@ -4,6 +4,8 @@
 - Opened: 2026-10-10 (decision file D-386)
 - Deferred by: decision agent (A41, A51), D-386 (TASK-014 accepted with these recorded, no fix in that task).
 - Decision group: A (test code within the self-build).
+- Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
+- Scheduled in: M8, the conformance and runner test-fix task, before the M8 exit review
 
 ## What
 - The two altered-set cases TASK-014 added to tests/unit/test_conformance_files.py ('a Resume Check fixture at the Verification folder', 'a Verification fixture at the Resume Check folder') also give an error because the moved path is missing from the files map, so they do not isolate the path rule; the base case 'a fixture path' has the same property. Reviewers suggested asserting the error text, or adding the moved path to the files map.
@@ -24,3 +26,4 @@ TASK-014 accepted (done, D-386).
 ## Log
 - 2026-10-10: opened (decision file D-386).
 - 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled the path-rule isolation (tests/unit/test_conformance_files.py:658), the comment in tests/integration/test_conformance_set.py:379, the module docstring and two renames of tests/integration/test_conformance_rc_set.py (:3, :106, :154); open: the base case 'a fixture path' (tests/unit/test_conformance_files.py:624) still does not isolate the path rule; the recorded-only commit-message point is unchanged. Status stays open.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 1, decision D-5264): read in full; git log f25b4576..HEAD (TASK-102's task commit) over the paths named in the Resume-when text printed no commit, so the event is not met (tests/unit/test_conformance_files.py, tests/integration/test_conformance_set.py and test_conformance_rc_set.py unchanged); open per the Log of 2026-10-30: the base case 'a fixture path' (test_conformance_files.py:624) does not isolate the path rule; the recorded-only commit-message point. State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the conformance and runner test-fix task, before the M8 exit review.

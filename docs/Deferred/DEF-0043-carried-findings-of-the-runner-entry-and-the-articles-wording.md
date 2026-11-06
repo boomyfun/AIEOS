@@ -4,6 +4,8 @@
 - Opened: 2026-10-11 (decision files D-458 and D-462)
 - Deferred by: decision agent (A41, A51), D-458 (TASK-017 accepted with these recorded, no third commit), D-456 C4 (the base-code point) and D-462 C2 (the wording).
 - Decision group: A (code, test and wording within the self-build).
+- Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
+- Scheduled in: M8, the conformance and runner test-fix task, before the M8 exit review
 
 ## What
 - (a) tests/property/test_runner_risk_properties.py: the random half of `test_a_rehashed_one_byte_change` asserts only that the result is one of the three, so it is a smoke check (round-2 review S2); name it so.
@@ -25,3 +27,4 @@ TASK-017 accepted (done, D-458).
 - 2026-10-11: opened (decision files D-458, D-456 C4 and D-462; session 51321169).
 - 2026-10-29: point (e) is addressed by conformance-files.md revision 11 (section 10's `articles` row; DM F76; decisions D-3611 and the decision that approves the row), in the commit that adds DM F76; section 9's row `inputs` uses the same words for the Resume Check input `articles` and is not changed by revision 11, so it is noted here for the file's next revision; points (a) to (d) remain, so the item stays open.
 - 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled (b) (tests/unit/test_runner_risk.py:206); also done though not in the map: (a) the smoke check (tests/property/test_runner_risk_properties.py:153); open (c), (d); (e) is addressed by conformance-files revision 11. Status stays open.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 1, decision D-5264): read in full; git log f25b4576..HEAD (TASK-102's task commit) over the paths named in the Resume-when text printed no commit, so the event is not met (conformance.py and the runner's Risk Engine tests unchanged); open per the Log of 2026-10-30: (c) and (d); (e) is addressed by conformance-files revision 11 (Log of 2026-10-29). State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the conformance and runner test-fix task, before the M8 exit review.

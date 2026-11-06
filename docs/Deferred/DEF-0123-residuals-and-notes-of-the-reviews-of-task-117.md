@@ -3,6 +3,8 @@
 - Opened: 2026-11-05 (session a0a0bdef-5258-47a7-94c1-6ba559edca43; TASK-117)
 - Deferred by: decision agent (A41, A51), D-4776
 - Decision group: A (self-build)
+- Blocks v0.1: no (the effects are capped at low and fail closed)
+- Scheduled in: M8, a policy-file grammar task (g2, g10), before the M8 exit review
 ## What
 (a) A block line led by a character that is neither whitespace nor printable ASCII (for example U+200B, the zero-width space) is still a top-level line under g2's wording ("a line that starts with a non-space"), so it ends the block and can hide a following repeated adapter id; the first item then reads low where g9 asks for error. The effect is capped at low. Fixing it changes the contract's grammar text (AC2 g2), so it needs a task of its own (found by the decision agent at D-4767; finding 2 of the second review ruled at D-4768; the code comment above _block states the reading of "non-space").
 (b) Two behaviours are stricter than g2's literal text and fail closed: a whitespace-only line led by a tab or U+00A0 after the last item is a block line and makes the block an error (g10 on every block line, skipped ones included); a column-0 comment does not end the block (g1 skips it before g2 is applied).
@@ -16,3 +18,4 @@ A task that revises g2 (and g10) with its own contract; a granted-case test and 
 TASK-117 (AC2, AC3); DEF-0122.
 ## Log
 - 2026-11-05: opened at the acceptance of TASK-117.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass E decision D-5258 and D-5259 M2): read in full; the Resume-when event (the launcher route is opened, DEF-0122) occurred: DEF-0122 is done, closed by TASK-118 on 2026-11-05 (decision D-4831); point (a) goes to a policy-file grammar task (g2, g10); point (b) is accepted as stricter than the text and fail closed, the g2 text to be aligned with the code in the same task; point (c) goes into the same task as its tests; points F3, F10 and F11 of (d) go to the launcher text-fix task. State: open; Blocks v0.1: no (the effects are capped at low and fail closed); Scheduled in: M8, a policy-file grammar task (g2, g10), before the M8 exit review.

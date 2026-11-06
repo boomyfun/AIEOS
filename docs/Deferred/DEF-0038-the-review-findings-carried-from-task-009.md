@@ -4,6 +4,8 @@
 - Opened: 2026-10-11 (decision file D-395)
 - Deferred by: decision agent (A41, A51), D-395 (TASK-009 accepted with these recorded, no fix in that task).
 - Decision group: A (code and test code within the self-build).
+- Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
+- Scheduled in: M8, the state-module fix task (eventlog, recovery, writer, gitread, startup), before the M8 exit review
 
 ## What
 - tests/unit/test_recovery.py: the argument checks lack failing cases for a non-UTC aware time, an extra key in a commit or a lease, a recorder that is not a string, and a tuple of commits.
@@ -25,3 +27,4 @@ TASK-009 accepted (done, D-395).
 ## Log
 - 2026-10-11: opened (decision file D-395).
 - 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled the argument failing cases (tests/unit/test_recovery.py:88-92), the property both ways (tests/property/test_recovery_properties.py:80, :101), the refused-append fence case (test_recovery.py:292), the docstring (test_recovery.py:1, :208) and recovery.py:8-10 in part (misplaced, miscased and twice-named keys); open: the malformed-trailer finding is still not named in that docstring; the recorded-only line is unchanged. Status stays open.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 1, decision D-5264): read in full; git log f25b4576..HEAD (TASK-102's task commit) over the paths named in the Resume-when text printed no commit, so the event is not met (recovery.py and its tests unchanged); open per the Log of 2026-10-30: the malformed-trailer finding not named in the module docstring; the recorded-only line. State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the state-module fix task (eventlog, recovery, writer, gitread, startup), before the M8 exit review.

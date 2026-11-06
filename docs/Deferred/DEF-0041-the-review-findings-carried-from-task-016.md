@@ -4,6 +4,8 @@
 - Opened: 2026-10-11 (decision file D-414)
 - Deferred by: decision agent (A41, A51), D-414 (TASK-016 accepted with these recorded, no fix in that task; finding (c) also carried as a requirement).
 - Decision group: A (code, test and wording within the self-build).
+- Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
+- Scheduled in: M8, the state-module fix task (eventlog, recovery, writer, gitread, startup), before the M8 exit review
 
 ## What
 - (a) tests/unit/test_writer.py: the failed read-back (AC2, AC10) is tested only through the private `_append_line`, and the file's bytes after the raise are not asserted, so "repairs nothing" holds by reading of the code, not by a test.
@@ -29,3 +31,4 @@ TASK-016 accepted (done, D-414).
 ## Log
 - 2026-10-11: opened (decision file D-414).
 - 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled (c)'s docstring half, epoch reuse (src/aieos_bootstrap/writer.py:355-357), (f) (tests/unit/test_writer.py:215), (h) (test_writer.py:353, :377), (j) (writer.py:357-359), (b) by the docstring alternative that DEF-0041 :10 names (writer.py:267-270; the code move is not made), (e) in part (test_writer.py:445), (i) in part (writer.py:269-270, :539-541); open (a), (d), (e) the R8 scan (test_writer.py:441), (g) (tests/property/test_writer_properties.py:60-61), (i) WriteResult.refusal (writer.py:132) and grant_lease (writer.py:432); (c)'s requirement on the contract of the first task that calls the store (DEF-0041 :11) stays as written. Status stays open.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 1, decision D-5264): read in full; the event occurred: writer.py was changed by TASK-115 (ba83811) and TASK-117 (7253aa9) and test_writer.py by TASK-117, after the Log's last line of 2026-10-30, and those tasks did not take the items; open per the Log of 2026-10-30: (a), (d), (e) the R8 scan, (g), (i) WriteResult.refusal and grant_lease; (c)'s requirement stays a requirement on the contract of the first task that calls the store (DEF-0030). State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the state-module fix task (eventlog, recovery, writer, gitread, startup), before the M8 exit review.

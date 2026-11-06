@@ -4,6 +4,8 @@
 - Opened: 2026-10-15 (decision D-692)
 - Deferred by: decision agent (A41), D-692 (the dispositions P1 to P14 of the five way-2 reviews; the items carried) and D-693 (C3).
 - Decision group: A (limits of the execution path within the self-build).
+- Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
+- Scheduled in: M8, the verification-path fix task (ac_coverage, ac_tests, stale, drift, reconcile, execution, evaluation, verification_records, scope_reconcile), before the M8 exit review
 
 ## What
 - **CONTINUE with a state effect** (R2, R3; P6): a record whose decision is CONTINUE or CONTINUE_WITH but whose state_effect is not empty is appended with its effect and then granted the lease; it is not refused. The real resume_check.check never gives such a record (its _effect returns no event for those decisions), so only a stand-in check can; tests show the grant comes after every event.
@@ -24,3 +26,4 @@ TASK-032 (accepted, decision D-693); TASK-008 (resume_check.py); TASK-016 and TA
 ## Log
 - 2026-10-15: opened (decisions D-692 and D-693; session 8dcd35e9).
 - 2026-10-15 (session 218e5c55): M4 exited with named limits (decision D-756; docs/plan/m4-exit-review.md §3, after the owner chose Option C on 2026-10-15). Limit L-c: no module calls execute yet; the session-start caller of specification 3 section 1 comes with the runtime of M5 to M7.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 2, decision D-5265 with the corrections of D-5265 C2): read in full; the event 'a module first calls execute' occurred: src/aieos_bootstrap/adapter.py:156 calls execution.execute, introduced by TASK-051 (ca9fb45, 2026-10-16, `git log -S'execution.execute('`), the day after the Log's line that says no module calls it; the M4 review point passed (Log of 2026-10-15); `git log -L` shows writer.held_lease unchanged since TASK-102 and whether the 2026-10-19 changes gave the holder is not shown; all five What points remain. State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the verification-path fix task (ac_coverage, ac_tests, stale, drift, reconcile, execution, evaluation, verification_records, scope_reconcile), before the M8 exit review.

@@ -1,10 +1,12 @@
 # DEF-0103: specification 5's sentence on an unexpired lease row, against `aieos end`
 
-- Status: closed (2026-10-25; DM F66)
+- Status: done
 - Opened: 2026-10-25 (session ea6ea0a3; TASK-092's records, decisions D-3047 (c1), D-3051 Q1 and R5b, D-3076)
 - Deferred by: decision agent (A41, A51), D-3051 R5b (found by the contract's reviews rv92a F5 and rv92b B2; a
   specification text, not a code change).
 - Decision group: A (a revision of specification 5, within the self-build; the specifications' owner rules apply).
+- Blocks v0.1: no (done)
+- Scheduled in: none (done)
 
 ## What
 Specification 5 revision 5 :125 says, in point 10's general rule for every core-written gone record, that "a session
@@ -32,3 +34,4 @@ revision 2.
 ## Log
 - 2026-10-25: opened with TASK-092's records (session ea6ea0a3; decisions D-3047, D-3051, D-3076).
 - 2026-10-25: closed by specification 5 revision 6 (DM F66; decisions D-3184 to D-3189): section 11 point 10 (:125) names the two paths through the core's outside end, `aieos end <session>` and the launcher's own fallback, as writing a gone session's record before the release while its lease row may be unexpired, the recorder naming the row as possibly unexpired, and reads "without a held lease" as said of the writer; carried to the next task that touches them: launcher.py :120-121's "departs from specification 5 :125", now out of date, and specification 4 :61's citation of specification 2 :156 for `models`, which is at :163 (session ea6ea0a3).
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass F batch 3, decision D-5269 (C1)): the Status word 'closed (2026-10-25; DM F66)' is not a value of the README and is changed to 'done' under D-5269 C1 and C4; the facts stay in the Log of 2026-10-25 (closed by specification 5 revision 6, DM F66); the two points carried there: launcher.py :120-121 was settled by TASK-102 (DEF-0106's Log of 2026-10-30), and the specification 4 :61 citation of specification 2 :156 is carried in DEF-0106. State: done; Blocks v0.1: no (done); Scheduled in: none (done).

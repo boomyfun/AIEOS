@@ -4,6 +4,8 @@
 - Opened: 2026-11-05 (session a0a0bdef-5258-47a7-94c1-6ba559edca43; TASK-117)
 - Deferred by: decision agent (A41, A51), D-4776
 - Decision group: A (self-build)
+- Blocks v0.1: no (a change of the declaration is not wanted now)
+- Scheduled in: none
 
 ## What
 TASK-117 adds writer.write_policy(root, text): it creates .aieos/project.yaml only if the file is absent or empty, in the form of write_contract (AC4). It cannot replace or extend an existing file. So, once the state commit P1-3 has put the declaration into Git, a changed declaration (a new adapter, a changed tier, a changed max_risk, a measurement key) needs a later task that adds a replacing or updating writer, or an owner-kept manual change. The contract states this limit in AC8 and asks for this entry at acceptance.
@@ -20,3 +22,4 @@ TASK-117 (AC4, AC8); the state commit P1-3.
 ## Log
 - 2026-11-05: opened at the acceptance of TASK-117.
 - 2026-11-05 (session 6550f093): P1-3 put the first declaration into Git by writer.write_policy at 711d7a95 (D-4860 to D-4863); the file now exists, so write_policy refuses any change (create-only); a changed declaration, for example a new Claude Code version, needs the later task this item names. The version 2.1.317 in the file is the value re-read at P1-3, not the fixture's 2.1.309 (D-4859); it will go stale at the next runtime update, which nothing compares (spec-02:250). The item stays open.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass E decision D-5258): read in full; the Resume-when event (a change to the declaration is wanted) is not met; the version 2.1.317 in .aieos/project.yaml will go stale at the next Claude Code update and nothing compares it (Log 2026-11-05). State: open; Blocks v0.1: no (a change of the declaration is not wanted now); Scheduled in: none.

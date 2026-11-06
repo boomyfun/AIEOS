@@ -21,3 +21,4 @@ DEF-0059 (the limits of the execution path; its resume-when, the first caller of
 
 ## Log
 - 2026-11-06: opened (session ce14b08a; decisions D-5245, D-5246).
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass F batch 3, decision D-5269): read in full; fields as written at opening (Blocks v0.1: no; Scheduled in: M8); the Resume-when event (after the first real run, or when a task touches launcher.py or execution.py for this) is not met: no first real run yet, and launcher.py was changed by TASK-115, 117 and 118 not for this. State: open; Blocks v0.1: no (in v0.1 each session needs a launch and no session starts the next one, specification 7 line 51, so a task left blocked by ESCALATE or stopped waits for the next launch, which fails safe; the decisions themselves, concept line 943, are built); Scheduled in: M8.

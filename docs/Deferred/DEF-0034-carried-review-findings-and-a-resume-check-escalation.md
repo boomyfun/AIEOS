@@ -4,6 +4,8 @@
 - Opened: 2026-10-10 (decision files D-349, D-351 and D-352)
 - Deferred by: decision agent (A41), D-349 (the dispositions of TASK-011's way-2 findings) and D-352 (TASK-008 carried whole with a ruling).
 - Decision group: A (task contracts and readings within the self-build; a specification revision under A51, B9, for F-a).
+- Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
+- Scheduled in: M8, the Resume Check and records fix task (with the component-path reading of context_compiler and specification 6 section 11), before the M8 exit review
 
 ## What
 - **F-a (TASK-011's way-2 R1, R2, R5):** records.check_decision lets a fired check of an execution decision record carry the outcome CONTINUE, while outcomes_fired refuses CONTINUE, and nothing ties the fired checks to outcomes_fired. This follows TASK-011's AC2 text ("an execution decision value when status is fired"). TASK-008's contract says which outcome a fired check carries; specification 3's next revision may state the tie.
@@ -24,3 +26,4 @@ TASK-011 accepted (done, D-351).
 - 2026-10-10: TASK-008's part done: TASK-008 accepted and on main with its AC9 assertion, decision D-352's and D-359's errata and the subject "TASK-0" stated by decision D-359 (decision D-363); F-a and F-d stay open.
 - 2026-10-11 (session 22aadea0): the "Resume when" above names TASK-008's code, which is accepted (decision file D-363); TASK-008's escalation was settled there. F-a and F-d stay open, for the next revision of specification 3 or the next task that changes records.py or its tests (D-415 C3). ../History/2026-10/2026-10-11-0220-decision-files-d399-d408-the-writer-and-m3-exit.md
 - 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled F-d (tests/property/test_records_execution_properties.py:136, :149); open F-a (records.py is outside the write set). Status stays open.
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 1, decision D-5264): read in full; the TASK-008 part is done (Log of 2026-10-10 and 2026-10-11); specification 3 has had revision 6 (citation only, D-3604) since and F-a was not addressed, and records.py is unchanged since TASK-102 (the git log loop); open: F-a (records.check_decision lets a fired execution check carry CONTINUE while outcomes_fired refuses it). State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the Resume Check and records fix task (with the component-path reading of context_compiler and specification 6 section 11), before the M8 exit review.

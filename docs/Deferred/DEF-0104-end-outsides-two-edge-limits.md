@@ -5,6 +5,8 @@
 - Deferred by: decision agent (A41, A51), D-3076 (found by TASK-092's acceptance review t92x-S1, findings F1 and
   F2, both non-blocking).
 - Decision group: A (a later task that changes launcher.end_outside, within the self-build).
+- Blocks v0.1: no (two edge cases the real writer does not reach)
+- Scheduled in: M8, the launcher text-fix task (launcher, cli), before the M8 exit review
 
 ## What
 At TASK-092's task head 5f01bb60, launcher.end_outside has two limits that no contract rule forbids:
@@ -30,3 +32,4 @@ TASK-092 (end_outside), TASK-089 (_store_findings' form).
 
 ## Log
 - 2026-10-25: opened with TASK-092's records (session ea6ea0a3; decision D-3076).
+- 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass C decisions D-5257 and D-5258): read in full; git log -L of launcher.end_outside and _outside_store shows only 0b37a1a (TASK-092); TASK-095's commit 3c14991 appended code after them and did not change them; the Resume-when event (the next task changing end_outside or _outside_store) is not met. State: open; Blocks v0.1: no (two edge cases the real writer does not reach); Scheduled in: M8, the launcher text-fix task (launcher, cli), before the M8 exit review.
