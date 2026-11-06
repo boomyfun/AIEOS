@@ -47,6 +47,10 @@ Occurrences in session 43f86835, second part (2026-11-06; ../History/2026-11/202
 Occurrences in session f348bb86 (2026-11-06; ../History/2026-11/2026-11-06-0904-m8-stage-8-task-124-the-lint-step-built-landed-and-recorded-f348bb86.md; the worker's own claim until checked):
 - cp366: the SHA-256 of diff_make_records_124r.txt was typed by hand and wrong; the machine output was copied into cp367 (D-5185 to D-5187).
 
+Occurrences in session ce14b08a, later part (2026-11-06; ../History/2026-11/2026-11-06-2156-m8-stage-8-the-deferred-items-triage-and-the-plan-revision-8-ce14b08a.md; the evidence lines are decision-file lines named in each item; the worker's own claim until checked):
+- cp467 (D-5276:54): the pin of cs_part3.py was written in the checkpoint entry as 4cd3cfbf...ec54; the sha256sum line is 4cd2cfbf...ec55; the right value is recorded in the batch note of D-5276; the pin file used in the run was made by the machine.
+- D-5278:13 and D-5278:64: the first text of master-plan section 9 item 1 listed what stays the owner's from the memory record and not from DM A66 and the definition; the decision agent found it and replaced the item by its exact M1 text, which was then committed. This is the nearest Rule (a name taken from its source, not from memory); no hash was involved.
+
 ## Why it happens
 Long hashes and commands are retyped from memory or from a previous message, and the decision agent repeats what the request says; the guard's forbidden forms are not in the decision agent's view.
 

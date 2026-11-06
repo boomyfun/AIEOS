@@ -74,6 +74,10 @@ Seven, in session 87e2584b's later part (../History/2026-10/2026-10-29-0446-the-
 Occurrences in session 08342c65, second part (../History/2026-11/2026-11-03-0157-m8-stage-8-the-continuation-08342c65-part-2-the-tier-answer-route-p1-and-the-task-117-contract.md; the evidence lines are the worker's checkpoint lines, decision-file lines and transcript lines named in each item; the worker's own claim until checked):
 - D-4731 C1, D-4732: cp308 edited before its pins check ran; a named lapse, a second one a breach (cp lines 2173, 2178).
 
+Occurrences in session ce14b08a, later part (2026-11-06; ../History/2026-11/2026-11-06-2156-m8-stage-8-the-deferred-items-triage-and-the-plan-revision-8-ce14b08a.md; the evidence lines are decision-file lines and checkpoint lines named in each item; the worker's own claim until checked):
+- D-5272 (checkpoint line 1645): the real copy of the writer for D-5261 to D-5270 (`write_dec_5261_5270d_real.py`) was made with `cp -n` before the decision that approved it; scratchpad only, nothing run; accepted as harmless.
+- D-5283 (hand-back of agent ab6862493112cd823, checkpoint cp482): the reading rule of D-5233 C1 to C3 asked for the CI log to be read; I read it with Greps and not in full, and said so in the request; this changed a condition of the decision without bringing it first. The decision agent read the log itself and compared the step names with the baseline; the gap is closed, and it counts as an occurrence.
+
 ## Why it happens
 - Claude treats a step as mechanical (a display, a change of order, a turn end) and does not see it as a decision.
 - The request checklist of the decision agent's definition was not applied before sending.
