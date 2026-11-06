@@ -50,6 +50,9 @@ One occurrence in session 6550f093 (../History/2026-11/2026-11-05-0750-m8-stage-
 Occurrences in session 43f86835 (2026-11-05; ../History/2026-11/2026-11-05-1258-m8-stage-8-task-121-and-task-122-the-pinned-upgrade-of-the-resume-check-43f86835.md; the worker's own claim until checked):
 - D-4959, D-4980: the Edit tool trimmed the trailing space of a new text once more: the first real copy of a decision-file writer differed from its dry copy beyond the MODE line; brought before it ran and never run; the next copy used an anchor that ends in text.
 
+Occurrences in session f348bb86 (2026-11-06; ../History/2026-11/2026-11-06-0904-m8-stage-8-task-124-the-lint-step-built-landed-and-recorded-f348bb86.md; the worker's own claim until checked):
+- D-5189: the first Edit of the real-mode records maker also shortened a padding by one space, which broke the order to leave the rest unchanged; the second Edit restored it before any run.
+
 ## Why it happens
 A new file has no hash until it exists, so the first run is done before a gate can be written; the Edit tool changes the file in place.
 

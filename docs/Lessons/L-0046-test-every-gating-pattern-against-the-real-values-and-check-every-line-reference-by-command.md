@@ -20,6 +20,9 @@ Session 43f86835 (2026-11-05; ../History/2026-11/2026-11-05-1258-m8-stage-8-task
 - D-5012: a request named line 25 for what was line 26.
 Each stopped a script before anything was pushed.
 
+Session f348bb86 (2026-11-06; ../History/2026-11/2026-11-06-0904-m8-stage-8-task-124-the-lint-step-built-landed-and-recorded-f348bb86.md; the worker's own claim until checked):
+- D-5182 (the decision agent's): a line count of 52 for a script of 50 lines; D-5197 and D-5198: counts of 60 and 86 for scripts of 59 and 85 lines (the Read tool shows one extra empty last line, and the lines are counted with wc -l); D-5190: a message of 8 lines called 9 (found at D-5191). Each stopped or was corrected before anything ran; the counts of lines are read with wc -l.
+
 ## Why it happens
 A pattern is written from a look at two or three names, and a comment is written before the last edit of the script; no step runs the pattern against the full listing or the comment against the file.
 
