@@ -1,0 +1,90 @@
+# Task contract TASK-124, r6 of the lint-step contract (the predecessor is TASK-119 r5, docs/tasks/TASK-119.yaml on main, approved at D-4888; this draft = that text by script with the exact replacements of make_task124_draft_c.py: the id TASK-119 to TASK-124 in the body, depends_on gains TASK-122, base_commit and the intent versions recomputed from main, traces_to gains DEF-0126 and DEF-0127, AC1 gains the key restriction of the text test (DEF-0126), AC4 states the first run of the stopped branch and the fixes of TASK-122, AC6 names DEF-0127 as untouched, AC3 states the network reads of the step as D-5107 C1 requires); sessions 43f86835 and b114176c; a scratch DRAFT, NOT approved, NOT in the repository. Whether this text is approved is recorded only in the decision agent's decision that names its SHA-256, not in this file.
+# Why: unchanged from TASK-119 r5 (DEF-0118: the low default evidence profile is functional [build, lint] and the CI produces no lint record), plus DEF-0126 (restrict the step's keys in the text test) as D-4900 C5 ruled. A new task id and a new branch name are used because the CI reads a contract only at the commit that adds it (D-4999) and the old branch task/TASK-119 is never force-updated (D-4902).
+# Facts read: the step text and the test text are those of the stopped branch task/TASK-119 (commits 92ce2c6 and 5b9330c1, the diff saved as task119_branch_diff.txt); the workflow header on main ends with revision 18, so the revision 19 paragraph of the step keeps its number.
+# Risk, authority: unchanged from r5 (critical; DM A41/A51 and A66; the step adds a check and loosens none; the owner-kept limits are unchanged).
+task: TASK-124
+contract_version: v1
+task_type: implementation
+objective: >-
+  Make the CI produce the lint entry of the low default profile: add ONE step to .github/workflows/aieos-checks.yml, after the bandit step, that installs pyflakes 4.0.3 into a venv in the runner's temp folder from the default package index, accepting only the one wheel whose hash is pinned (the form of the bandit step: --no-deps --require-hashes --only-binary :all:) and runs it with its default checks and no ignore or selection option over src and tests of the checked-out work tree, and fails the job when pyflakes reports any message or fails to run. Like the other task-gated steps it exits at once with "no task" when the run has no task. No other line of the workflow changes except a revision 19 paragraph in its header comment. A text test, tests/integration/test_ci_lint_step.py, checks the step's text. The record of the step (evidence_type lint, dimension functional) is made by the records maker of a later task from the run's step; the plan that `aieos run` writes is a later task.
+traces_to:
+  - docs/Deferred/DEF-0118-the-low-default-evidence-profile-names-a-lint-entry-that-the-ci-does-not-produce.md
+  - docs/Deferred/DEF-0126-the-lint-step-s-text-test-does-not-restrict-the-step-s-keys.md
+  - docs/Deferred/DEF-0127-pip-s-version-check-is-not-disabled-in-the-bandit-and-lint-steps.md
+  - docs/pre-genesis/assurance-model.md#5
+  - docs/pre-genesis/constitution.md#SEC-003
+input_state:
+  # base_commit is the head of main when the contract is approved (now 256d750a52a46ee31ce9684c18f8e14aed71a778); the executor refuses unless it equals HEAD, refs/heads/main and refs/remotes/origin/main.
+  base_commit: 256d750a52a46ee31ce9684c18f8e14aed71a778
+  depends_on: [TASK-114, TASK-103, TASK-122]
+  intent_versions:
+    # sha256 of each file at base_commit, computed by script from main; one key for each depends_on task file and each text the contract is bound by (the rule of TASK-114 :22).
+    .github/workflows/aieos-checks.yml: 49cd0ab3c0ca4b67aabd419d325a522de18010223093890d385dc09720df4a1d
+    docs/tasks/TASK-114.yaml: 376b8ae3bb9f4f3737c2690f6668f701595454cdc1a654318361cbad2004a962
+    docs/tasks/TASK-103.yaml: 467a238ecf7f037ec4d6ffe31c18183bedf95714f22f1861d39df99d957e233a
+    docs/tasks/TASK-122.yaml: c405881ccc280dc07f7465bbcaef2c15a9d6f7144b405599729b98949d04e0be
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/Deferred/DEF-0118-the-low-default-evidence-profile-names-a-lint-entry-that-the-ci-does-not-produce.md: c6fcedba1421ffe5cd51a607a4ad78857b74ec242d76ace26406d70436550951
+    docs/Deferred/DEF-0124-pyflakes-reports-an-unused-import-at-resume-check-py-42-a-pinned-governance-file.md: 41a0913b85a4effebd2dc889d33aeb64b3443cdca3e7e0c602b580397d866f4b
+    docs/Deferred/DEF-0125-pyflakes-reports-an-unused-local-variable-r-at-test-runner-rc-py-341.md: b0dbcf56f0546fef96b8f8004ea185bf78073ceffb04c3a4ba56a6d4d0af0e95
+    docs/Deferred/DEF-0126-the-lint-step-s-text-test-does-not-restrict-the-step-s-keys.md: 9212dc9779fe2e3d312a0a985298a3717819db167394d8d1b5fbcbd7fa055d9d
+    docs/Deferred/DEF-0127-pip-s-version-check-is-not-disabled-in-the-bandit-and-lint-steps.md: dd44be14b346b2f5cca7305faccb4fcb976039b31128fa555899cd42f439c7a6
+write_set:
+  paths:
+    - .github/workflows/aieos-checks.yml
+    - tests/integration/test_ci_lint_step.py
+read_set: {paths: [docs/plan/, docs/specs/, docs/Deferred/, docs/pre-genesis/, src/aieos_bootstrap/, tests/, .github/workflows/], interfaces: [], schemas: []}
+forbidden:
+  - .github/workflows/aieos-native.yml
+  - .github/workflows/aieos-bench.yml
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - src/**
+  - bench/**
+  - native/**
+  - docs/**
+  - tests/unit/**
+  - tests/property/**
+  - tests/conformance/**
+  - tests/run_tests.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The step. The unified diff of the workflow against main adds exactly one step, placed directly after the step "static_security_analysis (bandit, every package pinned by version and hash)" and named "lint (pyflakes 4.0.3, pinned by version and hash)". It has `if: ${{ !cancelled() }}`, begins with `set -euo pipefail` and exits 0 printing "lint: no task" when task.json holds `"task": null` (the form of the bandit step); it sets no `working-directory`; it sets `A="$RUNNER_TEMP/aieos-lint"` and makes the venv at `$A/venv`; its requirements file holds exactly one line, `pyflakes==4.0.3 --hash=sha256:330ba92b8c1db2eb0b8f4068f6c58674e2649a99e334769aa50e3e9c5b11c23a`; it installs with `--quiet --no-deps --require-hashes --only-binary :all:`; after `cd "$A"`, its last line is exactly `"$A/venv/bin/pyflakes" "$GITHUB_WORKSPACE/work/src" "$GITHUB_WORKSPACE/work/tests"` (default checks, no option; pyflakes reads no configuration file). Blocking is by form: `set -euo pipefail` and that last line as a bare command, so the step's exit status is pyflakes's. The step's text contains none of `continue-on-error`, `||`, `set +e`, `set +o`, `true`, `trap`, `python3 -m pyflakes`; its `run:` text has no `exit` other than the `exit 0` of the "no task" line and no shell `if` other than that line's (the step's `if: ${{ !cancelled() }}` key is outside the `run:` text); in its `run:` text no line names pyflakes other than the requirements line and the last line (the step's name also names it). The text of the step is the text the decision agent approved (its unified diff SHA-256 is bound in the A66 approval). The text test tests/integration/test_ci_lint_step.py (text only: it does not show that a line is reached) checks that the step exists directly after the bandit step, that it has no `working-directory`, the folder line, the exact requirements line, the install flags, the exact last line, the absence of each forbidden token of this AC and of AC3, and the "no task" line, and that the step's keys are exactly name, if and run (a key line at the step's key indentation other than `- name:`, `if:` and `run:` fails the test, so a `shell:`, a `timeout-minutes:` or any other key is refused; DEF-0126); it shows the text only, not that the job fails when pyflakes fails, which follows from the form above; it uses no subprocess, tempfile, exec, compile or open (deterministic_rule, as TASK-114 AC3), and each of its tests names "TASK-124 ACn" in its docstring.
+  - AC2: >-
+      Nothing is loosened. No existing line of the workflow changes (the diff has only added lines); the step list, every `if:`, every pinned list (the GOV-003 evaluator lists, the bandit pins) and the order of the existing steps are byte-for-byte as at base_commit. A raw `diff` of the base text and the new text with the added lines removed is empty. The change adds a check and loosens none; the header comment at the top of the workflow gains a "Revision 19 (TASK-124; ...)" paragraph (the last paragraph there is revision 18, for TASK-114) that says so and names the step (a comment line is an added line). The step 'GOV-003 base tests (report only)' stays the job's last step (TASK-103 AC6); the job's timeout-minutes 15 is not changed; if a branch run hits it, the stop rule of AC4 applies. The revision 19 paragraph is written only after the header (aieos-checks.yml :1-160) has been read in full.
+  - AC3: >-
+      The A66 limits. The step grants no write access (no `permissions:` change), uses no secret or token (no `secrets.` or `GITHUB_TOKEN` reference is added), changes no repository or security setting, adds no third-party action (no `uses:` line), and fetches from the network only the default package index page for pyflakes and the one hash-pinned wheel, where pip may also read its own version-check page as the bandit step does (DEF-0127 stays open). A Grep of every added line (the revision 19 paragraph included, which is written without these words) for `permissions`, `secrets`, `GITHUB_TOKEN`, `uses:`, `continue-on-error`, `env:`, `PIP_`, `index-url`, `find-links`, `trusted-host`, `curl`, `wget` finds none; the text test checks the same list over the step.
+  - AC4: >-
+      First run and risk. The lint step ran once, on the stopped branch task/TASK-119 (run aieos-checks 41965451678, head 5b9330c1), and was red with two findings, DEF-0124 and DEF-0125, which TASK-122 fixed on main (the unused import in resume_check.py and the unused local in test_runner_rc.py); the branch task/TASK-119 stays as it is and is never force-updated. The first run of this task is on the new task branch task/TASK-124 (DEF-0115's branch-first route), never on main; the workflow change goes to main only after a green run on the branch, or after code fixes that are themselves approved by their own decision and task (this task changes no source file, and no test file other than its own new text test tests/integration/test_ci_lint_step.py). The CI's python is 3.12.3 and the local interpreter is 3.14; pyflakes 4.0.3 requires python >=3.10, which both meet; a result on 3.12 may differ from one on 3.14; the CI's result governs. The first run is expected to be green, because both findings of the stopped branch were fixed on main; it may still be red on a finding not yet seen. STOP RULE: if the first branch run of the lint step is red, the task stops (exit condition escalate: needs_out_of_scope_change); each finding goes into a new DEF entry; any fix is its own task and its own decision, landing on main before TASK-124 resumes; the step's text is never changed to ignore a finding, because merging a red step would block every later task.
+  - AC5: >-
+      Evidence and records. The risk class is critical, so the evidence profile is the critical profile of assurance-model section 5: unit_test and integration_test (this task's test is an integration test and the CI runs the existing unit tests unchanged), deterministic_rule, static_security_analysis and ai_review (cross-model), plus functional [property/fuzz] (met by property_test records) and architecture [human_review] (met by a second decision_agent_review, which is never also the cross-model half: assurance-model section 5), as for TASK-103 and TASK-114. The tool entries are met by the CI's own steps on the accepted commit; if the governor shadow's raw output in the records dry run at the acceptance request shows any entry unmet, the task stops and comes back to the decision agent, and no workaround is used. The cross-model pair is a way-2 review on Haiku 5.5 (no other model without the owner) of the diff and the test, and a separate decision_agent_review that stands for that entry, both bound to the evaluated commit and the intent versions; the way-2 record names the implementer's model, the model of the session that makes the task commit (expected claude-sonnet-5-5) and the reviewer's model (Haiku 5.5); if the reviewer's model equals either of the other two, the pair counts nothing and the task stops. The lint step's own run is a record. The A66 decision is a precondition of the commit: it is requested after this contract is approved, after the workflow file and the test file are built and before the commit; it binds the SHA-256 of the built workflow file and of the base blob it replaces, of the unified diff of the workflow against base_commit, of the test file, and of this contract as approved; the executor refuses the commit on any mismatch (the route of TASK-114, D-4516 C2). After the first green branch run, the records maker of this task (a copy of the TASK-118 maker) gains one row ('lint (pyflakes', 'G2', 'lint', 'functional') (the gate value is a proposal; the governor does not read the gate); that row is a records-step matter after acceptance and not part of this task's write set. Because the task changes tests/, its acceptance brings the raw output of the step 'GOV-003 base tests (report only)' of the task-branch run and names each base-test failure in its departures (TASK-103 AC4; DEF-0107 point 4 (i)).
+  - AC6: >-
+      Limits. No change to the low profile or to assurance-model.md, to any spec, to any source file, to any test file other than the new tests/integration/test_ci_lint_step.py, or to aieos-native.yml or aieos-bench.yml; no continue-on-error; no tool beyond the one pinned wheel; the plan that `aieos run` writes (DEF-0118's second follow-up) is a later task; what counts as lint for a docs-only change stays the owner's; any finding in the existing code becomes a DEF entry or a task of its own, never an ignore in this step. DEF-0127 (pip's own version check in the bandit and lint steps) stays open and is not touched: the step's text stays exactly as approved at r5 (the line-by-line text of TASK-119 r5, AC1); DEF-0120, DEF-0121 and DEF-0123 stay untouched.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [.github/workflows/aieos-checks.yml, tests/integration/test_ci_lint_step.py]}
+  shell: {allow: []}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: critical
+autonomy:
+  max_level: L1
+  budgets: {tokens: 400k, wall_time: 6h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2]}
+  - {gate: G3, check: constitution, args: [AC3, AC4, AC5, AC6, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the risk class is satisfied AND one approval record counts AND the CI runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false, as for TASK-103 and TASK-114 (D-4875): the one act is a change of one workflow file of the self-build, decided under A66 on its exact diff; it grants no write access, uses no secret or token and changes no setting (AC3), which would stay the owner's. Raising any assurance or changing the low profile stays the owner's.
+owner_kept_act: false
