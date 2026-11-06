@@ -12,6 +12,7 @@ Work that was put off, one file per item (`Deferred/DEF-NNNN-<slug>.md`). Each f
 - **List of open items:** `grep -lE "^- Status: (open|waiting-owner)" docs/Deferred/DEF-*.md`.
 - **Who decided to defer:** always recorded. An owner deferral quotes the owner. A decision-agent deferral cites its decision ID. A Claude proposal is labelled as a proposal, not a decision.
 - **Decision group:** group B items are decided only by the owner, as in decision-matrix A41.
+- **Deferral rule:** `docs/plan/master-plan.md` section 6 (revision 7) sets when an item is opened, unblocked and listed at an exit review.
 
 ## Template
 
@@ -22,6 +23,8 @@ Work that was put off, one file per item (`Deferred/DEF-NNNN-<slug>.md`). Each f
 - Opened: YYYY-MM-DD (../History/YYYY-MM/<file>.md)
 - Deferred by: <owner: "quote" (transcript :N) | decision agent D-NNN | Claude (proposal, not a decision)>
 - Decision group: <A | B | unknown>
+- Blocks v0.1: <yes | no (why)>
+- Scheduled in: <task or milestone | none>
 
 ## What
 ## Why deferred
