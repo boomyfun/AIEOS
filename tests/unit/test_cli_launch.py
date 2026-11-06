@@ -629,5 +629,71 @@ class TASK111Token(unittest.TestCase):
         self.assertIn('lookup: a finding', out['findings'])
 
 
+STATE_DIR = launcher.writer.STATE_DIR
+FOUND_UNDER = 'contract: a write-set path is under the project-state directory'
+FOUND_COVER = 'contract: a write-set path may cover the project-state directory'
+CONTRACT_ORDER = ['clock', 'begin', 'contract_at', 'clock', 'finish_outside', 'write_handoff']
+
+
+def base_run_path_ok(path):
+    """The behaviour of launcher._run_path_ok at base_commit 0b784006, restated."""
+    if not (isinstance(path, str) and launcher._RUN_PATH.fullmatch(path) is not None) or path == '-':
+        return False
+    if path.startswith(('/', './')) or path.endswith('/'):
+        return False
+    parts = path.split('/')
+    if any(p in ('', '.', '..') or p.endswith(('.', ' ')) for p in parts):
+        return False
+    return parts[0].lower() != STATE_DIR.lower()
+
+
+class TASK125StateDir(unittest.TestCase):
+    def test_a_path_under_the_state_directory_is_refused(self):
+        """TASK-094 AC2 (amended by TASK-125 AC1): a write set with a path whose first segment is the state directory,
+        in any letter case, gives reason "contract", the new finding, no starter and the contract-failure calls."""
+        for first in (STATE_DIR, STATE_DIR.upper(), STATE_DIR.title(), STATE_DIR[:2] + STATE_DIR[2:].upper()):
+            for path in (first + '/tasks/x.yaml', first):
+                world = World(contract_at=contract(paths=['src/a.py', path]))
+                out = launch(world)
+                self.assertEqual((out['result'], out['reason'], world.names()), ('refused', 'contract', CONTRACT_ORDER),
+                                 path)
+                self.assertIn(FOUND_UNDER, out['findings'], path)
+                self.assertNotIn('starter', world.names())
+                self.assertEqual(world.args('finish_outside'), [(ROOT, SESSION, NOW + datetime.timedelta(minutes=5),
+                                                                 RECORDER)])
+
+    def test_a_first_segment_holding_a_star_is_refused(self):
+        """TASK-094 AC2 (amended by TASK-125 AC1): a path whose first segment holds "*" gives the same answer with the
+        finding that it may cover the state directory."""
+        for paths in (['*/x'], ['**'], ['.a*/tasks/x.yaml'], ['*.md'], ['src/a.py', '*/x']):
+            world = World(contract_at=contract(paths=paths))
+            out = launch(world)
+            self.assertEqual((out['result'], out['reason'], world.names()), ('refused', 'contract', CONTRACT_ORDER),
+                             paths)
+            self.assertIn(FOUND_COVER, out['findings'], paths)
+            self.assertNotIn('starter', world.names())
+
+    def test_other_write_sets_give_what_they_gave(self):
+        """TASK-094 AC2 (amended by TASK-125 AC1): write sets with no first segment equal to the state directory and no
+        "*" in a first segment give (the same list, None), unchanged."""
+        sets = [PATHS, ['docs/x.md'], ['src/aieos_bootstrap/mod.py', 'tests/unit/**'], ['x/' + STATE_DIR + '/y'],
+                [STATE_DIR + 'x/y'], [STATE_DIR[:-1] + '/y'], ['src/a*/b.py'], ['tests/**/x.py']]
+        for paths in sets:
+            self.assertEqual(launcher._launch_write_set(contract(paths=list(paths))), (list(paths), None), paths)
+
+    def test_the_helper_and_the_run_path_parity(self):
+        """TASK-094 AC2 (amended by TASK-125 AC2): _under_state_dir is true for the first segment equal to the state
+        directory in any letter case and false otherwise, and _run_path_ok answers as at base for a list of inputs."""
+        for path in (STATE_DIR, STATE_DIR + '/x', STATE_DIR.upper() + '/x', STATE_DIR.title() + '/a/b'):
+            self.assertTrue(launcher._under_state_dir(path), path)
+        for path in ('src/a.py', 'a/' + STATE_DIR + '/x', STATE_DIR + 'x/y', STATE_DIR[:-1] + '/y', ''):
+            self.assertFalse(launcher._under_state_dir(path), path)
+        inputs = ['src/a.py', STATE_DIR, STATE_DIR + '/x', STATE_DIR.upper() + '/x', 'a/' + STATE_DIR + '/x',
+                  STATE_DIR + 'x/y', STATE_DIR[:-1] + '/y', '*', 'a/*', '/x', './x', 'x/', 'x//y', 'a/../b', 'a/b.',
+                  'a/b ', '-', '', 3, None]
+        for path in inputs:
+            self.assertEqual(launcher._run_path_ok(path), base_run_path_ok(path), path)
+
+
 if __name__ == '__main__':
     unittest.main()

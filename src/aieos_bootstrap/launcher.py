@@ -229,7 +229,12 @@ is refused by handoff_file.write with reason "argument" and handled as any refus
 command passes no starter, so it starts no runtime. launch_outside reads the
 caller's clock twice and calls the caller's starter, the two exceptions to "reads no clock" and "starts no process but
 through gitread" above: the starter does whatever the caller's code does; the core's own code starts no process. A
-BaseException from the starter is re-raised after the end and the handoff.
+BaseException from the starter is re-raised after the end and the handoff. Since task TASK-125 the write set read at
+the grant's head is refused, with reason "contract" and no starter call, when a path has the project-state directory as
+its first segment (compared in any letter case, the name taken from writer.STATE_DIR) or a first segment that holds
+"*", because such a segment may cover that directory. Stated limits: only the first segment is checked; a contract whose
+write set is read at the base by another reader (the hook, base_inputs) is not changed here; the state commit is not
+automated, and the root's state after the check is open (DEF-0101).
 
 approval_act (task TASK-096; `aieos approve`, `aieos edit` and `aieos reject`, specification 1 section 12,
 specification 7 section 4) records an approval, a rejection or an edit note of a task's drafted contract version and
@@ -1118,6 +1123,11 @@ def _launch_grant_in_form(session_id, token, head, environment):
         return False
 
 
+def _under_state_dir(path):
+    """True when the first segment of the path is the project-state directory, in any letter case."""
+    return path.split('/')[0].lower() == writer.STATE_DIR.lower()
+
+
 def _launch_write_set(answer):
     """Step 5: (the write set, None), or (None, findings) for a contract read that does not pass."""
     if not (type(answer) is tuple and len(answer) == 2):
@@ -1136,6 +1146,10 @@ def _launch_write_set(answer):
     for p in paths:
         if _LAUNCH_PATH.fullmatch(p) is None or '' in p.split('/'):
             return None, ['contract: a write-set path is outside the pattern rule']
+        if '*' in p.split('/')[0]:
+            return None, ['contract: a write-set path may cover the project-state directory']
+        if _under_state_dir(p):
+            return None, ['contract: a write-set path is under the project-state directory']
     return list(paths), None
 
 
@@ -1817,7 +1831,7 @@ def _run_path_ok(path):
     parts = path.split('/')
     if any(p in ('', '.', '..') or p.endswith(('.', ' ')) for p in parts):
         return False
-    return parts[0].lower() != writer.STATE_DIR.lower()
+    return not _under_state_dir(path)
 
 
 def _run_argument_findings(root, task_id, intent, source_class, who, write, clock, callees):
