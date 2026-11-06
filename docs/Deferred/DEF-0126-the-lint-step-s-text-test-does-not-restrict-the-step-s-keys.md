@@ -19,3 +19,4 @@ TASK-119 (stopped under AC4); DEF-0118; DEF-0124; DEF-0125.
 
 ## Log
 - 2026-11-05: opened (session 6550f093), from D-4900 C5 (recorded in the records batch of D-4906).
+- 2026-11-06 (session f348bb86): TASK-124 adds to the text test of the lint step the test test_the_step_keys_are_exactly_name_if_and_run (keys exactly name, if and run; task commit bc33ff6a), which restricts the step's keys as this entry asked; limits recorded by the way-2 review (decision D-5149): the key pattern excludes digits and the run-block reader stops at a line indented under ten spaces; the status stays as the acceptance decides.
