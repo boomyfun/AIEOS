@@ -51,6 +51,9 @@ Occurrences in session ce14b08a, later part (2026-11-06; ../History/2026-11/2026
 - cp467 (D-5276:54): the pin of cs_part3.py was written in the checkpoint entry as 4cd3cfbf...ec54; the sha256sum line is 4cd2cfbf...ec55; the right value is recorded in the batch note of D-5276; the pin file used in the run was made by the machine.
 - D-5278:13 and D-5278:64: the first text of master-plan section 9 item 1 listed what stays the owner's from the memory record and not from DM A66 and the definition; the decision agent found it and replaced the item by its exact M1 text, which was then committed. This is the nearest Rule (a name taken from its source, not from memory); no hash was involved.
 
+Occurrences in session ce14b08a, after the final reply of D-5292 (2026-11-06; ../History/2026-11/2026-11-06-2304-m8-stage-8-the-deferral-controls-and-plan-revision-9-ce14b08a.md; the evidence lines are checkpoint lines and the worker note of D-5287 (the file D-5287-records-of-session-end-d-5286-results-fetch.md); the worker's own claim until checked):
+- cp491 (checkpoint line 1671): the pin of fetch_ff_rec.sh was half-typed from memory ("a6df6cd1...6b7b...", with an invented tail) in a checkpoint entry; the sha256sum value is a6df6cd18eb9ca419c1ab28231c502ba7ad75f2d37dd2511895b875048677b6a (pins_fetch_ff_rec.sum) and cp492 (line 1672) corrects it. No script or request used the wrong value.
+
 ## Why it happens
 Long hashes and commands are retyped from memory or from a previous message, and the decision agent repeats what the request says; the guard's forbidden forms are not in the decision agent's view.
 

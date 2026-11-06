@@ -179,6 +179,10 @@ Occurrences in session 2026-10-15-0830 (../History/2026-10/2026-10-15-0830-the-b
 Occurrences in session 2026-10-17-1820 (../History/2026-10/2026-10-17-1820-the-t0-adapter-accepted-and-the-hook-fix-replayed.md):
 - **2026-10-17 (D-1191 to D-1193).** Four times a script was run before it was written (exit 127 or 2, no effect), and review_models4.py was once called without its arguments; the fix: the Write of a script and its run in the same message, the Write first.
 
+Occurrences in session ce14b08a, after the final reply of D-5292 (2026-11-06; ../History/2026-11/2026-11-06-2304-m8-stage-8-the-deferral-controls-and-plan-revision-9-ce14b08a.md; the evidence lines are decision-file lines and checkpoint lines named in each item; the worker's own claim until checked):
+- **D-5288 (decision file lines 77 and 108; checkpoint line 1674, cp494).** The request said that the checkpoint entry cp494 existed when its first append had been refused by the call-form guard (the entry held the word for the interpreter), and its DENIALS part did not name the refusal; the entry was written later in a form without the word. A precondition stated without being checked against the file. The decision agent found it and accepted the rewritten entry under DM A71.
+- **The owner's question about DEF-0059 (checkpoint cp512; DEF-0059:29, decision D-5265).** I told the owner that I had not checked whether the triage handled DEF-0059; the triage had read it and recorded that its Resume-when event occurred (adapter.py:156). I should have grepped the Log before answering; found when the read-only list t144/def_resume_event_list.md was made.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

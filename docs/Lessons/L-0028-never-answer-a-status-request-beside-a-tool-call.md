@@ -121,6 +121,9 @@ Occurrences in session 43f86835, second part (2026-11-06; ../History/2026-11/202
 - D-5069 C5 (cp264): the text-block hook refused one message that held text before two tool calls; the first Read ran, the second was refused; the refused message was not resent in any wording and I went on with tool calls alone.
 - Messages holding more than one tool call: 114 messages of mine in this part held more than one tool call, counted by script from the continuation transcript 4ef0b8d4-73fa-42a1-b5ec-a3d33e8b4fdb.jsonl (the three with most calls: :4284 with 7 calls (Read Read Read Read Read Read Read), :1332 with 6 calls (Bash Edit Edit Edit Edit Edit), :2467 with 6 calls (Edit Edit Edit Edit Edit Edit)).
 
+Occurrences in session ce14b08a, after the final reply of D-5292 (2026-11-06; ../History/2026-11/2026-11-06-2304-m8-stage-8-the-deferral-controls-and-plan-revision-9-ce14b08a.md; the evidence lines are decision-file lines and checkpoint lines named in each item; main transcript line numbers were not taken; the worker's own claim until checked):
+- The text-block hook refused a Glob call twice, then the call was sent alone (D-5289:132; D-5290 C3), and two Glob calls and one Read call during the D-5291 steps (D-5291:68; checkpoint cp507, line 1687). After D-5293 it refused one more Read and one Grep, each because a sentence of mine stood beside it (checkpoint cp516 names the Read; the Grep is not in a checkpoint entry yet). Each call was resent alone at once; the decision agent accepted the resends under DM A71 (D-5289, D-5291). Several of the sentences answered the app's status request; others were result lines after a run, written out of habit.
+
 ## Why it happens
 The app's request reads as asking for words now, and the worker adds them to the call it is about to send.
 
