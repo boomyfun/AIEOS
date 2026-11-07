@@ -952,5 +952,74 @@ class TASK127AfterRead(unittest.TestCase):
         self.assertIn('_root', used_names(function('_launch_finish', 'launcher.py')))
 
 
+class TASK128StatementPaths(unittest.TestCase):
+    """The statement owner_kept_act false (decision_agent) and the owner-kept paths (TASK-128 Part A; DEF-0116)."""
+
+    NEW_REFUSED = ['AIEOS-concept.md', 'aieos-concept.md', 'AIEOS-CONCEPT.MD',
+                   'docs/pre-genesis/decision-matrix.md', 'DOCS/PRE-GENESIS/Decision-Matrix.md',
+                   'docs/pre-genesis/constitution.md', 'Docs/Pre-Genesis/CONSTITUTION.md',
+                   'CLAUDE.md', 'claude.md', 'Claude.Md',
+                   '.claude', '.CLAUDE', '.claude/settings.json', '.Claude/settings.local.json', '.claude/hooks/x.py']
+    OLD_REFUSED = ['.github/workflows/x.yml', '.GITHUB/x', 'docs/pre-genesis/measurement-protocol.md',
+                   'docs/pre-genesis/measurements', 'docs/pre-genesis/measurements/m1.md']
+    OLD_TEXT = ('argument: owner_kept_act false is refused for a write path under .github/, the measurement protocol '
+                'or the measurements folder')
+
+    def test_the_new_paths_are_refused(self):
+        """TASK-094 AC1 (amended by TASK-128 AC1): the statement false with decision_agent is refused with a finding
+        that begins argument: for each of AIEOS-concept.md, the decision matrix, the constitution, CLAUDE.md and
+        the .claude folder, compared without regard to case, alone or among other write paths."""
+        for path in self.NEW_REFUSED:
+            for write in ([path], ['src/aieos_bootstrap/mod.py', path]):
+                found = launcher._run_statement_findings('decision_agent', write, 'false')
+                self.assertEqual(len(found), 1, (path, write, found))
+                self.assertTrue(found[0].startswith('argument:'), (path, found))
+                self.assertIn('owner_kept_act false is refused', found[0], (path, found))
+                self.assertNotEqual(found[0], self.OLD_TEXT, (path, found))
+
+    def test_the_three_existing_refusals_keep_their_text(self):
+        """TASK-094 AC1 (amended by TASK-128 AC1): the refusals for .github/, the measurement protocol and the
+        measurements folder give the finding text they gave before, unchanged."""
+        for path in self.OLD_REFUSED:
+            self.assertEqual(launcher._run_statement_findings('decision_agent', [path], 'false'), [self.OLD_TEXT], path)
+
+    def test_paths_that_only_contain_the_names_are_not_refused(self):
+        """TASK-094 AC1 (amended by TASK-128 AC1): a path that merely contains one of the names, or whose name only
+        starts like one, is not refused by the new rule."""
+        for path in ['docs/notes/claude.md.txt', 'notes/.claude-notes.md', 'src/claude.md', 'docs/aieos-concept.md',
+                     'docs/pre-genesis/decision-matrix.md.bak', 'docs/pre-genesis/constitution.md.old',
+                     'x/.claude/settings.json', '.claudex', '.claude-notes/a.md', 'claude.mdx', 'aieos-concept.md.txt']:
+            self.assertEqual(launcher._run_statement_findings('decision_agent', [path], 'false'), [], path)
+
+    def test_no_statement_and_other_sources_are_unchanged(self):
+        """TASK-094 AC1 (amended by TASK-128 AC1): with the statement None the answer is [] for every path, the
+        argument rules of the statement itself are unchanged (not the text false; not decision_agent)."""
+        for path in self.NEW_REFUSED + self.OLD_REFUSED:
+            self.assertEqual(launcher._run_statement_findings('decision_agent', [path], None), [], path)
+        self.assertEqual(launcher._run_statement_findings('decision_agent', ['docs/a.md'], 'false'), [])
+        self.assertEqual(launcher._run_statement_findings('decision_agent', ['docs/a.md'], 'true'),
+                         ['argument: owner_kept_act is not None or the text false'])
+        self.assertEqual(launcher._run_statement_findings('human_authority', ['docs/a.md'], 'false'),
+                         ['argument: owner_kept_act false is accepted only with source_class decision_agent'])
+
+    def test_the_forms_that_are_not_normalised(self):
+        """TASK-094 AC1 (amended by TASK-128 AC2): a write path written with a leading ./, with a backslash or with a
+        trailing slash is not normalised by this function: the function gives today's answer for each, which the
+        test pins (./CLAUDE.md, CLAUDE.md/ and a backslash path are not refused by it; .claude/ is, by its first
+        segment)."""
+        for path in ['./CLAUDE.md', './claude.md', 'CLAUDE.md/', '.claude\\settings.json', '.\\claude.md']:
+            self.assertEqual(launcher._run_statement_findings('decision_agent', [path], 'false'), [], path)
+        found = launcher._run_statement_findings('decision_agent', ['.claude/'], 'false')
+        self.assertEqual(len(found), 1, found)
+        self.assertTrue(found[0].startswith('argument:'), found)
+
+    def test_the_docstring_states_the_limit(self):
+        """TASK-094 AC6 (amended by TASK-128 AC2): the docstring of _run_statement_findings names the forms that are
+        not normalised and that the refusal is by path only."""
+        doc = launcher._run_statement_findings.__doc__
+        for word in ('./', 'backslash', 'trailing slash', 'by path'):
+            self.assertIn(word, doc, word)
+
+
 if __name__ == '__main__':
     unittest.main()

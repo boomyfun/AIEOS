@@ -5,10 +5,12 @@ with eventlog.append as the real writer does, so no git starts and no file is to
 criteria it stands for in its own docstring."""
 
 import ast
+import copy
 import datetime
 import hashlib
 import pathlib
 import unittest
+from unittest import mock
 
 from aieos_bootstrap import evaluation
 from aieos_bootstrap import eventlog
@@ -615,6 +617,84 @@ class R12Purity(unittest.TestCase):
                     and n.value.id == 'os'}
         self.assertEqual(os_attrs, {'path'})
         self.assertNotIn('.aieos', MODULE.read_text(encoding='utf-8'))
+
+
+class TASK128OwnerKeptBinding(unittest.TestCase):
+    """TASK-128 Part B (DEF-0117 first gap, option d3 of D-5526): the governor never sees an owner_kept_act False that
+    the approved contract bytes do not carry; the other values fields stay caller data."""
+
+    EXACT = b'task: TASK-027\nowner_kept_act: false\n'
+
+    def go(self, contract_bytes, owner_kept=False):
+        """One evaluation over contract_bytes (approved by their own hash) with values owner_kept_act = owner_kept;
+        returns (result, the owner_kept_act values the governor's derive_inputs received, the values given, a deep
+        copy of the values taken before the call)."""
+        log = submitted(approved(Log(), chash=hashlib.sha256(contract_bytes).hexdigest()), cid(3))
+        v = values()
+        v['contract'] = dict(v['contract'], owner_kept_act=owner_kept)
+        before = copy.deepcopy(v)
+        seen = []
+        real = governor.derive_inputs
+
+        def spy(vals):
+            seen.append(vals['contract']['owner_kept_act'])
+            return real(vals)
+
+        with mock.patch.object(governor, 'derive_inputs', spy):
+            r, _, _ = run(log, contract_bytes=contract_bytes, values=v)
+        return r, seen, v, before
+
+    def test_an_exact_false_line_lets_a_false_reach_the_governor(self):
+        """TASK-027 AC6 (amended by TASK-128 AC3): the bytes hold exactly one line owner_kept_act: false at column 0
+        and values say False: the governor sees False and the evaluation is made."""
+        r, seen, _, _ = self.go(self.EXACT)
+        self.assertEqual(r['result'], 'evaluated', r)
+        self.assertEqual(seen, [False])
+
+    def test_values_false_with_bytes_true_is_seen_as_true(self):
+        """TASK-027 AC6 (amended by TASK-128 AC3): values say False, the bytes say owner_kept_act: true: the governor
+        sees True and the evaluation is not refused for that reason."""
+        r, seen, _, _ = self.go(b'task: TASK-027\nowner_kept_act: true\n')
+        self.assertEqual((r['result'], seen), ('evaluated', [True]), r)
+
+    def test_each_not_false_form_of_the_bytes_is_seen_as_true(self):
+        """TASK-027 AC6 (amended by TASK-128 AC3): the key missing, a duplicate key (also with a true line), a case
+        variant, a spacing variant (a leading space, a space before the colon, two spaces after it, a CRLF line end, a
+        tab, a trailing space) and bytes that are not UTF-8: each gives True to the governor, with no refusal for
+        that reason."""
+        forms = [b'task: TASK-027\n',
+                 b'task: TASK-027\nowner_kept_act: false\nowner_kept_act: false\n',
+                 b'task: TASK-027\nowner_kept_act: false\nowner_kept_act: true\n',
+                 b'task: TASK-027\nOwner_kept_act: false\n', b'task: TASK-027\nowner_kept_act: False\n',
+                 b'task: TASK-027\nOWNER_KEPT_ACT: false\n',
+                 b'task: TASK-027\n owner_kept_act: false\n', b'task: TASK-027\nowner_kept_act : false\n',
+                 b'task: TASK-027\nowner_kept_act:  false\n', b'task: TASK-027\nowner_kept_act: false\r\n',
+                 b'task: TASK-027\nowner_kept_act:\tfalse\n', b'task: TASK-027\nowner_kept_act: false \n',
+                 b'task: TASK-027\nowner_kept_act: false\n\xff\xfe\n']
+        for form in forms:
+            r, seen, _, _ = self.go(form)
+            self.assertEqual((r['result'], seen), ('evaluated', [True]), (form, r))
+
+    def test_values_true_with_bytes_false_stays_true(self):
+        """TASK-027 AC6 (amended by TASK-128 AC3): values say True and the bytes say owner_kept_act: false: the
+        governor sees True (stricter is allowed, a True is never lowered)."""
+        r, seen, _, _ = self.go(self.EXACT, owner_kept=True)
+        self.assertEqual((r['result'], seen), ('evaluated', [True]), r)
+
+    def test_the_callers_values_are_unchanged(self):
+        """TASK-027 AC6 (amended by TASK-128 AC3): after a call that changed what the governor saw (bytes not
+        false, values False) the caller's values mapping equals the deep copy taken before the call."""
+        for form in (b'task: TASK-027\n', self.EXACT):
+            _, _, given, before = self.go(form)
+            self.assertEqual(given, before, form)
+
+    def test_the_docstring_states_the_binding_and_the_limit(self):
+        """TASK-027 AC13 (amended by TASK-128 AC4): the module docstring says what the binding does and that the
+        other values fields stay caller data."""
+        doc = evaluation.__doc__
+        self.assertIn('owner_kept_act', doc)
+        self.assertIn('caller data', doc)
+        self.assertIn('owner_kept_act: false', doc)
 
 
 if __name__ == '__main__':

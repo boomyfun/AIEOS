@@ -60,7 +60,16 @@ Limits (AC13):
 - The PATH git is found by is the caller's precondition (DEF-0052 G1).
 - declared (intent_versions and retries) and values (the contract's declared fields, the policy's rules, the articles,
   the profiles, the delegation and the versions) are caller data, not bound to the hashed contract bytes, as the
-  governor's own limit says (decision D-633 C1). This repository's contracts write input_state.intent_versions as path
+  governor's own limit says (decision D-633 C1). One field is bound to the bytes (task TASK-128, DEF-0117 first gap):
+  the governor sees owner_kept_act False only when the contract bytes give exactly one line owner_kept_act: false at
+  column 0 and no other line that begins with owner_kept_act in any case or spacing (a duplicate, a case or spacing
+  variant, a missing key and bytes that are not UTF-8 all count as not false); in every other case it sees True,
+  whatever values say, on a copy, so the caller's mapping is not changed and no refusal is added. The reason: a False
+  that the approved contract does not carry never reaches the governor. The bytes read are the ones the caller gives,
+  checked first against the approved contract_hash; a run-made contract's approval refusal and the run's path
+  refusal remain the first filters. Only owner_kept_act is bound: the other values fields stay caller data (D-633
+  C1), and the second gap of DEF-0117, the acts that stay the owner's outside the path rules, stays with the
+  approver. This repository's contracts write input_state.intent_versions as path
   to SHA-256, not specification 2's version form, so the caller maps them (decision D-634 E1).
 - One evaluation of a task runs at a time: the writer reads the log and appends with no check that it is unchanged
   since this module's read.
@@ -338,6 +347,27 @@ def event_id_of(task_id, setter, record_ids):
     return hashlib.sha256('\n'.join([ID_PREFIX, task_id, setter] + sorted(record_ids)).encode('utf-8')).hexdigest()
 
 
+def _says_false(contract_bytes):
+    """TASK-128: true only when the contract text holds exactly one line equal to owner_kept_act: false at column 0 and
+    no other line that begins with owner_kept_act (any case, any spacing); bytes that are not UTF-8 are not false."""
+    try:
+        lines = contract_bytes.decode('utf-8').split('\n')
+    except UnicodeDecodeError:
+        return False
+    exact = [ln for ln in lines if ln == 'owner_kept_act: false']
+    other = [ln for ln in lines if ln != 'owner_kept_act: false' and ln.strip().lower().startswith('owner_kept_act')]
+    return len(exact) == 1 and not other
+
+
+def _bind_owner_kept(vals, contract_bytes):
+    """TASK-128: vals itself, or a copy whose contract mapping holds owner_kept_act True when values say False and the
+    approved bytes do not say false; no mapping of the caller's is changed."""
+    c = vals.get('contract')
+    if isinstance(c, dict) and c.get('owner_kept_act') is False and not _says_false(contract_bytes):
+        return dict(vals, contract=dict(c, owner_kept_act=True))
+    return vals
+
+
 def evaluate_task(root, repo, task_id, contract_bytes, declared, values, extra_records, recorder, now,
                   max_commits=1000, read=None, read_log=None, append=None):
     """Evaluate one task (TASK-027 AC1 to AC11); returns a mapping with RESULT_KEYS."""
@@ -371,7 +401,7 @@ def evaluate_task(root, repo, task_id, contract_bytes, declared, values, extra_r
             raise _Stop('values', ['values: changed_paths differ from the task\'s change: computed %r, given %r'
                                    % (paths, given)])
         try:
-            inputs = governor.derive_inputs(dict(values, changed_paths=list(paths)))
+            inputs = governor.derive_inputs(_bind_owner_kept(dict(values, changed_paths=list(paths)), contract_bytes))
         except Exception as exc:  # AC6
             raise _Stop('values', ['values: derive_inputs raised %s: %s' % (type(exc).__name__, exc)])
         request = {'task_id': task_id, 'task_content_hash': content_hash, 'evaluated_commit': commit,

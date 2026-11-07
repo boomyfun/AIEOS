@@ -1893,7 +1893,13 @@ def _run_argument_findings(root, task_id, intent, source_class, who, write, cloc
 def _run_statement_findings(source_class, write, owner_kept_act):
     """Step 1, the caller's statement (task TASK-115): none, or exactly the text false with decision_agent and no
     write path under .github/, equal to the measurement protocol, or equal to or under docs/pre-genesis/measurements
-    (the folder the CI routes to the owner), each compared without regard to case."""
+    (the folder the CI routes to the owner), each compared without regard to case (task TASK-128, DEF-0116): the
+    statement is also refused for a write path equal to AIEOS-concept.md, docs/pre-genesis/decision-matrix.md,
+    docs/pre-genesis/constitution.md or CLAUDE.md, or whose first segment is .claude, compared the same way, under a
+    finding of its own. The refusal is by path only, not by act: an act that stays the owner's outside these paths
+    rests on the approver, and the second gap of DEF-0117 is not closed here. A write path written with a leading ./,
+    with a backslash or with a trailing slash is not normalised by this function (the launch reader and _run_path_ok,
+    whose behaviour is not changed, refuse such a form or do not), so for example ./CLAUDE.md is not refused here."""
     if owner_kept_act is None:
         return []
     if not (type(owner_kept_act) is str and owner_kept_act == 'false'):
@@ -1908,6 +1914,11 @@ def _run_statement_findings(source_class, write, owner_kept_act):
                                           or path.lower().startswith('docs/pre-genesis/measurements/')):
                 return ['argument: owner_kept_act false is refused for a write path under .github/, the '
                         'measurement protocol or the measurements folder']
+            if isinstance(path, str) and (path.lower() in ('aieos-concept.md', 'docs/pre-genesis/decision-matrix.md',
+                                                          'docs/pre-genesis/constitution.md', 'claude.md')
+                                          or path.lower().split('/')[0] == '.claude'):
+                return ['argument: owner_kept_act false is refused for a write path that is AIEOS-concept.md, the '
+                        'decision matrix, the constitution, CLAUDE.md or under .claude/']
     return []
 
 
