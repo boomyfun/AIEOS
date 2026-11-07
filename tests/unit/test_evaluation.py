@@ -9,6 +9,7 @@ import copy
 import datetime
 import hashlib
 import pathlib
+import types
 import unittest
 from unittest import mock
 
@@ -675,6 +676,86 @@ class TASK128OwnerKeptBinding(unittest.TestCase):
             r, seen, _, _ = self.go(form)
             self.assertEqual((r['result'], seen), ('evaluated', [True]), (form, r))
 
+    def go_mapping(self, contract_bytes, mapping):
+        """One evaluation over contract_bytes (approved by their own hash) with values['contract'] = mapping; returns
+        (result, the log, the contract mappings the governor's derive_inputs received, the requests of
+        governor.evaluate)."""
+        log = submitted(approved(Log(), chash=hashlib.sha256(contract_bytes).hexdigest()), cid(3))
+        v = values()
+        v['contract'] = mapping
+        seen, requests = [], []
+        real, real_eval = governor.derive_inputs, governor.evaluate
+
+        def spy(vals):
+            seen.append(vals['contract'])
+            return real(vals)
+
+        with mock.patch.object(governor, 'derive_inputs', spy), \
+                mock.patch.object(governor, 'evaluate', lambda q, i, rs: requests.append(q) or real_eval(q, i, rs)):
+            r, lg, _ = run(log, contract_bytes=contract_bytes, values=v)
+        return r, lg, seen, requests
+
+    def test_each_line_break_or_invisible_character_form_is_seen_as_true(self):
+        """TASK-027 AC6 (amended by TASK-128 AC3, the review findings): an exact line and, with it, a bare CR, a byte-order
+        mark, a vertical tab, U+0085, U+2028, U+2029, a zero-width space or U+2060 each make the contract text not
+        false: the governor sees True with values False, with no refusal for that reason."""
+        forms = [b'task: TASK-027\rowner_kept_act: true\nowner_kept_act: false\n',
+                 b'\xef\xbb\xbfowner_kept_act: true\nowner_kept_act: false\n',
+                 b'task: TASK-027\x0bowner_kept_act: true\nowner_kept_act: false\n',
+                 b'task: TASK-027\xc2\x85owner_kept_act: true\nowner_kept_act: false\n',
+                 b'task: TASK-027\xe2\x80\xa8owner_kept_act: true\nowner_kept_act: false\n',
+                 b'task: TASK-027\xe2\x80\xa9owner_kept_act: true\nowner_kept_act: false\n',
+                 b'task: TASK-027\n\xe2\x80\x8bowner_kept_act: true\nowner_kept_act: false\n',
+                 b'task: TASK-027\n\xe2\x81\xa0owner_kept_act: true\nowner_kept_act: false\n']
+        for form in forms:
+            r, seen, _, _ = self.go(form)
+            self.assertEqual((r['result'], seen), ('evaluated', [True]), (form, r))
+
+    def test_each_quoted_or_explicit_key_spelling_is_seen_as_true(self):
+        """TASK-027 AC6 (amended by TASK-128 AC3, the review findings): an exact line and, after it, a second line that
+        holds the key in double quotes, in single quotes, after a question mark or after a space and a quote each make
+        the contract text not false: the governor sees True with values False."""
+        forms = [b'task: TASK-027\nowner_kept_act: false\n"owner_kept_act": true\n',
+                 b"task: TASK-027\nowner_kept_act: false\n'owner_kept_act': true\n",
+                 b'task: TASK-027\nowner_kept_act: false\n? owner_kept_act\n: true\n',
+                 b'task: TASK-027\nowner_kept_act: false\n?owner_kept_act\n',
+                 b'task: TASK-027\nowner_kept_act: false\n "owner_kept_act": true\n']
+        for form in forms:
+            r, seen, _, _ = self.go(form)
+            self.assertEqual((r['result'], seen), ('evaluated', [True]), (form, r))
+
+    def test_a_comment_line_is_not_another_line(self):
+        """TASK-027 AC6 (amended by TASK-128 AC3, the review findings): an exact line and a comment line that begins with a
+        number sign and names the key leave the contract text false: the governor sees False (a comment is never
+        counted as another line)."""
+        r, seen, _, _ = self.go(b'task: TASK-027\nowner_kept_act: false\n# owner_kept_act: false: ruled at D-5526 Q4\n')
+        self.assertEqual((r['result'], seen), ('evaluated', [False]), r)
+
+    def test_the_governor_reads_the_copy_that_was_tested(self):
+        """TASK-027 AC6 (amended by TASK-128 AC3, the review findings): a dict subclass whose get() answers True for the
+        key while its subscript gives False, with bytes that are not false: the governor receives a plain dict whose
+        owner_kept_act is True, not the subclass."""
+        class Sly(dict):
+            def get(self, key, default=None):
+                return True if key == 'owner_kept_act' else dict.get(self, key, default)
+
+        contract = Sly(values()['contract'])
+        self.assertIs(contract['owner_kept_act'], False)
+        r, _, seen, _ = self.go_mapping(CONTRACT, contract)
+        self.assertEqual(r['result'], 'evaluated', r)
+        self.assertEqual([type(c) for c in seen], [dict])
+        self.assertIs(seen[0]['owner_kept_act'], True)
+        self.assertIs(contract['owner_kept_act'], False)
+
+    def test_a_contract_that_is_not_a_plain_dict_or_lacks_the_key_is_refused(self):
+        """TASK-027 AC6 (amended by TASK-128 AC4): a non-dict mapping holding owner_kept_act False, and a dict without the
+        key, are passed on as before and derive_inputs refuses them: "refused", reason "values", nothing appended and
+        governor.evaluate not called."""
+        base = values()['contract']
+        for contract in (types.MappingProxyType(base), {k: x for k, x in base.items() if k != 'owner_kept_act'}):
+            r, lg, _, requests = self.go_mapping(CONTRACT, contract)
+            self.assertEqual((r['result'], r['reason'], lg.appends, requests), ('refused', 'values', [], []), r)
+
     def test_values_true_with_bytes_false_stays_true(self):
         """TASK-027 AC6 (amended by TASK-128 AC3): values say True and the bytes say owner_kept_act: false: the
         governor sees True (stricter is allowed, a True is never lowered)."""
@@ -682,8 +763,9 @@ class TASK128OwnerKeptBinding(unittest.TestCase):
         self.assertEqual((r['result'], seen), ('evaluated', [True]), r)
 
     def test_the_callers_values_are_unchanged(self):
-        """TASK-027 AC6 (amended by TASK-128 AC3): after a call that changed what the governor saw (bytes not
-        false, values False) the caller's values mapping equals the deep copy taken before the call."""
+        """TASK-027 AC6 (amended by TASK-128 AC3): after a call in which the governor saw True (bytes not false, values
+        False) and after one in which it saw False (the exact line), the caller's values mapping equals the deep copy
+        taken before the call."""
         for form in (b'task: TASK-027\n', self.EXACT):
             _, _, given, before = self.go(form)
             self.assertEqual(given, before, form)
@@ -693,8 +775,9 @@ class TASK128OwnerKeptBinding(unittest.TestCase):
         other values fields stay caller data."""
         doc = evaluation.__doc__
         self.assertIn('owner_kept_act', doc)
-        self.assertIn('caller data', doc)
+        self.assertIn('the other values fields stay caller data', doc)
         self.assertIn('owner_kept_act: false', doc)
+        self.assertIn('reads lines, not YAML', doc)
 
 
 if __name__ == '__main__':

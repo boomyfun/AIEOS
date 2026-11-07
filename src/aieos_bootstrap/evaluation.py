@@ -23,8 +23,9 @@ task in VERIFYING (after its task.submitted) or in IN_REVIEW (re-evaluation):
 5. The changed paths (AC5): the union of the paths each task commit changes against its first parent, read with the
    pinned diff-tree form and parsed by gitread.parse_paths.
 6. The inputs (AC6): values["changed_paths"] must be a list equal to that union; governor.derive_inputs is given a copy
-   of values holding the computed list, so no object of the caller's stands for the paths; the request is
-   specification 2 section 6.5's.
+   of values holding the computed list, so no object of the caller's stands for the paths, and its contract
+   mapping is a copy whose owner_kept_act is bound to the contract bytes (the Limits section, task TASK-128); the request
+   is specification 2 section 6.5's.
 7. The records (AC7; task TASK-053 AC1): the task's record.added and violation.detected payloads in log order, over
    the whole log, then extra_records; a record that records.check_record finds out of form, or whose record_id an
    earlier kept record has, is left out with a finding. A violation.detected payload is an observation with outcome
@@ -62,9 +63,16 @@ Limits (AC13):
   the profiles, the delegation and the versions) are caller data, not bound to the hashed contract bytes, as the
   governor's own limit says (decision D-633 C1). One field is bound to the bytes (task TASK-128, DEF-0117 first gap):
   the governor sees owner_kept_act False only when the contract bytes give exactly one line owner_kept_act: false at
-  column 0 and no other line that begins with owner_kept_act in any case or spacing (a duplicate, a case or spacing
-  variant, a missing key and bytes that are not UTF-8 all count as not false); in every other case it sees True,
-  whatever values say, on a copy, so the caller's mapping is not changed and no refusal is added. The reason: a False
+  column 0, no other line that begins with owner_kept_act in any case or spacing, after spaces, quote characters and a
+  question mark are removed (a duplicate, a case or spacing variant, a quoted or explicit-key spelling, a missing key
+  and bytes that are not UTF-8 all count as not false), and none of these characters: a byte-order mark, a carriage
+  return or a control character (U+0000 to U+0009, U+000B to U+001F, U+007F, U+0080 to U+009F, the set the contract
+  reader refuses), U+2028, U+2029, U+200B to U+200F and U+2060; a comment line is never counted as another line. In
+  every other case it sees True, whatever values say: the contract mapping is copied as a plain dict and the copy's
+  owner_kept_act is set to True, so what is tested is what derive_inputs reads, the caller's mapping is not changed and
+  no refusal is added; a contract that is not a plain dict is passed on as before and derive_inputs refuses it. The
+  rule is textual: it reads lines, not YAML, so a line inside a multi-line quoted scalar that reads exactly
+  owner_kept_act: false at column 0 counts as that line. The reason: a False
   that the approved contract does not carry never reaches the governor. The bytes read are the ones the caller gives,
   checked first against the approved contract_hash; a run-made contract's approval refusal and the run's path
   refusal remain the first filters. Only owner_kept_act is bound: the other values fields stay caller data (D-633
@@ -347,25 +355,45 @@ def event_id_of(task_id, setter, record_ids):
     return hashlib.sha256('\n'.join([ID_PREFIX, task_id, setter] + sorted(record_ids)).encode('utf-8')).hexdigest()
 
 
+# TASK-128 (the review findings of D-5559): the characters that make the contract text not false: a byte-order mark, a
+# carriage return and the control characters (the set the contract reader refuses), U+2028 and U+2029, and the
+# zero-width and direction marks U+200B to U+200F and U+2060.
+_NOT_FALSE_CHARS = re.compile('[\r\x00-\x09\x0b-\x1f\x7f\x80-\x9f' + chr(0xfeff) + chr(0x2028) + chr(0x2029) + chr(0x200b)
+                              + '-' + chr(0x200f) + chr(0x2060) + ']')
+# A line that holds the key under another spelling: after spaces, quote characters and a question mark, any case. A
+# line that begins with a number sign never matches, so a comment is not another line.
+_KEY_LINE = re.compile('[\\s"\'?]*owner_kept_act', re.IGNORECASE)
+
+
 def _says_false(contract_bytes):
-    """TASK-128: true only when the contract text holds exactly one line equal to owner_kept_act: false at column 0 and
-    no other line that begins with owner_kept_act (any case, any spacing); bytes that are not UTF-8 are not false."""
+    """TASK-128: true only when the contract text holds exactly one line equal to owner_kept_act: false at column 0, no
+    other line that holds the key (any case, any spacing, a quote or a question mark before it; a comment line does not)
+    and none of the characters of _NOT_FALSE_CHARS; bytes that are not UTF-8 are not false. The rule is textual: it
+    reads lines, not YAML."""
     try:
-        lines = contract_bytes.decode('utf-8').split('\n')
+        text = contract_bytes.decode('utf-8')
     except UnicodeDecodeError:
         return False
+    if _NOT_FALSE_CHARS.search(text):
+        return False
+    lines = text.split('\n')
     exact = [ln for ln in lines if ln == 'owner_kept_act: false']
-    other = [ln for ln in lines if ln != 'owner_kept_act: false' and ln.strip().lower().startswith('owner_kept_act')]
+    other = [ln for ln in lines if ln != 'owner_kept_act: false' and _KEY_LINE.match(ln)]
     return len(exact) == 1 and not other
 
 
 def _bind_owner_kept(vals, contract_bytes):
-    """TASK-128: vals itself, or a copy whose contract mapping holds owner_kept_act True when values say False and the
-    approved bytes do not say false; no mapping of the caller's is changed."""
+    """TASK-128: vals itself when its contract is not a plain dict (derive_inputs then refuses it as before), else a copy
+    of vals whose contract is a plain dict copy of the caller's, with owner_kept_act True when that copy holds the key
+    and the approved bytes do not say false; so what is tested is what derive_inputs reads, and no mapping of the
+    caller's is changed."""
     c = vals.get('contract')
-    if isinstance(c, dict) and c.get('owner_kept_act') is False and not _says_false(contract_bytes):
-        return dict(vals, contract=dict(c, owner_kept_act=True))
-    return vals
+    if not isinstance(c, dict):
+        return vals
+    plain = dict(c)
+    if 'owner_kept_act' in plain and not _says_false(contract_bytes):
+        plain['owner_kept_act'] = True
+    return dict(vals, contract=plain)
 
 
 def evaluate_task(root, repo, task_id, contract_bytes, declared, values, extra_records, recorder, now,
