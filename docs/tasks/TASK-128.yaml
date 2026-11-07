@@ -1,0 +1,97 @@
+# Task contract TASK-128 (DRAFT r1 for approval; D-5304 C2 prerequisite 3: DEF-0116 with DEF-0117, the run-made contract conversion task; plan D-5525, Part B changed to option (d3) by D-5526; session d01f63a5, 2026-11-07). Drafted in the scratchpad by Write (the form of docs/tasks/TASK-127.yaml, whose text it follows; not a cp -n and Edit copy: disclosed at D-5526); whether this text is approved is recorded only in the decision agent's decision that names its SHA-256, not in this file. The worker's own claim until checked.
+# Why: DEF-0116: `aieos run --class decision_agent --owner-kept-act false` is refused by path for .github/, the measurement protocol and the measurements folder only (launcher.py:1893-1911); it is not refused for AIEOS-concept.md, docs/pre-genesis/decision-matrix.md, docs/pre-genesis/constitution.md, CLAUDE.md or a path under .claude/. DEF-0117 first gap: no code makes the governor's owner_kept_act input depend on the approved contract bytes; evaluate_task takes values as caller data (evaluation.py:61-64, D-633 C1) and governor.py:586 reads `kept = contract['owner_kept_act'] is not False`, so the owner routing of a run-made contract rests only on the gap, which is not a control (DEF-0117:7, :11).
+# Not in this task: the second gap of DEF-0117 (statements by act and not by path: concept errata, CR-002 part 4 limits 5 and 8 outside the path rules; they stay with the approver), any change to the governor's own logic (governor.py), to the CI's path rules or workflows, to cli.py, writer.py, gitread.py or base_inputs.py, to any spec or doc or DEF file (the DEF-0116 and DEF-0117 Log lines, statuses and bullets are changed at acceptance by the records change-set), the other values fields (they stay caller data, D-633 C1), the runtime starter (a2, D-5304 C2 item 6, DM A75).
+# Risk, change class: high, as TASK-125 to TASK-127 (launcher.py and evaluation.py are gate files; the change class is critical_cr because the CI's EVALUATOR list holds src/aieos_bootstrap/** and the tests folders).
+# RULED POINTS (D-5526): (1) owner_kept_act of this contract is false (D-5526 Q4: Part B only makes the governor's owner-kept input stricter; it changes neither governor.py nor any spec, the delegation, the measurement protocol, credentials or money, and raises no autonomy level, so A51 item (4) and A54 point 2 are not touched). (2) Part B is option (d3): bytes not saying exactly `owner_kept_act: false` give the governor owner-kept True, with no new refusal; option (d) (a refusal) was dropped because every existing evaluate_task route whose bytes lack the line, the conformance runner's call included (conformance.py:1456, ADV-02: tests/conformance/fixtures_cb/adv_02.py:417 and :507), would refuse. The scratch experiment of (d3) (a clone at 03a02fa5, evaluation.py edited in the clone only, never committed or pushed) ran the six slices of the suite before and after: 892, 644, 582, 469, 223 and 219 tests, 0 failures and 0 errors both times (3029 tests), so no existing test and no conformance-runner test (test_runner_cb*, test_conformance_*) changes result and the write set holds no test file beyond the two named for new tests. (3) Specification 2 section 6.5 (spec-02:218-221) and conformance-files.md section 11 state no caller-data limit (a Grep of docs/specs and docs/pre-genesis at 03a02fa5 finds none); the limit is stated in evaluation.py:61-64, TASK-027.yaml:315 and DEF-0055:15, so no specification change comes first, and DEF-0055's carried-limit line is noted by the records change-set at acceptance.
+task: TASK-128
+contract_version: v1
+task_type: implementation
+objective: >-
+  Part A (DEF-0116). In src/aieos_bootstrap/launcher.py extend `_run_statement_findings` so that the statement owner_kept_act false (decision_agent only) is also refused, with the reason argument and a finding that names the path class, for a write path that, compared after lower-casing (as the existing three are) and after the same normalisation the function already applies (none beyond lower-casing; the contract says below how other forms are handled), is equal to `aieos-concept.md`, `docs/pre-genesis/decision-matrix.md`, `docs/pre-genesis/constitution.md` or `claude.md`, or whose first segment is `.claude`; the existing three refusals are kept unchanged and keep their finding text. A write path in the form `./x`, with a backslash, or with a trailing slash is NOT normalised by this task; each is named as a limit in the docstring (a write path in such a form is refused earlier or elsewhere by the launch reader and `_run_path_ok`, whose behaviour is not changed). Tests: one test per path and per case form (all upper case, mixed case) in tests/unit/test_cli_launch.py or the test file of the run command where `_run_statement_findings` is tested.
+  Part B (DEF-0117 first gap, option (d3) of D-5526). In src/aieos_bootstrap/evaluation.py, in `evaluate_task`, after the contract bytes are checked against the approved contract_hash (the step 'contract', evaluation.py:361-363) and before governor.derive_inputs is called, bind the governor's owner_kept_act input to those bytes, failing closed: let SAYS_FALSE be true only when the contract text, split at LF, holds exactly one line equal to `owner_kept_act: false` at column 0 and no other line that begins with `owner_kept_act` (any case, any spacing, a duplicate or a differently spelled key means "not false"), and any decode or parse failure means "not false". When SAYS_FALSE is not true, the governor's owner_kept_act input is True whatever values say; this is done on a copy that is passed to derive_inputs, and the caller's values mapping is not changed. When SAYS_FALSE is true, the governor sees what values say. There is no new refusal: the binding sits inside the existing try around derive_inputs, so any exception in it gives the existing `values` refusal (fail closed). The binding covers owner_kept_act only; the other values fields stay caller data (D-633 C1), named in the docstring as a limit.
+  Tests (Part B) in tests/unit/test_evaluation.py: an exact `owner_kept_act: false` line with values False (the governor, real or stand-in, sees False); values True with bytes false (the governor sees True); for each not-false variant of the bytes with values False (the key missing, a duplicate key, a case variant, a spacing variant: a leading space, a space before the colon, a CRLF line end, a tab, and bytes that are not UTF-8) the governor receives owner_kept_act True and the call is not refused for that reason; the caller's values mapping is unchanged after the call.
+traces_to:
+  - docs/Deferred/DEF-0116-the-false-owner-kept-act-statement-is-refused-by-path-only.md
+  - docs/Deferred/DEF-0117-the-conversion-gap-of-the-owner-kept-act-field-for-run-made-contracts.md
+input_state:
+  # base_commit is the head of main when the contract is approved (now 03a02fa5412ad16b2192aabce2ae1494b787614c, the TASK-127 records commit, on main and origin/main); the executor refuses unless it equals HEAD, refs/heads/main and refs/remotes/origin/main.
+  base_commit: 03a02fa5412ad16b2192aabce2ae1494b787614c
+  depends_on: [TASK-127]
+  intent_versions:
+    # sha256 of each file at base_commit, computed by script from main (iv_t128.sh; its raw output iv_t128_out.txt; the rule of TASK-114 :22).
+    src/aieos_bootstrap/launcher.py: cc4e8e8c03e424e113833c11f1ba22fe90e904bfcbd2572661c416ccf6c91f1a
+    src/aieos_bootstrap/evaluation.py: 87757bb02117bf3e00bf26082e50b4abe09aea99b6f3a0022ce463160124df24
+    tests/unit/test_cli_launch.py: 1f04d055cf88c08aa58e8a1f652c0b430e00209629c4dc9645378e45d2744082
+    tests/unit/test_evaluation.py: b63db497998ee589a1550e1899ceee35ec2ad559467cc53c4dfe00fd2ff4d272
+    docs/specs/spec-02-aieos-file-format.md: ab56bc5a7be484663d188f984f4946450de5306bf1839401799fdb4172143b15
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/Deferred/DEF-0116-the-false-owner-kept-act-statement-is-refused-by-path-only.md: 1ebbb8c0e34a25bdb373d648bc1920af2f870cadc661e9de37551983f6b8d397
+    docs/Deferred/DEF-0117-the-conversion-gap-of-the-owner-kept-act-field-for-run-made-contracts.md: cb9512048dfa2cb362bade9c991fdd4ca0cbfd3567df0d526dd1be344b12d9ec
+    docs/tasks/TASK-127.yaml: b9844c4de0ab42b1f5fd48f01c9b608b80e2d651391206daff6c873103597485
+write_set:
+  paths:
+    - src/aieos_bootstrap/launcher.py
+    - src/aieos_bootstrap/evaluation.py
+    - tests/unit/test_cli_launch.py
+    - tests/unit/test_evaluation.py
+read_set: {paths: [docs/plan/, docs/specs/, docs/Deferred/, docs/pre-genesis/, src/aieos_bootstrap/, tests/, .github/workflows/], interfaces: [], schemas: []}
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - docs/**
+  - src/aieos_bootstrap/cli.py
+  - src/aieos_bootstrap/writer.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - tests/conformance/**
+  - tests/run_tests.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      Part A, the paths. `_run_statement_findings(source_class, write, owner_kept_act)` with owner_kept_act the text false and source_class decision_agent returns a finding that begins "argument:" and names the refused class for a write path equal to aieos-concept.md, docs/pre-genesis/decision-matrix.md, docs/pre-genesis/constitution.md or claude.md, or whose first segment is .claude, compared after lower-casing (so AIEOS-concept.md, DOCS/PRE-GENESIS/Decision-Matrix.md, CLAUDE.md and .Claude/settings.json are refused); the three existing refusals (.github/, the measurement protocol, the measurements folder) and their finding text are unchanged; a path that merely contains one of the names (docs/notes/claude.md.txt, notes/.claude-notes.md) is not refused by the new rule; with owner_kept_act None the function returns [] as before. One test per path and per case form; the existing tests of the function pass unchanged.
+  - AC2: >-
+      Part A, the forms not normalised. The docstring states that a write path written with a leading "./", with a backslash or with a trailing slash is not normalised by this function (each is refused, or not, by the launch reader and `_run_path_ok`, whose behaviour is not changed by this task), and one test shows the actual behaviour for each of the three forms on one new path (for example "./CLAUDE.md": the test pins what the function does today, whichever it is, and the docstring says it).
+  - AC3: >-
+      Part B, the binding (option (d3)). In `evaluate_task`, after the 'contract' step and before derive_inputs: with values['contract']['owner_kept_act'] False, the governor sees False only when the contract bytes hold exactly one line `owner_kept_act: false` at column 0 and no other line beginning `owner_kept_act` (the exact rule of the objective); otherwise it sees True, on a copy, with no refusal for that reason and the caller's values unchanged. Tests: exact false with values False (the governor stand-in or the real governor sees False); values False with bytes true; a missing key; a duplicate key; a case variant (`Owner_kept_act: false`, `owner_kept_act: False`); a spacing variant (a leading space, a space before the colon, two spaces after it, a CRLF line end, a tab); values True with bytes false (the governor sees True); bytes that are not UTF-8 (not false: the governor sees True); the caller's values mapping equal to a deep copy taken before the call.
+  - AC4: >-
+      Part B, the other fields and the docstring. Only owner_kept_act is bound; the docstring's limit (evaluation.py:61-64) is amended to say so in plain words (the other values fields stay caller data, D-633 C1) and to say what the binding does and why; no other behaviour of evaluate_task changes (a test per untouched path of the existing suites passes unchanged except where AC5 says); governor.py is unchanged.
+  - AC5: >-
+      The existing tests. The routes to evaluate_task in the existing tests are tests/unit/test_evaluation.py, test_evaluation_failed.py, test_evaluation_repeated.py, test_evaluation_violation.py, tests/property/test_evaluation_properties.py, tests/integration/test_evaluation_repo.py (it reads docs/tasks/TASK-026.yaml, whose line 354 says owner_kept_act: false, so it is not affected) and, through the conformance runner (src/aieos_bootstrap/conformance.py:1456, the ADV-02 fixture tests/conformance/fixtures_cb/adv_02.py), tests/unit/test_runner_cb.py, tests/property/test_runner_cb_properties.py and tests/integration/test_runner_cb_run.py. The scratch experiment of option (d3) in a clone at 03a02fa5 (evaluation.py edited in the clone only) ran the six slices of the suite before and after (892, 644, 582, 469, 223 and 219 tests, 0 failures and 0 errors both times): no existing test changes result, so no existing test is amended by this task, and none is deleted or weakened. The conformance files and src/aieos_bootstrap/conformance.py stay forbidden; if the build shows that any conformance case or file must change, the task stops and the finding comes back to the decision agent before anything else, and it is not done in this task.
+  - AC6: >-
+      Purity and tests (INV-001, INV-002, INV-004). No new import in a changed src file beyond those already present (evaluation.py: hashlib is imported); no new process form, clock read or file access; the directory's name appears as a string in no changed src file; the new docstring sentences use none of MEASURED, ENFORCED and GUARANTEED and no string constant in a changed src file is exactly "valid", "accepted" or "approved"; every new test's docstring begins with the task id of the test file's own convention plus "(amended by TASK-128 ACn)" where the module's rule requires it; no test runs git init or a subprocess or touches this repository's real state; the whole suite passes locally (`timeout 110 python tests/run_tests.py < /dev/null`, in slices if it does not finish) and on the CI. The risk class is high; the evidence profile is that of assurance-model section 5 for high, as for TASK-125 to TASK-127 (unit_test, integration_test, deterministic_rule, static_security_analysis, ai_review cross-model by a pair of reviews on Haiku 5.5 and a per-article review, a separate decision_agent_review, and the profile's other entries); the expected governor shadow result at the GOV-003 row is a stated departure as in TASK-125 to TASK-127 (the change class is critical_cr). The raw output of the step 'GOV-003 base tests (report only)' of the task-branch run is brought at acceptance with each base-test failure named. The first run is on the task branch.
+  - AC7: >-
+      Limits. No change to governor.py, base_inputs.py, cli.py, writer.py, gitread.py, the conformance runner or fixtures, the hook, the workflows, any spec or doc, any DEF file (the DEF-0116 and DEF-0117 Log lines, statuses and bullets are changed at acceptance by the records change-set; DEF-0116 can close if Part A lands, DEF-0117 stays open for its second gap unless the decision agent rules otherwise); no launching of a runtime; no change to the autonomy level or the measurement protocol. Stated limits in the docstrings in plain words: the second gap of DEF-0117 (statements by act and not by path) is not closed and stays with the approver; the other values fields stay caller data; the binding reads the bytes of the contract the caller gives, which are checked against the approved contract_hash first; a run-made contract's approval refusal (launcher.py:1556) and the run's path refusal remain the first filters; the path refusal of Part A is by path only and not by act.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [src/aieos_bootstrap/launcher.py, src/aieos_bootstrap/evaluation.py, tests/unit/test_cli_launch.py, tests/unit/test_evaluation.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1200k, wall_time: 8h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6]}
+  - {gate: G3, check: constitution, args: [AC5, AC6, AC7, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts AND the aieos-checks and aieos-native runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false: ruled at D-5526 Q4 (Part B only makes the governor's owner-kept input stricter; no governor, spec, delegation, measurement protocol, credential or money change; no autonomy level raised).
+owner_kept_act: false
