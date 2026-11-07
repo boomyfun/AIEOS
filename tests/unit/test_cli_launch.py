@@ -695,5 +695,69 @@ class TASK125StateDir(unittest.TestCase):
             self.assertEqual(launcher._run_path_ok(path), base_run_path_ok(path), path)
 
 
+FOUND_PATTERN = 'contract: a write-set path is outside the pattern rule'
+FORMS = ('./x', 'a/./b', '../x', 'a/../b', 'src/../' + STATE_DIR + '/x', './' + STATE_DIR + '/x', STATE_DIR + './x',
+         'a/b./c', 'x.')
+
+
+class TASK126SegmentForms(unittest.TestCase):
+    def test_the_segment_forms_are_refused(self):
+        """TASK-094 AC2 (amended by TASK-126 AC1): a write set with a path that starts with "./", has a segment "." or
+        ".." or has a segment that ends with "." gives reason "contract", the pattern-rule finding, no starter and the
+        contract-failure calls."""
+        for path in FORMS:
+            world = World(contract_at=contract(paths=['src/a.py', path]))
+            out = launch(world)
+            self.assertEqual((out['result'], out['reason'], world.names()), ('refused', 'contract', CONTRACT_ORDER),
+                             path)
+            self.assertIn(FOUND_PATTERN, out['findings'], path)
+            self.assertNotIn('starter', world.names())
+
+    def test_other_write_sets_give_what_they_gave(self):
+        """TASK-094 AC2 (amended by TASK-126 AC1): write sets with none of the new forms give what they gave: the same
+        list and None for the allowed ones, and the same single finding for the refused ones."""
+        for paths in (PATHS, ['docs/x.md'], ['docs/**', 'src/*.py'], [STATE_DIR + 'x/y'], ['x/' + STATE_DIR + '/y'],
+                      ['src/a*/b.py'], ['tests/**/x.py'], ['a-b/c_d.e', 'f/g.h/i.j']):
+            self.assertEqual(launcher._launch_write_set(contract(paths=list(paths))), (list(paths), None), paths)
+        for paths, finding in ((['a b'], FOUND_PATTERN), (['/x'], FOUND_PATTERN), (['x/'], FOUND_PATTERN),
+                               (['x//y'], FOUND_PATTERN), (['*/x'], FOUND_COVER), (['**'], FOUND_COVER),
+                               ([STATE_DIR + '/x'], FOUND_UNDER), ([STATE_DIR.upper()], FOUND_UNDER)):
+            self.assertEqual(launcher._launch_write_set(contract(paths=list(paths))), (None, [finding]), paths)
+
+    def test_the_order_of_the_checks(self):
+        """TASK-094 AC2 (amended by TASK-126 AC2): the pattern rule and the segment forms come first, then a first
+        segment holding "*", then the first-segment test of the state directory."""
+        cases = ((['a b*/x'], FOUND_PATTERN), (['*/../x'], FOUND_PATTERN), (['*./x'], FOUND_PATTERN),
+                 (['./' + STATE_DIR + '/x'], FOUND_PATTERN), ([STATE_DIR + '/./x'], FOUND_PATTERN),
+                 (['*/x'], FOUND_COVER), ([STATE_DIR.upper() + '/x'], FOUND_UNDER))
+        for paths, finding in cases:
+            self.assertEqual(launcher._launch_write_set(contract(paths=list(paths))), (None, [finding]), paths)
+
+    def test_the_helper_and_the_run_path_parity(self):
+        """TASK-094 AC2 (amended by TASK-126 AC3): _segment_forms_ok is true for a path with no refused form and false
+        for each refused form, it is named three times in launcher.py (its definition and its two uses), and
+        _run_path_ok answers as at base for a list of inputs that holds the new forms."""
+        for path in ('src/a.py', 'a.b/c', 'docs/**', STATE_DIR + 'x/y', 'a/' + STATE_DIR + '/x', 'a-b/c_d.e'):
+            self.assertTrue(launcher._segment_forms_ok(path), path)
+        for path in ('', '/x', 'x/', 'x//y', '.', '..', 'a/b ') + FORMS:
+            self.assertFalse(launcher._segment_forms_ok(path), path)
+        text = (SRC / 'launcher.py').read_bytes().decode('utf-8')
+        self.assertEqual(text.count('_segment_forms_ok('), 3)
+        inputs = ['src/a.py', STATE_DIR, STATE_DIR + '/x', STATE_DIR.upper() + '/x', 'a/' + STATE_DIR + '/x',
+                  STATE_DIR + 'x/y', STATE_DIR[:-1] + '/y', '*', 'a/*', '/x', 'x/', 'x//y', 'a/b ', '-', '', 3,
+                  None, 'a.b/c', 'docs/**', STATE_DIR.title() + '/x', STATE_DIR[:2] + STATE_DIR[2:].upper() + '/x'] + list(FORMS)
+        for path in inputs:
+            self.assertEqual(launcher._run_path_ok(path), base_run_path_ok(path), path)
+
+    def test_the_docstring_limit(self):
+        """TASK-094 AC6 (amended by TASK-126 AC5): launcher.py's docstring says since which task the segment forms are
+        refused and that a "*" after the first segment is still allowed, and no longer says that only the first
+        segment is checked."""
+        text = doc('launcher.py')
+        for phrase in ('Since task TASK-126', 'segment forms', 'after the first segment'):
+            self.assertIn(phrase, text)
+        self.assertNotIn('only the first segment is checked', text)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -232,9 +232,11 @@ through gitread" above: the starter does whatever the caller's code does; the co
 BaseException from the starter is re-raised after the end and the handoff. Since task TASK-125 the write set read at
 the grant's head is refused, with reason "contract" and no starter call, when a path has the project-state directory as
 its first segment (compared in any letter case, the name taken from writer.STATE_DIR) or a first segment that holds
-"*", because such a segment may cover that directory. Stated limits: only the first segment is checked; a contract whose
-write set is read at the base by another reader (the hook, base_inputs) is not changed here; the state commit is not
-automated, and the root's state after the check is open (DEF-0101).
+"*", because such a segment may cover that directory. Since task TASK-126 the same refusal, with the finding of the
+pattern rule, applies to the segment forms that `aieos run` refuses (a path that starts with "./", a segment "." or "..",
+a segment that ends with "."), checked before the first-segment rules; a "*" after the first segment is still allowed.
+Stated limits: a contract whose write set is read at the base by another reader (the hook, base_inputs) is not changed
+here; the state commit is not automated, and the root's state after the check is open (DEF-0101).
 
 approval_act (task TASK-096; `aieos approve`, `aieos edit` and `aieos reject`, specification 1 section 12,
 specification 7 section 4) records an approval, a rejection or an edit note of a task's drafted contract version and
@@ -1128,6 +1130,14 @@ def _under_state_dir(path):
     return path.split('/')[0].lower() == writer.STATE_DIR.lower()
 
 
+def _segment_forms_ok(path):
+    """True when the path has none of the refused segment forms: it does not start with "/" or "./", does not end with
+    "/", and has no segment that is empty, "." or ".." or that ends with "." or " "."""
+    if path.startswith(('/', './')) or path.endswith('/'):
+        return False
+    return not any(p in ('', '.', '..') or p.endswith(('.', ' ')) for p in path.split('/'))
+
+
 def _launch_write_set(answer):
     """Step 5: (the write set, None), or (None, findings) for a contract read that does not pass."""
     if not (type(answer) is tuple and len(answer) == 2):
@@ -1144,7 +1154,7 @@ def _launch_write_set(answer):
     if not (type(paths) is list and paths and all(type(p) is str for p in paths)):
         return None, ['contract: the write set is not a non-empty list of str']
     for p in paths:
-        if _LAUNCH_PATH.fullmatch(p) is None or '' in p.split('/'):
+        if _LAUNCH_PATH.fullmatch(p) is None or not _segment_forms_ok(p):
             return None, ['contract: a write-set path is outside the pattern rule']
         if '*' in p.split('/')[0]:
             return None, ['contract: a write-set path may cover the project-state directory']
@@ -1826,10 +1836,7 @@ def _run_path_ok(path):
     "." or " ", not "-", and not under the project-state directory in any case."""
     if not (isinstance(path, str) and _RUN_PATH.fullmatch(path) is not None) or path == '-':
         return False
-    if path.startswith(('/', './')) or path.endswith('/'):
-        return False
-    parts = path.split('/')
-    if any(p in ('', '.', '..') or p.endswith(('.', ' ')) for p in parts):
+    if not _segment_forms_ok(path):
         return False
     return not _under_state_dir(path)
 
