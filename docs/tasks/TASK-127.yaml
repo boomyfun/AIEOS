@@ -1,0 +1,88 @@
+# Task contract TASK-127 (DRAFT r2 for approval; D-5304 C2 item 2: DEF-0101 part (a), the root's state after the session; D-5258 K6 option A; specification 7 revision 12, landed at b389945464a9 (F86); decisions D-5437 to D-5441; session d01f63a5, 2026-11-07). Drafted in the scratchpad; whether this text is approved is recorded only in the decision agent's decision that names its SHA-256, not in this file. Form: TASK-126 (docs/tasks/); the worker's own claim until checked.
+# Why: the launcher reads the root's Git state once, before the grant (the step "root", TASK-109 and TASK-110). That the session leaves the root untouched afterwards is not checked (DEF-0101 :34-35; spec 7 :49). The first real run puts a runtime next to the owner's main checkout. This task adds one more read of the root after the session's end, with the existing check `_root`, so that a launch cannot report "done" over a root that is not clean.
+# Not in this task: the state commit and its automation (option S), the runtime starter (a2, D-5304 C2 item 6, DM A75), an event written to the log for the finding, a new `gitread` form, any change to cli.py, gitread.py, writer.py, the hook, base_inputs.py, the workflows, any spec or doc or DEF file (spec 7 revision 12 is its own change and lands first; DEF-0101's bullet, Log line and "Resume when" are changed at this task's acceptance by the records change-set), a real-repository integration test (withdrawn at D-5439: no test in tests/ runs git init or a subprocess; see AC6), and the other open items of DEF-0101.
+# Risk, change class: high, as TASK-109, TASK-110 and TASK-126 (a launcher gate change; R2 reads src/** and tests/** as medium and R3 cannot be evaluated so it matches every path it could cover); the change class is critical_cr because the CI's EVALUATOR list holds src/aieos_bootstrap/** and the tests folders.
+task: TASK-127
+contract_version: v1
+task_type: implementation
+objective: >-
+  Read the root's Git state once more after the session's end. In src/aieos_bootstrap/launcher.py give `launch_outside` the keyword `read=None`, resolved at the call to `gitread.run` (as `start` resolves its own `read`, launcher.py:622) and checked callable with the other callees (`read=3` gives "refused" with the reason "argument"); `read` is not passed to `begin`. In `_launch_finish`, after the session's end has been made (the end call, and the fallback end through `finish_outside` where it is made) and before the handoff file is written, call `_root(read, root)` once (the same two fixed forms, the configuration read and then the status read, with the state directory left out, nothing new in gitread). A clean root adds the finding "root after: clean". A root that is not clean, a read that is refused, gives no answer or an answer out of form, or a read that raises (any Exception raised within the `_root` call), adds findings that begin "root after:" and, when no earlier reason is set, sets the reason "root after" (added at the end of launcher.LAUNCH_REASONS), so that the result is "refused"; the end and the handoff are made as before whatever the read finds, and the read never stops the end, the handoff or the return. The after-read is made in every case in which the end is made after a grant (the normal path, the path in which the starter raised, the unreadable write set, and the granted answer out of form with a string session id) and never when nothing was granted or an argument is refused. The directory's name is never written as a literal in src (writer.STATE_DIR only). Tests are added to tests/unit/test_cli_launch.py, where launch_outside is tested.
+traces_to:
+  - docs/Deferred/DEF-0101-the-launchers-open-requirements-before-a-runtime-is-launched.md
+  - docs/specs/spec-07-cli-and-zero-friction-path.md#5
+input_state:
+  # base_commit is the head of main when the contract is approved (now b389945464a9475796d09004de6648d82a077b17, the spec 7 revision 12 and F86 commit, on main and origin/main); the executor refuses unless it equals HEAD, refs/heads/main and refs/remotes/origin/main.
+  base_commit: b389945464a9475796d09004de6648d82a077b17
+  depends_on: [TASK-126]
+  intent_versions:
+    # sha256 of each file at base_commit, computed by script from main (the rule of TASK-114 :22).
+    src/aieos_bootstrap/launcher.py: ef4d5d486d301ad4b17446782288181506fe3d1a14b70baf076dca366cad3b9d
+    tests/unit/test_cli_launch.py: b91eda26c82bf162aedd8861f9d41c5bd46de4337bc4d1be005f4716638c23eb
+    docs/specs/spec-07-cli-and-zero-friction-path.md: d633ad8e918efae41487e53b6e026965f74dd9647d3b2ee0a640fc938e50bfed
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/Deferred/DEF-0101-the-launchers-open-requirements-before-a-runtime-is-launched.md: b94ad3283981f274c702de7c8e0f37630e04a4e9f85697c2e116ea9ee109e5ba
+    docs/tasks/TASK-126.yaml: 185f05e243839861b38bf42378be667c305e7cb44ae782cf3d308ab7de717870
+write_set:
+  paths:
+    - src/aieos_bootstrap/launcher.py
+    - tests/unit/test_cli_launch.py
+read_set: {paths: [docs/plan/, docs/specs/, docs/Deferred/, docs/pre-genesis/, src/aieos_bootstrap/, tests/, .github/workflows/], interfaces: [], schemas: []}
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - docs/**
+  - src/aieos_bootstrap/cli.py
+  - src/aieos_bootstrap/writer.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - tests/conformance/**
+  - tests/property/**
+  - tests/integration/**
+  - tests/run_tests.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The keyword. `launch_outside(root, task_id, clock, starter, begin=None, contract_at=None, finish=None, finish_outside=None, write_handoff=None, base='main', read=None)`; a `read` that is neither None nor callable gives "refused" with the reason "argument" and a finding naming `read`, before the clock and `begin` are called (test: `dict(read=3)` added to the wrong-arguments test as a pure addition); with no `read` the default is `gitread.run`, looked up at each call (the defaults test patches `gitread.run` and checks the stand-in is the one called); `read` is not passed to `begin` (the begin keyword record stays `[{'base': 'main'}]`, test_cli_launch.py:145); `launcher.LAUNCH_REASONS` ends with "root after" and keeps its seven earlier values in their order; cli.py is unchanged (its form check accepts a non-done result whose reason is in LAUNCH_REASONS).
+  - AC2: >-
+      The after-read, clean. On a grant with a clean root (the fake `read` answers the config form and the status form in the existing mapping form `{exit, out (bytes), err, error}` with an empty configuration list and an empty status), the result stays "done", `findings` holds "root after: clean", and the callee calls are exactly as before (ORDER and CONTRACT_ORDER are unchanged: the fake read records into its own list, not into `world.calls`); a dedicated test records finish, the read and write_handoff into one shared sequence and checks: the end, then the configuration read and the status read, then the handoff.
+  - AC3: >-
+      The after-read, not clean. Each of these answers gives findings that begin "root after:", the reason "root after", the result "refused", the end and the handoff made as before, and an earlier reason is not overwritten (a starter that raised keeps "run"; an end that was not done keeps "end"): an untracked line, a tracked-edit line, a configuration key `filter.x` or `core.worktree`, exit 128, an `error` set, an answer out of form (a non-bytes `out`, a non-mapping), and a `read` that raises (caught, the try covering the whole `_root` call, so that an Exception from an answer whose own methods raise is caught in the same way, a finding "root after: ..." naming the exception type, the reason set, nothing raised out of `launch_outside`, a BaseException that is not an Exception, raised by `read`, is not caught: the end has been made, no handoff is written and it propagates; this is stated (AC7) and not tested).
+  - AC4: >-
+      The paths. The after-read is made on the normal path, on the path in which the starter raised, on the unreadable-write-set path (the contract path, with `finish_outside`), and on the path of a granted answer out of form with a string session id; it is not made when `begin` does not grant, when an argument is refused, when the clock is bad before the start, and when the granted answer is out of form with a session id that is not a string; a test for each.
+  - AC5: >-
+      The writes of the end. A reading, recorded at acceptance, shows that `end`, `end_outside` and the handoff write nothing in the root outside `writer.STATE_DIR`: launcher.py has no direct file write in them (a Grep of launcher.py for `open(`, `os.path`, `write_text`, `.write(`, `os.replace` and `os.makedirs`, its raw output brought at acceptance), writer.py builds every path under STATE_DIR (writer.py:106 and its joins), and the adapter's end (`adapter.end`, adapter.py) is read for any write (read by the decision agent at D-5441 by Grep: its defaults are writer.release_lease_token and writer.end_session and adapter.py has no direct file write; the acceptance brings the raw Grep again); if it writes in the root outside STATE_DIR, the task stops and comes back to the decision agent.
+  - AC6: >-
+      Purity and tests (INV-001, INV-002, INV-004). The directory's name appears as a string in no changed src file (writer.STATE_DIR only); no new import (gitread is already imported at launcher.py:296); no new process form, clock read or file access beyond `read`; the new docstring sentences use none of MEASURED, ENFORCED and GUARANTEED and no string constant in a changed src file is exactly "valid", "accepted" or "approved"; the pinned phrases of the launcher.py docstring that tests/unit/test_cli_launch.py pins stay (test_the_launcher_docstring), and test_what_launch_outside_names (the ast check of launch_outside and the names beginning `_launch`) holds. The existing tests amended, and only these, each listed in the acceptance: the defaults test (test_cli_launch.py:178-188, it also patches `gitread.run`), the done-path findings assertion (:132, which gains "root after: clean"), the World class (:54-108) and the helper `launch` (:111-115) (a `read` stand-in recording into its own list, passed by keyword), and the callee-name lists of the wrong-arguments test (:198-211, a pure addition); every new test's docstring begins with "TASK-094 ACn (amended by TASK-127 ACm)" so that the module's rule that every test names "TASK-094 AC" holds; no test runs git init or a subprocess or touches this repository's real state; the whole suite passes locally (`timeout 110 python tests/run_tests.py < /dev/null`, in slices if it does not finish) and on the CI. The criterion of D-5438 for an integration test on a temporary real repository is withdrawn (D-5439: no test in tests/ runs git init or a subprocess; that would be a new kind of test with its own risks; the logic is covered by the unit tests with the fake answers of the existing forms), and tests/integration/** is in the forbidden list. The risk class is high; the evidence profile is that of assurance-model section 5 for high, as for TASK-125 and TASK-126 (unit_test, integration_test, deterministic_rule, static_security_analysis, ai_review cross-model by a pair of reviews on Haiku 5.5 and a per-article review, and a separate decision_agent_review, plus the profile's other entries; the integration_test entry is met as TASK-126's acceptance met it, named at this acceptance, or its absence is stated there as a departure); the expected governor shadow result at the GOV-003 row is a stated departure as in TASK-125 AC5 and TASK-126 AC5 (the change class is critical_cr; the acceptance names it). The raw output of the step 'GOV-003 base tests (report only)' of the task-branch run is brought at acceptance with each base-test failure named. The first run is on the task branch.
+  - AC7: >-
+      Limits. No change to cli.py, writer.py, gitread.py, base_inputs.py, the hook, the workflows, any spec or doc, any DEF file or tests/integration/** (DEF-0101's bullet at :34-35, its Log line and its "Resume when" are changed at the acceptance by the records change-set, and spec 7 revision 12 lands before this task's contract is approved); no launching of a runtime; no change to the autonomy level or the measurement protocol. The limits are stated in the launcher.py docstring in plain words: a change made and undone within the session is not seen; a change after the read is not seen; the finding is advisory and no event is written; `aieos end` after a crash makes no read; every limit of the step "root" applies again; an interrupt (a BaseException that is not an Exception) during the after-read propagates after the end and before the handoff, so no handoff is written.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [src/aieos_bootstrap/launcher.py, tests/unit/test_cli_launch.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 6h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC6]}
+  - {gate: G3, check: constitution, args: [AC5, AC6, AC7, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts AND the aieos-checks and aieos-native runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false: the task's acts are edits to one source file and one test file in the write set; it never launches a runtime; A51 item (4) keeps launching with a runtime as A73 sets it.
+owner_kept_act: false
