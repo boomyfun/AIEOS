@@ -923,14 +923,14 @@ class TASK127AfterRead(unittest.TestCase):
 
     def test_the_limits_are_in_the_docstring(self):
         """TASK-094 AC6 (amended by TASK-127 AC7): launch_outside's docstring states the root-after read and its limits
-        in plain words, and uses none of MEASURED, ENFORCED and GUARANTEED."""
+        in plain words, and uses none of the three effect labels (OPS-003; A30)."""
         text = ' '.join(ast.get_docstring(function('launch_outside', 'launcher.py')).split())
         for phrase in ('the root after the session', 'a change made and undone within the session is not seen',
                        'a change after the read is not seen', 'advisory and no event is written',
                        'aieos end after a crash makes no read', 'every limit of the step root applies again',
                        'no handoff is written'):
             self.assertIn(phrase, text)
-        for word in ('MEASURED', 'ENFORCED', 'GUARANTEED'):
+        for word in ('MEASURED', 'ENFORCED', 'GUARANTEED'):  # OPS-003; A30: the labels are named here only to check that they are absent
             self.assertNotIn(word, text)
 
     def test_purity_by_ast(self):
