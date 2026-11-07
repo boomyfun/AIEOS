@@ -9,12 +9,13 @@ its own docstring."""
 
 import ast
 import datetime
+import inspect
 import pathlib
 import unittest
 from collections import OrderedDict
 from unittest import mock
 
-from aieos_bootstrap import base_inputs, claude_code_channel, cli, handoff_file, launcher
+from aieos_bootstrap import base_inputs, claude_code_channel, cli, gitread, handoff_file, launcher
 
 HERE = pathlib.Path(__file__).resolve()
 SRC = HERE.parents[2] / 'src' / 'aieos_bootstrap'
@@ -51,11 +52,26 @@ def handoff(result='written', reason=None, findings=()):
     return {'result': result, 'reason': reason, 'findings': list(findings), 'path': None}
 
 
+def read_answer(out=b'', exit=0, err=b'', error=None):
+    """One answer of gitread.run in the existing mapping form."""
+    return {'exit': exit, 'out': out, 'err': err, 'error': error}
+
+
+def clean_reads():
+    """The two answers of a clean root: an empty configuration list, then an empty status (TASK-127)."""
+    return [read_answer(), read_answer()]
+
+
 class World:
-    """The stand-ins of launch_outside: each records its call in order and gives its answer, or raises."""
+    """The stand-ins of launch_outside: each records its call in order and gives its answer, or raises. The read
+    stand-in (TASK-127) records into its own list, reads, and not into calls; seq holds the callees and the reads in one
+    order."""
 
     def __init__(self, begin=GOOD, contract_at=GOOD, finish=GOOD, finish_outside=GOOD, write_handoff=GOOD,
-                 starter=None, clocks=GOOD):
+                 starter=None, clocks=GOOD, reads=GOOD):
+        self.read_answers = clean_reads() if reads is GOOD else list(reads)
+        self.reads = []
+        self.seq = []
         self.answers = {'begin': granted() if begin is GOOD else begin,
                         'contract_at': contract() if contract_at is GOOD else contract_at,
                         'finish': ended() if finish is GOOD else finish,
@@ -67,8 +83,17 @@ class World:
         self.begin_kwargs = []
         self.handoff_kwargs = []
 
+    def read(self, *args):
+        self.reads.append(args)
+        self.seq.append('read')
+        value = self.read_answers[min(len(self.reads), len(self.read_answers)) - 1]
+        if isinstance(value, BaseException):
+            raise value
+        return value
+
     def _give(self, name, args):
         self.calls.append((name, args))
+        self.seq.append(name)
         answer = self.answers[name]
         if isinstance(answer, BaseException):
             raise answer
@@ -110,7 +135,7 @@ class World:
 
 def launch(world, **over):
     kw = {'begin': world.begin, 'contract_at': world.contract_at, 'finish': world.finish,
-          'finish_outside': world.finish_outside, 'write_handoff': world.write_handoff}
+          'finish_outside': world.finish_outside, 'write_handoff': world.write_handoff, 'read': world.read}
     kw.update(over)
     return launcher.launch_outside(ROOT, TASK, world.clock, world.starter, **kw)
 
@@ -129,7 +154,7 @@ class TASK094AC1Composition(unittest.TestCase):
         self.assertEqual((out['result'], out['reason'], out['session_id'], out['run']), ('done', None, SESSION,
                                                                                          'returned'))
         self.assertEqual((out['start'], out['end'], out['handoff']), (granted(), ended(), handoff()))
-        self.assertEqual(out['findings'], ['gone_records: one line', 'end: a line'])
+        self.assertEqual(out['findings'], ['gone_records: one line', 'end: a line', 'root after: clean'])
 
     def test_the_arguments(self):
         """TASK-094 AC1 (amended by TASK-111), as TASK-117 AC3 and TASK-118 AC1 change it: begin, contract_at,
@@ -176,16 +201,17 @@ class TASK094AC1Composition(unittest.TestCase):
         self.assertIsNot(args[0], answer['environment'])
 
     def test_the_callees_default_at_call_time(self):
-        """TASK-094 AC1: with no callee given, the mock.patch.object stand-ins of launcher.start, launcher.end,
-        launcher.end_outside, base_inputs.contract_at and handoff_file.write made after import are the ones
-        called."""
+        """TASK-094 AC1 (amended by TASK-127 AC1): with no callee given, the mock.patch.object stand-ins of
+        launcher.start, launcher.end, launcher.end_outside, base_inputs.contract_at, handoff_file.write and
+        gitread.run made after import are the ones called (the read stand-in twice, in its own list)."""
         world = World()
         with mock.patch.object(launcher, 'start', world.begin), mock.patch.object(launcher, 'end', world.finish), \
                 mock.patch.object(launcher, 'end_outside', world.finish_outside), \
                 mock.patch.object(base_inputs, 'contract_at', world.contract_at), \
-                mock.patch.object(handoff_file, 'write', world.write_handoff):
+                mock.patch.object(handoff_file, 'write', world.write_handoff), \
+                mock.patch.object(gitread, 'run', world.read):
             out = launcher.launch_outside(ROOT, TASK, world.clock, world.starter)
-        self.assertEqual((out['result'], world.names()), ('done', ORDER))
+        self.assertEqual((out['result'], world.names(), len(world.reads)), ('done', ORDER, 2))
 
     def test_none_for_steps_not_reached(self):
         """TASK-094 AC1: a step not reached leaves its key None: a start not granted gives run, end and handoff
@@ -196,11 +222,12 @@ class TASK094AC1Composition(unittest.TestCase):
 
 class TASK094AC2Failures(unittest.TestCase):
     def test_wrong_arguments(self):
-        """TASK-094 AC2: a root not an absolute Windows path, a task_id out of form, a clock or a starter not
-        callable, or a callee neither None nor callable gives "argument" with nothing called."""
+        """TASK-094 AC2 (amended by TASK-127 AC1): a root not an absolute Windows path, a task_id out of form, a clock or
+        a starter not callable, or a callee (the keyword read included) neither None nor callable gives "argument" with
+        nothing called."""
         world = World()
         cases = [dict(root='relative/root'), dict(root=3), dict(task_id='task-1'), dict(clock=None),
-                 dict(starter='x'), dict(begin=3), dict(write_handoff='w')]
+                 dict(starter='x'), dict(begin=3), dict(write_handoff='w'), dict(read=3)]
         for case in cases:
             args = {'root': ROOT, 'task_id': TASK, 'clock': world.clock, 'starter': world.starter}
             callees = {}
@@ -757,6 +784,163 @@ class TASK126SegmentForms(unittest.TestCase):
         for phrase in ('Since task TASK-126', 'segment forms', 'after the first segment'):
             self.assertIn(phrase, text)
         self.assertNotIn('only the first segment is checked', text)
+
+
+READ_FORMS = [list(gitread.CONFIG_LIST), list(gitread.STATUS_HEAD) + [':(exclude)' + STATE_DIR]]
+
+
+class BadAnswer(dict):
+    """An answer of the read whose own method raises."""
+
+    def get(self, *args):
+        raise RuntimeError('an own method')
+
+
+def dirty_reads():
+    """The (name, the answers of the reads) pairs that leave the root not clean."""
+    return [('an untracked line', [read_answer(), read_answer(b'?? new.txt\0')]),
+            ('a tracked edit', [read_answer(), read_answer(b' M src/a.py\0')]),
+            ('a filter key', [read_answer(b'filter.x.clean\nf\0')]),
+            ('core.worktree', [read_answer(b'core.worktree\nC:/x\0')]),
+            ('exit 128', [read_answer(exit=128)]),
+            ('an error', [read_answer(exit=None, error='timeout')]),
+            ('a non-bytes out', [read_answer(out='text')]),
+            ('a non-mapping answer', ['not a mapping']),
+            ('a status out of form', [read_answer(), read_answer(b'?? x')]),
+            ('a read that raises', [RuntimeError('r')]),
+            ('an answer whose own methods raise', [BadAnswer()])]
+
+
+class TASK127AfterRead(unittest.TestCase):
+    def test_the_keyword_and_the_reasons(self):
+        """TASK-094 AC1 (amended by TASK-127 AC1): launch_outside has the keyword read, default None, after base;
+        LAUNCH_REASONS keeps its seven values in order and ends with "root after"; a read neither None nor callable
+        gives "refused" with reason "argument", a finding naming read, and no callee and no read called."""
+        params = list(inspect.signature(launcher.launch_outside).parameters.values())
+        self.assertEqual([p.name for p in params][-2:], ['base', 'read'])
+        self.assertIsNone(params[-1].default)
+        self.assertEqual(launcher.LAUNCH_REASONS, ('argument', 'clock', 'start', 'contract', 'run', 'end', 'handoff',
+                                                   'root after'))
+        for bad in (3, 'x', [], {}):
+            world = World()
+            out = launch(world, read=bad)
+            self.assertEqual((out['result'], out['reason']), ('refused', 'argument'), bad)
+            self.assertIn('argument: read is neither None nor callable', out['findings'])
+            self.assertEqual((world.calls, world.reads), ([], []), bad)
+
+    def test_read_is_not_passed_to_begin(self):
+        """TASK-094 AC1 (amended by TASK-127 AC1): begin gets its eight positional arguments and the one keyword base
+        and no read; by ast the call of begin in launch_outside has the one keyword base."""
+        world = World()
+        launch(world)
+        self.assertEqual((len(world.args('begin')[0]), world.begin_kwargs), (8, [{'base': 'main'}]))
+        calls = [n for n in ast.walk(function('launch_outside', 'launcher.py')) if isinstance(n, ast.Call)
+                 and isinstance(n.func, ast.Name) and n.func.id == 'begin']
+        self.assertEqual([[k.arg for k in c.keywords] for c in calls], [['base']])
+
+    def test_a_clean_root(self):
+        """TASK-094 AC2 (amended by TASK-127 AC2): a clean root gives "done", the finding "root after: clean" after the
+        end's findings, the same callee calls as before, and exactly two reads: the configuration form, then the status
+        form with the state directory excluded."""
+        world = World()
+        out = launch(world)
+        self.assertEqual((out['result'], out['reason'], world.names()), ('done', None, ORDER))
+        self.assertEqual(out['findings'], ['gone_records: one line', 'end: a line', 'root after: clean'])
+        self.assertEqual(world.reads, [(ROOT, READ_FORMS[0], launcher.TIMEOUT), (ROOT, READ_FORMS[1],
+                                                                                 launcher.TIMEOUT)])
+
+    def test_the_read_is_after_the_end_and_before_the_handoff(self):
+        """TASK-094 AC2 (amended by TASK-127 AC2): in one sequence the end comes first (finish, or finish then
+        finish_outside), then the configuration read and the status read, then write_handoff."""
+        world = World()
+        launch(world)
+        self.assertEqual(world.seq[world.seq.index('finish'):], ['finish', 'read', 'read', 'write_handoff'])
+        world = World(finish=ended('refused', 'argument', ('record: not present',)))
+        launch(world)
+        self.assertEqual(world.seq[world.seq.index('finish'):], ['finish', 'finish_outside', 'read', 'read',
+                                                                 'write_handoff'])
+
+    def test_a_root_that_is_not_clean(self):
+        """TASK-094 AC2 (amended by TASK-127 AC3): each of an untracked line, a tracked edit, a configuration key
+        filter.x or core.worktree, exit 128, an error, an answer out of form, a read that raises and an answer whose own
+        methods raise gives "refused", reason "root after", findings that begin "root after:" (none is the clean one),
+        and the end and the handoff made as before and returned."""
+        for name, reads in dirty_reads():
+            with self.subTest(case=name):
+                world = World(reads=reads)
+                out = launch(world)
+                self.assertEqual((out['result'], out['reason'], world.names()), ('refused', 'root after', ORDER), name)
+                self.assertTrue([f for f in out['findings'] if f.startswith('root after:')], name)
+                self.assertNotIn('root after: clean', out['findings'], name)
+                self.assertIn('end: a line', out['findings'], name)
+                self.assertEqual((out['end'], out['handoff']), (ended(), handoff()), name)
+
+    def test_an_exception_of_the_read_is_named(self):
+        """TASK-094 AC2 (amended by TASK-127 AC3): a read that raises, and an answer whose own methods raise, give a
+        "root after:" finding that names the exception type; nothing is raised out of launch_outside."""
+        for reads in ([RuntimeError('r')], [BadAnswer()]):
+            out = launch(World(reads=reads))
+            self.assertTrue([f for f in out['findings'] if f.startswith('root after:') and 'RuntimeError' in f], reads)
+
+    def test_an_earlier_reason_is_kept(self):
+        """TASK-094 AC2 (amended by TASK-127 AC3): a starter that raised keeps "run", an end that was not done keeps
+        "end", a granted answer out of form keeps "start" and a contract failure keeps "contract"; each still adds the
+        root-after finding and makes both reads."""
+        dirty = [read_answer(), read_answer(b'?? new.txt\0')]
+        cases = [(dict(starter=ValueError('s')), 'run'), (dict(finish=ended('refused', 'held')), 'end'),
+                 (dict(begin=granted(fencing_token=None)), 'start'), (dict(contract_at=RuntimeError('c')), 'contract')]
+        for over, reason in cases:
+            world = World(reads=dirty, **over)
+            out = launch(world)
+            self.assertEqual((out['result'], out['reason']), ('refused', reason), over)
+            self.assertTrue([f for f in out['findings'] if f.startswith('root after:')], over)
+            self.assertEqual(len(world.reads), 2, over)
+
+    def test_the_paths_on_which_the_read_is_made(self):
+        """TASK-094 AC4 (amended by TASK-127 AC4): the two reads are made on the normal path, on the path in which the
+        starter raised, on the unreadable-write-set path and on the path of a granted answer out of form with a str
+        session id."""
+        for over in (dict(), dict(starter=ValueError('s')), dict(contract_at=RuntimeError('c')),
+                     dict(begin=granted(fencing_token=None))):
+            world = World(**over)
+            launch(world)
+            self.assertEqual(len(world.reads), 2, over)
+
+    def test_the_paths_on_which_no_read_is_made(self):
+        """TASK-094 AC4 (amended by TASK-127 AC4): no read is made when begin does not grant (not granted, refused, a
+        non-dict, a raise), when an argument is refused, when the clock is bad before the start, and when the granted
+        answer is out of form with a session id that is not a str."""
+        for over in (dict(begin=granted(result='not granted', reason='decision')),
+                     dict(begin=granted(result='refused', reason='head')), dict(begin=['granted']),
+                     dict(begin=RuntimeError('b')), dict(clocks=[RuntimeError('c')]),
+                     dict(clocks=[NOW.replace(tzinfo=None)]), dict(begin=granted(session_id=3))):
+            world = World(**over)
+            launch(world)
+            self.assertEqual(world.reads, [], over)
+        world = World()
+        launch(world, base='bad base!')
+        self.assertEqual((world.calls, world.reads), ([], []))
+
+    def test_the_limits_are_in_the_docstring(self):
+        """TASK-094 AC6 (amended by TASK-127 AC7): launch_outside's docstring states the root-after read and its limits
+        in plain words, and uses none of MEASURED, ENFORCED and GUARANTEED."""
+        text = ' '.join(ast.get_docstring(function('launch_outside', 'launcher.py')).split())
+        for phrase in ('the root after the session', 'a change made and undone within the session is not seen',
+                       'a change after the read is not seen', 'advisory and no event is written',
+                       'aieos end after a crash makes no read', 'every limit of the step root applies again',
+                       'no handoff is written'):
+            self.assertIn(phrase, text)
+        for word in ('MEASURED', 'ENFORCED', 'GUARANTEED'):
+            self.assertNotIn(word, text)
+
+    def test_purity_by_ast(self):
+        """TASK-094 AC6 (amended by TASK-127 AC6): no string constant of launcher.py holds the state directory's name or
+        is exactly valid, accepted or approved, and _launch_finish names _root."""
+        tree = ast.parse((SRC / 'launcher.py').read_bytes().decode('utf-8'))
+        strs = [n.value for n in ast.walk(tree) if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+        self.assertEqual([s for s in strs if STATE_DIR.lower() in s.lower()], [])
+        self.assertEqual(set(strs) & {'valid', 'accepted', 'approved'}, set())
+        self.assertIn('_root', used_names(function('_launch_finish', 'launcher.py')))
 
 
 if __name__ == '__main__':

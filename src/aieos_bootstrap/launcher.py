@@ -1070,7 +1070,7 @@ def init_project(root, init_layout=None):
 # ---- launch_outside, `aieos launch` (task TASK-094) ----
 
 LAUNCH_KEYS = ('result', 'reason', 'findings', 'session_id', 'start', 'run', 'end', 'handoff')
-LAUNCH_REASONS = ('argument', 'clock', 'start', 'contract', 'run', 'end', 'handoff')
+LAUNCH_REASONS = ('argument', 'clock', 'start', 'contract', 'run', 'end', 'handoff', 'root after')
 LAUNCH_LEASE = datetime.timedelta(hours=2)
 LAUNCH_ADAPTER = 'claude-code'
 LAUNCH_RECORDER = 'aieos cli launch'
@@ -1078,7 +1078,7 @@ LAUNCH_HOLDER = 'aieos cli launch'
 _LAUNCH_PATH = re.compile(r'[A-Za-z0-9._*/-]+')
 _LAUNCH_FOR = ' for session '
 _LAUNCH_ENVIRONMENT = frozenset({'AIEOS_SESSION_ID', 'AIEOS_ROOT', 'AIEOS_BASE'})
-_LAUNCH_CALLEES = ('begin', 'contract_at', 'finish', 'finish_outside', 'write_handoff')
+_LAUNCH_CALLEES = ('begin', 'contract_at', 'finish', 'finish_outside', 'write_handoff', 'read')
 _LAUNCH_AFTER = ('argument', 'record')
 _LAUNCH_NOT_WRITTEN = "handoff: not written, the session's end was not done"
 _LAUNCH_BAD_CLOCK = 'clock: the clock gave no timezone-aware UTC time with whole seconds'
@@ -1202,6 +1202,17 @@ def _launch_finish(state, clock, finish, finish_outside, write_handoff):
                 ended, done = _launch_end_call(finish_outside, (root, session_id, now2, recorder), findings)
     else:
         ended, done = _launch_end_call(finish_outside, (root, session_id, now2, recorder), findings)
+    try:  # TASK-127: the root read once more after the session's end and before the handoff
+        refused, found = _root(state['read'], root)
+    except Exception as exc:
+        findings.append('root after: reading the root raised %s' % type(exc).__name__)
+        reason = reason or 'root after'
+    else:
+        if refused is None:
+            findings.append('root after: clean')
+        else:
+            findings.extend('root after: %s' % f for f in found)
+            reason = reason or 'root after'
     handoff = None
     if not done:
         reason = reason or 'end'
@@ -1229,7 +1240,7 @@ def _launch_finish(state, clock, finish, finish_outside, write_handoff):
 
 
 def launch_outside(root, task_id, clock, starter, begin=None, contract_at=None, finish=None, finish_outside=None,
-                   write_handoff=None, base='main'):
+                   write_handoff=None, base='main', read=None):
     """Launch one session from outside the runtime (task TASK-094; `aieos launch`, specification 7 :34-35, sections 5
     and 7): start with no tier argument (the tier is the declaration read at the base, TASK-117), on a grant the
     contract's write set at the grant's head, the caller's starter, the
@@ -1238,8 +1249,16 @@ def launch_outside(root, task_id, clock, starter, begin=None, contract_at=None, 
     handoff. The keyword base (task TASK-106; default "main") names the base branch: a base that gitread.is_base_name
     refuses gives "refused" with reason "argument" before the clock and begin are called, and begin is always called with
     base=base by keyword; `aieos launch` passes no base, so the default "main" holds and an option for other bases is
-    open (specification 7 section 10 item 7)."""
-    callees = (begin, contract_at, finish, finish_outside, write_handoff)
+    open (specification 7 section 10 item 7). The keyword read (task TASK-127; default gitread.run, looked up at the
+    call; it is not passed to begin) gives the root after the session: once the session's end has been made and before
+    the handoff, in every case in which the end is made after a grant, the step root is made again with the same two
+    reads. A clean root adds the finding "root after: clean"; any other answer, a read that raises included, adds
+    findings that begin "root after:" and, when no earlier reason is set, the reason "root after", so that the result
+    is "refused"; the end and the handoff are made as before. The finding is advisory and no event is written. The
+    limits: a change made and undone within the session is not seen; a change after the read is not seen; aieos end
+    after a crash makes no read; every limit of the step root applies again; an interrupt (a BaseException that is not
+    an Exception) during the read goes on after the end, so no handoff is written."""
+    callees = (begin, contract_at, finish, finish_outside, write_handoff, read)
     try:
         found = _launch_argument_findings(root, task_id, clock, starter, callees, base)
     except Exception as exc:  # an argument whose own methods raise
@@ -1251,6 +1270,7 @@ def launch_outside(root, task_id, clock, starter, begin=None, contract_at=None, 
     finish = end if finish is None else finish
     finish_outside = end_outside if finish_outside is None else finish_outside
     write_handoff = handoff_file.write if write_handoff is None else write_handoff
+    read = gitread.run if read is None else read
     try:
         now = clock()
     except Exception as exc:
@@ -1278,7 +1298,7 @@ def launch_outside(root, task_id, clock, starter, begin=None, contract_at=None, 
     session_id, token = started.get('session_id'), started.get('fencing_token')
     head, environment = started.get('head_commit'), started.get('environment')
     state = {'root': root, 'task_id': task_id, 'now': now, 'started': started, 'findings': findings, 'reason': None,
-             'run': None, 'write_set': None, 'session_id': session_id, 'token': token, 'recorder': None}
+             'run': None, 'write_set': None, 'session_id': session_id, 'token': token, 'recorder': None, 'read': read}
     if not _launch_grant_in_form(session_id, token, head, environment):
         findings.append('start: the granted answer is out of form')
         if type(session_id) is not str:
