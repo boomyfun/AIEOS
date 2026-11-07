@@ -127,7 +127,7 @@ The rulings, each this task's choice (decisions D-2673, D-2675, D-2681):
 Stated limits: the observed read-set record is written at four call places: end writes it at the normal end and for the
 gone session at the end after a violation or an expiry, with the reads' removal (TASK-089), start's step 1a writes it at
 the next start, before the expiry, for a session gone with no end (TASK-090), and end_outside for `aieos end`; launching
-with a runtime is not before DEF-0101's open points are closed: the untouched-root check after the session (the check before the grant is step 3b) and the declared tier (read at the
+with a runtime is not before DEF-0101's open points are closed: the declared tier (the root is checked before the grant by step 3b and, since task TASK-127, once more after the session by launch_outside; the tier is read at the
 base, unmeasured and advisory: a statement, not a lock; check 0 is made by the Resume Check at every start and the base-tip check by step 3a). The base's limits
 (TASK-106): the hook still makes no check 0 (specification 5 :121; specification 7 revision 5 :49); the base-name rule
 of gitread.is_base_name is stricter than git's own, so a base that git accepts but the rule refuses is refused in step 1
@@ -236,7 +236,7 @@ its first segment (compared in any letter case, the name taken from writer.STATE
 pattern rule, applies to the segment forms that `aieos run` refuses (a path that starts with "./", a segment "." or "..",
 a segment that ends with "."), checked before the first-segment rules; a "*" after the first segment is still allowed.
 Stated limits: a contract whose write set is read at the base by another reader (the hook, base_inputs) is not changed
-here; the state commit is not automated, and the root's state after the check is open (DEF-0101).
+here; the state commit is not automated, and the root's state after the session is read once by launch_outside (task TASK-127; advisory, see its docstring).
 
 approval_act (task TASK-096; `aieos approve`, `aieos edit` and `aieos reject`, specification 1 section 12,
 specification 7 section 4) records an approval, a rejection or an edit note of a task's drafted contract version and
@@ -1257,7 +1257,8 @@ def launch_outside(root, task_id, clock, starter, begin=None, contract_at=None, 
     is "refused"; the end and the handoff are made as before. The finding is advisory and no event is written. The
     limits: a change made and undone within the session is not seen; a change after the read is not seen; aieos end
     after a crash makes no read; every limit of the step root applies again; an interrupt (a BaseException that is not
-    an Exception) during the read goes on after the end, so no handoff is written."""
+    an Exception) during the read is not caught: it escapes from launch_outside after the end, and no handoff is
+    written."""
     callees = (begin, contract_at, finish, finish_outside, write_handoff, read)
     try:
         found = _launch_argument_findings(root, task_id, clock, starter, callees, base)

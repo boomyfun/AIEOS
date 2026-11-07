@@ -875,6 +875,15 @@ class TASK127AfterRead(unittest.TestCase):
                 self.assertIn('end: a line', out['findings'], name)
                 self.assertEqual((out['end'], out['handoff']), (ended(), handoff()), name)
 
+    def test_a_configuration_key_is_refused_before_the_status_read(self):
+        """TASK-094 AC2 (amended by TASK-127 AC3): a configuration key filter.x or core.worktree gives the finding of the
+        key and one read only: the status is not read, although a second answer, a clean status, is given."""
+        for key in (b'filter.x.clean\nf\0', b'core.worktree\nC:/x\0'):
+            world = World(reads=[read_answer(key), read_answer()])
+            out = launch(world)
+            self.assertEqual((out['result'], out['reason'], len(world.reads)), ('refused', 'root after', 1), key)
+            self.assertIn('root after: root: configuration names filter driver or work tree keys: 1', out['findings'], key)
+
     def test_an_exception_of_the_read_is_named(self):
         """TASK-094 AC2 (amended by TASK-127 AC3): a read that raises, and an answer whose own methods raise, give a
         "root after:" finding that names the exception type; nothing is raised out of launch_outside."""
