@@ -183,6 +183,10 @@ Occurrences in session ce14b08a, after the final reply of D-5292 (2026-11-06; ..
 - **D-5288 (decision file lines 77 and 108; checkpoint line 1674, cp494).** The request said that the checkpoint entry cp494 existed when its first append had been refused by the call-form guard (the entry held the word for the interpreter), and its DENIALS part did not name the refusal; the entry was written later in a form without the word. A precondition stated without being checked against the file. The decision agent found it and accepted the rewritten entry under DM A71.
 - **The owner's question about DEF-0059 (checkpoint cp512; DEF-0059:29, decision D-5265).** I told the owner that I had not checked whether the triage handled DEF-0059; the triage had read it and recorded that its Resume-when event occurred (adapter.py:156). I should have grepped the Log before answering; found when the read-only list t144/def_resume_event_list.md was made.
 
+Occurrences in sessions ce14b08a (part 3) and d01f63a5 (2026-11-07; the worker's own claim until checked):
+- **D-5300 (checkpoint a0a0bdef line 1715; D-5300 file line 51).** The memory section and the next prompt of the first final reply said that the first real run needs the owner's launch; under DM A73 (revision 14) launching real tools is the decision agent's to decide, so the statement was wrong; corrected in the second memory section.
+- **D-5373 (checkpoint line 1867, cp687).** The request for D-5373 misstated D-5372 C4 (it said R16 first; C4 said the writer batch first) and said there was no new departure; D-5373 amended C4 and the misstatement was named a departure.
+
 ## Why it happens
 - The same model writes, chooses the evidence and reviews.
 - Counts are typed from memory instead of computed.

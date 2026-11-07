@@ -54,6 +54,10 @@ Occurrences in session ce14b08a, later part (2026-11-06; ../History/2026-11/2026
 Occurrences in session ce14b08a, after the final reply of D-5292 (2026-11-06; ../History/2026-11/2026-11-06-2304-m8-stage-8-the-deferral-controls-and-plan-revision-9-ce14b08a.md; the evidence lines are checkpoint lines and the worker note of D-5287 (the file D-5287-records-of-session-end-d-5286-results-fetch.md); the worker's own claim until checked):
 - cp491 (checkpoint line 1671): the pin of fetch_ff_rec.sh was half-typed from memory ("a6df6cd1...6b7b...", with an invented tail) in a checkpoint entry; the sha256sum value is a6df6cd18eb9ca419c1ab28231c502ba7ad75f2d37dd2511895b875048677b6a (pins_fetch_ff_rec.sum) and cp492 (line 1672) corrects it. No script or request used the wrong value.
 
+Occurrences in sessions ce14b08a (part 3) and d01f63a5 (2026-11-07; the worker's own claim until checked):
+- **D-5356 (checkpoint a0a0bdef lines 1830 and 1839, cp650 and cp659).** The pin hash of the real fast-forward copy was typed in the request (and in cp650) with a wrong end; the decision agent noticed; the value in pins_ff_t125b_real.sum is the right one; cp650 is not edited and cp659 corrects it.
+- **D-5378 (checkpoint file d01f63a5, cp694).** My request quoted the hash of the real writer copy cut off (the request ended it with "e5b3153..." and no more of the 64 characters), and said so in item 6 of the same request; the whole value is in pins_write_5372i_real.sum and the decision agent read it there.
+
 ## Why it happens
 Long hashes and commands are retyped from memory or from a previous message, and the decision agent repeats what the request says; the guard's forbidden forms are not in the decision agent's view.
 

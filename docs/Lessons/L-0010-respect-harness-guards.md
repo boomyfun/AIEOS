@@ -325,6 +325,9 @@ Occurrences in session 43f86835 (2026-11-05; ../History/2026-11/2026-11-05-1258-
 - **2026-11-05 (D-5024).** A one-line Python syntax check of mine (Python's name followed by a dash) was refused before it ran; not retried in any form.
 - **2026-11-05 (D-5032).** The D-4967 pattern once more: a checkpoint append (cp195) whose text quoted the refused form of D-5024 was refused before it ran; the entry was re-written to describe the form and appended before the decision agent was asked (accepted at D-5032).
 
+Occurrence in session ce14b08a (part 3, 2026-11-07; the worker's own claim until checked; checkpoint a0a0bdef lines 1825 and 1827):
+- **D-5355.** A compound command for a counted CI poll was refused by the owner command guard before it ran (rules R2 and R3: an interpreter call with a dash option that I had put into the tail of the command); I did not retry or reword it, and brought it to the decision agent, who ruled it under DM A71 (the refused command is never run again, in whole or in part, in any form; the CI read went on as new commands without an interpreter call).
+
 ## Why it happens
 - An approval in chat is confused with a change in the harness.
 - Retrying is cheap.

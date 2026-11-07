@@ -36,6 +36,9 @@ Session ce14b08a, later part (2026-11-06; ../History/2026-11/2026-11-06-2156-m8-
 - D-5253:16 and :29 (D-5253 C1, D-5254:21): the line-10 comment of the writer copy named lines 13 and 70 as edited, but lines 13 and 70 are identical; a wrong line reference in a comment, corrected before the pin. D-5253 C5 (:61) asked for the occurrence to be recorded; cp441 lists it as owed.
 - D-5260:39: a read-only `git log --since=2026-10-30` over three modules used a date filter that left out TASK-102's own commits of that day; it was not tested against the real list of commits; the range `f25b4576..HEAD` replaced it and printed nothing.
 
+Session d01f63a5 (2026-11-07; checkpoint file d01f63a5, cp692; D-5377; the worker's own claim until checked):
+- D-5377: the first dry run of write_dec_5372_5375h.py stopped on an assert (script line 48) because the assert and the regex on the next line looked for "ID / SUBJECT: next / " while the raw ID line of that hand-back reads "ID / SUBJECT: next free number after D-5373 (the writer assigns it) / ..."; I had written the pattern from the ID field that the scan printed, not from the raw line, and two narrow Grep -o matches on the subagent file found the real line. Nothing was written; the copy i fixed the two patterns and the two record texts that named the ID line (D-5377).
+
 ## Why it happens
 A pattern is written from a look at two or three names, and a comment is written before the last edit of the script; no step runs the pattern against the full listing or the comment against the file.
 

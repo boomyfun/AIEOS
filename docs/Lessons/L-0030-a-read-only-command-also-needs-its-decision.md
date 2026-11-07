@@ -61,6 +61,9 @@ Occurrences in session 43f86835, second part (2026-11-06; ../History/2026-11/202
 - D-5073: I ran the dry copy of a new writer script before the decision agent had released it; it wrote nothing; accepted, with the rule that a dry run of a new script waits for its release.
 - D-5087 step: read-only Bash commands (git log, ls, tail, git show --stat) while I read the forms for the closing drafts, not named one by one.
 
+Occurrences in session d01f63a5 (2026-11-07; checkpoint file d01f63a5, cp689 and the D-5375 request; the worker's own claim until checked):
+- **D-5375, D-5376.** Eight read-only commands before the first request, not named by a decision and disclosed in it: a git rev-parse of HEAD, main and origin/main, a git ls-remote of main, a sha256sum of the decision agent's definition file, two cp -n copies into the scratchpad, one diff and one sha256sum pin. A later date command (for the History file name) and two narrow Greps on a subagent transcript to find a raw ID line (the request of D-5377) were also run without a named decision; read-only.
+
 ## Why it happens
 A read is not felt as an act, and right after a compaction the habits of the call form are weakest.
 

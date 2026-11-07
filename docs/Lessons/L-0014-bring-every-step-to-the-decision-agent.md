@@ -82,6 +82,12 @@ Occurrences in session ce14b08a, after the final reply of D-5292 (2026-11-06; ..
 - Poll 2 of the CI read of a21b4f26 ran 40 s after poll 1, against the 60 s minimum of the reading rule (D-5233 C1, repeated in D-5289 C6): I printed the date and ran the poll anyway (checkpoint line 1681, cp501; D-5290:49 and :96). A departure from a decision's condition, found by me and reported before the decision agent read it; poll 2 was not counted and poll 3 came 67 s after it.
 - The CI log of a21b4f26 was read by Grep and not in full, a second time after D-5283: the request said so before the decision agent read the log (checkpoint line 1683, cp503; D-5290:50 and :97). It recurred because the Read tool refuses chunks over 25000 tokens (450 lines were 31028 tokens) and I took the Grep route again instead of bringing the method to the decision agent first; D-5290 C2 then set the standing log-read method.
 
+Occurrences in sessions ce14b08a (part 3) and d01f63a5 (2026-11-07; ../History/2026-11/2026-11-07-0707-m8-stage-8-tasks-125-and-126-the-launch-reader-segment-forms-and-the-writer-batches-ce14b08a-d01f63a5.md; the evidence lines are checkpoint-file lines and decision-file lines named in each item; the worker's own claim until checked):
+- Early CI lists, a departure from the 60-second minimum of the reading rule: 29 s after poll 1 (checkpoint a0a0bdef line 1824), 57 s after poll 1 (line 1846; D-5364) and 51 s after poll 1 (line 1860; D-5371 C5, "a repeat of the slip of D-5364"); none was counted.
+- D-5370 C3 (checkpoint line 1859; D-5371 C5): the push output was not read whole; the decision agent read all 141 lines.
+- D-5375 C2 (checkpoint file d01f63a5, cp690; D-5376): the exit code of the scan was not printed.
+- D-5378 C2 (cp694, cp695; D-5379): the Grep count of equal lines of the real writer output was not run; the decision agent compared the lines itself.
+
 ## Why it happens
 - Claude treats a step as mechanical (a display, a change of order, a turn end) and does not see it as a decision.
 - The request checklist of the decision agent's definition was not applied before sending.

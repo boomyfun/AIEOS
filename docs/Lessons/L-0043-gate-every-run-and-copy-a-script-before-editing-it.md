@@ -53,6 +53,10 @@ Occurrences in session 43f86835 (2026-11-05; ../History/2026-11/2026-11-05-1258-
 Occurrences in session f348bb86 (2026-11-06; ../History/2026-11/2026-11-06-0904-m8-stage-8-task-124-the-lint-step-built-landed-and-recorded-f348bb86.md; the worker's own claim until checked):
 - D-5189: the first Edit of the real-mode records maker also shortened a padding by one space, which broke the order to leave the rest unchanged; the second Edit restored it before any run.
 
+Occurrences in session ce14b08a (2026-11-06 and 2026-11-07; the evidence lines are checkpoint a0a0bdef lines and decision-file lines named in each item; the worker's own claim until checked):
+- **D-5301 (a0a0bdef lines 1716 to 1718; D-5301 file line 50, D-5302 C4).** The one-line change of the pinned writer write_dec_5298_5300d.py was first made in place with the Edit tool, with no copy first, on the wording of the decision agent's own order; I restored the old line and sha256sum -c of the old pin was OK again; the edited text went to write_dec_5298_5300d_v2.py. The head text of the decision files D-5298 to D-5300 therefore names the wrong parent of the real writer (corrected in the D-5301 worker note).
+- **D-5361 (a0a0bdef line 1841, cp661; D-5360 C1).** The header line of the derived writer for D-5355 to D-5359 (written into all five permanent files) named the d writer while the real copy was the e one; my step from d to e had copied a header that names d; the f writer fixed line 64 only.
+
 ## Why it happens
 A new file has no hash until it exists, so the first run is done before a gate can be written; the Edit tool changes the file in place.
 

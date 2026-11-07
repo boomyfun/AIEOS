@@ -124,6 +124,10 @@ Occurrences in session 43f86835, second part (2026-11-06; ../History/2026-11/202
 Occurrences in session ce14b08a, after the final reply of D-5292 (2026-11-06; ../History/2026-11/2026-11-06-2304-m8-stage-8-the-deferral-controls-and-plan-revision-9-ce14b08a.md; the evidence lines are decision-file lines and checkpoint lines named in each item; main transcript line numbers were not taken; the worker's own claim until checked):
 - The text-block hook refused a Glob call twice, then the call was sent alone (D-5289:132; D-5290 C3), and two Glob calls and one Read call during the D-5291 steps (D-5291:68; checkpoint cp507, line 1687). After D-5293 it refused one more Read and one Grep, each because a sentence of mine stood beside it (checkpoint cp516 names the Read; the Grep is not in a checkpoint entry yet). Each call was resent alone at once; the decision agent accepted the resends under DM A71 (D-5289, D-5291). Several of the sentences answered the app's status request; others were result lines after a run, written out of habit.
 
+Occurrences in sessions ce14b08a (part 3) and d01f63a5 (2026-11-07; the worker's own claim until checked):
+- **Checkpoint a0a0bdef line 1799 (cp619, D-5345 C1).** The text-block hook refused one Read of lines 1 to 10 because a sentence of mine stood beside the call; it was resent alone as lines 1 to 119.
+- **Session d01f63a5 (checkpoint file d01f63a5, cp691, and calls in parallel during the R16 drafts; D-5376, D-5379).** Messages holding more than one tool call: a checkpoint append with an Edit of CKMAX, and two Edits of lesson files in one message (L-0014 with L-0010) during the R16 drafts, and several Read, Grep or Glob calls sent together; no text beside them; nothing wrong was written. The status requests of the app were answered by going on with tool-call-only messages.
+
 ## Why it happens
 The app's request reads as asking for words now, and the worker adds them to the call it is about to send.
 
