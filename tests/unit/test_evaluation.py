@@ -13,6 +13,7 @@ import types
 import unittest
 from unittest import mock
 
+from aieos_bootstrap import base_inputs
 from aieos_bootstrap import evaluation
 from aieos_bootstrap import eventlog
 from aieos_bootstrap import gitread
@@ -731,6 +732,88 @@ class TASK128OwnerKeptBinding(unittest.TestCase):
         r, seen, _, _ = self.go(b'task: TASK-027\nowner_kept_act: false\n# owner_kept_act: false: ruled at D-5526 Q4\n')
         self.assertEqual((r['result'], seen), ('evaluated', [False]), r)
 
+    def check_true(self, forms):
+        """Each form: the contract reader refuses it, the governor sees True with values False, and the evaluation is
+        made."""
+        for form in forms:
+            with self.assertRaises(base_inputs._Stop, msg=form):
+                base_inputs._parse_contract_text(form.decode('utf-8'))
+            r, seen, _, _ = self.go(form)
+            self.assertEqual((r['result'], seen), ('evaluated', [True]), (form, r))
+
+    def test_each_key_form_the_contract_reader_refuses_is_seen_as_true(self):
+        """TASK-027 AC6 (amended by TASK-128 AC3, the review findings of D-5578): an exact line and, in the same text, a
+        second key under a form the contract reader refuses (a double-quoted key with a backslash, a tag, an anchor, an
+        alias key after an anchor line, a flow continuation with a comma, a flow mapping at the top, a document
+        marker) make the contract text not false: the governor sees True with values False."""
+        self.check_true([
+            b'task: TASK-027\nowner_kept_act: false\n"owner\\x5fkept_act": true\n',
+            b'task: TASK-027\nowner_kept_act: false\n!!str owner_kept_act: true\n',
+            b'task: TASK-027\nowner_kept_act: false\n&k owner_kept_act: true\n',
+            b'task: TASK-027\nref: &a owner_kept_act\nowner_kept_act: false\n*a : true\n',
+            b'{ x: 1\nowner_kept_act: false\n, owner_kept_act: true }\n',
+            b'---\nowner_kept_act: false\n',
+            b'task: TASK-027\nowner_kept_act: false\n...\n'])
+
+    def test_an_exact_line_inside_an_unclosed_value_is_seen_as_true(self):
+        """TASK-027 AC6 (amended by TASK-128 AC3, the review findings of D-5578): an exact line that follows a
+        double-quoted value that does not close on its line, or an unclosed flow list, or that sits inside a sequence
+        item's unclosed double-quoted value, is not false: the governor sees True with values False."""
+        self.check_true([
+            b'task: TASK-027\nnote: "x\nowner_kept_act: false\ny"\n',
+            b'task: TASK-027\nx: [\nowner_kept_act: false\n]\n',
+            b'task: TASK-027\nx:\n- "a\nowner_kept_act: false\n  b"\n',
+            b'task: TASK-027\nx:\n- [a,\nowner_kept_act: false\n  b]\n'])
+
+    def test_an_exact_line_after_a_sequence_or_empty_value_out_of_place_is_seen_as_true(self):
+        """TASK-027 AC6 (amended by TASK-128 AC3, the review findings of D-5578): an exact line in a text whose top
+        level is a sequence, with a sequence item that does not follow an empty-value key, after an empty-value key
+        that is not followed by an indented line or a sequence item, after an indented first line, or with a repeated
+        key, is not false: the governor sees True with values False."""
+        self.check_true([
+            b'- a\nowner_kept_act: false\n',
+            b'task: TASK-027\nowner_kept_act: false\n- a\n',
+            b'a:\nowner_kept_act: false\n',
+            b'task:\n  a: 1\n- b\nowner_kept_act: false\n',
+            b' task: TASK-027\nowner_kept_act: false\n',
+            b'task: TASK-027\nowner_kept_act: false\ntask: TASK-028\n',
+            b'task: TASK-027\nowner_kept_act: false\nx:\n',
+            b'task: TASK-027\nowner_kept_act: false\nf: >-\n',
+            b'task: TASK-027\nx:\n- >-\nowner_kept_act: false\n',
+            b'task: TASK-027\nx:\n- k:\nowner_kept_act: false\n'])
+
+    def test_an_exact_line_with_a_plain_value_the_reader_refuses_is_seen_as_true(self):
+        """TASK-027 AC6 (amended by TASK-128 AC3, the review findings of D-5578): an exact line and a plain value that
+        starts with an indicator character, is a dash or starts with a dash and a space, holds a space and a number
+        sign or a colon and a space, or ends with a colon, make the text not false: the governor sees True."""
+        self.check_true([b'task: TASK-027\nowner_kept_act: false\nnote: @x\n',
+                         b'task: TASK-027\nowner_kept_act: false\nnote: -\n',
+                         b'task: TASK-027\nowner_kept_act: false\nnote: - x\n',
+                         b'task: TASK-027\nowner_kept_act: false\nnote: a #b\n',
+                         b'task: TASK-027\nowner_kept_act: false\nnote: a: b\n',
+                         b'task: TASK-027\nowner_kept_act: false\nnote: a:\n'])
+
+    def test_the_forms_the_reader_accepts_leave_the_exact_line_false(self):
+        """TASK-027 AC6 (amended by TASK-128 AC3, the review findings of D-5578): an exact line in a text of the
+        shapes the contract reader accepts (a sequence under an empty-value key, a double-quoted value, a closed flow
+        list, a flow list continued on an indented line, a folded value, an indented block and a comment) stays
+        false: the governor sees False."""
+        text = (b'task: TASK-027\nowner_kept_act: false\nitems:\n- a\n- "b"\n- k: v\nnote: "q"\n'
+                b'flow: [1, 2]\nmulti: [1,\n  2]\nfolded: >-\n  text\n  more\nblock:\n  inner: 1\n# comment\n')
+        base_inputs._parse_contract_text(text.decode('utf-8'))
+        r, seen, _, _ = self.go(text)
+        self.assertEqual((r['result'], seen), ('evaluated', [False]), r)
+
+    def test_a_bytes_subclass_cannot_change_what_is_read(self):
+        """TASK-027 AC6 (amended by TASK-128 AC3, the review findings of D-5578): a bytes subclass whose decode() answers an
+        exact line while its bytes say otherwise (the hash is taken over the bytes): the governor sees True."""
+        class Sly(bytes):
+            def decode(self, *args, **kwargs):
+                return 'owner_kept_act: false\n'
+
+        r, seen, _, _ = self.go(Sly(b'task: TASK-027\n'))
+        self.assertEqual((r['result'], seen), ('evaluated', [True]), r)
+
     def test_the_governor_reads_the_copy_that_was_tested(self):
         """TASK-027 AC6 (amended by TASK-128 AC3, the review findings): a dict subclass whose get() answers True for the
         key while its subscript gives False, with bytes that are not false: the governor receives a plain dict whose
@@ -748,7 +831,7 @@ class TASK128OwnerKeptBinding(unittest.TestCase):
         self.assertIs(contract['owner_kept_act'], False)
 
     def test_a_contract_that_is_not_a_plain_dict_or_lacks_the_key_is_refused(self):
-        """TASK-027 AC6 (amended by TASK-128 AC4): a non-dict mapping holding owner_kept_act False, and a dict without the
+        """TASK-027 AC6 (amended by TASK-128 AC3): a non-dict mapping holding owner_kept_act False, and a dict without the
         key, are passed on as before and derive_inputs refuses them: "refused", reason "values", nothing appended and
         governor.evaluate not called."""
         base = values()['contract']

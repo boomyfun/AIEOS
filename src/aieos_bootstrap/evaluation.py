@@ -66,13 +66,17 @@ Limits (AC13):
   column 0, no other line that begins with owner_kept_act in any case or spacing, after spaces, quote characters and a
   question mark are removed (a duplicate, a case or spacing variant, a quoted or explicit-key spelling, a missing key
   and bytes that are not UTF-8 all count as not false), and none of these characters: a byte-order mark, a carriage
-  return or a control character (U+0000 to U+0009, U+000B to U+001F, U+007F, U+0080 to U+009F, the set the contract
-  reader refuses), U+2028, U+2029, U+200B to U+200F and U+2060; a comment line is never counted as another line. In
-  every other case it sees True, whatever values say: the contract mapping is copied as a plain dict and the copy's
-  owner_kept_act is set to True, so what is tested is what derive_inputs reads, the caller's mapping is not changed and
+  return or a control character (U+0000 to U+0009, U+000B to U+001F, U+007F, U+0080 to U+009F, U+2028 and U+2029,
+  which the contract reader also refuses) and, beyond the reader, U+200B to U+200F and U+2060; a comment line is never counted as
+  another line. In every other case it sees True, whatever values say: the contract mapping is copied as a plain dict
+  and the copy's owner_kept_act is set to True, so what is tested is what derive_inputs reads, the caller's mapping is
+  not changed and
   no refusal is added; a contract that is not a plain dict is passed on as before and derive_inputs refuses it. The
-  rule is textual: it reads lines, not YAML, so a line inside a multi-line quoted scalar that reads exactly
-  owner_kept_act: false at column 0 counts as that line. The reason: a False
+  rule is textual: it reads lines, not YAML, but it mirrors the contract reader's refusals that bear on a column-0 line
+  (a line out of the key form, a document marker, a double-quoted value that does not close on its line or holds a
+  backslash, a flow value left unclosed, a plain value the reader refuses, an empty value or a sequence item out of
+  place, a repeated key), so none of those forms leaves the exact line false. Not mirrored: the refusals on indented
+  lines, the inner form of a flow collection, the indentation of folded scalars, and the size and depth limits. The reason: a False
   that the approved contract does not carry never reaches the governor. The bytes read are the ones the caller gives,
   checked first against the approved contract_hash; a run-made contract's approval refusal and the run's path
   refusal remain the first filters. Only owner_kept_act is bound: the other values fields stay caller data (D-633
@@ -356,8 +360,8 @@ def event_id_of(task_id, setter, record_ids):
 
 
 # TASK-128 (the review findings of D-5559): the characters that make the contract text not false: a byte-order mark, a
-# carriage return and the control characters (the set the contract reader refuses), U+2028 and U+2029, and the
-# zero-width and direction marks U+200B to U+200F and U+2060.
+# carriage return and the control characters (which the contract reader also refuses, as it does U+2028 and U+2029), and,
+# beyond the reader, the zero-width and direction marks U+200B to U+200F and U+2060.
 _NOT_FALSE_CHARS = re.compile('[\r\x00-\x09\x0b-\x1f\x7f\x80-\x9f' + chr(0xfeff) + chr(0x2028) + chr(0x2029) + chr(0x200b)
                               + '-' + chr(0x200f) + chr(0x2060) + ']')
 # A line that holds the key under another spelling: after spaces, quote characters and a question mark, any case. A
@@ -365,16 +369,129 @@ _NOT_FALSE_CHARS = re.compile('[\r\x00-\x09\x0b-\x1f\x7f\x80-\x9f' + chr(0xfeff)
 _KEY_LINE = re.compile('[\\s"\'?]*owner_kept_act', re.IGNORECASE)
 
 
+# TASK-128 (the review findings of D-5578): the contract reader's own forms for a column-0 line, copied as text so that
+# this module does not import the contract reader: a key line, the characters that start no plain scalar, and the bracket and quote count
+# of a flow value.
+_KEY0 = re.compile('([A-Za-z0-9_][A-Za-z0-9_./\\-]*):(?: (.*))?')
+_LEADING0 = '@`%?|>!&*\',[]{}#'
+
+
+def _closed0(text):
+    """True when every bracket and quote opened in text is closed."""
+    depth, quoted = 0, False
+    for ch in text:
+        if quoted:
+            if ch == '"':
+                quoted = False
+        elif ch == '"':
+            quoted = True
+        elif ch in '[{':
+            depth += 1
+        elif ch in ']}':
+            depth -= 1
+    return depth <= 0 and not quoted
+
+
+def _value_in_form(rest, lines, i):
+    """(ok, next line index) for a non-empty value text rest that starts on a column-0 line; lines[i:] follow it. It
+    mirrors the contract reader: a folded marker is fine; a double-quoted value must close on its line, without a
+    backslash and with nothing after it; a flow value must close, its continuation lines being indented and not blank;
+    a plain value must not start with an indicator character, be a dash or start with a dash and a space, hold a space
+    and a number sign or a colon and a space, or end with a colon."""
+    if rest == '>-':
+        j = i
+        while j < len(lines) and lines[j].strip() == '':
+            j += 1
+        return j < len(lines) and lines[j].startswith(' '), i
+    if rest[0] == '"':
+        end = rest.find('"', 1)
+        return end >= 0 and '\\' not in rest[1:end] and not rest[end + 1:].strip(' '), i
+    if rest[0] in '[{':
+        text = rest
+        while not _closed0(text):
+            if i >= len(lines) or lines[i].strip() == '' or not lines[i].startswith(' '):
+                return False, i
+            text += ' ' + lines[i].strip(' ')
+            i += 1
+        return True, i
+    bad = (rest[0] in _LEADING0 or rest == '-' or rest.startswith('- ') or ' #' in rest or ': ' in rest
+           or rest.endswith(':'))
+    return not bad, i
+
+
+def _top_level_in_form(lines):
+    """TASK-128: false when a column-0 line has a form the contract reader refuses: a first content line that is not at
+    column 0 or is a sequence item; a document marker; a line that is not a key line or a sequence item; a repeated key;
+    a key with an empty value not followed by a line indented by 2 or a column-0 sequence item; a sequence item that is
+    not directly after such a key or another item, or that is empty; a value out of form (_value_in_form). Indented
+    lines are skipped: they belong to a block."""
+    lines = list(lines)
+    if lines and lines[-1] == '':
+        lines.pop()
+    first, seen, pending, seq_ok, i = True, set(), False, False, 0
+    while i < len(lines):
+        ln = lines[i]
+        i += 1
+        if ln.strip() == '' or ln.strip().startswith('#'):
+            continue
+        if ln.startswith(' '):
+            if first or (pending and len(ln) - len(ln.lstrip(' ')) != 2):
+                return False
+            if pending:
+                seq_ok = False
+            pending = False
+            continue
+        content = ln.rstrip(' ')
+        if content in ('---', '...'):
+            return False
+        if content == '-' or content.startswith('- '):
+            if first or not (pending or seq_ok):
+                return False
+            item = content[2:].strip(' ')
+            if item == '':
+                return False
+            km = _KEY0.fullmatch(item)
+            if km is not None:
+                rest = (km.group(2) or '').strip(' ')
+                if rest == '':
+                    j = i
+                    while j < len(lines) and (lines[j].strip() == '' or lines[j].strip().startswith('#')):
+                        j += 1
+                    ok = j < len(lines) and lines[j].startswith(' ')
+                else:
+                    ok, i = _value_in_form(rest, lines, i)
+            else:
+                ok, i = _value_in_form(item, lines, i)
+            if not ok:
+                return False
+            pending, seq_ok = False, True
+            continue
+        m = _KEY0.fullmatch(content)
+        if m is None or pending or m.group(1) in seen:
+            return False
+        seen.add(m.group(1))
+        first, seq_ok = False, False
+        rest = (m.group(2) or '').strip(' ')
+        if rest == '':
+            pending, seq_ok = True, True
+            continue
+        ok, i = _value_in_form(rest, lines, i)
+        if not ok:
+            return False
+    return not pending
+
+
 def _says_false(contract_bytes):
     """TASK-128: true only when the contract text holds exactly one line equal to owner_kept_act: false at column 0, no
     other line that holds the key (any case, any spacing, a quote or a question mark before it; a comment line does not)
-    and none of the characters of _NOT_FALSE_CHARS; bytes that are not UTF-8 are not false. The rule is textual: it
-    reads lines, not YAML."""
+    and none of the characters of _NOT_FALSE_CHARS, and every column-0 line in the contract reader's form
+    (_top_level_in_form); bytes that are not UTF-8 are not false. The rule is textual: it reads lines, not YAML, but
+    it mirrors the contract reader's refusals that bear on a column-0 line."""
     try:
-        text = contract_bytes.decode('utf-8')
+        text = bytes.decode(contract_bytes, 'utf-8')
     except UnicodeDecodeError:
         return False
-    if _NOT_FALSE_CHARS.search(text):
+    if _NOT_FALSE_CHARS.search(text) or not _top_level_in_form(text.split('\n')):
         return False
     lines = text.split('\n')
     exact = [ln for ln in lines if ln == 'owner_kept_act: false']
