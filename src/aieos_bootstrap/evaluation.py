@@ -67,18 +67,20 @@ Limits (AC13):
   question mark are removed (a duplicate, a case or spacing variant, a quoted or explicit-key spelling, a missing key
   and bytes that are not UTF-8 all count as not false), and none of these characters: a byte-order mark, a carriage
   return or a control character (U+0000 to U+0009, U+000B to U+001F, U+007F, U+0080 to U+009F, U+2028 and U+2029,
-  which the contract reader also refuses) and, beyond the reader, U+200B to U+200F and U+2060; a comment line is never counted as
-  another line. In every other case it sees True, whatever values say: the contract mapping is copied as a plain dict
-  and the copy's owner_kept_act is set to True, so what is tested is what derive_inputs reads, the caller's mapping is
-  not changed and
-  no refusal is added; a contract that is not a plain dict is passed on as before and derive_inputs refuses it. The
+  which the contract reader also refuses) and, beyond the reader, U+200B to U+200F and U+2060; a comment line is
+  never counted as another line; and the line right after the exact line, if it is not blank, does not start with a
+  space (an indented line there continues the value, so the reader reads a string and not false). In every other case
+  it sees True, whatever values say: the contract mapping is copied as a plain dict and the copy's owner_kept_act is
+  set to True, so what is tested is what derive_inputs reads, the caller's mapping is not changed and no refusal is
+  added; a contract that is not a plain dict is passed on as before and derive_inputs refuses it. The
   rule is textual: it reads lines, not YAML, but it mirrors the contract reader's refusals that bear on a column-0 line
   (a line out of the key form, a document marker, a double-quoted value that does not close on its line or holds a
   backslash, a flow value left unclosed, a plain value the reader refuses, an empty value or a sequence item out of
   place, a repeated key), so none of those forms leaves the exact line false. Not mirrored: the refusals on indented
-  lines, the inner form of a flow collection, the indentation of folded scalars, and the size and depth limits. The reason: a False
-  that the approved contract does not carry never reaches the governor. The bytes read are the ones the caller gives,
-  checked first against the approved contract_hash; a run-made contract's approval refusal and the run's path
+  lines and inside a flow collection, the indentation of folded scalars, and the size and depth limits; bytes that
+  the reader refuses there can still leave the exact line false, and no approved contract carries them. The reason: a
+  False that the approved contract does not carry never reaches the governor. The bytes read are the ones the caller
+  gives, checked first against the approved contract_hash; a run-made contract's approval refusal and the run's path
   refusal remain the first filters. Only owner_kept_act is bound: the other values fields stay caller data (D-633
   C1), and the second gap of DEF-0117, the acts that stay the owner's outside the path rules, stays with the
   approver. This repository's contracts write input_state.intent_versions as path
@@ -360,8 +362,8 @@ def event_id_of(task_id, setter, record_ids):
 
 
 # TASK-128 (the review findings of D-5559): the characters that make the contract text not false: a byte-order mark, a
-# carriage return and the control characters (which the contract reader also refuses, as it does U+2028 and U+2029), and,
-# beyond the reader, the zero-width and direction marks U+200B to U+200F and U+2060.
+# carriage return and the control characters (which the contract reader also refuses, as it does U+2028 and
+# U+2029), and, beyond the reader, the zero-width and direction marks U+200B to U+200F and U+2060.
 _NOT_FALSE_CHARS = re.compile('[\r\x00-\x09\x0b-\x1f\x7f\x80-\x9f' + chr(0xfeff) + chr(0x2028) + chr(0x2029) + chr(0x200b)
                               + '-' + chr(0x200f) + chr(0x2060) + ']')
 # A line that holds the key under another spelling: after spaces, quote characters and a question mark, any case. A
@@ -370,8 +372,8 @@ _KEY_LINE = re.compile('[\\s"\'?]*owner_kept_act', re.IGNORECASE)
 
 
 # TASK-128 (the review findings of D-5578): the contract reader's own forms for a column-0 line, copied as text so that
-# this module does not import the contract reader: a key line, the characters that start no plain scalar, and the bracket and quote count
-# of a flow value.
+# this module does not import the contract reader: a key line, the characters that start no plain scalar, and the
+# bracket and quote count of a flow value.
 _KEY0 = re.compile('([A-Za-z0-9_][A-Za-z0-9_./\\-]*):(?: (.*))?')
 _LEADING0 = '@`%?|>!&*\',[]{}#'
 
@@ -485,8 +487,9 @@ def _says_false(contract_bytes):
     """TASK-128: true only when the contract text holds exactly one line equal to owner_kept_act: false at column 0, no
     other line that holds the key (any case, any spacing, a quote or a question mark before it; a comment line does not)
     and none of the characters of _NOT_FALSE_CHARS, and every column-0 line in the contract reader's form
-    (_top_level_in_form); bytes that are not UTF-8 are not false. The rule is textual: it reads lines, not YAML, but
-    it mirrors the contract reader's refusals that bear on a column-0 line."""
+    (_top_level_in_form), and the line right after the exact line is absent, blank or not indented (an indented line
+    there continues the value, which the reader reads as a string); bytes that are not UTF-8 are not false. The rule is
+    textual: it reads lines, not YAML, but it mirrors the contract reader's refusals that bear on a column-0 line."""
     try:
         text = bytes.decode(contract_bytes, 'utf-8')
     except UnicodeDecodeError:
@@ -496,7 +499,10 @@ def _says_false(contract_bytes):
     lines = text.split('\n')
     exact = [ln for ln in lines if ln == 'owner_kept_act: false']
     other = [ln for ln in lines if ln != 'owner_kept_act: false' and _KEY_LINE.match(ln)]
-    return len(exact) == 1 and not other
+    if len(exact) != 1 or other:
+        return False
+    after = lines[lines.index('owner_kept_act: false') + 1:][:1]
+    return not after or after[0].strip(' ') == '' or not after[0].startswith(' ')
 
 
 def _bind_owner_kept(vals, contract_bytes):

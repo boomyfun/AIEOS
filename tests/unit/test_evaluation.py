@@ -814,6 +814,24 @@ class TASK128OwnerKeptBinding(unittest.TestCase):
         r, seen, _, _ = self.go(Sly(b'task: TASK-027\n'))
         self.assertEqual((r['result'], seen), ('evaluated', [True]), r)
 
+    def test_an_indented_line_right_after_the_exact_line_is_seen_as_true(self):
+        """TASK-027 AC6 (amended by TASK-128 AC3, the review findings of D-5602): an exact line followed directly by an
+        indented line makes the contract reader read the value as the string "false true", so the governor is given
+        True with values False."""
+        text = b'task: TASK-027\nowner_kept_act: false\n  true\n'
+        self.assertEqual(base_inputs._parse_contract_text(text.decode('utf-8'))['owner_kept_act'], 'false true')
+        r, seen, _, _ = self.go(text)
+        self.assertEqual((r['result'], seen), ('evaluated', [True]), r)
+
+    def test_an_exact_line_followed_by_a_blank_line_and_an_indented_comment_stays_false(self):
+        """TASK-027 AC6 (amended by TASK-128 AC3, the review findings of D-5602): an exact line, a blank line, an
+        indented comment and a key leave the text false: the contract reader reads the string false and the governor
+        is given False."""
+        text = b'task: TASK-027\nowner_kept_act: false\n\n  # c\nnext: x\n'
+        self.assertEqual(base_inputs._parse_contract_text(text.decode('utf-8'))['owner_kept_act'], 'false')
+        r, seen, _, _ = self.go(text)
+        self.assertEqual((r['result'], seen), ('evaluated', [False]), r)
+
     def test_the_governor_reads_the_copy_that_was_tested(self):
         """TASK-027 AC6 (amended by TASK-128 AC3, the review findings): a dict subclass whose get() answers True for the
         key while its subscript gives False, with bytes that are not false: the governor receives a plain dict whose
