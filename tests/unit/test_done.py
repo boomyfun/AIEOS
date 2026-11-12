@@ -350,7 +350,7 @@ def purity_findings(source):
             found.append('string ' + node.value)
         if isinstance(node, ast.Assert):
             found.append('assert')
-    for word in ('MEASURED', 'ENFORCED', 'GUARANTEED'):
+    for word in ('MEASURED', 'ENFORCED', 'GUARANTEED'):  # OPS-003; A30: the labels are named here only to check that they are absent
         if word in source:
             found.append('word ' + word)
     return found
@@ -379,7 +379,7 @@ class D7Purity(unittest.TestCase):
         seeds = {'\nopen("x")\n': 'name open', '\ndatetime.datetime.now()\n': 'attribute now',
                  '\nimport subprocess\nsubprocess.run(["x"])\n': 'attribute run', '\nassert True\n': 'assert',
                  '\nX = "accepted"\n': 'string accepted', '\nX = "' + '.aie' + 'os/x"\n': 'string',
-                 '\n# MEASURED\n': 'word MEASURED'}
+                 '\n# MEASURED\n': 'word MEASURED'}  # OPS-003; A30: a seeded label, to check that the check finds it
         for seed, want in seeds.items():
             self.assertTrue(any(want in f for f in purity_findings(base + seed)), seed)
 
