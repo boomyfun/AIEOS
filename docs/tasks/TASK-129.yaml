@@ -1,0 +1,99 @@
+# Task contract TASK-129 (DRAFT r2 for approval; DEF-0118 follow-up 2, the plan that `aieos run` writes for a low contract follows the default plan; plan approved at D-5746, plan file sha256 d50c49ed640a5cbe3b100ac7b261e8a2e3b0184739e69c6f496f687618137c1e; session 7d0b3852, 2026-11-12). Drafted in the scratchpad; whether this text is approved is recorded only in the decision agent's decision that names its SHA-256, not in this file. Form: TASK-127 (docs/tasks/); the worker's own claim until checked.
+# Why: the plan that `aieos run` writes for a low contract names G0 scope, G1 build and G3 review but no lint gate (launcher.py:1827), although the default plan of the low class is G0 scope, G1 build, G2 lint (docs/pre-genesis/conformance-scenarios-initial.md:11; assurance-model.md section 5, line 78) and the CI now produces the lint entry (TASK-124, the step "lint (pyflakes 4.0.3, pinned by version and hash)" at .github/workflows/aieos-checks.yml:1880). Without the gate a run-made low contract cannot show the whole default plan (DEF-0118 :13 and :22; Blocks v0.1: yes; scheduled before the first real run).
+# Not in this task: the drafting plan (`_RUN_DRAFTING`, risk critical, G3 only), `_RUN_TAIL`, the validators (ac_coverage.py, ac_tests.py, conformance.py, governor.py, evaluation.py), the CI and every file under .github/, the records maker's mapping of the lint step to a gate, a probe of the governor with a G2 lint record (D-5746 Q3), what counts as lint for a docs-only change (closed by D-5306, row A76), the re-evaluation of TASK-116 (DEF-0118 :23, a standing condition and not owed work), and any doc, spec or DEF file (DEF-0118's Log line and status are changed at the acceptance by the records change-set, in the Log's numbering of the follow-ups).
+# Risk, change class: high, as TASK-125 to TASK-128 (launcher.py:1821-1829 is the template of every contract `aieos run` writes, and governor.py:426-431 makes each plan gate a required passing CI record); not critical: no governor, secrets or CI change; the change class is critical_cr because the CI's EVALUATOR list holds src/aieos_bootstrap/** and the tests folders.
+task: TASK-129
+contract_version: v1
+task_type: implementation
+objective: >-
+  In src/aieos_bootstrap/launcher.py change the 'gates' text of `_RUN_SINGLE` (line 1827) from
+  "  - {gate: G1, check: build}\n  - {gate: G3, check: review, args: [AC1, AC2]}\n" to
+  "  - {gate: G1, check: build}\n  - {gate: G2, check: lint}\n  - {gate: G3, check: review, args: [AC1, AC2]}\n",
+  so that the plan written for a low contract is G0 scope, G1 build, G2 lint, G3 review over AC1 and AC2 (the lint gate carries no args). Nothing else in launcher.py changes except one comment line naming DEF-0118. In tests/unit/test_cli_run.py add the line "  - {gate: G2, check: lint}" between the G1 and G3 lines at lines 83, 180 and 370, change the docstring of test_the_texts_parse (lines 364-367) from "its G1 and G3 gates" to "its G1, G2 and G3 gates", and add one assertion to test_the_texts_parse: the verification_plan of the mapping that base_inputs._parse_contract_text (the parser the test already calls) gives for the low text holds the gate G2 with the check lint exactly once, and `ac_coverage.check` of that mapping gives no finding.
+traces_to:
+  - docs/Deferred/DEF-0118-the-low-default-evidence-profile-names-a-lint-entry-that-the-ci-does-not-produce.md
+  - docs/pre-genesis/conformance-scenarios-initial.md
+input_state:
+  # base_commit is the head of main when the contract is approved (now c7325dd0cb369f5eb1942065b3a21e5d2799ce2f, the TASK-128 records commit, on main and origin/main); the executor refuses unless it equals HEAD, refs/heads/main and refs/remotes/origin/main.
+  base_commit: c7325dd0cb369f5eb1942065b3a21e5d2799ce2f
+  depends_on: [TASK-128]
+  intent_versions:
+    # sha256 of each file at base_commit, computed by script from main (the rule of TASK-114 :22).
+    src/aieos_bootstrap/launcher.py: e31a80040ed478bf311c202cb3871d79830055c6d0c34ec0be3d67e30acc94bc
+    tests/unit/test_cli_run.py: 010dc6d3148978da5b6e588ef1211efbe79260240635ab0777d4483d1bbbc69e
+    docs/Deferred/DEF-0118-the-low-default-evidence-profile-names-a-lint-entry-that-the-ci-does-not-produce.md: a45de462d9b0986b78eb59fc33a5679593e6e77a4a31dbf202edbde6a1f2f5b2
+    docs/pre-genesis/conformance-scenarios-initial.md: 6b5c0666a1f364f5ecec9ad516c9a749969a1963f4e5dbef566adcbc8c80e24d
+    docs/specs/spec-02-aieos-file-format.md: ab56bc5a7be484663d188f984f4946450de5306bf1839401799fdb4172143b15
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/tasks/TASK-128.yaml: d0b0cb008127539ccb6b949b98201ca3c1c36cabe7aab1cd0cde408e6cfbcd37
+write_set:
+  # the task commit holds these two paths only; the records step (after acceptance) adds docs/Deferred/DEF-0118-...md and docs/records/TASK-129.jsonl (D-5746 plan section 4 item 3 and the records of item 4); this contract, docs/tasks/TASK-129.yaml, is committed on main before the task by its own contract-commit route, each step its own decision, as TASK-128's was (D-5527 C2).
+  paths:
+    - src/aieos_bootstrap/launcher.py
+    - tests/unit/test_cli_run.py
+read_set: {paths: [docs/plan/, docs/specs/, docs/Deferred/, docs/pre-genesis/, src/aieos_bootstrap/, tests/, .github/workflows/], interfaces: [], schemas: []}
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - docs/**
+  - src/aieos_bootstrap/cli.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/writer.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - tests/conformance/**
+  - tests/property/**
+  - tests/integration/**
+  - tests/run_tests.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The low plan. After the change the contract text that `aieos run` writes for the single-task (low) form has, in its verification_plan, exactly these four entries in this order: "  - {gate: G0, check: scope}", "  - {gate: G1, check: build}", "  - {gate: G2, check: lint}", "  - {gate: G3, check: review, args: [AC1, AC2]}"; the lint gate has no args; 'risk' stays "low". The drafting form (`_RUN_DRAFTING`) is byte-for-byte unchanged: its risk stays "critical" and its plan stays G0 scope and G3 review over AC1 to AC4. The change in launcher.py is the one 'gates' string of `_RUN_SINGLE` and one comment line naming DEF-0118; `_RUN_TAIL`, `_RUN_HEAD`, `_run_contract` and every other line are unchanged (the diff is brought at acceptance).
+  - AC2: >-
+      The tests. In tests/unit/test_cli_run.py the three places that hold the gate text (lines 83, 180, 370 at the base commit) gain the line "  - {gate: G2, check: lint}" between the G1 and G3 lines, and the docstring of test_the_texts_parse (lines 364-367) says "its G1, G2 and G3 gates"; these edits, the one new assertion of AC3, the addition of ac_coverage to the module's import from aieos_bootstrap (lines 20-21) and nothing else are the changes to existing tests, each listed at acceptance. No new test file; no test in tests/ runs git init or a subprocess or touches this repository's real state.
+  - AC3: >-
+      The new assertion and the validators. In test_the_texts_parse, for the low text: the verification_plan of the mapping that base_inputs._parse_contract_text gives holds the gate G2 with the check lint exactly once, with no args (task_contract.parse_contract returns no plan, task_contract.py:261-262; its parse still gives no finding, as the existing assertion says); and `ac_coverage.check` of that mapping gives no finding (every AC of the contract is named in the args of G3 review, so the lint gate adds no uncovered or stray_arg finding). A reading, recorded at acceptance, shows that ac_tests.py:173 acts only on a gate G2 whose check is tests, so the lint gate is ignored there (the raw Grep output is brought). If that mapping does not give acceptance_criteria, verification_plan and constitution in ac_coverage's form, the task stops and the finding comes to the decision agent; no src file is changed to fit it.
+  - AC4: >-
+      The record of the lint gate (the statement of D-5746 Q3). No governor, evaluation, conformance or records-maker code is changed by this task. The gate id G2 for the lint step comes from the default plan (conformance-scenarios-initial.md:11); G2 means "tests" in the high contracts (docs/tasks/TASK-128.yaml:91) and "lint" in a low contract, and a low plan has no tests gate, so the two meanings do not meet in one contract. Governor.py:426-431 turns each plan gate into a required passing CI record: the records step of the first real low run must map the CI lint step (aieos-checks.yml:1880) to the gate G2, as the step22 lint record of docs/records/TASK-124.jsonl to TASK-128.jsonl (line 17 of each) does; the proof comes at that first real run and is not required of this task. The acceptance names this statement.
+  - AC5: >-
+      Purity and the suite (INV-001, INV-002, INV-004). No new import, process form, clock read or file access in src; the changed text uses none of the words MEASURED, ENFORCED and GUARANTEED and no string constant in a changed src file is exactly "valid", "accepted" or "approved"; the pinned phrases of the launcher.py docstring and the tests that pin the run text keep passing; the whole suite passes locally (`timeout 110 python tests/run_tests.py < /dev/null`, in slices if it does not finish) and on the CI, and pyflakes (the CI's pinned lint step) is silent on src and tests. The raw output of the full unit suite and of pyflakes is brought unedited. The first run is on the task branch.
+  - AC6: >-
+      Class and evidence. The risk class is high; the evidence profile is that of assurance-model section 5 for high, as for TASK-125 to TASK-128 (unit_test, integration_test, deterministic_rule, static_security_analysis, ai_review by a pair of reviews on Haiku 5.5, labelled same-vendor and not cross-model (D-5746 C3), with the profile's ai_review (cross-model) entry met or stated as a departure at acceptance as for TASK-128, a per-article review, and a separate decision_agent_review, plus the profile's other entries; the integration_test entry is met as TASK-128's acceptance met it, named at this acceptance, or its absence is stated there as a departure); the expected governor shadow result at the GOV-003 row is a stated departure as in TASK-125 to TASK-128 (the change class is critical_cr; the acceptance names it). The raw output of the step 'GOV-003 base tests (report only)' of the task-branch run is brought at acceptance with each base-test failure named.
+  - AC7: >-
+      Limits and the closing of DEF-0118. No change to any file outside the write set; no change under .github/; no docs, spec or DEF file in the task commit. DEF-0118 may be closed only at this task's acceptance: follow-up 1 is done (TASK-124), follow-up 3 of the Log's numbering (what counts as lint for a docs-only change) is closed (D-5306, row A76), and follow-up 2 (this task) is done by it; the acceptance decision must state that bullet 3 of the "Follow-ups owed" list (the re-evaluation of TASK-116 with evidence bound to T b202e609) is a standing condition and not owed work, and the DEF Log line uses the Log's numbering of the follow-ups and names that bullet. If the acceptance does not state this, DEF-0118 stays open with follow-up 2 logged as done. No launching of a runtime; no change to the autonomy level or the measurement protocol.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [src/aieos_bootstrap/launcher.py, tests/unit/test_cli_run.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 6h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC5]}
+  - {gate: G3, check: constitution, args: [AC4, AC5, AC6, AC7, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts AND the aieos-checks and aieos-native runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false: the task's acts are edits to one source file and one test file in the write set; it never launches a runtime; A51 item (4) keeps launching with a runtime as A73 sets it.
+owner_kept_act: false
