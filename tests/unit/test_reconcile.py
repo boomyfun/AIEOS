@@ -800,5 +800,100 @@ class R10Purity(unittest.TestCase):
             self.assertIn(word, doc)
 
 
+def review_decision(rid, commit, task=TASK, **over):
+    """TASK-131: the record the governor writes at L1 after an approval record counts (governor.py:476-482, :497)."""
+    return decision(rid, commit, task, 'NEEDS_REVIEW', **dict({'next_task_state': 'ACCEPTED', 'approval_record': 'ap-1'},
+                                                              **over))
+
+
+def events_of(log):
+    """The log's events in order, as reconcile reads them (records.check_log, ignored duplicates left out)."""
+    report = records.check_log(log.log)
+    assert not report.findings(), report.findings()
+    return [line.event for line in report.lines if line.duplicate_of is None]
+
+
+class R11Accepts(unittest.TestCase):
+    """TASK-131 AC1 and AC3: reconcile.accepts and its use in _done_tasks (DEF-0119, option A)."""
+
+    def test_the_two_accepting_forms_count(self):
+        """AC1: ACCEPT counts; NEEDS_REVIEW with next_task_state ACCEPTED and an approval record counts."""
+        self.assertTrue(reconcile.accepts({'decision': 'ACCEPT'}))
+        self.assertTrue(reconcile.accepts(review_decision('dec-1', cid(2))))
+        self.assertTrue(reconcile.accepts({'decision': 'NEEDS_REVIEW', 'next_task_state': 'ACCEPTED',
+                                           'approval_record': ' a '}))
+
+    def test_every_other_form_does_not_count(self):
+        """AC1: NEEDS_REVIEW staying IN_REVIEW, without an approval record, with an empty, blank or non-string one,
+        and the other decisions, even with next_task_state ACCEPTED or an approval record, do not count; nor does a
+        value that is not a mapping, a missing field or a field of another type."""
+        base = {'next_task_state': 'ACCEPTED', 'approval_record': 'ap-1'}
+        cases = [dict(base, decision='NEEDS_REVIEW', next_task_state='IN_REVIEW'),
+                 {'decision': 'NEEDS_REVIEW', 'next_task_state': 'ACCEPTED'},
+                 dict(base, decision='NEEDS_REVIEW', approval_record=None),
+                 dict(base, decision='NEEDS_REVIEW', approval_record=''),
+                 dict(base, decision='NEEDS_REVIEW', approval_record='   '),
+                 dict(base, decision='NEEDS_REVIEW', approval_record=1),
+                 dict(base, decision='NEEDS_REVIEW', approval_record=['ap-1']),
+                 dict(base, decision='NEEDS_REVIEW', next_task_state=['ACCEPTED']),
+                 dict(base, decision='NEEDS_REVIEW', next_task_state=None),
+                 dict(base, decision='INSUFFICIENT_EVIDENCE'), dict(base, decision='NEEDS_REWORK'),
+                 dict(base, decision='REJECT'), dict(base, decision='accept'), dict(base, decision=['ACCEPT']),
+                 dict(base, decision=None), base, {}]
+        for case in cases:
+            self.assertIs(reconcile.accepts(case), False, case)
+        for value in (None, 'ACCEPT', ['ACCEPT'], 1, ()):
+            self.assertIs(reconcile.accepts(value), False, value)
+
+    def test_a_task_accepted_by_an_approval_record_is_covered(self):
+        """AC1, AC3: a DONE task whose decision record is NEEDS_REVIEW with next_task_state ACCEPTED and an approval
+        record gets its accepted commit, as an ACCEPT record does."""
+        log = Log()
+        log.add('decision.acceptance', review_decision('dec-r', cid(2)), 'acc-r')
+        log.add('task.done', {'decision_record': 'dec-r'}, 'done-r')
+        unc_list = []
+        self.assertEqual(reconcile._done_tasks(events_of(log), unc_list), {TASK: cid(2)})
+        self.assertEqual(unc_list, [])
+
+    def test_the_other_forms_leave_the_task_uncovered_with_the_old_detail(self):
+        """AC1: a record that does not satisfy accepts() leaves the task uncovered, with the detail text of the base
+        commit, and an accepting record without an evaluated_commit still leaves it uncovered."""
+        for over in ({'next_task_state': 'IN_REVIEW'}, {'approval_record': None}):
+            log = Log()
+            log.add('decision.acceptance', review_decision('dec-r', cid(2), **over), 'acc-r')
+            log.add('task.done', {'decision_record': 'dec-r'}, 'done-r')
+            unc_list = []
+            self.assertEqual(reconcile._done_tasks(events_of(log), unc_list), {})
+            self.assertEqual(unc_list, [{'ref': TASK, 'detail': 'decision record dec-r is not an ACCEPT decision'}])
+        log = Log()
+        no_commit = review_decision('dec-n', cid(2))
+        del no_commit['evaluated_commit']
+        log.add('decision.acceptance', no_commit, 'acc-n')
+        log.add('task.done', {'decision_record': 'dec-n'}, 'done-n')
+        unc_list = []
+        self.assertEqual(reconcile._done_tasks(events_of(log), unc_list), {})
+        self.assertEqual(unc_list, [{'ref': TASK, 'detail': 'decision record dec-n has no evaluated_commit'}])
+
+    def test_a_full_run_covers_a_task_accepted_by_an_approval_record(self):
+        """AC1, AC3: reconcile() computes stale evidence for a DONE task whose decision record is NEEDS_REVIEW with an
+        approval record, as it does for an ACCEPT record (test_a_done_task_is_found_and_computed)."""
+        log = Log()
+        log.add('record.added', record('r-' + TASK, cid(2), TASK), 'rec-' + TASK, task_id=TASK)
+        log.add('task.submitted', {'commit': cid(2), 'compensating': False}, 'sub-' + TASK, task_id=TASK,
+                fencing_token=FENCE, lease={'task_id': TASK, 'fencing_token': FENCE, 'expires_at': NOW + H1})
+        log.add('decision.acceptance', review_decision('dec-r', cid(2)), 'acc-' + TASK, task_id=TASK)
+        log.add('task.done', {'decision_record': 'dec-r'}, 'done-' + TASK, task_id=TASK)
+        res = run(log)
+        self.assertEqual(res['result'], 'reconciled', res)
+        self.assertEqual([a[0] for a in log.appends].count('evidence.stale'), 2)
+        self.assertNotIn(TASK, {u['ref'] for u in res['uncovered']})
+
+    def test_the_docstring_names_the_accepting_forms(self):
+        """AC1: the module docstring names accepts() and the NEEDS_REVIEW case and DEF-0119."""
+        doc = ast.get_docstring(ast.parse(MODULE.read_text(encoding='utf-8')))
+        for word in ('accepts()', 'NEEDS_REVIEW', 'next_task_state ACCEPTED', 'DEF-0119'):
+            self.assertIn(word, doc)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -7,8 +7,10 @@ and drift.violations (TASK-030).
 1. Arguments (AC1): every argument is checked before anything is read; a wrong one gives a refusal result.
 2. The log (AC2): read once through writer.read_log and checked by records.check_log. A task is DONE when the log
    holds a task.done event for it; its accepted commit is the evaluated_commit of the decision.acceptance whose
-   record_id is that task.done's decision_record. A decision record that is absent, not an ACCEPT decision or without
-   an evaluated_commit leaves the task uncovered (fail closed). The task's records are its record.added payloads, its
+   record_id is that task.done's decision_record. A decision record that is absent, not an accepting decision
+   (accepts(): ACCEPT, or NEEDS_REVIEW with next_task_state ACCEPTED and an approval_record, which is what the governor
+   writes at L1 after an approval record counts; TASK-131, DEF-0119) or without an evaluated_commit leaves the task
+   uncovered (fail closed). The task's records are its record.added payloads, its
    earlier events its evidence.stale payloads, its submitted commits those of its task.submitted events.
 3. The walk (AC3): from the trigger back along first parents, each commit read once with "cat-file -p" through
    gitread.run and parsed by gitread.parse_commit, its changed paths read with the pinned diff-tree form
@@ -118,6 +120,21 @@ def _commit(value):
     return isinstance(value, str) and _COMMIT.fullmatch(value) is not None
 
 
+def accepts(record):
+    """TASK-131 AC1: whether a decision.acceptance payload is an accepting record for coverage (DEF-0119, option A):
+    its decision is ACCEPT, or its decision is NEEDS_REVIEW with next_task_state ACCEPTED and an approval_record that is
+    a string with a non-space character (governor.py writes exactly that when a re-evaluation finds an approval record
+    that counts). Pure and total: any other value, a missing field or a field of another type gives False."""
+    if not isinstance(record, dict):
+        return False
+    decision = record.get('decision')
+    if decision == 'ACCEPT':
+        return True
+    approval = record.get('approval_record')
+    return (decision == 'NEEDS_REVIEW' and record.get('next_task_state') == 'ACCEPTED'
+            and isinstance(approval, str) and approval.strip() != '')
+
+
 def _result(result, reason=None, findings=(), appended=(), duplicate=(), already=(), uncovered=()):
     entries = sorted({(u['ref'], u['detail']) for u in uncovered})
     return {'result': result, 'reason': reason, 'findings': list(findings), 'appended': list(appended),
@@ -211,7 +228,7 @@ def _done_tasks(events, uncovered):
                 record = e['payload']
         if record is None:
             uncovered.append({'ref': task_id, 'detail': 'decision record %s not in the log' % done[task_id]})
-        elif record.get('decision') != 'ACCEPT':
+        elif not accepts(record):
             uncovered.append({'ref': task_id, 'detail': 'decision record %s is not an ACCEPT decision' % done[task_id]})
         elif not _commit(record.get('evaluated_commit')):
             uncovered.append({'ref': task_id, 'detail': 'decision record %s has no evaluated_commit' % done[task_id]})
