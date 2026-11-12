@@ -17,8 +17,8 @@ import unittest
 from collections import OrderedDict
 from unittest import mock
 
-from aieos_bootstrap import (base_inputs, cli, eventlog, gitread, launcher, records, scope_drift, scope_reconcile,
-                             task_contract, writer)
+from aieos_bootstrap import (ac_coverage, base_inputs, cli, eventlog, gitread, launcher, records, scope_drift,
+                             scope_reconcile, task_contract, writer)
 
 REAL_APPEND_EVENT = writer.append_event
 APPEND_SIGNATURE = inspect.signature(REAL_APPEND_EVENT)
@@ -81,6 +81,7 @@ def expected_single(task=TASK, head=HEAD, intent_id='INT-001', paths=('docs/a.md
         'verification_plan:',
         '  - {gate: G0, check: scope}',
         '  - {gate: G1, check: build}',
+        '  - {gate: G2, check: lint}',
         '  - {gate: G3, check: review, args: [AC1, AC2]}',
         'exit_conditions:',
         '  success: the change is made within the write set and nothing else changed',
@@ -177,7 +178,8 @@ GOLDEN_RUN_CONTRACT = '\n'.join((
     '  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}',
     '  secrets: deny', '  external_side_effects: deny', 'risk: low', 'autonomy:', '  max_level: L1',
     '  budgets: {tokens: 400k, wall_time: 2h, retries: 1, human_attention: 0m}', 'verification_plan:',
-    '  - {gate: G0, check: scope}', '  - {gate: G1, check: build}', '  - {gate: G3, check: review, args: [AC1, AC2]}',
+    '  - {gate: G0, check: scope}', '  - {gate: G1, check: build}', '  - {gate: G2, check: lint}',
+    '  - {gate: G3, check: review, args: [AC1, AC2]}',
     'exit_conditions:', '  success: the change is made within the write set and nothing else changed',
     '  escalate: [needs_out_of_scope_change, needs_owner_act]', 'owner_kept_act: true')) + '\n'
 PATH = '.aieos/tasks/%s.yaml' % TASK
@@ -361,13 +363,15 @@ class TASK098AC1Runs(unittest.TestCase):
         self.assertEqual(written(w)[0][3], expected_drafting('TASK-123', 'd' * 40, 'INT-005'))
 
     def test_the_texts_parse(self):
-        """TASK-098 AC1: both texts parse by task_contract.parse_contract with no finding and by base_inputs'
-        contract parser with every CONTRACT_NEEDS key; their keys are TASK-097's in order; owner_kept_act true; t1 risk
-        low with its G1 and G3 gates, t2 risk critical with its G3 gate over AC1 to AC4; forbidden the project-state
-        directory; push forbidden."""
+        """TASK-098 AC1 (amended by TASK-129 AC2 and AC3): both texts parse by task_contract.parse_contract with no
+        finding and by base_inputs' contract parser with every CONTRACT_NEEDS key; their keys are TASK-097's in order;
+        owner_kept_act true; t1 risk low with its G1, G2 and G3 gates (the G2 lint gate once and without args, and
+        ac_coverage.check of the mapping gives no finding), t2 risk critical with its G3 gate over AC1 to AC4; forbidden
+        the project-state directory; push forbidden."""
         for text, paths, risk, gates in (
                 (expected_single(), ['docs/a.md'], 'risk: low',
-                 ['  - {gate: G1, check: build}', '  - {gate: G3, check: review, args: [AC1, AC2]}']),
+                 ['  - {gate: G1, check: build}', '  - {gate: G2, check: lint}',
+                  '  - {gate: G3, check: review, args: [AC1, AC2]}']),
                 (expected_drafting(), proposals(), 'risk: critical',
                  ['  - {gate: G3, check: review, args: [AC1, AC2, AC3, AC4]}'])):
             parsed = task_contract.parse_contract(text, TASK)
@@ -384,6 +388,11 @@ class TASK098AC1Runs(unittest.TestCase):
             self.assertIn(risk, lines)
             for gate in gates:
                 self.assertIn(gate, lines)
+            if risk == 'risk: low':
+                plan = mapping['verification_plan']
+                self.assertEqual([g['gate'] for g in plan], ['G0', 'G1', 'G2', 'G3'])
+                self.assertEqual([g for g in plan if g['gate'] == 'G2'], [{'gate': 'G2', 'check': 'lint'}])
+                self.assertEqual(ac_coverage.check(mapping), [])
             self.assertIn('  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}',
                           lines)
 

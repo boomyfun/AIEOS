@@ -1824,7 +1824,8 @@ _RUN_SINGLE = {
     'criteria': ('  - AC1: >-\n      The change does what intent %(intent)s states, within the write set.\n'
                  '  - AC2: >-\n      No other path is changed.\n'),
     'risk': 'low',
-    'gates': '  - {gate: G1, check: build}\n  - {gate: G3, check: review, args: [AC1, AC2]}\n',
+    # DEF-0118 follow-up 2 (TASK-129): the low default plan is G0 scope, G1 build, G2 lint, G3 review.
+    'gates': '  - {gate: G1, check: build}\n  - {gate: G2, check: lint}\n  - {gate: G3, check: review, args: [AC1, AC2]}\n',
     'success': 'the change is made within the write set and nothing else changed',
 }
 _RUN_DRAFTING = {
