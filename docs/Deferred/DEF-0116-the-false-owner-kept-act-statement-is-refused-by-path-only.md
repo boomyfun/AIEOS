@@ -1,6 +1,6 @@
 # DEF-0116: the false owner_kept_act statement is refused by path only
 
-- Status: open
+- Status: done
 - Opened: 2026-11-02 (session 08342c65; TASK-115, decision D-4643, Finding A)
 - Deferred by: decision agent (A41, A51), D-4643 and D-4647
 - Decision group: A (self-build)
@@ -25,3 +25,4 @@ TASK-115; DEF-0101 (the launchers' open requirements).
 ## Log
 - 2026-11-02: opened (session 08342c65), found by the decision agent's own review of X3 in D-4643 and missed by the way-2 reviews R115x, R115x2, R115w and R115v.
 - 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass E decision D-5258): read in full; _run_statement_findings was last changed by TASK-115 itself (13647f1, git log -L), so the Resume-when event (a DEF task taking up the owner-kept acts outside the path rules, or the next change of that function) is not met; it goes with the conversion-gap task of DEF-0117. State: open; Blocks v0.1: no (the standing practice: no `aieos run --owner-kept-act false` on those paths); Scheduled in: M8, the run-made contract conversion task (owner_kept_act and the paths the run refuses), before the first real run.
+- 2026-11-12 (session 7d0b3852-d124-4653-b026-25d167d6f9c4; TASK-128 records, acceptance decisions D-5647 and D-5673): TASK-128 landed Part A: the statement owner_kept_act false is now also refused, with the reason argument, for a write path that is AIEOS-concept.md, the decision matrix, the constitution, CLAUDE.md or under .claude/ (launcher.py:1917-1921), by path only after lower-casing; the forms with ./, a backslash or a trailing slash are not normalised (limit named in the docstring); status: done.
