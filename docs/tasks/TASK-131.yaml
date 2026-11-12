@@ -1,0 +1,110 @@
+# Task contract TASK-131 (DRAFT r1 for the decision agent's reading; DEF-0119 options A + C, one separate fix task; session 7d0b3852, 2026-11-12). Drafted in the scratchpad; whether this text is approved is recorded only in the decision agent's decision that approves it. The number 131 is proposed because TASK-130 is the informal label of the records-route tool (README of C:\Users\Admin\AIEOS-REG0-lite\records-route, decisions D-5824 to D-5842), which has no contract file.
+# Why: at the self-build's autonomy level L1 the governor never gives the decision ACCEPT (governor.py:474-475; LEVEL_AT_LEAST_L2 False at :55); a re-evaluation that finds an approval record that counts keeps the decision NEEDS_REVIEW and sets next_task_state ACCEPTED with approval_record set (governor.py:476-482, :497). reconcile accepts a DONE task's commit only from a decision.acceptance record whose decision is ACCEPT (reconcile.py:214-215), and no function in src writes task.done (DEF-0119:11). So no task accepted at L1 is covered by reconciliation and the metrics report counts no done task (metrics_report.py:361, :379). Rulings: option A (reconcile) and option C (a task.done writer) are the decision agent's (group A, decisions D-5847 and D-5848); option B (a new governor decision value) is the owner's and is not part of this task; the order is prerequisite 5 (this task) before prerequisite 6 (the runtime starter a2), D-5854.
+# Not in this task: governor.py, evaluation.py, records.py (the forms), execution.py, metrics_report.py, writer.py, cli.py, launcher.py and every specification or governance text; a CLI command or a launcher call for the writer; the check that the accepted commit is on main before task.done (reconcile's walk does it); any change to who may approve; the autonomy level; option B.
+# Risk, change class: high (R3 matches every path under src/** and tests/** until an architecture names the components, risk-rules-gov-aieos.md:18; reconcile.py is the reconciliation caller, not a governor file); not critical: no governor, secrets or CI change and no spec text; the change class is critical_cr because the CI's EVALUATOR list holds src/aieos_bootstrap/** and the tests folders, as for TASK-125 to TASK-129.
+task: TASK-131
+contract_version: v1
+task_type: implementation
+objective: >-
+  (A) In src/aieos_bootstrap/reconcile.py add the public function accepts(record), which is true for a decision.acceptance payload exactly when its decision is ACCEPT, or its decision is NEEDS_REVIEW and its next_task_state is ACCEPTED and its approval_record is a non-empty string; and make _done_tasks (reconcile.py:199-220) use it in place of the test record.get('decision') != 'ACCEPT' (line 214); the other two gaps (record absent; no evaluated_commit) and every uncovered detail text stay as they are. (C) Add a new module src/aieos_bootstrap/done.py with the function done(root, task_id, event_id, recorder, now, read_log=None, append=None), which appends one task.done event {decision_record: the record_id of the task's last decision.acceptance} through writer.append_event, with task_id and no fencing token, only when the task's state in the log is ACCEPTED and that last decision.acceptance satisfies reconcile.accepts and carries a commit-form evaluated_commit; it refuses otherwise, and it gives the result duplicate (nothing appended) when the state is DONE and the task's last task.done already names that record. Tests: new cases in tests/unit/test_reconcile.py and a new file tests/unit/test_done.py, including one composed chain of the existing functions (governor.evaluate with an approval record, then done, then execution.task_states, then reconcile._done_tasks) built from stand-ins and values, with no git and no file.
+traces_to:
+  - docs/Deferred/DEF-0119-at-l1-no-task-accepted-through-the-governor-is-covered-by-reconcile.md
+  - docs/pre-genesis/governor-spec.md
+  - docs/specs/spec-01-state-and-event-model.md
+input_state:
+  # base_commit is the head of main when the contract is approved (now 7e4a274062c6ab2c7ba780ea52eeaf1adc156b85, the TASK-129 records commit, on main and origin/main); the executor refuses unless it equals HEAD, refs/heads/main and refs/remotes/origin/main.
+  base_commit: 7e4a274062c6ab2c7ba780ea52eeaf1adc156b85
+  depends_on: [TASK-129]
+  intent_versions:
+    # sha256 of each file at base_commit, computed by script from main (the rule of TASK-114 :22).
+    src/aieos_bootstrap/reconcile.py: 8c988a29270334276c41fcbd70783adec86ea87f587e1e276b5547dacf38d8b9
+    src/aieos_bootstrap/execution.py: 84585f7fa2a9283012f4d1d8a0c3e9ea45fb92fb5739bcc665b4ca6b4f354d42
+    src/aieos_bootstrap/records.py: 2b7b456b1ef9fecde0c8b84eaf75b1fd85b7ac2e8f40e9e329a7dea3b7b31297
+    src/aieos_bootstrap/governor.py: 2f2dcd7525bcc39dcb3539ada93daff428a624cf2c47876c2d17599cf7ec022f
+    src/aieos_bootstrap/writer.py: 2ed3d9bf0d883fd54302b9e51b101c7e1155562eb1fbe01a2b5008299d9822b0
+    src/aieos_bootstrap/metrics_report.py: 5553690724273187db5fe15d35c990a8b1e90857d8d37ed89171b101c1ae1300
+    tests/unit/test_reconcile.py: 8aefef174b0dbb57da242a64ec27e816b763848e65a58e3ed58dd3c9de597ad9
+    docs/Deferred/DEF-0119-at-l1-no-task-accepted-through-the-governor-is-covered-by-reconcile.md: 8cc999e134555fcf9e59c6d64cd21a3c6ddd46ce92f9ac138f2d457a5db394fb
+    docs/specs/spec-01-state-and-event-model.md: c79897a1f82590046e1f49c3753e934e0b3df2893f0c627dd6ac90c8b8c6eebb
+    docs/specs/spec-04-verification-and-evidence.md: 48d4f5bf06461ad49409f21bc6ea8d511d17a84eaac15adda14277483176a8d5
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/pre-genesis/CR-002-concept-errata.md: 446c8523339a11c62ada936ba4b3001cde26dc5e3eac6ea234b78cec13b4a3e1
+    docs/tasks/TASK-129.yaml: 96c241c59a7a04e61cc96330129c7a5bd0d2c8bfc7613ff5aa9ac109a28bbb88
+write_set:
+  # the task commit holds these four paths only; the records step (after acceptance) adds docs/Deferred/DEF-0119-...md (the Log lines, including the line held in C:\Users\Admin\AIEOS-REG0-lite\held, and the status and header changes), a Log line on DEF-0099 only if the acceptance decision orders one (DEF-0099 stays done: AC7 (5)), and docs/records/TASK-131.jsonl; this contract, docs/tasks/TASK-131.yaml, is committed on main before the task by its own contract-commit route, each step its own decision, as TASK-129's was.
+  paths:
+    - src/aieos_bootstrap/reconcile.py
+    - src/aieos_bootstrap/done.py
+    - tests/unit/test_reconcile.py
+    - tests/unit/test_done.py
+read_set: {paths: [docs/plan/, docs/specs/, docs/Deferred/, docs/pre-genesis/, src/aieos_bootstrap/, tests/, .github/workflows/], interfaces: [], schemas: []}
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - docs/**
+  - src/aieos_bootstrap/cli.py
+  - src/aieos_bootstrap/launcher.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/metrics_report.py
+  - src/aieos_bootstrap/writer.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - tests/conformance/**
+  - tests/property/**
+  - tests/integration/**
+  - tests/run_tests.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      Part A, reconcile. reconcile.accepts(record) is public, pure and total on a mapping: it returns True exactly in these two cases and False in every other case, including a missing or non-string field: (1) record['decision'] == 'ACCEPT'; (2) record['decision'] == 'NEEDS_REVIEW' and record['next_task_state'] == 'ACCEPTED' and record['approval_record'] is a str with at least one non-space character. _done_tasks keeps its other two gaps (the decision record not in the log; no commit-form evaluated_commit) and every detail text it has at the base commit, and uses accepts() in place of line 214's test; the module docstring (lines 8-12) names the new case. No other line of reconcile.py changes (the diff is brought at acceptance). The tests of AC3 pin each of: ACCEPT counts; NEEDS_REVIEW with ACCEPTED and an approval record counts; NEEDS_REVIEW with IN_REVIEW, with no approval_record, with an empty or non-string approval_record does not count; INSUFFICIENT_EVIDENCE, NEEDS_REWORK and REJECT do not count, even with next_task_state ACCEPTED or an approval_record present.
+  - AC2: >-
+      Part C, the task.done writer. done(root, task_id, event_id, recorder, now, read_log=None, append=None) checks every argument before anything is read (a wrong one gives a refusal result and appends nothing); reads the log once through read_log (default writer.read_log, bound at call time) and checks it with records.check_log (a finding gives a refusal result); takes the task's state from execution.task_states (a state other than ACCEPTED, or a state None, gives a refusal result; a DONE state whose last task.done names the record that this function would name gives the result duplicate and appends nothing); takes the task's last decision.acceptance event and requires accepts() on its payload, a commit-form evaluated_commit and a non-empty record_id (otherwise a refusal result); appends exactly one task.done event with payload {decision_record: record_id}, task_id set, no fencing token, through append (default writer.append_event). The result is a mapping with exactly the keys result ('done', 'duplicate' or 'refused'), reason, findings and appended; an exception from read_log or append is caught and becomes a refusal result. The module reads no clock, no environment variable and no file itself, starts no process, builds no log line itself, grants no lease and creates no store.
+  - AC3: >-
+      The tests. tests/unit/test_reconcile.py gains the cases of AC1 and keeps every existing test unchanged (an existing test that fails on the new rule is a finding that stops the task: it comes to the decision agent, and no existing assertion is edited to fit); tests/unit/test_done.py is new and covers: each argument refusal before any read; a log with a finding; a task in each state other than ACCEPTED (DRAFT, READY, IN_PROGRESS, VERIFYING, IN_REVIEW, REWORK, ESCALATED, REJECTED, STALE, BLOCKED, DONE with another record) refused with nothing appended; ACCEPTED with ACCEPT and with NEEDS_REVIEW plus an approval record done with one append of the exact payload; ACCEPTED whose last decision.acceptance does not satisfy accepts() refused; the duplicate case; a stand-in append that raises or refuses; the defaults bound at call time. One composed chain: governor.evaluate at a re-evaluation (task_state IN_REVIEW) with an approval record that counts gives decision NEEDS_REVIEW, next_task_state ACCEPTED and approval_record set; that record is added to a stand-in log as a decision.acceptance (and the approval flows, as the existing execution tests build them); done appends task.done; execution.task_states gives DONE; reconcile._done_tasks maps the task to the record's evaluated_commit. No test runs git init or a subprocess, writes a file or touches this repository's real state.
+  - AC4: >-
+      Limit 8 and limit 5 of CR-002 part 4 (docs/pre-genesis/CR-002-concept-errata.md:61 and :64), stated and shown. Limit 8: this task weakens no evidence requirement. The governor's gates, evidence profiles, independence rule and approval rule (governor.py:373-402, :426-431, :474-482) are not touched; no kind of review or record counts as acceptance evidence where it did not count before: option A only lets reconciliation read, for coverage, a record that the governor itself wrote after an approval record counted, and a record without such an approval still does not count; option C only writes a state transition that an accepting record already decided and refuses every state and record that the projection or accepts() would not treat as accepted. The acceptance names, with the diff, the line of each file that decides this. Limit 5: no act that DM A51 item (4) keeps for the owner: no runtime is launched, no visibility change or publication, no measurement protocol, no concept erratum, no change to the autonomy level or to who may approve. If a reviewer shows that a form counts that did not require an approval record, or that done appends for a state that is not ACCEPTED, the contract comes back to the decision agent.
+  - AC5: >-
+      Purity and the suite (INV-001, INV-002, INV-004). done.py imports only from the standard library modules already used by submit.py and execution.py, aieos_bootstrap.writer, aieos_bootstrap.records, aieos_bootstrap.execution and aieos_bootstrap.reconcile; no process form, clock read or file access in src; the single writer stays the only code that builds log lines (INV-004); the new text uses none of the words MEASURED, ENFORCED and GUARANTEED and no string constant in a changed src file is exactly "valid", "accepted" or "approved"; the whole suite passes locally (`timeout 110 python tests/run_tests.py < /dev/null`, in slices if it does not finish) and on the CI, and pyflakes (the CI's pinned lint step) is silent on src and tests. The raw output of the full unit suite and of pyflakes is brought unedited. The first run is on the task branch.
+  - AC6: >-
+      Class, evidence and the departures. The risk class is high; the evidence profile is that of assurance-model section 5 for high, as for TASK-125 to TASK-129 (unit_test, integration_test, deterministic_rule, static_security_analysis, ai_review by a pair of reviews on Haiku 5.5, labelled same-vendor and not cross-model, with the profile's ai_review (cross-model) entry met or stated as a departure at acceptance as for TASK-128, a per-article review, and a separate decision_agent_review, plus the profile's other entries; the integration_test entry is met as TASK-128's acceptance met it, named at this acceptance, or its absence is stated there as a departure); the expected governor shadow result at the GOV-003 row is a stated departure as in TASK-125 to TASK-129 (the change class is critical_cr; the acceptance names it). The raw output of the step 'GOV-003 base tests (report only)' of the task-branch run is brought at acceptance with each base-test failure named.
+  - AC7: >-
+      Limits and the closing of DEF-0119. Stated at acceptance: (1) done() is not wired into the CLI or the launcher; the first real run calls it as a scripted function of the existing code (DEF-0119:23, option O2); (2) it does not check that the accepted commit is on main; reconcile's walk leaves a task whose accepted commit is not reached uncovered (reconcile.py:13-18); (3) reconcile trusts the approval_record field as the governor wrote it and does not re-run the governor's approval rule; (4) a task whose last decision.acceptance is not an accepting record, or whose state is not ACCEPTED, cannot get a task.done from this writer, whatever its earlier records say; (5) DEF-0099 stays done. No change to any file outside the write set; no change under .github/; no docs, spec or DEF file in the task commit. DEF-0119 may be closed only at this task's acceptance and records step: the Log line held in C:\Users\Admin\AIEOS-REG0-lite\held is re-applied with the D-5854 C1 correction, a Log line for this task is added, and the status and the two header lines change as DEF-0118's did (7e4a274); if the acceptance does not state this, DEF-0119 stays open with a Log line only. No launching of a runtime; no change to the autonomy level or the measurement protocol.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [src/aieos_bootstrap/reconcile.py, src/aieos_bootstrap/done.py, tests/unit/test_reconcile.py, tests/unit/test_done.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1200k, wall_time: 8h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC5]}
+  - {gate: G3, check: constitution, args: [AC4, AC5, AC6, AC7, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND one approval record counts AND the aieos-checks and aieos-native runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false: the task's acts are edits to one source file, one new source file and two test files in the write set; it never launches a runtime; A51 item (4) keeps launching with a runtime as A73 sets it; CR-002 part 4 limits 5 and 8 are stated and shown in AC4.
+owner_kept_act: false
