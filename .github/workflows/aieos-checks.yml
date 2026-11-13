@@ -155,6 +155,16 @@
 # similar faults), not style or logic; the step ran once before, on the stopped branch of TASK-119, and found two faults that TASK-122 has fixed on main, so its first run on the
 # TASK-124 branch may still be red on a fault not yet seen, and TASK-124 then stops (its AC4); the wheel is trusted by its hash alone, and the step reads over the network the package
 # index's page for pyflakes and the one wheel, and pip may also read its own version-check page, as the bandit step does.
+# Revision 20 (TASK-132; the decision agent's own decision under DM A66; DEF-0101, the real runtime starter of `aieos launch`) LOOSENS two checks for exactly one path and one call form and tightens
+# nothing else. (1) deterministic_rule: the package name aieos_runtime joins OWN, and the one path src/aieos_runtime/claude_starter.py may import subprocess (ALLOW), under a pattern rule
+# (check_starter) that accepts exactly one subprocess.run call whose only positional argument is the pinned ten-element list [EXE_PATH, '-p', PROMPT, '--permission-prompts', 'none', '--strict-mcp-
+# config', '--mcp-config', MCP_FILE, '--settings', SETTINGS_FILE], with keywords only from shell (the constant False), stdin (subprocess.DEVNULL), cwd, timeout (the constant 6600), env and check, and
+# no output capture; PROMPT, MCP_FILE, MCP_SHA256, SETTINGS_FILE and SETTINGS_SHA256 are pinned to their exact values, EXE_PATH and EXE_SHA256 to their form only (a runtime file of the desktop app's
+# folder, and 64 lowercase hexadecimal characters). (2) static_security_analysis: that one file is run without B404 and B603 (not B607). The revision also ADDS checks: only src/aieos_bootstrap/cli.py,
+# inside its `if __name__ == '__main__':` block, may import aieos_runtime; a module under src/aieos_runtime/ may not import aieos_bootstrap; the only paths under src/aieos_runtime/ are __init__.py and
+# claude_starter.py. It grants no write access, uses no secret or token and changes no setting; the EVALUATOR lists are unchanged. Limits: the rules run over the files Git tracks under src/ at HEAD of
+# a task run; they check the form of the call and of the constants, not what the runtime then does; the executable's path and hash are checked for form only (a change of either is the contract's own
+# pin decision).
 name: aieos-checks
 
 on:
@@ -1586,7 +1596,7 @@ jobs:
           # Checks every file Git tracks under src/ and tests/ at HEAD, and the task's changed paths:
           # - file rule (INV-002): only .py files; no package manifest and no vendored package anywhere in the change;
           # - import rule (INV-001, INV-002): every import resolves to the standard library (this Python's own list of its module
-          #   names) or to the package aieos_bootstrap; a pinned deny-list of standard-library modules is refused as well
+          #   names) or to the own packages aieos_bootstrap and aieos_runtime (revision 20); a pinned deny-list of standard-library modules is refused as well
           #   (dynamic import, processes, network, files written, foreign code);
           # - pattern rule (INV-001, INV-002): no exec, eval, compile, __import__, open, input or breakpoint; no __builtins__;
           #   no call that starts a process or writes, removes or renames a file; os is also followed through `import os as
@@ -1606,10 +1616,12 @@ jobs:
           #   the pattern rule of check_subprocess; nothing else is relaxed, and its test modules get no allowance.
           import ast
           import json
+          import re
           import subprocess
           import sys
 
-          OWN = {'aieos_bootstrap'}
+          OWN = {'aieos_bootstrap', 'aieos_runtime'}
+          # revision 20 (TASK-132): the starter's rules (ALLOW[STARTER], check_starter, check_runtime_imports) are defined below, before check_source
           DENY_MODULES = {'importlib', 'subprocess', 'multiprocessing', 'socket', 'ssl', 'http', 'urllib', 'ftplib', 'smtplib',
                           'poplib', 'imaplib', 'telnetlib', 'xmlrpc', 'asyncio', 'ctypes', 'pty', 'shutil', 'tempfile', 'sqlite3',
                           'webbrowser', 'runpy', 'pickle', 'marshal', 'shelve', 'dbm', 'zipimport', 'pkgutil', 'code', 'codeop',
@@ -1647,6 +1659,161 @@ jobs:
 
           def git(*a):
               return subprocess.run(['git'] + list(a), capture_output=True, check=True).stdout.decode('utf-8')
+
+
+          # revision 20 (TASK-132): the starter's rules (constants, ALLOW entry, check_starter, check_runtime_imports)
+          STARTER = 'src/aieos_runtime/claude_starter.py'
+          RUNTIME_DIR = 'src/aieos_runtime/'
+          RUNTIME_INIT = 'src/aieos_runtime/__init__.py'
+          CLI = 'src/aieos_bootstrap/cli.py'
+          EXE_RE = re.compile(r'C:\\Users\\Admin\\AppData\\Roaming\\Claude\\claude-code\\[0-9]+\.[0-9]+\.[0-9]+\\[0-9a-f]{12}\\claude\.exe')
+          HEX64 = re.compile(r'[0-9a-f]{64}')
+          PINNED = {
+              'PROMPT': 'Call the AIEOS tool get_work_order of the connected aieos MCP server, do the work its Work Order describes within its limits, and stop when it is done.',
+              'MCP_FILE': 'C:\\Users\\Admin\\AIEOS-runtime\\claude-mcp.json',
+              'MCP_SHA256': 'cbfc039cd668ca362c5713ad5498a3c18eeca7a59505363756e303c81035f882',
+              'SETTINGS_FILE': 'C:\\Users\\Admin\\AIEOS-runtime\\claude-settings.json',
+              'SETTINGS_SHA256': 'bb9c8724b7e24955f07ea185b045008adcf313dfe9ecc9268a3023c9e75bf26b',
+          }
+          FORMS = {'EXE_SHA256': HEX64}
+          STARTER_NAMES = ('EXE_PATH', 'EXE_SHA256', 'PROMPT', 'MCP_FILE', 'MCP_SHA256', 'SETTINGS_FILE', 'SETTINGS_SHA256')
+          # the argument list of the one call (contract AC3): a name is written NAME, a constant is written as its text
+          STARTER_ARGS = (('N', 'EXE_PATH'), ('C', '-p'), ('N', 'PROMPT'), ('C', '--permission-prompts'), ('C', 'none'),
+                          ('C', '--strict-mcp-config'), ('C', '--mcp-config'), ('N', 'MCP_FILE'), ('C', '--settings'), ('N', 'SETTINGS_FILE'))
+          STARTER_KEYWORDS = {'shell', 'stdin', 'cwd', 'timeout', 'env', 'check'}
+          STARTER_REQUIRED = {'shell', 'stdin', 'timeout'}
+
+
+          def _parents(tree):
+              parent = {}
+              for n in ast.walk(tree):
+                  for c in ast.iter_child_nodes(n):
+                      parent[id(c)] = n
+              return parent
+
+
+          def check_starter(path, tree, findings):
+              # the pattern rule for the one path that may start the runtime: one process form, as the contract's AC2 to AC6 fix it
+              parent = _parents(tree)
+              runs = []
+              for n in ast.walk(tree):
+                  if isinstance(n, ast.ImportFrom) and n.module == 'subprocess':
+                      findings.append('%s:%d: from subprocess import is refused (revision 20)' % (path, n.lineno))
+                  if isinstance(n, ast.Import) and any(a.name == 'subprocess' and a.asname for a in n.names):
+                      findings.append('%s:%d: import subprocess as is refused (revision 20)' % (path, n.lineno))
+                  if isinstance(n, ast.Name) and n.id == 'subprocess':
+                      p = parent.get(id(n))
+                      if not (isinstance(p, ast.Attribute) and p.value is n):
+                          findings.append('%s:%d: the name subprocess used other than as an attribute\'s object (revision 20)' % (path, n.lineno))
+                          continue
+                      ap = parent.get(id(p))
+                      if p.attr == 'run':
+                          if not (isinstance(ap, ast.Call) and ap.func is p):
+                              findings.append('%s:%d: subprocess.run used other than as the function of a call (revision 20)' % (path, n.lineno))
+                              continue
+                          runs.append(ap)
+                      elif p.attr == 'DEVNULL':
+                          if not isinstance(ap, ast.keyword):
+                              findings.append('%s:%d: subprocess.DEVNULL used other than as a keyword value (revision 20)' % (path, n.lineno))
+                      elif p.attr == 'TimeoutExpired':
+                          q = ap if isinstance(ap, ast.Tuple) else p
+                          h = parent.get(id(q))
+                          if not (isinstance(h, ast.ExceptHandler) and h.type is q):
+                              findings.append('%s:%d: subprocess.TimeoutExpired used other than in an except clause (revision 20)' % (path, n.lineno))
+                      else:
+                          findings.append('%s:%d: subprocess.%s is refused (revision 20)' % (path, n.lineno, p.attr))
+              if len(runs) != 1:
+                  findings.append('%s: exactly one subprocess.run call is required, found %d (revision 20)' % (path, len(runs)))
+              for call in runs:
+                  if len(call.args) != 1 or call.keywords is None or not isinstance(call.args[0], ast.List) or len(call.args[0].elts) != len(STARTER_ARGS):
+                      findings.append('%s:%d: subprocess.run must take one list of exactly %d elements (revision 20)' % (path, call.lineno, len(STARTER_ARGS)))
+                  else:
+                      for k, (elt, (kind, want)) in enumerate(zip(call.args[0].elts, STARTER_ARGS)):
+                          ok = (isinstance(elt, ast.Name) and elt.id == want) if kind == 'N' else (
+                              isinstance(elt, ast.Constant) and isinstance(elt.value, str) and elt.value == want)
+                          if not ok:
+                              findings.append('%s:%d: element %d of the argument list is not the pinned %s %s (revision 20)' % (
+                                  path, call.lineno, k + 1, 'name' if kind == 'N' else 'constant', want))
+                  names = [kw.arg for kw in call.keywords]
+                  if None in names or len(set(names)) != len(names) or not set(names) <= STARTER_KEYWORDS:
+                      findings.append('%s:%d: subprocess.run keyword refused: %s (revision 20)' % (
+                          path, call.lineno, ', '.join(sorted(str(x) for x in set(names) - STARTER_KEYWORDS)) or 'a duplicate or **'))
+                  if not STARTER_REQUIRED <= set(names):
+                      findings.append('%s:%d: subprocess.run lacks one of shell, stdin, timeout (revision 20)' % (path, call.lineno))
+                  for kw in call.keywords:
+                      v = kw.value
+                      if kw.arg == 'shell' and not (isinstance(v, ast.Constant) and v.value is False):
+                          findings.append('%s:%d: subprocess.run with a shell (revision 20)' % (path, call.lineno))
+                      if kw.arg == 'stdin' and not (isinstance(v, ast.Attribute) and v.attr == 'DEVNULL' and isinstance(v.value, ast.Name) and v.value.id == 'subprocess'):
+                          findings.append('%s:%d: subprocess.run stdin is not subprocess.DEVNULL (revision 20)' % (path, call.lineno))
+                      if kw.arg == 'timeout' and not (isinstance(v, ast.Constant) and v.value == 6600 and type(v.value) is int):
+                          findings.append('%s:%d: subprocess.run timeout is not the constant 6600 (revision 20)' % (path, call.lineno))
+              stores = {}
+              for n in ast.walk(tree):
+                  if isinstance(n, ast.Name) and n.id in STARTER_NAMES and not isinstance(n.ctx, ast.Load):
+                      stores[n.id] = stores.get(n.id, 0) + 1
+                  if isinstance(n, ast.AugAssign) and isinstance(n.target, ast.Name) and n.target.id in STARTER_NAMES:
+                      findings.append('%s:%d: augmented assignment to %s (revision 20)' % (path, n.lineno, n.target.id))
+                  # every other way to bind a pinned name (a parameter, an except-as name, an import alias, global or nonlocal, a match capture)
+                  if isinstance(n, ast.arg) and n.arg in STARTER_NAMES:
+                      findings.append('%s:%d: a parameter named %s (revision 20)' % (path, getattr(n, 'lineno', 0), n.arg))
+                  if isinstance(n, ast.ExceptHandler) and n.name in STARTER_NAMES:
+                      findings.append('%s:%d: an except clause binds %s (revision 20)' % (path, getattr(n, 'lineno', 0), n.name))
+                  if isinstance(n, ast.alias) and (n.asname or n.name.split('.')[0]) in STARTER_NAMES:
+                      findings.append('%s:%d: an import binds %s (revision 20)' % (path, getattr(n, 'lineno', 0), n.asname or n.name))
+                  if isinstance(n, (ast.Global, ast.Nonlocal)) and set(n.names) & set(STARTER_NAMES):
+                      findings.append('%s:%d: a global or nonlocal statement names a pinned name (revision 20)' % (path, getattr(n, 'lineno', 0)))
+                  if isinstance(n, (ast.MatchAs, ast.MatchStar)) and n.name in STARTER_NAMES:
+                      findings.append('%s:%d: a match pattern binds %s (revision 20)' % (path, getattr(n, 'lineno', 0), n.name))
+              top = {}
+              for n in tree.body:
+                  if isinstance(n, ast.Assign) and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name) and n.targets[0].id in STARTER_NAMES:
+                      top.setdefault(n.targets[0].id, []).append(n.value)
+              for name in STARTER_NAMES:
+                  vals = top.get(name, [])
+                  if len(vals) != 1 or stores.get(name, 0) != 1:
+                      findings.append('%s: %s must be bound exactly once, at module level (revision 20)' % (path, name))
+                      continue
+                  v = vals[0]
+                  if not (isinstance(v, ast.Constant) and isinstance(v.value, str)):
+                      findings.append('%s: %s is not bound to a constant string (revision 20)' % (path, name))
+                  elif name == 'EXE_PATH':
+                      if not EXE_RE.fullmatch(v.value):
+                          findings.append('%s: EXE_PATH is not in the pinned form of the desktop app\'s runtime (revision 20)' % path)
+                  elif name in FORMS:
+                      if not FORMS[name].fullmatch(v.value):
+                          findings.append('%s: %s is not in the pinned form (revision 20)' % (path, name))
+                  elif v.value != PINNED[name]:
+                      findings.append('%s: %s is not the pinned value (revision 20)' % (path, name))
+
+
+          def _inside_main_block(node, parent):
+              p = parent.get(id(node))
+              while p is not None:
+                  if isinstance(p, ast.If) and isinstance(p.test, ast.Compare) and isinstance(p.test.left, ast.Name) and p.test.left.id == '__name__' \
+                          and len(p.test.ops) == 1 and isinstance(p.test.ops[0], ast.Eq) and len(p.test.comparators) == 1 \
+                          and isinstance(p.test.comparators[0], ast.Constant) and p.test.comparators[0].value == '__main__' \
+                          and isinstance(parent.get(id(p)), ast.Module):
+                      return True
+                  p = parent.get(id(p))
+              return False
+
+
+          def check_runtime_imports(path, tree, findings):
+              # which modules may import the runtime package (revision 20): only the command's entry line, inside its main block
+              parent = _parents(tree)
+              for n in ast.walk(tree):
+                  if isinstance(n, (ast.Import, ast.ImportFrom)) and not (isinstance(n, ast.ImportFrom) and n.level):
+                      names = [a.name for a in n.names] if isinstance(n, ast.Import) else [n.module or '']
+                      for x in names:
+                          top = x.split('.')[0]
+                          if top == 'aieos_bootstrap' and path.startswith(RUNTIME_DIR):
+                              findings.append('%s:%d: a module of the runtime package imports aieos_bootstrap (revision 20)' % (path, n.lineno))
+                          if top == 'aieos_runtime' and not path.startswith(RUNTIME_DIR):
+                              if path == CLI and _inside_main_block(n, parent):
+                                  continue
+                              findings.append('%s:%d: import of aieos_runtime outside the entry line\'s main block (revision 20)' % (path, n.lineno))
+          ALLOW[STARTER] = {'modules': frozenset({'subprocess'}), 'os': frozenset(), 'open_modes': frozenset(), 'aieos_string': False}
 
 
           def starts_with_git(node):
@@ -1720,6 +1887,10 @@ jobs:
               allow = ALLOW.get(path, NONE)
               if path == GITREAD:
                   check_subprocess(path, tree, findings)
+              if path == STARTER:
+                  check_starter(path, tree, findings)
+              if path.startswith('src/'):
+                  check_runtime_imports(path, tree, findings)
               # the Name nodes `open` that are the function of an allowed call open(<path>, <constant mode>) (revision 7)
               open_ok = {id(n.func) for n in ast.walk(tree)
                          if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == 'open'
@@ -1778,6 +1949,9 @@ jobs:
                   if VENDOR_DIRS.intersection(parts[:-1]):
                       findings.append('%s: a vendored package folder (INV-002)' % p)
               files = [p for p in git('ls-files', 'src', 'tests').split('\n') if p]
+              for p in files:
+                  if p.startswith(RUNTIME_DIR) and p not in (STARTER, RUNTIME_INIT):
+                      findings.append('%s: a path under %s other than the starter and its package file (revision 20)' % (p, RUNTIME_DIR))
               for p in files:
                   if not p.endswith('.py'):
                       findings.append('%s: not a Python source file (INV-002 file rule)' % p)
@@ -1869,11 +2043,14 @@ jobs:
           "$A/venv/bin/bandit" --version
           # src/: every bandit test. tests/: every test but B101 (assert) and B311 (the random module, which seeded
           # property tests use); both options are written here, never read from the change. Revision 8: the Git reader
-          # src/aieos_bootstrap/gitread.py without B404, B603 and B607; every other file as before.
+          # src/aieos_bootstrap/gitread.py without B404, B603 and B607; every other file as before. Revision 20: the starter
+          # src/aieos_runtime/claude_starter.py without B404 and B603 (not B607); every other file as before.
           GR="$GITHUB_WORKSPACE/work/src/aieos_bootstrap/gitread.py"
+          SR="$GITHUB_WORKSPACE/work/src/aieos_runtime/claude_starter.py"
           S=0
-          "$A/venv/bin/bandit" -r "$GITHUB_WORKSPACE/work/src" -x "$GR" --ini "$A/empty.bandit" --ignore-nosec -f txt || S=1
+          "$A/venv/bin/bandit" -r "$GITHUB_WORKSPACE/work/src" -x "$GR,$SR" --ini "$A/empty.bandit" --ignore-nosec -f txt || S=1
           if [ -e "$GR" ]; then "$A/venv/bin/bandit" "$GR" --ini "$A/empty.bandit" --ignore-nosec --skip B404,B603,B607 -f txt || S=1; fi
+          if [ -e "$SR" ]; then "$A/venv/bin/bandit" "$SR" --ini "$A/empty.bandit" --ignore-nosec --skip B404,B603 -f txt || S=1; fi
           "$A/venv/bin/bandit" -r "$GITHUB_WORKSPACE/work/tests" --ini "$A/empty.bandit" --ignore-nosec --skip B101,B311 -f txt || S=1
           [ "$S" = 0 ]
 
