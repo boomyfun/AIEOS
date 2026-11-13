@@ -27,6 +27,8 @@ BAD_CHARS = ' /\\:*?"<>|\n\t\x00éß'
 LAUNCHER_VARS = ('AIEOS_SESSION_ID', 'AIEOS_ROOT', 'AIEOS_BASE')
 PROCESS_VARS = ('PATH', 'SYSTEMROOT', 'SYSTEMDRIVE', 'COMSPEC', 'PATHEXT', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA',
                 'TEMP', 'TMP')
+# AC6: the variables that must never reach the runtime; a tuple of names, as in the unit tests (bandit B105)
+REFUSED_VARS = ('API_KEY', 'GH_TOKEN', 'PYTHONPATH', 'HOME', 'ANTHROPIC_API_KEY')
 
 
 class Timeout(Exception):
@@ -185,8 +187,8 @@ class TASK132PropertiesEnvironment(unittest.TestCase):
             for _ in range(ROUNDS):
                 env = good_env(rng)
                 environ = good_environ(rng)
-                extra = {'EXTRA_%d' % rng.randrange(100): 'x', 'API_KEY': 'k', 'GH_TOKEN': 't', 'PYTHONPATH': 'p',
-                         'HOME': 'h', 'ANTHROPIC_API_KEY': 'a'}
+                extra = {name: 'v' for name in REFUSED_VARS}
+                extra['EXTRA_%d' % rng.randrange(100)] = 'x'
                 sub, _, error = launch(env, dict(environ, **extra))
                 self.assertIsNone(error)
                 passed = sub.calls[0][1]['env']

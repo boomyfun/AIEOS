@@ -35,6 +35,9 @@ LAUNCHER_VARS = ('AIEOS_SESSION_ID', 'AIEOS_ROOT', 'AIEOS_BASE')
 PROCESS_VARS = ('PATH', 'SYSTEMROOT', 'SYSTEMDRIVE', 'COMSPEC', 'PATHEXT', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA',
                 'TEMP', 'TMP')
 PROCESS = {name: 'value-of-' + name for name in PROCESS_VARS}
+# AC6: the variables that must never reach the runtime; a tuple of names, so that no literal pairs a
+# credential-like name with a string value (bandit B105 refuses such a pair in a test file)
+REFUSED_VARS = ('PYTHONPATH', 'HOME', 'ANTHROPIC_API_KEY', 'GITHUB_TOKEN', 'OTHER')
 ARGS = [EXE, '-p', PROMPT, '--permission-prompts', 'none', '--strict-mcp-config', '--mcp-config', MCP, '--settings',
         SETTINGS]
 FORBIDDEN_FLAGS = ('--dangerously-skip-permissions', '--allow-dangerously-skip-permissions', '--permission-mode',
@@ -316,7 +319,7 @@ class TASK132AC6Environment(unittest.TestCase):
         """TASK-132 AC6: the environment passed to the process holds the three launcher variables and the listed
         variables of the starter's own environment that are present, with their values, and nothing else."""
         environ = dict(PROCESS)
-        environ.update({'PYTHONPATH': 'p', 'HOME': 'h', 'ANTHROPIC_API_KEY': 'k', 'GITHUB_TOKEN': 't', 'OTHER': 'o'})
+        environ.update({name: 'v-' + name for name in REFUSED_VARS})
         w, _, error = run_starter(environ=environ)
         self.assertIsNone(error)
         want = dict(ENV)
