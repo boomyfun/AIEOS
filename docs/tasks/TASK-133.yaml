@@ -1,0 +1,125 @@
+# TASK-133 replaces TASK-132 (decisions D-6038 and D-6039, session 86f64e95, 2026-11-13). TASK-132's contract (docs/tasks/TASK-132.yaml r8, committed at
+# b25405a5, approved at D-6002) was never run as a task: no commit with its trailer was pushed. The full run of the unit tests with the change (the real
+# runtime starter in src/aieos_runtime/, which imports subprocess as the contract and CI revision 20 require) found one failing test, tests/unit/test_gitread.py
+# :602-:612 (TASK-024 AC6 and AC12, test_no_other_src_module_imports_subprocess), which asserts that gitread.py is the only module of src/ that imports subprocess
+# and was not in TASK-132's write set; the G0 scope check reads only the commit that added a contract (aieos-checks.yml :333-:357), so a revision cannot widen
+# a write set, and the task restarts under a new id (as TASK-107 replaced TASK-105). This contract is TASK-132's r8 text with the new id, the base_commit 622b248f
+# (the revision 20 CI commit), the intent_versions recomputed from that base with tests/unit/test_gitread.py and docs/tasks/TASK-132.yaml added, tests/unit/test_gitread.py
+# added to the write set (seven paths) and one sentence added to AC9; the criteria are otherwise TASK-132's. The CI revision this task depends on is revision 20
+# (commit 622b248f, D-6018 to D-6026): its rule is by path (src/aieos_runtime/claude_starter.py) and its comments name TASK-132 as history. Nothing here is a
+# statement of what ran under TASK-132: nothing did as a task (the build was made in a scratch clone and is carried over).
+# Task contract TASK-133 (the text of TASK-132 r8 under the new id; prerequisite 6 of D-5304 C2, "a2", the real runtime starter of `aieos launch`; DM A75). r8 drops the two intent_versions lines whose paths begin with a dot (.aieos/project.yaml sha256 997b5d433db0a1dc3503a971f340010137621c172e20d50adafb55f2c739f4d1 and .github/workflows/aieos-checks.yml sha256 84674280e6689250f9f753e1f8f3ab04d02b43e09d24fda8ef75361106d9d4dd at the base), because the core's contract reader (base_inputs._KEY) takes no key that begins with a dot; both files stay read through read_set. r4 answered D-5986 (M1 to M9) on r3; r5 applied D-5987 E1 to E5; r6 fixed this header line only; r7 (D-5998 K3-1) adds the intent_versions map and a read_set line and fixes the layout of base_commit, depends_on and forbidden for the contract parsers, with no other change. Constants are quoted verbatim below (M7). intent_versions are computed by script from main at 9dab35269466f6437714dc9eb3bdcbe1adac2ea6 (scratchpad intent_versions_r4.txt, sha256 85cbecd90976d9219aea7166410baba1713f6ffc6282e035a3badcd8b07d2914) and are copied into input_state at approval. Observed Claude Code version 2.1.321 (both installed copies; `--permission-prompts` was seen only in 2.1.321's --help); the declared version in .aieos/project.yaml:5 is 2.1.317: a fact for the gate check, not fixed here.
+# Why: `aieos launch` ships no starter (cli.py:182 NO_STARTER; launcher.launch_outside takes the caller's starter, launcher.py:1242-1325); DEF-0101 (open, Blocks v0.1: yes) closes only when the real starter is built; the first real run (master-plan.md:117) needs it.
+# Placement (Claude's reading, PROPOSED, not text of the constitution): launcher.py:229-231 says "the starter does whatever the caller's code does; the core's own code starts no process". The starter is the CALLER of launch_outside, not part of the core. It lives in a new package directory src/aieos_runtime/, outside src/aieos_bootstrap/ (the core's modules), and is imported by the command's entry line (cli.py) only. No document defines where "the core's source tree" ends; whether this placement satisfies INV-001's review item ("whether an allowed executable ... runs a model", constitution.md:28-29) is an explicit QUESTION for the way-2 review and the decision agent's review. The CI's deterministic_rule (aieos-checks.yml:1579 on) lets only gitread.py import subprocess, knows only the package aieos_bootstrap as its own (OWN), and refuses the builtin open and open-type calls; the starter therefore needs its own workflow revision (OWN gets aieos_runtime; one ALLOW entry for this one path with subprocess; one pattern rule for its single call form pinned to the exact path string; a check that no src/ module other than src/aieos_bootstrap/cli.py imports aieos_runtime, and that cli.py does so only inside its `if __name__ == '__main__':` block; bandit B404, B603 skipped for that one file as for gitread.py): a .github change, critical by R9, its own request and its own A66 decision, BEFORE this task's first build commit is pushed. NOT part of this task (.github/** forbidden). To fit that rule the starter reads file bytes with pathlib's read_bytes (not on the pattern rule's refused list) and hashes with hashlib.
+# Risk: critical. R2 and R3 (every path under src/** and tests/**, risk-rules-gov-aieos.md:18) give at least high; the decision agent's floor "when unsure, choose critical" (D-4580:28) and CR-002 limit 8 (a class is not lowered later) make it critical; this is the first code that starts a model runtime. Change class: critical_cr. The A59/A60 pair of reviews (master-plan.md:106) is kept; not cut.
+task: TASK-133
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add the real runtime starter of `aieos launch` as a caller of the launcher, in a new module src/aieos_runtime/claude_starter.py (with the package file src/aieos_runtime/__init__.py): a function starter(env) that, given the launcher's environment copy (exactly AIEOS_SESSION_ID, AIEOS_ROOT, AIEOS_BASE: launcher.py:694 and :1080; launcher.py:1321 passes dict(environment)), starts the pinned Claude Code program through ONE process form and waits for it to end; and wire it into the entry line of cli.py (main's `starter` argument stays for tests; main with starter=None still gives NO_STARTER, cli.py:480-481). The starter writes no event, calls no governor, reconcile, done or writer function, builds no log line and adds no acceptance logic beside the governor's (DA-2's limit). Tests use stand-in process runners and values only; no test starts a real runtime.
+traces_to:
+  - docs/Deferred/DEF-0101-the-launchers-open-requirements-before-a-runtime-is-launched.md
+  - docs/specs/spec-07-cli-and-zero-friction-path.md (section 3 `aieos launch`, section 5 the launcher)
+  - docs/specs/spec-05-adapter-contract.md
+  - docs/pre-genesis/decision-matrix.md (A75)
+input_state:
+  # base_commit is the head of main when the contract is approved (now 622b248f334ec02c201caf8daa667a644721214b, the revision 20 CI commit of D-6026, on main and origin/main); the executor refuses unless it equals HEAD, refs/heads/main and refs/remotes/origin/main.
+  base_commit: 622b248f334ec02c201caf8daa667a644721214b
+  # Two further dependencies are not task ids and are named here: the CI revision that allows src/aieos_runtime/claude_starter.py (revision 20, commit 622b248f, A66, D-6018 to D-6026, already on main with green CI) and the A73 settings decision D-5988 that placed the two runtime files of AC3.
+  depends_on: [TASK-131, TASK-127, TASK-117]
+  intent_versions:
+    # sha256 of each file at base_commit, computed by script from main (git show 622b248f334ec02c201caf8daa667a644721214b:path | sha256sum; the rule of TASK-114 :22).
+    src/aieos_bootstrap/cli.py: 4bc2511e58781ad78cb9bed27062d36439df31b0b44e5875c678a3061e7a82c9
+    src/aieos_bootstrap/launcher.py: fd88f079e7f58731117d3b04d986f7ed170d8ff91ca54bb0724f9912530a376a
+    src/aieos_bootstrap/mcp_server.py: fe672ceef7cbbdbb5a4650930371c85373ca589bbf6fdbd419fee29efd478c91
+    src/aieos_bootstrap/claude_code_pretool_hook.py: 2acbcd224f97e68bc391a373e626ccf465ddbaa55ba647540f42bff1874f9ded
+    src/aieos_bootstrap/claude_code_read_hook.py: 1ed1dd8ebff36079545d87d72e4c672e4c8178de0c2504c0a5c393f605c77553
+    src/aieos_bootstrap/gitread.py: 5a8aabeddcd2b5ee53ad8c40b9d572d85d5ea7359052f96b37eb0a540d83f70e
+    tests/unit/test_cli.py: 028600eefcec5ab28783d0fb1e700196232b15ce6f1e556f8830151cebc33eaf
+    docs/Deferred/DEF-0101-the-launchers-open-requirements-before-a-runtime-is-launched.md: ecc73e1c7deb52318a4c1aa43c676f9f247652764bf18db298e0bad23e373647
+    docs/specs/spec-05-adapter-contract.md: 5a0d6f03130b973d137fbf2012ab2d3436c37ef4663296479603fb8af9802056
+    docs/specs/spec-07-cli-and-zero-friction-path.md: d633ad8e918efae41487e53b6e026965f74dd9647d3b2ee0a640fc938e50bfed
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/pre-genesis/CR-002-concept-errata.md: 446c8523339a11c62ada936ba4b3001cde26dc5e3eac6ea234b78cec13b4a3e1
+    docs/pre-genesis/decision-matrix.md: 21c860db8260d1adcd8f7b54c334f1d2d38108d4b41c949cb89a6d944fe5c7d0
+    docs/tasks/TASK-131.yaml: c7ecc080276260016fc30ccc3539ace89d0fc77f16c94c82e92c3073bb6f9475
+    tests/unit/test_gitread.py: e9c59e027469c3f21335a710d74f64ebb6f2f53dc925c1dcbfa9624912d14993
+    docs/tasks/TASK-132.yaml: 99f684c7a53d476ba6266a336498816dc61d3425ba5f92b0cf7e35a3459517c2
+write_set:
+  paths:
+    - src/aieos_runtime/__init__.py
+    - src/aieos_runtime/claude_starter.py
+    - src/aieos_bootstrap/cli.py
+    - tests/unit/test_claude_starter.py
+    - tests/unit/test_cli.py
+    - tests/property/test_claude_starter_properties.py
+    - tests/unit/test_gitread.py
+read_set: {paths: [docs/plan/, docs/specs/, docs/Deferred/, docs/pre-genesis/, docs/tasks/, src/aieos_bootstrap/, src/aieos_runtime/, tests/, .github/workflows/, .aieos/project.yaml], interfaces: [], schemas: []}
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - docs/**
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/done.py
+  - src/aieos_bootstrap/writer.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/launcher.py
+  - src/aieos_bootstrap/mcp_server.py
+  - tests/conformance/**
+  - tests/integration/**
+  - tests/run_tests.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      Form: starter(env) -> None (launcher.py:1321). It raises, before any process starts, when env lacks a string AIEOS_SESSION_ID (form [A-Za-z0-9._-]{1,128}, mcp_server.py:19-20), AIEOS_ROOT (an absolute path) or AIEOS_BASE (exactly 40 lowercase hexadecimal characters); launch_outside then records "run: the starter raised ..." and still ends the session (launcher.py:1323-1326).
+  - AC2: >-
+      Executable (D-5985 C3, D-5986 ruling (b)). Constants, verbatim: EXE_PATH = C:\Users\Admin\AppData\Roaming\Claude\claude-code\2.1.321\d0e23af87588\claude.exe; EXE_SHA256 = e6dae5fc45902b15751f2591a02f51760351c4788c5fd8291b3f1443d40c13a4 (346487456 bytes). The other installed copy, d020ce1b5d30, SHA-256 185dbc197835e568c1701f928b9c5b3a3e233731d9ae22f46fb80f5f09ffa1d9 (346487968 bytes), has a version and a --help text byte-equal to the pinned one; which copy the desktop app uses is NOT known and the 512-byte size difference is not explained. No PATH search, no ~, no environment-variable expansion. Before any process starts the starter refuses if the file is missing, is not a regular file, does not end in .exe, or its SHA-256 differs; a .cmd or .bat target is refused outright. Gap stated: the file can change between the hash check and the start. Each update of the desktop app changes the folder name and the hash, so the starter refuses until a new pin, which is its own decision (stated in plain words at acceptance). `claude` is on no PATH on this machine (the four probes of D-5984 C1).
+  - AC3: >-
+      Argument form, fixed, quoted from the installed --help (2.1.321), passed as a list with no shell, in this order: [EXE_PATH, "-p", PROMPT, "--permission-prompts", "none", "--strict-mcp-config", "--mcp-config", MCP_FILE, "--settings", SETTINGS_FILE]. The prompt follows "-p" at once and never follows the variadic --mcp-config (a test pins the order). NO --setting-sources: the run loads the default sources (user, project, local) plus the --settings file, so the OWNER'S COMMAND GUARD (the PreToolUse hooks of C:\Users\Admin\.claude\settings.json:49-71, user source) stays loaded in the launched run. --permission-prompts none: "nobody: anything that would prompt is denied automatically; the permission mode still decides everything else" (--help lines 155-160): a prompt is denied and never answered in anyone's place; work that needs a prompt stops (stated limit). NO option that skips, pre-answers or widens permissions or tools: no --dangerously-skip-permissions, no --allow-dangerously-skip-permissions, no --permission-mode, no --allowedTools, no --tools, no --add-dir. Effective permission mode and allow rules come only from the settings sources (the user source and the file below); the contract adds none; the two files below set no defaultMode, no permission rule, and never bypassPermissions, auto or acceptEdits. With no allow rule, every edit and command that needs permission is denied: stated.
+      The two runtime files (D-5986 M3), OUTSIDE E:\AIEOS because the project-state directory is the core's and a new untracked file in the root gives "root after" (spec-07:50; .gitignore:1-2; spec-07:26): MCP_FILE = C:\Users\Admin\AIEOS-runtime\claude-mcp.json and SETTINGS_FILE = C:\Users\Admin\AIEOS-runtime\claude-settings.json. Their draft content is in the scratchpad (runtime-files\, sha256 of the drafts: claude-mcp.json cbfc039cd668ca362c5713ad5498a3c18eeca7a59505363756e303c81035f882 (315 bytes); claude-settings.json bb9c8724b7e24955f07ea185b045008adcf313dfe9ecc9268a3023c9e75bf26b (619 bytes)); placing them is its own A73 settings decision BEFORE this contract is approved, so the hashes below are final: MCP_SHA256 = cbfc039cd668ca362c5713ad5498a3c18eeca7a59505363756e303c81035f882; SETTINGS_SHA256 = bb9c8724b7e24955f07ea185b045008adcf313dfe9ecc9268a3023c9e75bf26b (equal to the read-back of the placed files, D-5988). The starter refuses when a file is missing, is not a regular file, or its SHA-256 differs.
+  - AC4: >-
+      Prompt, verbatim, ONE constant string in the module, no file read: PROMPT = "Call the AIEOS tool get_work_order of the connected aieos MCP server, do the work its Work Order describes within its limits, and stop when it is done." The starter has no task id and no Work Order, only the three variables (launcher.py:1321); the server serves get_work_order from AIEOS_SESSION_ID, AIEOS_ROOT and AIEOS_BASE (mcp_server.py:19-20).
+  - AC5: >-
+      Process form (INV-001): no shell; standard input closed; a pinned working directory, the root (AIEOS_ROOT); a fixed timeout of 6600 seconds (110 minutes, below launch_outside's two-hour lease, launcher.py:1074); on a timeout the process is terminated and the starter raises; a non-zero exit raises; child processes the runtime started may survive its termination (stated limit); the runtime's output is inherited to the console, not captured, stored or parsed. The starter reads no file besides the bytes of the executable and of the two runtime files (for the hashes), and the existence of the two files.
+  - AC6: >-
+      Environment, a constant list in the module, pinned by a test; nothing else is passed. From the launcher's copy: AIEOS_SESSION_ID, AIEOS_ROOT, AIEOS_BASE (the readers are the hooks and the MCP server). From the starter's own process environment (os.environ; refused if PATH is absent): PATH, unchanged (the owner's guard hooks run `python`, and the runtime's Bash tool needs Git Bash, found through it); SYSTEMROOT, SYSTEMDRIVE, COMSPEC, PATHEXT (Windows process creation and program lookup); USERPROFILE, APPDATA, LOCALAPPDATA (where the desktop app's program and the runtime's own stored login live; Claude Code finds the user settings, and so the owner's command guard, through USERPROFILE; the starter reads none of their content); TEMP, TMP (scratch). PYTHONPATH is NOT passed: the two runtime files set it themselves for the hook and server commands. HOME is not passed. No variable that holds a credential (no API key or token variable) is ever passed; if the runtime's login needs one, that is the owner's (accounts) and the work stops there. Whether the runtime's stored login costs money per use is checked at the first-run decision (money is the owner's).
+  - AC7: >-
+      No acceptance logic and no event: the module imports no aieos_bootstrap module at all (a test pins the import list), so it can reach none of governor, reconcile, done, writer, execution, records or evaluation. A finish refused "stored_reads" is left to `aieos end` or the lease's expiry (D-3164:31-33). Lease renewal is NOT in this task: a session longer than the timeout is ended by it. A denied permission prompt is NOT detected by the starter (the run goes on and can exit 0); its effect shows only in the run's output and records.
+  - AC8: >-
+      Carried gaps of done() (DEF-0119, TASK-131), STATED and unchanged: (G1) done()'s reads of the log are not atomic with its append; (G2) the approval_record named by an accepting NEEDS_REVIEW record is checked for form only, not for existence; (G3) the real writer path with a lease has not been run (done() was tested with stand-ins only): the first real run exercises it and must record what it shows. DA-2's limit holds: no caller of the governor, reconcile or done adds acceptance logic beside the governor's.
+  - AC9: >-
+      Tests: tests/unit/test_claude_starter.py (each refusal of AC1; each refusal of AC2 and AC3 for a missing, non-regular or hash-differing file; the exact argument list of AC3 and the prompt of AC4 against a stand-in process runner; the order of the prompt after "-p"; no shell; stdin closed; the timeout and the termination; a non-zero exit; the environment of AC6 equal to the constant list and refused without PATH; the import list of AC7); tests/unit/test_cli.py (the entry line passes the real starter; main with starter=None still gives NO_STARTER; the help line of AC10; a stand-in starter still works; a test that asserts the old help text is changed only as AC10 states); tests/property/test_claude_starter_properties.py (for random env values a refused input never starts a process, the starter returns no value, the environment passed is a subset of the AC6 list). No test starts a real runtime or writes a file in the repository. The whole suite passes locally (`timeout 110 python tests/run_tests.py < /dev/null`, in slices) and on the CI's branch run; pyflakes silent; the preceding CI revision accepts the module. One more file is changed (the contract's seventh path): in tests/unit/test_gitread.py only the test test_no_other_src_module_imports_subprocess changes: its assertion becomes exact equality to the sorted list ['src/aieos_bootstrap/gitread.py', 'src/aieos_runtime/claude_starter.py'], no looser form (no subset, prefix or at-most-N test); its docstring keeps "TASK-024 AC6" and names TASK-133 as the amending task; no other line of the file changes (the diff is brought at acceptance). The change mirrors the one ALLOW entry of CI revision 20 (STARTER = 'src/aieos_runtime/claude_starter.py'); INV-001's review question stays the one of AC11.
+  - AC10: >-
+      cli.py edit: the help line (cli.py:151) `launch <task>  launch a session for a task (no runtime starter is shipped)` becomes `launch <task>  launch a session for a task through the pinned runtime starter`; the docstring lines that say the entry line passes no starter (cli.py:8-10, :62-70) are updated to say it passes the starter of src/aieos_runtime; NO_STARTER (cli.py:182) stays for starter=None. Two further changes, in the `if __name__ == '__main__':` block (cli.py:746-747): the import of aieos_runtime.claude_starter is added inside that block, and the entry line at :747 passes `starter=claude_starter.starter`. No other line of cli.py changes: the changed lines are exactly these two, the help line (:151) and the docstring lines named above (the diff is brought at acceptance).
+  - AC11: >-
+      Evidence profile for critical (assurance-model.md section 5): unit_test, integration_test (a departure if absent, as TASK-128), property/fuzz, deterministic_rule, static_security_analysis, ai_review by the A59/A60 pair (same-vendor, not cross-model), a per-article review, and two separate decision_agent_reviews (assurance-model.md:85). The human_review entries (the architecture entry; INV-003's) are met ONLY as the owner's answer to Q-A allows: if yes, the decision agent's review plus another Claude model's review fill them and the decision matrix records the owner's words; if no or no answer, the task is built and not accepted, and the software is not used until the owner has reviewed it on a plain-words explanation. The GOV-003 shadow result is a stated departure as in TASK-125 to TASK-131 (critical_cr). The question for the way-2 review and the decision agent: does the pinned program count as "an allowed executable that runs a model" under INV-001, and is the placement outside src/aieos_bootstrap/ a valid reading.
+  - AC12: >-
+      Limits, stated at acceptance (D-5986 M4, M5, M9): the launch itself is NOT done by this task; the first real launch is its own decision under A73 after the gate check (DEF-0095, DEF-0101, DEF-0117) and the pre-run record (master-plan.md:117); -p mode silently ignores settings files that fail validation (--help lines 177-180) and skips the workspace trust dialog (--help lines 172-176), so the first real run's pre-run record must show, in a launched run and before any work: (i) the AIEOS PreToolUse hook REFUSES one call outside the write-set (not only that it fires); (ii) the owner's command guard fires; (iii) the read hook records one read; (iv) the MCP server's status answers with the session's task, which shows that the AIEOS_* values reach it; a hook that fails to start (shell or PYTHONPATH) or exceeds its 10-second timeout lets the call through (stated limit); known stale text, not changed here: claude_code_pretool_hook.py:8-9 says placing the hook is the owner's under A51 item (4), and A73 has since moved settings and hooks to the decision agent; the gap between the hash check and the start; no allow rule means every edit and command is denied, and the effective permission mode and its source are named in that record; the run uses the desktop app's stored login, and whether it costs money per use is the owner's and is checked at the first-run decision; lease renewal; the undetected denied prompt; surviving child processes; what the root-after read does not see (DEF-0101 Log 2026-11-07); a finish refused "stored_reads"; the pin that stops working at each app update; observed 2.1.321 against declared 2.1.317. DEF-0101 may be closed only at this task's acceptance and records step, by a Log line, and only if the acceptance says every open point of the item is met or moved by its own decision (the point "launching with a runtime" is the first real run's).
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [src/aieos_runtime/__init__.py, src/aieos_runtime/claude_starter.py, src/aieos_bootstrap/cli.py, tests/unit/test_claude_starter.py, tests/unit/test_cli.py, tests/property/test_claude_starter_properties.py, tests/unit/test_gitread.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: critical
+autonomy: {max_level: L1, budgets: {tokens: 1500k, wall_time: 10h, retries: 3, human_attention: 0m}}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC9]}
+  - {gate: G3, check: constitution, args: [AC8, AC10, AC11, AC12, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied (human_review entries only as AC11 states) AND the aieos-checks and aieos-native runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false. The task BUILDS the starter and launches nothing (as TASK-131.yaml:109-110). A75 (decision-matrix.md:136) gives the acceptance of this software to the decision agent, the owner told after, with the first clause of CR-002 part 4 limit 5 unchanged (see Q-A and AC11). The field is bound to the contract bytes (evaluation.py:64-75).
+owner_kept_act: false
