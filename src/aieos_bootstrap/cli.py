@@ -7,7 +7,7 @@ What it does:
 - It is run as ``python -m aieos_bootstrap.cli <command> [flags]``; the installed name is open (specification 7 :26),
   and "aieos <command>" in texts means that run form. ``main(argv, stdout, environ, clock, starter=None)`` returns 0,
   1 or 2 and never raises: every Exception is caught; KeyboardInterrupt and SystemExit are not. os.environ is read only
-  in the entry line, which passes no starter.
+  in the entry line, which passes the starter of src/aieos_runtime.
 - Its own parser, not argparse: argv is exactly a list of str; argv[0] is a command of COMMANDS, tasks, end, status,
   init, launch, approve, edit, reject, import or run; end takes its session as argv[1], and launch, approve, edit,
   reject, import and run their task as argv[1]; run takes its intent as argv[2] (a non-empty value not beginning
@@ -59,8 +59,9 @@ What it does:
 - launch <task> (task TASK-094; specification 7 :34-35), ``aieos launch``, launches a session for the task from
   outside the runtime through launcher.launch_outside; the task must fully match TASK. After the parse it is refused
   inside a runtime: in_runtime(environ) true gives exit 1 and the one finding LAUNCH_RUNTIME_REFUSAL; else, with no
-  starter (main's starter is None, and the entry line passes none), it gives exit 1 and the one finding NO_STARTER, no
-  runtime starter being shipped, with neither the clock nor launch_outside called; else
+  starter (main's starter is None, as in a test; the entry line passes the starter of src/aieos_runtime), it gives exit
+  1 and the one finding NO_STARTER, no runtime starter being shipped, with neither the clock nor launch_outside called;
+  else
   launcher.launch_outside(root, task, clock, starter) once, looked up at each call. "done" gives exit 0 and the lines
   "session: <id>", "run: returned", "end: done" and "handoff: <written or none>", then "finding: <text>" per finding,
   or under --json one JSON line of session_id and findings; "not granted" and "refused" give exit 1 and the findings
@@ -148,7 +149,7 @@ USAGE = ('usage: python -m aieos_bootstrap.cli tasks --root <path> [--json]\n'
          '  end <session>  end a crashed session from outside the runtime\n'
          '  status         the status of the project\n'
          '  init           create the project-state layout in a folder that has none\n'
-         '  launch <task>  launch a session for a task (no runtime starter is shipped)\n'
+         '  launch <task>  launch a session for a task through the pinned runtime starter\n'
          '  approve <task> approve the task\'s drafted contract version\n'
          '  edit <task>    record an edit note on the task\'s drafted contract version\n'
          '  reject <task>  reject the task\'s drafted contract version\n'
@@ -744,4 +745,5 @@ def _clock():
 
 
 if __name__ == '__main__':
-    sys.exit(main(sys.argv[1:], sys.stdout, os.environ, _clock))
+    from aieos_runtime import claude_starter
+    sys.exit(main(sys.argv[1:], sys.stdout, os.environ, _clock, starter=claude_starter.starter))
