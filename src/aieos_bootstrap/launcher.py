@@ -1,8 +1,8 @@
 """The launcher's core path of gov-AIEOS (task TASK-086; specification 7 revision 2, section 5; specification 5
 revision 5, section 11 point 7; specification 3 revision 5, sections 1 and 2): start and end of one session over
-adapter.start and adapter.end (TASK-051), callable by tests. It starts no runtime: no process but through gitread, no
-hook placed, no setting changed; who decides running `aieos launch` with a runtime, and building a starter, is set
-by specification 7 :35.
+adapter.start and adapter.end (TASK-051), callable by tests. Its own code starts no runtime: no process but through gitread, no
+hook placed, no setting changed; the starter that the entry line of cli.py passes (src/aieos_runtime) is the caller's and
+starts the pinned runtime; who decides each real launch is set by specification 7 :35.
 
 ``start(root, repo, task_id, adapter_name, holder, recorder, now, expires_at, ...)`` returns a mapping with exactly
 START_KEYS and never raises once it is called with its signature (a keyword max_risk, which start no longer has, is a
@@ -226,7 +226,7 @@ With two task.submitted events that carry the token the launch still reports "do
 findings and the commit null. A grant whose token is None (an out-of-form grant with a str session id) takes
 handoff_file.write's path without a token: commit null and no finding; a grant token that is neither None nor a mapping
 is refused by handoff_file.write with reason "argument" and handled as any refused handoff. The shipped
-command passes no starter, so it starts no runtime. launch_outside reads the
+command passes the starter of src/aieos_runtime, which starts the pinned runtime. launch_outside reads the
 caller's clock twice and calls the caller's starter, the two exceptions to "reads no clock" and "starts no process but
 through gitread" above: the starter does whatever the caller's code does; the core's own code starts no process. A
 BaseException from the starter is re-raised after the end and the handoff. Since task TASK-125 the write set read at

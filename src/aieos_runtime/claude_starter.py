@@ -1,4 +1,4 @@
-"""The real runtime starter of `aieos launch` (task TASK-132, contract AC1 to AC8), standard library only.
+"""The real runtime starter of `aieos launch` (task TASK-134, contract AC1 to AC12), standard library only.
 
 starter(env) is the starter that the entry line of cli.py passes to launcher.launch_outside: it is called with the
 launcher's environment copy (exactly AIEOS_SESSION_ID, AIEOS_ROOT and AIEOS_BASE), starts the pinned Claude Code program

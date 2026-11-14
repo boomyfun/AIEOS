@@ -1,4 +1,4 @@
-"""Unit tests of aieos_runtime.claude_starter (task TASK-132, the real runtime starter of `aieos launch`), standard
+"""Unit tests of aieos_runtime.claude_starter (task TASK-134, the real runtime starter of `aieos launch`), standard
 library only. No test starts a process, a runtime or anything else, and no test writes or reads a file of the
 repository except this file and the module's own source, with pathlib's read_bytes, for the ast checks: the process
 function (the module's `subprocess`), the file functions (the module's `Path`) and the starter's own environment
@@ -144,12 +144,12 @@ def run_starter(env=None, **world):
 
 class TASK132AC1Form(unittest.TestCase):
     def test_a_good_env_starts_once_and_returns_none(self):
-        """TASK-132 AC1: with the three variables in form, starter(env) returns None and starts the process once."""
+        """TASK-134 AC1: with the three variables in form, starter(env) returns None and starts the process once."""
         w, value, error = run_starter()
         self.assertEqual((value, error, len(w.sub.calls)), (None, None, 1))
 
     def test_each_variable_is_required_in_form(self):
-        """TASK-132 AC1: a missing, non-str or out-of-form AIEOS_SESSION_ID, AIEOS_ROOT (not absolute) or AIEOS_BASE
+        """TASK-134 AC1: a missing, non-str or out-of-form AIEOS_SESSION_ID, AIEOS_ROOT (not absolute) or AIEOS_BASE
         (not exactly 40 lowercase hexadecimal characters) raises StarterError before any process starts."""
         bad = {'AIEOS_SESSION_ID': [None, 5, b'x', '', 'a b', 'a/b', 'a' * 129, 'é'],
                'AIEOS_ROOT': [None, 5, '', 'relative\\dir', 'dir', '.'],
@@ -168,7 +168,7 @@ class TASK132AC1Form(unittest.TestCase):
             self.assertEqual(w.sub.calls, [], name)
 
     def test_the_longest_and_the_odd_session_forms_are_accepted(self):
-        """TASK-132 AC1: AIEOS_SESSION_ID of 1 and of 128 characters over letters, digits, ".", "_" and "-" is
+        """TASK-134 AC1: AIEOS_SESSION_ID of 1 and of 128 characters over letters, digits, ".", "_" and "-" is
         accepted."""
         for session in ('a', 'A' * 128, '0.9_z-Z'):
             env = dict(ENV)
@@ -179,12 +179,12 @@ class TASK132AC1Form(unittest.TestCase):
 
 class TASK132AC2Executable(unittest.TestCase):
     def test_the_pinned_constants_are_verbatim(self):
-        """TASK-132 AC2: EXE_PATH and EXE_SHA256 are the pinned values of the contract, as constant strings."""
+        """TASK-134 AC2: EXE_PATH and EXE_SHA256 are the pinned values of the contract, as constant strings."""
         self.assertEqual(claude_starter.EXE_PATH, EXE)
         self.assertEqual(claude_starter.EXE_SHA256, 'e6dae5fc45902b15751f2591a02f51760351c4788c5fd8291b3f1443d40c13a4')
 
     def test_refusals_of_the_executable(self):
-        """TASK-132 AC2: a missing executable, one that is not a regular file and one whose hash differs each raise
+        """TASK-134 AC2: a missing executable, one that is not a regular file and one whose hash differs each raise
         StarterError before any process starts."""
         cases = [
             dict(files={MCP: MCP_BYTES, SETTINGS: SETTINGS_BYTES}),
@@ -197,7 +197,7 @@ class TASK132AC2Executable(unittest.TestCase):
             self.assertEqual((got, w.sub.calls), (None, []), case)
 
     def test_cmd_bat_and_other_targets_are_refused_outright(self):
-        """TASK-132 AC2: a target ending in .cmd, .bat, .com or nothing is refused even when the file exists and its
+        """TASK-134 AC2: a target ending in .cmd, .bat, .com or nothing is refused even when the file exists and its
         hash is the pinned one."""
         for target in ('C:\\x\\claude.cmd', 'C:\\x\\claude.bat', 'C:\\x\\claude.com', 'C:\\x\\claude', 'C:\\x\\a.EXE.txt'):
             files = {target: EXE_BYTES, MCP: MCP_BYTES, SETTINGS: SETTINGS_BYTES}
@@ -207,7 +207,7 @@ class TASK132AC2Executable(unittest.TestCase):
             self.assertEqual(w.sub.calls, [], target)
 
     def test_no_search_and_no_expansion(self):
-        """TASK-132 AC2: the module names no PATH search, no user-directory expansion and no variable expansion
+        """TASK-134 AC2: the module names no PATH search, no user-directory expansion and no variable expansion
         (which, expanduser, expandvars, getenv), as a name or an attribute."""
         tree = ast.parse(MODULE.read_bytes().decode('utf-8'))
         used = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
@@ -217,13 +217,13 @@ class TASK132AC2Executable(unittest.TestCase):
 
 class TASK132AC3Arguments(unittest.TestCase):
     def test_the_argument_list_is_exact(self):
-        """TASK-132 AC3: the process is started with exactly the ten-element list of the contract, in order."""
+        """TASK-134 AC3: the process is started with exactly the ten-element list of the contract, in order."""
         w, _, error = run_starter()
         self.assertIsNone(error)
         self.assertEqual(w.sub.calls[0][0], ARGS)
 
     def test_the_prompt_follows_dash_p_and_never_the_variadic_option(self):
-        """TASK-132 AC3: the prompt is the element right after "-p" and does not follow "--mcp-config"; the value of
+        """TASK-134 AC3: the prompt is the element right after "-p" and does not follow "--mcp-config"; the value of
         "--mcp-config" is the MCP file and of "--settings" the settings file."""
         args = run_starter()[0].sub.calls[0][0]
         self.assertEqual(args[args.index('-p') + 1], claude_starter.PROMPT)
@@ -234,14 +234,14 @@ class TASK132AC3Arguments(unittest.TestCase):
         self.assertNotEqual(args[args.index('--mcp-config') + 2:][:1], [claude_starter.PROMPT])
 
     def test_no_option_that_widens_permissions(self):
-        """TASK-132 AC3: none of --dangerously-skip-permissions, --allow-dangerously-skip-permissions,
+        """TASK-134 AC3: none of --dangerously-skip-permissions, --allow-dangerously-skip-permissions,
         --permission-mode, --allowedTools, --tools, --add-dir and --setting-sources is in the list."""
         args = run_starter()[0].sub.calls[0][0]
         self.assertEqual(set(args) & set(FORBIDDEN_FLAGS), set())
         self.assertEqual(args[args.index('--permission-prompts') + 1], 'none')
 
     def test_the_runtime_file_constants_are_verbatim(self):
-        """TASK-132 AC3: MCP_FILE, MCP_SHA256, SETTINGS_FILE and SETTINGS_SHA256 are the pinned values."""
+        """TASK-134 AC3: MCP_FILE, MCP_SHA256, SETTINGS_FILE and SETTINGS_SHA256 are the pinned values."""
         self.assertEqual((claude_starter.MCP_FILE, claude_starter.SETTINGS_FILE), (MCP, SETTINGS))
         self.assertEqual(claude_starter.MCP_SHA256,
                          'cbfc039cd668ca362c5713ad5498a3c18eeca7a59505363756e303c81035f882')
@@ -249,7 +249,7 @@ class TASK132AC3Arguments(unittest.TestCase):
                          'bb9c8724b7e24955f07ea185b045008adcf313dfe9ecc9268a3023c9e75bf26b')
 
     def test_refusals_of_the_runtime_files(self):
-        """TASK-132 AC3: a missing, non-regular or hash-differing MCP file or settings file each raises StarterError
+        """TASK-134 AC3: a missing, non-regular or hash-differing MCP file or settings file each raises StarterError
         before any process starts."""
         for path in (MCP, SETTINGS):
             keep = {EXE: EXE_BYTES, MCP: MCP_BYTES, SETTINGS: SETTINGS_BYTES}
@@ -264,7 +264,7 @@ class TASK132AC3Arguments(unittest.TestCase):
 
 class TASK132AC4Prompt(unittest.TestCase):
     def test_the_prompt_is_one_constant_string(self):
-        """TASK-132 AC4: PROMPT is exactly the sentence of the contract, and it is a module constant bound to a
+        """TASK-134 AC4: PROMPT is exactly the sentence of the contract, and it is a module constant bound to a
         string literal."""
         self.assertEqual(claude_starter.PROMPT, PROMPT)
         tree = ast.parse(MODULE.read_bytes().decode('utf-8'))
@@ -274,7 +274,7 @@ class TASK132AC4Prompt(unittest.TestCase):
         self.assertIsInstance(bound[0].value, ast.Constant)
 
     def test_no_file_is_read_for_the_prompt(self):
-        """TASK-132 AC4 and AC5: the only files read are the three of the contract, once each."""
+        """TASK-134 AC4 and AC5: the only files read are the three of the contract, once each."""
         w, _, error = run_starter()
         self.assertIsNone(error)
         self.assertEqual(sorted(w.reads), sorted([EXE, MCP, SETTINGS]))
@@ -282,7 +282,7 @@ class TASK132AC4Prompt(unittest.TestCase):
 
 class TASK132AC5Process(unittest.TestCase):
     def test_the_process_form(self):
-        """TASK-132 AC5: shell False, stdin the process module's DEVNULL, the working directory AIEOS_ROOT, timeout
+        """TASK-134 AC5: shell False, stdin the process module's DEVNULL, the working directory AIEOS_ROOT, timeout
         the integer 6600, and no capture of output (no stdout, stderr or capture_output keyword)."""
         w, _, _ = run_starter()
         kwargs = w.sub.calls[0][1]
@@ -294,13 +294,13 @@ class TASK132AC5Process(unittest.TestCase):
         self.assertLessEqual(set(kwargs), {'shell', 'stdin', 'cwd', 'timeout', 'env', 'check'})
 
     def test_a_timeout_raises(self):
-        """TASK-132 AC5: a timeout of the process (its termination is the process function's) raises StarterError."""
+        """TASK-134 AC5: a timeout of the process (its termination is the process function's) raises StarterError."""
         w, got, error = run_starter(timeout=True)
         self.assertIsInstance(error, claude_starter.StarterError)
         self.assertEqual((got, len(w.sub.calls)), (None, 1))
 
     def test_a_non_zero_exit_raises_and_zero_returns_none(self):
-        """TASK-132 AC5: a non-zero exit code raises StarterError; exit code 0 returns None."""
+        """TASK-134 AC5: a non-zero exit code raises StarterError; exit code 0 returns None."""
         for code in (1, 2, 255, -1):
             _, got, error = run_starter(returncode=code)
             self.assertIsInstance(error, claude_starter.StarterError, code)
@@ -311,12 +311,12 @@ class TASK132AC5Process(unittest.TestCase):
 
 class TASK132AC6Environment(unittest.TestCase):
     def test_the_constant_lists(self):
-        """TASK-132 AC6: the two environment lists are module constants equal to the contract's lists."""
+        """TASK-134 AC6: the two environment lists are module constants equal to the contract's lists."""
         self.assertEqual(tuple(claude_starter.ENV_FROM_LAUNCHER), LAUNCHER_VARS)
         self.assertEqual(tuple(claude_starter.ENV_FROM_PROCESS), PROCESS_VARS)
 
     def test_the_environment_passed_is_exactly_the_lists(self):
-        """TASK-132 AC6: the environment passed to the process holds the three launcher variables and the listed
+        """TASK-134 AC6: the environment passed to the process holds the three launcher variables and the listed
         variables of the starter's own environment that are present, with their values, and nothing else."""
         environ = dict(PROCESS)
         environ.update({name: 'v-' + name for name in REFUSED_VARS})
@@ -327,7 +327,7 @@ class TASK132AC6Environment(unittest.TestCase):
         self.assertEqual(w.sub.calls[0][1]['env'], want)
 
     def test_an_absent_listed_variable_is_left_out_but_path_is_required(self):
-        """TASK-132 AC6: a listed variable other than PATH that is absent is not passed; without PATH the starter
+        """TASK-134 AC6: a listed variable other than PATH that is absent is not passed; without PATH the starter
         raises StarterError before any process starts."""
         environ = {k: v for k, v in PROCESS.items() if k not in ('SYSTEMROOT', 'TMP')}
         w, _, error = run_starter(environ=environ)
@@ -339,7 +339,7 @@ class TASK132AC6Environment(unittest.TestCase):
         self.assertEqual((got, w.sub.calls), (None, []))
 
     def test_extra_launcher_variables_are_not_passed(self):
-        """TASK-132 AC6: a key of the launcher's env beyond the three is not passed."""
+        """TASK-134 AC6: a key of the launcher's env beyond the three is not passed."""
         env = dict(ENV)
         env['AIEOS_EXTRA'] = 'x'
         w, _, error = run_starter(env)
@@ -349,7 +349,7 @@ class TASK132AC6Environment(unittest.TestCase):
 
 class TASK132AC7NoCore(unittest.TestCase):
     def test_the_import_list(self):
-        """TASK-132 AC7: the module imports no aieos_bootstrap module at all, and only hashlib, ntpath, os, pathlib, re
+        """TASK-134 AC7: the module imports no aieos_bootstrap module at all, and only hashlib, ntpath, os, pathlib, re
         and subprocess of the standard library."""
         tree = ast.parse(MODULE.read_bytes().decode('utf-8'))
         names = set()
@@ -363,7 +363,7 @@ class TASK132AC7NoCore(unittest.TestCase):
         self.assertFalse([x for x in names if x.split('.')[0] == 'aieos_bootstrap'])
 
     def test_the_module_reaches_no_core_name(self):
-        """TASK-132 AC7: the module names none of governor, reconcile, done, writer, execution, records or
+        """TASK-134 AC7: the module names none of governor, reconcile, done, writer, execution, records or
         evaluation."""
         tree = ast.parse(MODULE.read_bytes().decode('utf-8'))
         used = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
@@ -372,7 +372,7 @@ class TASK132AC7NoCore(unittest.TestCase):
                          set())
 
     def test_the_one_public_function(self):
-        """TASK-132 AC7: the module holds the one public function starter (every other function is private, its name
+        """TASK-134 AC7: the module holds the one public function starter (every other function is private, its name
         begins with an underscore)."""
         tree = ast.parse(MODULE.read_bytes().decode('utf-8'))
         public = [n.name for n in tree.body if isinstance(n, ast.FunctionDef) and not n.name.startswith('_')]
@@ -381,7 +381,7 @@ class TASK132AC7NoCore(unittest.TestCase):
 
 class TASK132AC9ThisFile(unittest.TestCase):
     def test_this_test_file(self):
-        """TASK-132 AC9: this file imports no tempfile, sqlite3, shutil or subprocess, names no open, compile, exec,
+        """TASK-134 AC9: this file imports no tempfile, sqlite3, shutil or subprocess, names no open, compile, exec,
         eval or input, and has no one-argument .replace() and no .replace(target=...)."""
         tree = ast.parse(HERE.read_bytes().decode('utf-8'))
         imported = set()
@@ -398,13 +398,13 @@ class TASK132AC9ThisFile(unittest.TestCase):
         self.assertEqual(replaces, [])
 
     def test_every_test_names_its_criteria(self):
-        """TASK-132 AC9: every test function of this module names "TASK-132 AC" in its own docstring, more than 15
+        """TASK-134 AC9: every test function of this module names "TASK-134 AC" in its own docstring, more than 15
         in all."""
         tree = ast.parse(HERE.read_bytes().decode('utf-8'))
         tests = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name.startswith('test_')]
         self.assertGreater(len(tests), 15)
         for node in tests:
-            self.assertIn('TASK-132 AC', ast.get_docstring(node) or '', node.name)
+            self.assertIn('TASK-134 AC', ast.get_docstring(node) or '', node.name)
 
 
 if __name__ == '__main__':

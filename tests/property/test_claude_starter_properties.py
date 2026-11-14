@@ -1,4 +1,4 @@
-"""Property tests of aieos_runtime.claude_starter (task TASK-132, AC1, AC2, AC3, AC5 and AC6), standard library only,
+"""Property tests of aieos_runtime.claude_starter (task TASK-134, AC1, AC2, AC3, AC5 and AC6), standard library only,
 with fixed seeds. For random values, an input out of form by construction never starts a process and the starter raises
 StarterError; an input in form starts the process once, returns no value and passes an environment that is a subset of
 the contract's lists, with the values of its sources; a stand-in file whose bytes differ from the pinned ones is
@@ -151,7 +151,7 @@ def bad_value(rng, name):
 
 class TASK132PropertiesInput(unittest.TestCase):
     def test_a_refused_input_never_starts_a_process(self):
-        """TASK-132 AC1: for random env values with one of the three variables missing or out of form by
+        """TASK-134 AC1: for random env values with one of the three variables missing or out of form by
         construction, the starter raises StarterError, returns no value and starts no process."""
         for seed in SEEDS:
             rng = random.Random(seed)
@@ -167,7 +167,7 @@ class TASK132PropertiesInput(unittest.TestCase):
                 self.assertEqual((value, sub.calls), (None, []), (seed, name, env))
 
     def test_an_input_in_form_starts_once_and_returns_none(self):
-        """TASK-132 AC1 and AC5: for random env values in form, the process starts once, the starter returns None
+        """TASK-134 AC1 and AC5: for random env values in form, the process starts once, the starter returns None
         and the working directory is the env's AIEOS_ROOT."""
         for seed in SEEDS:
             rng = random.Random(seed)
@@ -180,7 +180,7 @@ class TASK132PropertiesInput(unittest.TestCase):
 
 class TASK132PropertiesEnvironment(unittest.TestCase):
     def test_the_environment_passed_is_a_subset_of_the_lists(self):
-        """TASK-132 AC6: for random starter environments, with other names added (credentials included), the
+        """TASK-134 AC6: for random starter environments, with other names added (credentials included), the
         environment passed is a subset of the contract's lists and holds the values of its sources."""
         for seed in SEEDS:
             rng = random.Random(seed)
@@ -202,7 +202,7 @@ class TASK132PropertiesEnvironment(unittest.TestCase):
                         self.assertNotIn(name, passed)
 
     def test_no_path_means_no_process(self):
-        """TASK-132 AC6: for random starter environments without PATH, the starter raises StarterError and starts no
+        """TASK-134 AC6: for random starter environments without PATH, the starter raises StarterError and starts no
         process."""
         for seed in SEEDS:
             rng = random.Random(seed)
@@ -216,7 +216,7 @@ class TASK132PropertiesEnvironment(unittest.TestCase):
 
 class TASK132PropertiesFiles(unittest.TestCase):
     def test_bytes_that_differ_are_refused(self):
-        """TASK-132 AC2 and AC3: for random one-byte changes and random other bytes of the executable, the MCP file
+        """TASK-134 AC2 and AC3: for random one-byte changes and random other bytes of the executable, the MCP file
         or the settings file, the starter raises StarterError and starts no process."""
         for seed in SEEDS:
             rng = random.Random(seed)
@@ -237,7 +237,7 @@ class TASK132PropertiesFiles(unittest.TestCase):
                 self.assertEqual((value, sub.calls), (None, []), (seed, path))
 
     def test_the_argument_list_does_not_depend_on_the_env(self):
-        """TASK-132 AC3: for random env values in form, the list passed to the process is the same ten elements."""
+        """TASK-134 AC3: for random env values in form, the list passed to the process is the same ten elements."""
         first = None
         for seed in SEEDS:
             rng = random.Random(seed)
@@ -252,11 +252,11 @@ class TASK132PropertiesFiles(unittest.TestCase):
 
 class TASK132PropertiesThisFile(unittest.TestCase):
     def test_every_test_names_its_criteria(self):
-        """TASK-132 AC9: every test of this module names "TASK-132 AC" in its own docstring."""
+        """TASK-134 AC9: every test of this module names "TASK-134 AC" in its own docstring."""
         for cls in (TASK132PropertiesInput, TASK132PropertiesEnvironment, TASK132PropertiesFiles):
             for name in dir(cls):
                 if name.startswith('test_'):
-                    self.assertIn('TASK-132 AC', getattr(cls, name).__doc__ or '', name)
+                    self.assertIn('TASK-134 AC', getattr(cls, name).__doc__ or '', name)
 
 
 if __name__ == '__main__':

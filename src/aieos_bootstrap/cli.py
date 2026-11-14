@@ -60,15 +60,16 @@ What it does:
   outside the runtime through launcher.launch_outside; the task must fully match TASK. After the parse it is refused
   inside a runtime: in_runtime(environ) true gives exit 1 and the one finding LAUNCH_RUNTIME_REFUSAL; else, with no
   starter (main's starter is None, as in a test; the entry line passes the starter of src/aieos_runtime), it gives exit
-  1 and the one finding NO_STARTER, no runtime starter being shipped, with neither the clock nor launch_outside called;
+  1 and the one finding NO_STARTER, no runtime starter given to main (the entry line always passes the starter of
+  src/aieos_runtime, so this is the case of a test), with neither the clock nor launch_outside called;
   else
   launcher.launch_outside(root, task, clock, starter) once, looked up at each call. "done" gives exit 0 and the lines
   "session: <id>", "run: returned", "end: done" and "handoff: <written or none>", then "finding: <text>" per finding,
   or under --json one JSON line of session_id and findings; "not granted" and "refused" give exit 1 and the findings
   "launch: <result> <reason>" then the answer's findings; an answer out of form, its types checked exactly, gives
   LAUNCH_OUT_OF_FORM; a raise in launch_outside gives "launch: a step raised <type>", and a raise in _render_launch
-  "cli: a step raised <type>". As shipped, launch starts no runtime; who decides starting one, and building a
-  starter, is set by specification 7 :35.
+  "cli: a step raised <type>". As shipped, the entry line passes the starter of src/aieos_runtime, which starts the
+  pinned runtime; who decides each real launch, and the first real run, is set by specification 7 :35.
 - approve <task>, edit <task> and reject <task> (task TASK-096; specification 7 section 4, specification 1 section
   12), ``aieos approve``, ``aieos edit`` and ``aieos reject``, record an approval, an edit note or a rejection of the
   task's drafted contract version through launcher.approval_act, which writes through the writer. --class is
@@ -725,7 +726,7 @@ def _run(argv, environ, clock, starter=None):
 def main(argv, stdout, environ, clock, starter=None):
     """Run one command; return 0, 1 or 2; never raise an Exception. environ is read by end, init, launch, approve,
     edit, reject, import and run, after the parse, through in_runtime; tasks and status do not read it. starter is
-    None unless a caller passes one; the entry line passes none."""
+    None unless a caller passes one; the entry line passes the starter of src/aieos_runtime."""
     try:
         code, text = _run(argv, environ, clock, starter)
     except Exception:

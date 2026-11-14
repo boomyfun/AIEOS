@@ -600,7 +600,7 @@ class SingleWrapper(unittest.TestCase):
         self.assertEqual(os_calls, {'isabs', 'isdir', 'get'})
 
     def test_no_other_src_module_imports_subprocess(self):
-        """TASK-024 AC6 and TASK-024 AC12, as amended by TASK-133: gitread.py and the runtime starter
+        """TASK-024 AC6 and TASK-024 AC12, as amended by TASK-134: gitread.py and the runtime starter
         src/aieos_runtime/claude_starter.py are the only modules of src/ that import subprocess (the failing case: the
         check finds gitread itself)."""
         found = []

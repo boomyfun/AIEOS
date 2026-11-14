@@ -1225,9 +1225,10 @@ class TASK115AC4Stale(unittest.TestCase):
         used = "Its use on a real project is not decided by this text."
         old_used = "It is not run on any real project: its real use is the owner's, asked separately."
         pairs = (
-            ('cli.py', "As shipped, launch starts no runtime: starting one stays the owner's (spec 7 :35).",
-             'As shipped, launch starts no runtime; who decides starting one, and building a starter, is set by '
-             'specification 7 :35.', 1),
+            ('cli.py', 'As shipped, launch starts no runtime; who decides starting one, and building a starter, is set by '
+             'specification 7 :35.',
+             'As shipped, the entry line passes the starter of src/aieos_runtime, which starts the pinned runtime; who '
+             'decides each real launch, and the first real run, is set by specification 7 :35.', 1),
             ('cli.py', "it drafts nothing: reading the repository and drafting the proposals are a launched session's,"
              " the owner's.",
              "it drafts nothing: reading the repository and drafting the proposals are a launched session's.", 1),
@@ -1239,8 +1240,11 @@ class TASK115AC4Stale(unittest.TestCase):
              'Nothing runs this module but its tests and its uses on a real project, each decided on its own.', 1),
             ('launcher.py', "It starts no runtime: no process but through gitread, no hook placed, no setting changed;"
              " running `aieos launch` with a runtime stays the owner's (DM A51 item (4)).",
-             'It starts no runtime: no process but through gitread, no hook placed, no setting changed; who decides '
-             'running `aieos launch` with a runtime, and building a starter, is set by specification 7 :35.', 1),
+             'Its own code starts no runtime: no process but through gitread, no hook placed, no setting changed; the '
+             "starter that the entry line of cli.py passes (src/aieos_runtime) is the caller's and starts the pinned "
+             'runtime; who decides each real launch is set by specification 7 :35.', 1),
+            ('launcher.py', 'The shipped command passes no starter, so it starts no runtime.',
+             'The shipped command passes the starter of src/aieos_runtime, which starts the pinned runtime.', 1),
             ('launcher.py', "Reading the repository and drafting the proposals are a launched session's, and every "
              "launch is the owner's.",
              "Reading the repository and drafting the proposals are a launched session's, and every launch is decided "
