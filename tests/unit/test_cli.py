@@ -267,14 +267,17 @@ class TASK091AC3NeverRaises(unittest.TestCase):
             self.assertIn(rc, (0, 1, 2))
 
     def test_entry_line(self):
-        """TASK-091 AC3: the module's entry line is exactly `if __name__ == '__main__':` followed by
-        `sys.exit(main(sys.argv[1:], sys.stdout, os.environ, _clock))`, checked by ast."""
+        """TASK-091 AC3, as changed by TASK-132 AC10: the module's entry block is exactly `if __name__ ==
+        '__main__':` followed by `from aieos_runtime import claude_starter` and `sys.exit(main(sys.argv[1:],
+        sys.stdout, os.environ, _clock, starter=claude_starter.starter))`, checked by ast."""
         tree = ast.parse((SRC / 'cli.py').read_bytes().decode('utf-8'))
         last = tree.body[-1]
         self.assertIsInstance(last, ast.If)
         self.assertEqual(ast.unparse(last.test), "__name__ == '__main__'")
         self.assertEqual([ast.unparse(s) for s in last.body],
-                         ['sys.exit(main(sys.argv[1:], sys.stdout, os.environ, _clock))'])
+                         ['from aieos_runtime import claude_starter',
+                          'sys.exit(main(sys.argv[1:], sys.stdout, os.environ, _clock, '
+                          'starter=claude_starter.starter))'])
 
     def test_clock_form(self):
         """TASK-091 AC3: _clock gives a timezone-aware UTC datetime with microsecond 0."""
@@ -331,8 +334,9 @@ class TASK091AC5Module(unittest.TestCase):
         return ast.parse((SRC / 'cli.py').read_bytes().decode('utf-8'))
 
     def test_imports(self):
-        """TASK-091 AC5, as changed by TASK-092: cli.py imports exactly datetime, json, os, re, sys, and execution and
-        launcher from aieos_bootstrap."""
+        """TASK-091 AC5, as changed by TASK-092 and by TASK-132 AC10: cli.py imports exactly datetime, json, os, re,
+        sys, and execution and launcher from aieos_bootstrap, and claude_starter from aieos_runtime (inside the entry
+        block)."""
         names = set()
         for n in ast.walk(self.tree()):
             if isinstance(n, ast.Import):
@@ -340,7 +344,7 @@ class TASK091AC5Module(unittest.TestCase):
             elif isinstance(n, ast.ImportFrom):
                 names.update('%s.%s' % (n.module, a.name) for a in n.names)
         self.assertEqual(names, {'datetime', 'json', 'os', 're', 'sys', 'aieos_bootstrap.execution',
-                                 'aieos_bootstrap.launcher'})
+                                 'aieos_bootstrap.launcher', 'aieos_runtime.claude_starter'})
 
     def test_refused_names(self):
         """TASK-091 AC5: cli.py names no open, exec, eval, compile, __import__, input, argparse, subprocess, writer,
@@ -418,6 +422,64 @@ class TASK091AC6Docs(unittest.TestCase):
         self.assertGreater(len(tests), 20)
         for node in tests:
             self.assertIn('TASK-091 AC', ast.get_docstring(node) or '', node.name)
+
+
+OLD_HELP = '  launch <task>  launch a session for a task (no runtime starter is shipped)\n'
+NEW_HELP = '  launch <task>  launch a session for a task through the pinned runtime starter\n'
+
+
+class TASK132AC10Cli(unittest.TestCase):
+    def test_the_help_line(self):
+        """TASK-091 AC1 as changed by TASK-132 AC10: USAGE holds the new help line of launch and no longer the old
+        one."""
+        self.assertIn(NEW_HELP, cli.USAGE)
+        self.assertNotIn(OLD_HELP, cli.USAGE)
+        self.assertNotIn('no runtime starter is shipped)', cli.USAGE)
+
+    def test_no_starter_still_gives_the_finding(self):
+        """TASK-091 AC4 as kept by TASK-132 AC10: main with starter None gives exit 1 and the one finding NO_STARTER
+        for launch, with the clock and launch_outside not called; NO_STARTER keeps its text."""
+        self.assertEqual(cli.NO_STARTER, 'launch: no runtime starter is shipped (specification 7 :35, DEF-0101)')
+        sink, clock = Sink(), Clock()
+        with mock.patch.object(cli.launcher, 'launch_outside') as stand:
+            rc = cli.main(['launch', 'TASK-1', '--root', ROOT], sink, {}, clock)
+        self.assertEqual((rc, ''.join(sink.writes), stand.call_args_list, clock.calls),
+                         (1, 'finding: %s\n' % cli.NO_STARTER, [], 0))
+
+    def test_a_stand_in_starter_is_passed_through(self):
+        """TASK-091 AC4 as kept by TASK-132 AC10: a stand-in starter given to main reaches launch_outside as it is,
+        once, with the root, the task and the clock; a raise in launch_outside gives exit 1."""
+        starter = object()
+        sink, clock = Sink(), Clock()
+        with mock.patch.object(cli.launcher, 'launch_outside', side_effect=RuntimeError('x')) as stand:
+            rc = cli.main(['launch', 'TASK-1', '--root', ROOT], sink, {}, clock, starter)
+        self.assertEqual((rc, stand.call_args_list), (1, [mock.call(ROOT, 'TASK-1', clock, starter)]))
+        self.assertIn('RuntimeError', ''.join(sink.writes))
+
+    def test_the_runtime_package_is_imported_only_in_the_entry_block(self):
+        """TASK-091 AC5 as changed by TASK-132 AC10: every import of aieos_runtime in cli.py is inside the entry
+        block, and there is exactly one."""
+        tree = ast.parse((SRC / 'cli.py').read_bytes().decode('utf-8'))
+
+        def runtime_imports(root):
+            found = []
+            for n in ast.walk(root):
+                if isinstance(n, ast.ImportFrom) and (n.module or '').split('.')[0] == 'aieos_runtime':
+                    found.append(n)
+                elif isinstance(n, ast.Import) and any(a.name.split('.')[0] == 'aieos_runtime' for a in n.names):
+                    found.append(n)
+            return found
+        self.assertEqual(len(runtime_imports(tree)), 1)
+        self.assertEqual(len(runtime_imports(tree.body[-1])), 1)
+
+    def test_the_docstring_names_the_runtime_starter(self):
+        """TASK-091 AC6 as changed by TASK-132 AC10: cli.py's docstring says the entry line passes the starter of
+        src/aieos_runtime and no longer says that it passes no starter or none."""
+        doc = ast.get_docstring(ast.parse((SRC / 'cli.py').read_bytes().decode('utf-8')))
+        self.assertIn('the starter of src/aieos_runtime', doc)
+        self.assertNotIn('in the entry line, which passes no starter', doc)
+        self.assertNotIn('the entry line passes none', doc)
+        self.assertIn('no runtime starter', doc)
 
 
 if __name__ == '__main__':

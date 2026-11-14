@@ -600,8 +600,9 @@ class SingleWrapper(unittest.TestCase):
         self.assertEqual(os_calls, {'isabs', 'isdir', 'get'})
 
     def test_no_other_src_module_imports_subprocess(self):
-        """TASK-024 AC6 and TASK-024 AC12: gitread.py is the only module of src/ that imports subprocess (the failing
-        case: the check finds gitread itself)."""
+        """TASK-024 AC6 and TASK-024 AC12, as amended by TASK-133: gitread.py and the runtime starter
+        src/aieos_runtime/claude_starter.py are the only modules of src/ that import subprocess (the failing case: the
+        check finds gitread itself)."""
         found = []
         for p in sorted((ROOT / 'src').rglob('*.py')):
             tree = ast.parse(p.read_bytes().decode('utf-8'))
@@ -609,7 +610,7 @@ class SingleWrapper(unittest.TestCase):
                 if ((isinstance(n, ast.Import) and any(a.name.split('.')[0] == 'subprocess' for a in n.names))
                         or (isinstance(n, ast.ImportFrom) and (n.module or '').split('.')[0] == 'subprocess')):
                     found.append(p.relative_to(ROOT).as_posix())
-        self.assertEqual(found, ['src/aieos_bootstrap/gitread.py'])
+        self.assertEqual(found, ['src/aieos_bootstrap/gitread.py', 'src/aieos_runtime/claude_starter.py'])
 
     def test_the_three_modules_name_their_criteria(self):
         """TASK-024 AC11 and TASK-024 AC12: every test function of the three test modules names "TASK-024 ACn" in its
