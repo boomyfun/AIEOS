@@ -1,2 +1,4 @@
 # The local store of leases, sessions and reads is never committed (specification 2, section 3).
 .aieos/local/
+# Python's bytecode caches are build output, never committed (D-6230).
+__pycache__/
