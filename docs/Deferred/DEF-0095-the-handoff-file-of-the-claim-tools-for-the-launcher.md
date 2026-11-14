@@ -4,7 +4,7 @@
 - Opened: 2026-10-24 (session 308d8b07; decisions D-2131 and D-2134 and the acceptance decision of TASK-079, D-2161)
 - Deferred by: decision agent (A41, A51), D-2131 (the handoff file outside TASK-079) and D-2161 (TASK-079's acceptance).
 - Decision group: A (a task of specification 7, M7, the launcher's).
-- Blocks v0.1: yes (concept lines 936 to 942: over about 100 tasks the handoff must reach the next session's base by a stated rule; the stated rule exists in specification 7 :71-:75 but nothing enforces or automates the state commit, and no runtime starter writes the file in a real session; the first real run needs it, master-plan.md :116)
+- Blocks v0.1: yes (concept lines 936 to 942: over about 100 tasks the handoff must reach the next session's base by a stated rule; the stated rule exists in specification 7 :71-:75 but nothing enforces or automates the state commit, and the write that launch_outside makes after a done end (TASK-094), now reachable through the shipped starter (TASK-134), has not happened in a real session because none has run; the first real run needs it, master-plan.md :116)
 - Scheduled in: M8, the handoff file task (the write in a real session and the state-commit rule), before the first real run
 
 ## What

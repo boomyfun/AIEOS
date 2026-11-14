@@ -5,7 +5,7 @@
 - Deferred by: decision agent (A41, A51), D-2681 Q1 and Q3 (TASK-086's launcher writes no observed read-set record
   and leaves max_risk to its caller; these requirements are carried here).
 - Decision group: A (later M7 tasks within the self-build; launching with a runtime stays the owner's, DM A51 item (4)).
-- Blocks v0.1: yes (the first real run launches a runtime and `aieos launch` ships no starter; the item says a launch waits for its open points)
+- Blocks v0.1: yes (the first real run launches a runtime; `aieos launch` now ships the real starter (TASK-134, accepted at D-6205, effective at D-6208), never run for real; the item says a launch waits for its open points)
 - Scheduled in: M8, the launcher root-after-check task, before the first real run
 
 ## What
