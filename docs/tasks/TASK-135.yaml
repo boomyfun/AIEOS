@@ -1,0 +1,104 @@
+# Task contract TASK-135 (r2; the judge-fix task of D-6240 conditions 1 to 4, ordered first by D-6244; session 26136a0a, 2026-11-14). Approved in substance by the decision agent at D-6246, with the edits of its condition 1 made here.
+# Why: claude_code._judge (src/aieos_bootstrap/claude_code.py:288-332) gives "uncovered" to every tool name beginning "mcp__" (docstring :15-16, fall-through :332), and claude_code_pretool_hook turns "uncovered" into exit code 2 (a refusal). The launched session of the first real run calls only the seven tools of the server "aieos" (mcp_server.py: SERVER_INFO name 'aieos', TOOL_NAMES = status, acknowledge, ask, report, handoff, get_work_order, query), the first being get_work_order, so every one of its MCP calls would be refused (confirmed on the pure function by the worker's finding3_out.txt; whether Claude Code applies exit 2 to MCP calls in -p mode is unmeasured and stays a measurement of the first run, D-6240 C5). D-6238 to D-6240 (finding 3).
+# Not in this task: the hook script, any settings file, the MCP file, claude_starter.py, claude_code_pretool_hook.py, claude_code_hook.py, claude_code_reads.py and claude_code_read_hook.py (the read hook keeps skipping every mcp__ name), .github/**, every docs file. A change to any of them is its own decision (D-6240 C3). No other tool name changes its verdict.
+# Specification 5: its text says nothing that this change makes false (line 65 lists "tool coverage, including ... MCP tools" as unmeasured, which stays true; line 123 point 8 leaves the tool-name detail to a later contract). Specification 5: nothing in it is made false by this change (lines 65 and 123); no spec edit, ruled by the decision agent at D-6246 (b). So no docs/specs path is in the write set; D-6240 C4 is met by this finding and by the docstring fix.
+# Risk, change class: high (R3 matches every path under src/** and tests/** until an architecture names the components, risk-rules-gov-aieos.md:18); not critical: no docs/specs, no .github, no .claude, no conformance path in the write set (computed by script from base acf4b41d, output brought with this draft); the change class is critical_cr because the CI's EVALUATOR list holds src/aieos_bootstrap/** and the tests folders, as for TASK-125 to TASK-131.
+task: TASK-135
+contract_version: v1
+task_type: implementation
+objective: >-
+  In src/aieos_bootstrap/claude_code.py add one module constant MCP_TOOLS, a tuple of exactly the seven strings "mcp__aieos__status", "mcp__aieos__acknowledge", "mcp__aieos__ask", "mcp__aieos__report", "mcp__aieos__handoff", "mcp__aieos__get_work_order" and "mcp__aieos__query", and make _judge give the verdict allow, concern "mcp", reason "mcp", no finding and no record to a call whose tool_name is a string equal (exact string equality, no prefix match, no case folding, no pattern, no strip) to one of them and whose tool_input is a mapping; add the word "mcp" to REASONS; every other name, including every other name beginning "mcp__", keeps its verdict "uncovered", reason "tool", and every other tool keeps its verdict. Correct the module docstring (file lines 15-16, 17-20 and AC list) to say so. Tests in tests/unit/test_claude_code.py and one end-to-end case in tests/unit/test_claude_code_pretool_hook.py.
+traces_to:
+  - docs/Deferred/DEF-0101-the-launchers-open-requirements-before-a-runtime-is-launched.md
+  - docs/specs/spec-05-adapter-contract.md
+  - docs/tasks/TASK-134.yaml
+  - docs/tasks/TASK-061.yaml
+input_state:
+  # base_commit is the head of main when the contract is approved (acf4b41dcb4323c1bbbbdcf2edb52252e1fb24bc at this draft, the History commit of session 86f64e95, on main and origin/main); to be re-read from the refs at approval; the executor refuses unless it equals HEAD, refs/heads/main and refs/remotes/origin/main.
+  base_commit: acf4b41dcb4323c1bbbbdcf2edb52252e1fb24bc
+  depends_on: [TASK-134, TASK-061]
+  intent_versions:
+    # sha256 of each file at base_commit, computed by script from main (git show acf4b41d:path | sha256sum).
+    src/aieos_bootstrap/claude_code.py: ef981ea80d02277e6312fbe367c9ed09a50d463e1cd2f083307f4e7eda63f9d9
+    src/aieos_bootstrap/mcp_server.py: fe672ceef7cbbdbb5a4650930371c85373ca589bbf6fdbd419fee29efd478c91
+    src/aieos_bootstrap/claude_code_hook.py: eb1a07f3dd5f51a3bf19fb3d31fab91af8c9eb0f7658f87173517fc0ca48e9ab
+    src/aieos_bootstrap/claude_code_pretool_hook.py: 2acbcd224f97e68bc391a373e626ccf465ddbaa55ba647540f42bff1874f9ded
+    tests/unit/test_claude_code.py: 937ab1c6bd53088077344bd544ee38e2597e0ae60454c81770c4aee6cdf052ea
+    tests/unit/test_claude_code_hook.py: 59b76771749eaa45b5f79fd9c5f734ee049f137ecb7f80b4372fe3264a923b6b
+    tests/unit/test_claude_code_pretool_hook.py: b66b833604e9caf835bdae6ce773d152405558b9d297760784f1a0c2778f8d56
+    docs/specs/spec-05-adapter-contract.md: 5a0d6f03130b973d137fbf2012ab2d3436c37ef4663296479603fb8af9802056
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/pre-genesis/CR-002-concept-errata.md: 446c8523339a11c62ada936ba4b3001cde26dc5e3eac6ea234b78cec13b4a3e1
+    docs/pre-genesis/decision-matrix.md: 18c01d5040bb3f5e0e5e085ab0e23446ddcc1366fcc9f6e3df69997166390bea
+    docs/Deferred/DEF-0101-the-launchers-open-requirements-before-a-runtime-is-launched.md: e5e8938ff2b0d882076c36d0d96ec343916466292271b0190f861457337e21f2
+    docs/tasks/TASK-134.yaml: aa16d4b6569cb711204655dc984b830e4c7af76a072763c4e6efb51f5a76c11a
+write_set:
+  # the task commit holds these three paths only; this contract is committed on main before the task by its own route; the records step after acceptance adds docs/records/TASK-135.jsonl.
+  paths:
+    - src/aieos_bootstrap/claude_code.py
+    - tests/unit/test_claude_code.py
+    - tests/unit/test_claude_code_pretool_hook.py
+read_set: {paths: [docs/plan/, docs/specs/, docs/Deferred/, docs/pre-genesis/, docs/tasks/, src/aieos_bootstrap/, src/aieos_runtime/, tests/, .github/workflows/], interfaces: [], schemas: []}
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - docs/**
+  - src/aieos_runtime/**
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/records.py
+  - tests/conformance/**
+  - tests/integration/**
+  - tests/property/**
+  - tests/run_tests.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The tuple and the verdict (D-6240 C1). claude_code.MCP_TOOLS is a tuple of exactly seven str, each equal to "mcp__aieos__" followed by one of status, acknowledge, ask, report, handoff, get_work_order, query, in that order. For a hook input whose tool_name is a str equal to one of them (membership by ==, no other comparison) and whose tool_input is a dict, judge gives {'verdict': 'allow', 'concern': 'mcp', 'reason': 'mcp', 'findings': [], 'record': None}, whatever the tool_input holds and without reading any other key. The check sits after the argument findings and the existing READ, WRITE and SHELL branches and before the final fall-through, so no existing branch changes. For a tool_name that is a str not in the tuple, including every near-miss of AC2, and for a non-dict tool_input, the result is what it is at the base (uncovered, reason tool). 'mcp' is added to REASONS (the tuple then holds 'argument', 'tool', 'input', 'path', 'write_set', 'parse', 'push', 'allowlist', 'record', 'read', 'mcp'); no other constant changes.
+  - AC2: >-
+      Tests of the judge, tests/unit/test_claude_code.py: each of the seven names gives the AC1 result; the near-misses each give uncovered, reason tool, no record: another server (mcp__other__status, mcp__aieos2__status, mcp__aieos_x__status), wrong case (MCP__aieos__status, mcp__AIEOS__status, mcp__aieos__Status, mcp__aieos__GET_WORK_ORDER), a suffix (mcp__aieos__status2, mcp__aieos__status_, mcp__aieos__status with a trailing space or newline), a prefix only (mcp__aieos, mcp__aieos__, mcp__), an empty tool part, a leading space, a name of another tool (status, get_work_order, Status), a tool of the aieos server that does not exist (mcp__aieos__write, mcp__aieos__exec), and the older uncovered names the existing tests use; a non-str tool_name and a non-dict tool_input stay uncovered. The verdicts of Read, Grep, Glob, Write, Edit, Bash, PowerShell, TodoWrite, MultiEdit and a relative file path are unchanged (pinned by a table equal to the base behaviour). One test holds claude_code.MCP_TOOLS equal to tuple('mcp__aieos__' + n for n in mcp_server.TOOL_NAMES) (so the tuple cannot drift from the server) and mcp_server.SERVER_INFO['name'] equal to 'aieos'; the test file imports mcp_server for this only. The existing test test_other_tools_uncovered keeps passing without an edit to its assertions (its mcp__ name is another server's).
+  - AC3: >-
+      End to end, tests/unit/test_claude_code_pretool_hook.py: one new test, with the file's own stand-ins, that a call input for mcp__aieos__get_work_order gives exit_code 0, outcome 'allow', reason 'tied_allow' with nothing passed to the violation path, and that an input for mcp__aieos__nothing gives exit_code 2, reason 'uncovered'. No other test of that file changes.
+  - AC4: >-
+      Docstring (D-6240 C4). The module docstring of claude_code.py is corrected: the list at file lines 15-16 no longer says every name beginning "mcp__" is uncovered but says that exactly the seven names of MCP_TOOLS are allowed with concern "mcp" and every other tool name, every other name beginning "mcp__" included, is uncovered; the AC9 paragraph states that whether Claude Code runs a hook for an MCP call and applies exit 2 to it in -p mode stays unmeasured. No other sentence of the docstring changes. Specification 5: stated finding above (nothing false to correct); no docs path in the write set.
+  - AC5: >-
+      Limits stated at acceptance: (1) the allow is by tool name only: it does not judge the tool_input of an MCP call, and the server's own checks (session, lease, scope) are the server's; (2) a server named "aieos" in any other MCP file would be allowed by name: the launched run loads only the pinned MCP file with --strict-mcp-config (TASK-134 AC3), which the starter hash-checks, and at acceptance a script checks that the top-level server key of that file is exactly "aieos" and that the file's sha256 equals the starter's pin, its output brought unedited (the file is outside the repository, so no test reads it); (3) the read hook (claude_code_reads, claude_code_read_hook) still skips every mcp__ name; (4) whether the run's MCP calls reach this hook is a measurement of the first real run, not shown here; (5) the tool names are exact: a rename of a tool in mcp_server.py fails the drift test until this tuple is changed by its own task; (6) the property tests (tests/property/test_claude_code_properties.py and the hook property tests) generate no aieos name, so the new allow is covered by the unit and end-to-end tests only; tests/property stays forbidden; (7) the docstring of claude_code_pretool_hook.py (lines 43-44) lists examples of "allow" that do not name an MCP call; that file is forbidden and its list is not exhaustive (it omits a shell allow already).
+  - AC6: >-
+      Purity and the suite (INV-001, INV-002, INV-004). claude_code.py keeps its imports (re, governor, records), starts no process and opens no file; the new text uses none of the words MEASURED, ENFORCED and GUARANTEED; the whole suite passes locally (`timeout 110 python tests/run_tests.py < /dev/null`, in slices if it does not finish) and on the CI's task-branch run, and pyflakes is silent on src and tests. The raw output of the full unit suite and of pyflakes is brought unedited. The diff of the three files is brought at acceptance and shows only the changes above.
+  - AC7: >-
+      Class, evidence and the departures. The risk class is high; the change class is critical_cr; the evidence profile is that of assurance-model section 5 for high, as for TASK-131: unit_test, integration_test (named at acceptance or its absence stated as a departure), deterministic_rule, static_security_analysis, ai_review by a pair of reviews on Haiku 5.5 in their own sessions (D-6206; labelled same-vendor, not cross-model, and the cross-model entry stated as a departure), a per-article review, and a separate decision_agent_review. The governor's shadow result at the GOV-003 row is a stated departure as in TASK-125 to TASK-134, and a run-made evidence gap (no G3 record) is stated if it shows. The task BUILDS the fix and launches nothing; the first real run is its own decision under A73. DM A73 gives hooks and settings of the self-build to the decision agent; this change installs no hook and changes no setting.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [src/aieos_bootstrap/claude_code.py, tests/unit/test_claude_code.py, tests/unit/test_claude_code_pretool_hook.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 800k, wall_time: 6h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC6]}
+  - {gate: G3, check: constitution, args: [AC4, AC5, AC6, AC7, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND the aieos-checks and aieos-native runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false: edits to one source file and two test files in the write set; no runtime is launched; no hook or setting is installed or changed; no permission prompt, account, key or money is touched.
+owner_kept_act: false
