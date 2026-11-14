@@ -12,7 +12,9 @@ Two pure functions over one hook-input mapping, the object Claude Code gives a h
    - shell (Bash and PowerShell): the text of tool_input.command, first for ``git push`` (AC5), then against the
      allowlist (AC6), which is the caller's (specification 5 section 11 point 6), never a default of this module;
    - read (Read, Grep and Glob): nothing is judged; the observed read-set record is part CC-2's;
-   - every other tool name, MultiEdit and NotebookEdit (never seen in this project's transcripts) and every name
+   - mcp (task TASK-135): exactly the seven names of MCP_TOOLS, "mcp__aieos__" followed by a tool of the server "aieos",
+     compared by exact string equality, are allowed, concern "mcp", reason "mcp", whatever tool_input holds;
+   - every other tool name, MultiEdit and NotebookEdit (never seen in this project's transcripts) and every other name
      beginning "mcp__" included, is "uncovered".
    A refusal on a policy concern carries the observation record the core would write (specification 5 section 8:
    outcome blocking, blocking_kind violation; line 64: deterministic_tool_local), checked by
@@ -29,7 +31,9 @@ What these functions show, and what they do not (AC9):
   not judged against the write-set; only Write and Edit calls are. Pushes by other means than git (gh, git send-pack,
   a network call) are not detected. Both are lower bounds, as specification 5 line 73 says of the read-set.
 - The tool names are the model-side tool_use names seen in this project's transcripts; that a hook input's tool_name
-  carries the same names is supported live only for Bash (D-1202, D-1203), and unmeasured for the other tools.
+  carries the same names is supported live only for Bash (D-1202, D-1203), and unmeasured for the other tools. In
+  particular whether Claude Code runs a hook for an MCP call, and applies the exit code 2 to it in -p mode, is
+  unmeasured; the allow of MCP_TOOLS judges the tool name only, never tool_input (task TASK-135).
 - The shell checks read the command text only and refuse when unsure, so they over-refuse. First the push checks: any
   text with a git word and "push" in any letter case anywhere once quotes and backslashes are removed (D-1228 F10:
   "git PUSH" is refused too, its effect on Windows being unmeasured), or with a git word and any "$",
@@ -90,8 +94,12 @@ RECORDER = 'the Claude Code adapter (aieos_bootstrap.claude_code)'
 WRITE_TOOLS = ('Write', 'Edit')
 SHELL_TOOLS = ('Bash', 'PowerShell')
 READ_TOOLS = ('Read', 'Grep', 'Glob')
+# The seven tools of the MCP server "aieos" (mcp_server.TOOL_NAMES), by their full tool names (task TASK-135, D-6240 C1). Compared by
+# exact string equality only: no prefix, no case folding, no pattern. A test holds this tuple equal to the server's tool names.
+MCP_TOOLS = ('mcp__aieos__status', 'mcp__aieos__acknowledge', 'mcp__aieos__ask', 'mcp__aieos__report', 'mcp__aieos__handoff',
+             'mcp__aieos__get_work_order', 'mcp__aieos__query')
 VERDICTS = ('allow', 'refuse', 'uncovered')
-REASONS = ('argument', 'tool', 'input', 'path', 'write_set', 'parse', 'push', 'allowlist', 'record', 'read')
+REASONS = ('argument', 'tool', 'input', 'path', 'write_set', 'parse', 'push', 'allowlist', 'record', 'read', 'mcp')
 RESULT_KEYS = ('verdict', 'concern', 'reason', 'findings', 'record')
 PREFIXES = ('env', 'command', 'exec', 'nohup', 'time', 'sudo', 'xargs')
 REFERS_MAX = 200
@@ -329,6 +337,8 @@ def _judge(hook_input, root, task_id, write_set, allowlist, record_id, recorder)
             if not any(c[:len(e)] == e for e in entries):
                 return _refuse('shell', 'allowlist', _record(record_id, recorder, task_id, 'shell_not_allowed', ' '.join(c)))
         return _result('allow', 'shell', 'allowlist')
+    if tool in MCP_TOOLS:
+        return _result('allow', 'mcp', 'mcp')
     return _result('uncovered', None, 'tool', ['tool %r is not judged here' % (tool,)])
 
 

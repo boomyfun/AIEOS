@@ -375,5 +375,67 @@ class Purity(unittest.TestCase):
                 self.assertNotIn(bad, text, (rel, bad))
 
 
+class McpTools(unittest.TestCase):
+    """The exact-name allow of the seven tools of the MCP server "aieos" (task TASK-135, its contract AC1 to AC3)."""
+    NAMES = ('status', 'acknowledge', 'ask', 'report', 'handoff', 'get_work_order', 'query')
+
+    def test_the_seven_names_are_allowed(self):
+        """TASK-061 AC2, amended by the contract of TASK-135 (its AC1): each of the seven names gives allow, concern
+        "mcp", reason "mcp", no finding and no record, whatever tool_input holds."""
+        self.assertEqual(claude_code.MCP_TOOLS, tuple('mcp__aieos__' + n for n in self.NAMES))
+        for tool in claude_code.MCP_TOOLS:
+            for inp in ({}, {'ref': 'x'}, {'file_path': 'C:/elsewhere/x'}):
+                r = call(tool, inp)
+                self.assertEqual(r, {'verdict': 'allow', 'concern': 'mcp', 'reason': 'mcp', 'findings': [], 'record': None}, tool)
+        self.assertIn('mcp', claude_code.REASONS)
+
+    def test_near_misses_stay_uncovered(self):
+        """TASK-061 AC2, amended by the contract of TASK-135 (its AC2): another server, another case, a suffix, a
+        prefix only, an empty tool part, a space, a bare tool name and a tool the server does not have stay uncovered,
+        reason tool, no record."""
+        misses = ['mcp__other__status', 'mcp__aieos2__status', 'mcp__aieos_x__status', 'MCP__aieos__status',
+                  'mcp__AIEOS__status', 'mcp__aieos__Status', 'mcp__aieos__GET_WORK_ORDER', 'mcp__aieos__status2',
+                  'mcp__aieos__status_', 'mcp__aieos__status ', 'mcp__aieos__status\n', ' mcp__aieos__status',
+                  'mcp__aieos', 'mcp__aieos__', 'mcp__', 'mcp__aieos____', 'status', 'get_work_order', 'Status',
+                  'mcp__aieos__write', 'mcp__aieos__exec', 'mcp__aieos__status__query', 'mcp__aieos__st', '']
+        for tool in misses:
+            r = call(tool, {})
+            self.assertEqual((r['verdict'], r['concern'], r['reason'], r['record']), ('uncovered', None, 'tool', None), repr(tool))
+        for tool in (None, 7, b'mcp__aieos__status', ['mcp__aieos__status']):
+            self.assertEqual(call(tool, {})['verdict'], 'uncovered', repr(tool))
+        r = claude_code.judge({'tool_name': 'mcp__aieos__status', 'tool_input': 'x'}, ROOT, TASK, WS, ALLOW, RID, REC)
+        self.assertEqual((r['verdict'], r['reason']), ('uncovered', 'tool'))
+        r = claude_code.judge({'tool_name': 'mcp__aieos__status'}, ROOT, TASK, WS, ALLOW, RID, REC)
+        self.assertEqual((r['verdict'], r['reason']), ('uncovered', 'tool'))
+
+    def test_other_verdicts_are_unchanged(self):
+        """TASK-061 AC2, amended by the contract of TASK-135 (its AC2): Read, Grep, Glob, Write, Edit, Bash, PowerShell,
+        TodoWrite, MultiEdit and a relative path keep the verdicts they had at the base."""
+        inside = 'C:/proj/repo/docs/notes/a.md'
+        table = [(call('Read', {'file_path': 'C:/elsewhere/x'}), ('allow', 'read', 'read')),
+                 (call('Grep', {'pattern': 'x'}), ('allow', 'read', 'read')),
+                 (call('Glob', {'pattern': '*'}), ('allow', 'read', 'read')),
+                 (call('Write', {'file_path': inside, 'content': 'x'}), ('allow', 'write', 'write_set')),
+                 (call('Edit', {'file_path': inside, 'old_string': 'a', 'new_string': 'b'}), ('allow', 'write', 'write_set')),
+                 (write('C:/proj/repo/src/other.py'), ('refuse', 'write', 'write_set')),
+                 (call('Write', {'file_path': 'docs/notes/a.md', 'content': 'x'}), ('uncovered', 'write', 'path')),
+                 (bash('git status'), ('allow', 'shell', 'allowlist')),
+                 (call('PowerShell', {'command': 'git status'}), ('allow', 'shell', 'allowlist')),
+                 (bash('git push'), ('refuse', 'shell', 'push')),
+                 (bash('rm -rf x'), ('refuse', 'shell', 'allowlist')),
+                 (call('TodoWrite', {'todos': []}), ('uncovered', None, 'tool')),
+                 (call('MultiEdit', {'file_path': inside}), ('uncovered', None, 'tool'))]
+        for r, want in table:
+            self.assertEqual((r['verdict'], r['concern'], r['reason']), want)
+
+    def test_the_tuple_equals_the_server(self):
+        """TASK-061 AC2, amended by the contract of TASK-135 (its AC2): MCP_TOOLS equals "mcp__aieos__" plus each tool name
+        of mcp_server, in its order, and the server's name is "aieos", so the tuple cannot drift from the server."""
+        from aieos_bootstrap import mcp_server
+        self.assertEqual(claude_code.MCP_TOOLS, tuple('mcp__' + mcp_server.SERVER_INFO['name'] + '__' + n for n in mcp_server.TOOL_NAMES))
+        self.assertEqual(mcp_server.SERVER_INFO['name'], 'aieos')
+        self.assertEqual(len(set(claude_code.MCP_TOOLS)), 7)
+
+
 if __name__ == '__main__':
     unittest.main()

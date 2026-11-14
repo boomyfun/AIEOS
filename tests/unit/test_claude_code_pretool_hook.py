@@ -361,6 +361,19 @@ class AC4TheJudgement(unittest.TestCase):
                                                       'findings': []})
                 self.assertNotIn('session_violation', c.log)
 
+    def test_an_aieos_mcp_call_is_allowed_by_exact_name(self):
+        """TASK-072 AC4, amended by the contract of TASK-135 (its AC3): a call of mcp__aieos__get_work_order gives exit 0,
+        reason "tied_allow" and nothing passed to the core; a name of the same server that is not one of the seven gives
+        exit 2, reason "uncovered", nothing passed."""
+        c = Calls()
+        self.assertEqual(c.run(stdin=call_bytes('mcp__aieos__get_work_order', {})),
+                         {'exit_code': 0, 'outcome': 'allow', 'reason': 'tied_allow', 'findings': []})
+        self.assertNotIn('session_violation', c.log)
+        c = Calls()
+        self.assertEqual(c.run(stdin=call_bytes('mcp__aieos__nothing', {})),
+                         {'exit_code': 2, 'outcome': 'refuse', 'reason': 'uncovered', 'findings': [hook._FINDING['uncovered']]})
+        self.assertNotIn('session_violation', c.log)
+
     def test_uncovered_is_refused_without_a_record(self):
         """TASK-072 AC4: an uncovered call (an unjudged tool, a relative path, bytes that are not JSON) gives exit 2,
         reason "uncovered", nothing passed."""
