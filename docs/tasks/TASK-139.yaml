@@ -1,0 +1,100 @@
+# Task contract TASK-139 (DRAFT r2; r1 plus the edits E1 to E5 of D-6315; the replay of decision.execution records in CI; ordered at D-6310 (route D), D-6312 C2 and D-6314 C2/C3; session 26136a0a, 2026-11-15).
+# Why: the CI step "INV-010 replay" (.github/workflows/aieos-checks.yml :630-669) counts every decision.acceptance and decision.execution line of every tracked events.jsonl and fails on any (D-181 P4, D-236 C2): "no replay recomputes them yet". The first real launch writes a
+# decision.execution line into the tracked log (.aieos/events.jsonl line 13, seq 13, committed at 4c859678, pushed at 5b7151ff), so main has been red at that step since the push (finding F-INV010, DEF-0137). Constitution INV-010 (docs/pre-genesis/constitution.md :72-74) asks that
+# decisions be recomputable and specification 3 :138 says that a decision is recomputable from its record, the repository and the event log (proposed). A read-only probe (scratchpad run37/probe_replay13.py, D-6313; probe13_out.txt) recomputed that one record with the Resume Check
+# loaded from its head_commit and the working tree's readers at the tip: 25 keys compared, 0 differing, record_id and uncovered among them. That is evidence for ONE record, not for every record.
+# Not in this task: decision.acceptance records (their replay is a separate task B; this task keeps failing closed on them), the change of .github/workflows/aieos-checks.yml (its own decision under A66, an exact diff, after this task; .github/** is critical by R9 and is forbidden here),
+# any change to the launcher, the Resume Check, the writer or any existing module, the starter pin (TASK-138), .aieos/**, docs/**, and any relaunch.
+# Risk: high. R3 matches every path under src/** and tests/** until an architecture names the components (risk-rules-gov-aieos.md :18, :36-38); not critical: no docs/specs, no .github, no .claude, no conformance path in the write set (to be computed by script at approval).
+task: TASK-139
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add the module src/aieos_bootstrap/decision_replay.py and its tests. The module recomputes a logged decision.execution record and reports every difference. For each decision.execution line of a tracked events.jsonl it takes the record's own payload (task_id, head_commit, log_seq, engine_identity.code_sha256, runtime),
+  cuts the log at the lines with seq <= log_seq (and checks that the record's own seq is log_seq + 1), reads the Resume Check text at head_commit, hashes it exactly as launcher.py :506 and :516 do (base_files.read_file text, encoded as UTF-8, SHA-256), refuses unless that hash equals the record's code_sha256 AND is an accepted engine pin,
+  loads that text as a module, builds the 22 inputs as launcher._inputs does (launcher.py :498-516) with the cut log, no held lease and the runtime taken from the record, calls that engine's check(inputs, code_sha256) and compares the result with the logged payload key by key. It passes only when every key is equal; engine_identity.python is compared for code_sha256 only and the python value is printed, never failed on. Any other outcome (a difference, a missing commit, a missing engine, an unaccepted engine, an unreadable log, an exception) is a failure with its finding, with no special case and no skip list.
+  A command-line entry runs it over the tracked events.jsonl files of a checkout and exits 1 on any failure; it keeps failing closed on every decision.acceptance line, printing "NOT REPLAYED: decision.acceptance (task B)".
+traces_to:
+  - docs/pre-genesis/constitution.md
+  - docs/specs/spec-03-resume-check-and-decision-engine.md
+  - docs/tasks/TASK-134.yaml
+input_state:
+  # base_commit is the head of main when the contract is approved (to be re-read from the refs at approval; at this draft the tip is 5b7151ff96567e14da20eb2c298455f92ac12bf6, red at INV-010).
+  base_commit: da2cf491ffe27d784aa20cf1329bd9cac46aee5e
+  depends_on: []
+  intent_versions:
+    # sha256 of each file at base_commit, computed by the builder script (git show <base>:<path> | sha256), not retyped.
+    src/aieos_bootstrap/launcher.py: ee2bfe199eda8aeca1bafd72ce21fb0d4ad71259461488cd99ba75fbac280d69
+    src/aieos_bootstrap/resume_check.py: b03c0b8a1caaa77c2974da0b512bd38e1f330b5d08dda1bbd85427944eee2e76
+    src/aieos_bootstrap/resume_inputs.py: c4a2620bab45ec631002eeb622b4bfc8043d9e54c7b705bb24df0c5fe4c65e65
+    src/aieos_bootstrap/resume_log_inputs.py: 7e3db86bef3b934dbd9f244a2ec2acef03a7f31234d8cf468e71f47c62fd7499
+    src/aieos_bootstrap/execution.py: 84585f7fa2a9283012f4d1d8a0c3e9ea45fb92fb5739bcc665b4ca6b4f354d42
+    src/aieos_bootstrap/base_files.py: f9b224104cf6c9fd5670c6413734e646b40411033dbe5a1d8131b23d044afa78
+    src/aieos_bootstrap/gitread.py: 5a8aabeddcd2b5ee53ad8c40b9d572d85d5ea7359052f96b37eb0a540d83f70e
+    src/aieos_bootstrap/records.py: 2b7b456b1ef9fecde0c8b84eaf75b1fd85b7ac2e8f40e9e329a7dea3b7b31297
+    .github/workflows/aieos-checks.yml: a33097cc7133f87e92b3ca45c3705876c92c55db28dcccb5fdda26f542803cf7
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/pre-genesis/decision-matrix.md: e2cdac6dd869a62c002ff7ed6a38b8f686c7da0cae15402c0a966eab9a5976eb
+write_set:
+  paths:
+    - src/aieos_bootstrap/decision_replay.py
+    - tests/unit/test_decision_replay.py
+    - tests/integration/test_decision_replay_real_record.py
+read_set: {paths: [docs/plan/, docs/specs/, docs/Deferred/, docs/pre-genesis/, docs/tasks/, src/aieos_bootstrap/, src/aieos_runtime/, tests/, .github/workflows/, .aieos/events.jsonl], interfaces: [], schemas: []}
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - docs/**
+  - src/aieos_runtime/**
+  - src/aieos_bootstrap/__init__.py
+  - tests/conformance/**
+  - tests/property/**
+  - tests/run_tests.py
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-010, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The replay. replay_execution(repo, log_bytes, record_index, accepted_engines) returns (True, []) for the record at line 13 of the tracked .aieos/events.jsonl at the base commit (the integration test reads it from the repository's own history), and (False, findings) for each of: a changed head_commit, a head_commit that is not a commit, a changed log_seq, a record whose seq is not log_seq + 1, a changed code_sha256 (the engine's hash then differs), a code_sha256 equal to the engine at head_commit but not in accepted_engines, a changed decision, a changed record_id, a changed key of any of the 25 keys the probe compared, a missing resume_check.py at head_commit, a log that records.check_log refuses, and an exception of any called reader. Every key of the logged payload and of the recomputed record is compared; engine_identity.python is compared for code_sha256 only and its two values are printed.
+  - AC2: >-
+      The engine. The Resume Check text comes from head_commit through base_files.read_file and its SHA-256 is that of the text encoded as UTF-8, as launcher.py :506 and :516 compute it (the probe showed that the raw git bytes give the same hash here; the module uses the launcher's way and states the raw bytes as not used). The module refuses to execute any engine text whose hash is not in accepted_engines (the command-line entry takes the pinned AIEOS_PINNED_RESUME_CHECK and, when set, AIEOS_PINNED_RESUME_CHECK_PREVIOUS of the workflow), so a record cannot certify itself with an engine of its own naming. With zero accepted-engine arguments every decision.execution record fails (the finding names the empty list), and a test asserts it.
+  - AC3: >-
+      The inputs and the limits stated in the module's docstring and printed by the entry: (1) the reader modules (resume_inputs, resume_log_inputs, execution, base_files, gitread, and records, whose check_log the module uses) are those of the commit that the CI checks out, never of a local working tree, and only the engine comes from head_commit; (2) a pass shows that the record is reproducible by the checked tree's readers and the pinned engine, NOT that it is what head_commit's readers computed; (3) any difference, including one that a later reader change causes, fails closed, with no skip list; (4) the remedy named for a historical record that a reader change makes differ is loading the readers from head_commit, to be ruled on by the decision agent (D-6314 C3); (5) runtime.max_risk is taken from the record, because it comes from the launcher's declaration read (launcher.py :519-539), which the replay does not repeat; (6) the held lease is None and `now` is a fixed constant, which only the argument checks of task_view use; (7) the Python of the CI runner may differ from the recorded python, which is reported only; (8) one record was probed before this task (D-6313); this task's tests are the evidence for the others.
+  - AC4: >-
+      Acceptance records. The command-line entry exits 1 on every decision.acceptance line and prints "NOT REPLAYED: decision.acceptance" with the record_id; no acceptance record is replayed, skipped or counted as passing. A test with an acceptance line asserts exit 1.
+  - AC5: >-
+      The command-line entry: `python src/aieos_bootstrap/decision_replay.py <repo> [<accepted engine sha256> ...]` (or the module's main(argv)) lists the tracked files named events.jsonl or ending in /events.jsonl (git ls-files), reads each at HEAD, replays every decision.execution line, prints one line per record "REPLAYED <record_id> <path>:<seq> ok" or "FAIL ...", a final summary, and exits 0 only when every decision record in the tree was replayed and passed (no decision record at all also exits 0, as the present step does). A test runs it over a scratch repository.
+  - AC6: >-
+      Purity (INV-001, INV-002, INV-004). The module imports the standard library and the readers named above, opens and writes no file, reads no clock and no environment variable (the entry takes the accepted pins as arguments), starts a process only through gitread's read forms, makes no network call and no model call, and never raises (every failure is a finding). Executing the engine text is the one dynamic act; it happens only after the hash is accepted. The new text uses none of the words MEASURED, ENFORCED and GUARANTEED.
+  - AC7: >-
+      Tests and suite. tests/unit/test_decision_replay.py holds the cases of AC1, AC4 and AC5 over stand-ins and a scratch git repository it builds; tests/integration/test_decision_replay_real_record.py replays the real record of the repository's history (line 13 at the base commit); no test is skipped. The whole suite passes locally (`timeout 110 python tests/run_tests.py < /dev/null`). The change adds exactly the three write-set files and changes no existing file.
+  - AC8: >-
+      Class, evidence and the departures. Risk high; the evidence profile is that of docs/pre-genesis/assurance-model.md :82 (high: medium's entries plus functional [integration_test], security [static_security_analysis] and architecture [ai_review (cross-model)]; the pair rule :85), as for TASK-131, TASK-135 and TASK-138: unit_test, integration_test (AC7), deterministic_rule, static_security_analysis, ai_review by a pair of reviews on Haiku 5.5 in their own sessions (D-6206; same-vendor, not cross-model: stated as a departure), a per-article review and a separate decision_agent_review. The governor's shadow result at the GOV-003 row is a stated departure as in TASK-125 to TASK-138, and the run-made evidence gap (DEF-0136) is stated if it shows. The exit condition names the aieos-checks run of the accepted commit; the one stated departure (D-6315 Q1): only the INV-010 replay step of that run may fail, and only because of the existing decision.execution line(s); every other step of that run and the aieos-native run must succeed, shown as unedited run output; and the module's own command-line entry, run locally over the accepted commit, must print REPLAYED ... ok for line 13 and exit 0, with its raw output in the acceptance request. The workflow change then follows as its own A66 decision on an exact diff (the step passes both pins from the job's env, the second only when set), then a green main, then TASK-138; no other task is accepted in between. This task changes no workflow and installs no hook or setting.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [src/aieos_bootstrap/decision_replay.py, tests/unit/test_decision_replay.py, tests/integration/test_decision_replay_real_record.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 600k, wall_time: 4h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC4, AC5, AC6, AC7]}
+  - {gate: G3, check: constitution, args: [AC3, AC6, AC8, INV-001, INV-002, INV-003, INV-004, INV-010, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND the aieos-native run of the accepted commit succeeds AND every step of its aieos-checks run succeeds except the INV-010 replay step, which may fail only because of the existing decision.execution line(s) (D-6315 Q1; the departure is stated in AC8) AND the module's own command-line entry, run locally over the accepted commit, prints REPLAYED ... ok for line 13 and exits 0
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false: a new source file and two new test files in the write set; no runtime is launched; no hook, setting or workflow is installed or changed; no permission prompt, account, key or money is touched.
+owner_kept_act: false
