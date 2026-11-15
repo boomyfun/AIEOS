@@ -165,6 +165,12 @@
 # claude_starter.py. It grants no write access, uses no secret or token and changes no setting; the EVALUATOR lists are unchanged. Limits: the rules run over the files Git tracks under src/ at HEAD of
 # a task run; they check the form of the call and of the constants, not what the runtime then does; the executable's path and hash are checked for form only (a change of either is the contract's own
 # pin decision).
+# Revision 21 (TASK-139, accepted at decision D-6342; the decision agent's own decision under DM A66, its own decision on the exact diff) LOOSENS ONE CHECK, the step "INV-010 replay", and changes no other step. Before it the step
+# failed on every decision record in a tracked events.jsonl, because no replay existed (revision 4; DEF-0137). From it on the step runs the replay entry of TASK-139 (src/aieos_bootstrap/decision_replay.py) with the job's Resume Check pin(s), as
+# erratum E1.7 sets (PYTHONPATH=src python -B -P -m aieos_bootstrap.decision_replay <repo> [<pins>]): a decision.execution record that the entry recomputes equal now PASSES, which it never did; a record that differs, a decision.acceptance record
+# (not replayed: a separate task), a dirty or filter-configured tree or an unreadable log still FAILS; with no decision record it passes as before. The step also refuses a runner older than Python 3.11 and a top-level name under src that shadows a
+# standard-library module (B3 of decision D-6335 C4). It grants no write access, uses no secret or token and changes no setting. Limits: GOV-003 does not hold for the entry and its reader modules (they run from the tree under check; decision D-6332);
+# the entry's engine file is checked by path and by hash, not hashed again as it runs (B2); a pass shows reproducibility by the checked tree's readers, not what head_commit's readers computed; the replay of decision.acceptance records is task B.
 name: aieos-checks
 
 on:
@@ -632,37 +638,32 @@ jobs:
         working-directory: work
         shell: python3 {0}
         run: |
-          # AIEOS CI: replay (INV-010) (D-181 P4). Standard library only. Run in the checkout of the pushed commit, on every push.
-          # Counts the decision records in the tree at HEAD: lines of any file named events.jsonl whose type is
-          # decision.acceptance or decision.execution. No replay that recomputes a decision record with the pinned governor exists
-          # yet, so any decision record fails, whether or not a governor version is pinned (revision 4, decision D-236 C2: the
-          # re-check's F13; setting the pin does not open this step); with none, it reports 0 and passes.
-          import json
+          # AIEOS CI: replay (INV-010) (D-181 P4; revision 21: TASK-139, accepted at decision D-6342, and its A66 step). Standard library only. Run in the checkout of the pushed commit, on every push.
+          # It runs the replay entry of the checked tree, src/aieos_bootstrap/decision_replay.py, as erratum E1.7 of TASK-139 sets: PYTHONPATH=src python -B -P -m aieos_bootstrap.decision_replay <repo> [<accepted engine sha256> ...],
+          # with the job's AIEOS_PINNED_RESUME_CHECK as the first accepted engine and AIEOS_PINNED_RESUME_CHECK_PREVIOUS as the second only when it is set. The entry recomputes every decision.execution record of the tree with the Resume
+          # Check pinned by those values and fails on any difference, on any decision.acceptance record (not replayed: a separate task), on a dirty or filter-configured tree and on any log it cannot read. With no decision record it passes.
+          # This step no longer fails on a decision record as such: it fails on a record that does not replay (revision 21 says so plainly: a loosening of this check). The entry and its reader modules run from the tree under check,
+          # not from a base: GOV-003 does not hold for them (decision D-6332), and only the engine is tied to the record by its hash and to the pin. Before the entry runs, this step refuses a runner older than Python 3.11 (the -P flag)
+          # and a src folder that holds a top-level name that a standard-library module has, or sitecustomize or usercustomize, because PYTHONPATH=src would then shadow it (decision D-6335 C4, B3). The one limit left open
+          # is B2: the engine file that runs is the repository's own file, checked by path and by hash against the record, the pin and the commit, and not hashed again at the moment it runs.
           import os
           import subprocess
           import sys
 
-          PINNED_GOVERNOR = os.environ.get('AIEOS_PINNED_GOVERNOR') or None  # the job's env, the one place (revision 3)
+          PINS = [v for v in (os.environ.get('AIEOS_PINNED_RESUME_CHECK', ''), os.environ.get('AIEOS_PINNED_RESUME_CHECK_PREVIOUS', '')) if v]
 
 
           def main():
-              files = [p for p in subprocess.run(['git', 'ls-files'], capture_output=True, check=True).stdout.decode('utf-8').split('\n')
-                       if p == 'events.jsonl' or p.endswith('/events.jsonl')]
-              n = 0
-              for p in files:
-                  data = subprocess.run(['git', 'show', 'HEAD:' + p], capture_output=True, check=True).stdout.decode('utf-8', 'replace')
-                  for line in data.split('\n'):
-                      try:
-                          if json.loads(line).get('type') in ('decision.acceptance', 'decision.execution'):
-                              n += 1
-                      except (ValueError, AttributeError):
-                          if 'decision.acceptance' in line or 'decision.execution' in line:
-                              n += 1
-              print('replay: event logs %d, decision records: %d, pinned governor: %s' % (len(files), n, PINNED_GOVERNOR or 'none'))
-              if n:
-                  print('replay FAIL: decision records exist and no replay recomputes them yet (pinned or not)')
+              if sys.version_info < (3, 11):
+                  print('replay FAIL: the runner Python is older than 3.11, which the -P flag needs')
                   return 1
-              return 0
+              clash = sorted(n for n in os.listdir('src') if n.split('.')[0] in sys.stdlib_module_names or n.split('.')[0] in ('sitecustomize', 'usercustomize'))
+              if clash:
+                  print('replay FAIL: a top-level name under src shadows a standard-library module under PYTHONPATH=src: %s' % ', '.join(clash))
+                  return 1
+              print('replay: running the entry with %d accepted engine pin(s); python %d.%d' % (len(PINS), sys.version_info[0], sys.version_info[1]), flush=True)
+              env = dict(os.environ, PYTHONPATH='src')
+              return subprocess.run([sys.executable, '-B', '-P', '-m', 'aieos_bootstrap.decision_replay', os.getcwd()] + PINS, env=env).returncode
 
 
           if __name__ == '__main__':
