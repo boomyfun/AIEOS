@@ -374,6 +374,26 @@ class AC4TheJudgement(unittest.TestCase):
                          {'exit_code': 2, 'outcome': 'refuse', 'reason': 'uncovered', 'findings': [hook._FINDING['uncovered']]})
         self.assertNotIn('session_violation', c.log)
 
+    def test_a_toolsearch_select_of_the_seven_is_allowed(self):
+        """TASK-072 AC4, amended by the contract of TASK-140 (its AC2 and AC3): a ToolSearch call whose query is "select:" and one or more of
+        the seven names gives exit 0, reason "tied_allow" and nothing passed to the core, through the entry (so claude_code.REASONS holds
+        the reason "schema"); a keyword query, an eighth name, a select with a space and a name of another server give exit 2, reason
+        "uncovered", nothing passed."""
+        allowed = ('select:mcp__aieos__get_work_order', 'select:mcp__aieos__status,mcp__aieos__query', 'select:mcp__aieos__ask,mcp__aieos__ask')
+        for q in allowed:
+            with self.subTest(query=q):
+                c = Calls()
+                self.assertEqual(c.run(stdin=call_bytes('ToolSearch', {'query': q, 'max_results': 3})),
+                                 {'exit_code': 0, 'outcome': 'allow', 'reason': 'tied_allow', 'findings': []})
+                self.assertNotIn('session_violation', c.log)
+        refused = ('aieos work order', 'select:mcp__aieos__nothing', 'select: mcp__aieos__status', 'select:mcp__other__status', 'select:')
+        for q in refused:
+            with self.subTest(query=q):
+                c = Calls()
+                self.assertEqual(c.run(stdin=call_bytes('ToolSearch', {'query': q})),
+                                 {'exit_code': 2, 'outcome': 'refuse', 'reason': 'uncovered', 'findings': [hook._FINDING['uncovered']]})
+                self.assertNotIn('session_violation', c.log)
+
     def test_uncovered_is_refused_without_a_record(self):
         """TASK-072 AC4: an uncovered call (an unjudged tool, a relative path, bytes that are not JSON) gives exit 2,
         reason "uncovered", nothing passed."""

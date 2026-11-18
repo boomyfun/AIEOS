@@ -14,6 +14,10 @@ Two pure functions over one hook-input mapping, the object Claude Code gives a h
    - read (Read, Grep and Glob): nothing is judged; the observed read-set record is part CC-2's;
    - mcp (task TASK-135): exactly the seven names of MCP_TOOLS, "mcp__aieos__" followed by a tool of the server "aieos",
      compared by exact string equality, are allowed, concern "mcp", reason "mcp", whatever tool_input holds;
+   - schema (task TASK-140): the tool ToolSearch, only when tool_input holds a "query" string that is "select:" followed by one or more
+     of the seven names of MCP_TOOLS separated by commas (exact string equality, no space, a name may repeat), is allowed, concern
+     "schema", reason "schema", whatever else tool_input holds; the shape of tool_input (a "query" string) is taken from the tool's own
+     definition in the session and is unmeasured in a hook input; every other ToolSearch call is "uncovered";
    - every other tool name, MultiEdit and NotebookEdit (never seen in this project's transcripts) and every other name
      beginning "mcp__" included, is "uncovered".
    A refusal on a policy concern carries the observation record the core would write (specification 5 section 8:
@@ -98,8 +102,12 @@ READ_TOOLS = ('Read', 'Grep', 'Glob')
 # exact string equality only: no prefix, no case folding, no pattern. A test holds this tuple equal to the server's tool names.
 MCP_TOOLS = ('mcp__aieos__status', 'mcp__aieos__acknowledge', 'mcp__aieos__ask', 'mcp__aieos__report', 'mcp__aieos__handoff',
              'mcp__aieos__get_work_order', 'mcp__aieos__query')
+# ToolSearch (task TASK-140, D-6401): a session loads the schema of a deferred MCP tool through it. It is allowed only for a query of the exact
+# form SCHEMA_PREFIX followed by one or more of MCP_TOOLS joined by commas (no space); every other ToolSearch call stays "uncovered".
+SCHEMA_TOOL = 'ToolSearch'
+SCHEMA_PREFIX = 'select:'
 VERDICTS = ('allow', 'refuse', 'uncovered')
-REASONS = ('argument', 'tool', 'input', 'path', 'write_set', 'parse', 'push', 'allowlist', 'record', 'read', 'mcp')
+REASONS = ('argument', 'tool', 'input', 'path', 'write_set', 'parse', 'push', 'allowlist', 'record', 'read', 'mcp', 'schema')
 RESULT_KEYS = ('verdict', 'concern', 'reason', 'findings', 'record')
 PREFIXES = ('env', 'command', 'exec', 'nohup', 'time', 'sudo', 'xargs')
 REFERS_MAX = 200
@@ -339,6 +347,12 @@ def _judge(hook_input, root, task_id, write_set, allowlist, record_id, recorder)
         return _result('allow', 'shell', 'allowlist')
     if tool in MCP_TOOLS:
         return _result('allow', 'mcp', 'mcp')
+    if tool == SCHEMA_TOOL:
+        query = inp.get('query')
+        if isinstance(query, str) and query.startswith(SCHEMA_PREFIX):
+            # an empty part (a bare prefix, a trailing or doubled comma) is no name of MCP_TOOLS, so it falls through to uncovered
+            if all(name in MCP_TOOLS for name in query[len(SCHEMA_PREFIX):].split(',')):
+                return _result('allow', 'schema', 'schema')
     return _result('uncovered', None, 'tool', ['tool %r is not judged here' % (tool,)])
 
 

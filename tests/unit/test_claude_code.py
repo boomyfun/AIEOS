@@ -437,5 +437,77 @@ class McpTools(unittest.TestCase):
         self.assertEqual(len(set(claude_code.MCP_TOOLS)), 7)
 
 
+class SchemaTool(unittest.TestCase):
+    """The narrow allow of ToolSearch for the schema of the seven tools of the MCP server "aieos" (task TASK-140, its contract AC2 and AC3)."""
+    WANT = {'verdict': 'allow', 'concern': 'schema', 'reason': 'schema', 'findings': [], 'record': None}
+
+    def test_a_select_of_the_seven_names_is_allowed(self):
+        """TASK-061 AC2, amended by the contract of TASK-140 (its AC2): ToolSearch with a query "select:" and one or more of the seven names
+        joined by commas (one name, two, all seven, a name twice), whatever else tool_input holds, gives allow, concern "schema", reason
+        "schema", no finding and no record; REASONS holds "schema"."""
+        for name in claude_code.MCP_TOOLS:
+            self.assertEqual(call('ToolSearch', {'query': 'select:' + name}), self.WANT, name)
+            self.assertEqual(call('ToolSearch', {'query': 'select:' + name, 'max_results': 5, 'other': 1}), self.WANT, name)
+        pairs = ['select:' + claude_code.MCP_TOOLS[0] + ',' + claude_code.MCP_TOOLS[5],
+                 'select:' + ','.join(claude_code.MCP_TOOLS),
+                 'select:' + claude_code.MCP_TOOLS[2] + ',' + claude_code.MCP_TOOLS[2]]
+        for q in pairs:
+            self.assertEqual(call('ToolSearch', {'query': q}), self.WANT, q)
+        self.assertIn('schema', claude_code.REASONS)
+
+    def test_every_other_query_stays_uncovered(self):
+        """TASK-061 AC2, amended by the contract of TASK-140 (its AC2): a keyword query, a bare "select:", a trailing, a leading and a doubled
+        comma, a space around a name, another case of the prefix or of a name, an eighth name, a name of another server, a name without
+        its prefix, a name followed by a line feed, a missing, empty or non-string query and a tool_input that is not a mapping give
+        uncovered, reason tool, no record."""
+        a = claude_code.MCP_TOOLS[0]
+        b = claude_code.MCP_TOOLS[5]
+        queries = ['aieos get work order', 'select:', 'select:' + a + ',', 'select:,' + a, 'select:' + a + ',,' + b, 'select: ' + a,
+                   'select:' + a + ', ' + b, 'select:' + a + ' ', 'SELECT:' + a, 'Select:' + a, 'select:' + a.upper(), 'select:mcp__aieos__write',
+                   'select:' + a + ',mcp__aieos__write', 'select:mcp__other__status', 'select:status', 'select:' + a + '\n', ' select:' + a,
+                   'select:' + a + ';' + b, 'select:*', 'select:mcp__aieos__', '', a]
+        for q in queries:
+            r = call('ToolSearch', {'query': q})
+            self.assertEqual((r['verdict'], r['concern'], r['reason'], r['record']), ('uncovered', None, 'tool', None), repr(q))
+        for inp in ({}, {'query': None}, {'query': 7}, {'query': [a]}, {'query': b'select:' + a.encode()}, {'q': 'select:' + a}):
+            r = call('ToolSearch', inp)
+            self.assertEqual((r['verdict'], r['reason'], r['record']), ('uncovered', 'tool', None), repr(inp))
+        r = claude_code.judge({'tool_name': 'ToolSearch', 'tool_input': 'select:' + a}, ROOT, TASK, WS, ALLOW, RID, REC)
+        self.assertEqual((r['verdict'], r['reason']), ('uncovered', 'tool'))
+        r = claude_code.judge({'tool_name': 'ToolSearch'}, ROOT, TASK, WS, ALLOW, RID, REC)
+        self.assertEqual((r['verdict'], r['reason']), ('uncovered', 'tool'))
+
+    def test_the_tool_name_is_matched_exactly(self):
+        """TASK-061 AC2, amended by the contract of TASK-140 (its AC2): another case of the tool name, a suffix, a space and a similar name
+        give uncovered, reason tool, even with an allowed query."""
+        q = 'select:' + claude_code.MCP_TOOLS[0]
+        for tool in ('toolsearch', 'TOOLSEARCH', 'ToolSearch ', ' ToolSearch', 'ToolSearch2', 'ToolSearchX', 'Tool_Search', 'WebSearch'):
+            r = call(tool, {'query': q})
+            self.assertEqual((r['verdict'], r['concern'], r['reason'], r['record']), ('uncovered', None, 'tool', None), repr(tool))
+
+    def test_the_names_accepted_are_the_tuple_of_the_server(self):
+        """TASK-061 AC2, amended by the contract of TASK-140 (its AC2): the names that the rule accepts are exactly those of claude_code.MCP_TOOLS,
+        which equal "mcp__aieos__" plus each tool name of mcp_server; a name of the server that it does not have is not accepted."""
+        from aieos_bootstrap import mcp_server
+        for n in mcp_server.TOOL_NAMES:
+            self.assertEqual(call('ToolSearch', {'query': 'select:mcp__aieos__' + n}), self.WANT, n)
+        self.assertEqual(claude_code.MCP_TOOLS, tuple('mcp__aieos__' + n for n in mcp_server.TOOL_NAMES))
+        self.assertEqual(call('ToolSearch', {'query': 'select:mcp__aieos__nothing'})['verdict'], 'uncovered')
+
+    def test_the_other_verdicts_do_not_change(self):
+        """TASK-061 AC2, amended by the contract of TASK-140 (its AC2): the verdicts of Read, Write, Bash, an mcp__ name of the server, another
+        server's name, WebFetch and MultiEdit are those that they had before the rule."""
+        inside = 'C:/proj/repo/docs/notes/a.md'
+        table = [(call('Read', {'file_path': 'C:/elsewhere/x'}), ('allow', 'read', 'read')),
+                 (call('Write', {'file_path': inside, 'content': 'x'}), ('allow', 'write', 'write_set')),
+                 (bash('git status'), ('allow', 'shell', 'allowlist')),
+                 (call('mcp__aieos__status', {}), ('allow', 'mcp', 'mcp')),
+                 (call('mcp__other__status', {}), ('uncovered', None, 'tool')),
+                 (call('WebFetch', {'url': 'x'}), ('uncovered', None, 'tool')),
+                 (call('MultiEdit', {'file_path': inside}), ('uncovered', None, 'tool'))]
+        for r, want in table:
+            self.assertEqual((r['verdict'], r['concern'], r['reason']), want)
+
+
 if __name__ == '__main__':
     unittest.main()
