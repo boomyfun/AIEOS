@@ -102,7 +102,7 @@ READ_TOOLS = ('Read', 'Grep', 'Glob')
 # exact string equality only: no prefix, no case folding, no pattern. A test holds this tuple equal to the server's tool names.
 MCP_TOOLS = ('mcp__aieos__status', 'mcp__aieos__acknowledge', 'mcp__aieos__ask', 'mcp__aieos__report', 'mcp__aieos__handoff',
              'mcp__aieos__get_work_order', 'mcp__aieos__query')
-# ToolSearch (task TASK-140, D-6401): a session loads the schema of a deferred MCP tool through it. It is allowed only for a query of the exact
+# ToolSearch (task TASK-140, D-6401): a session may load the schema of a deferred MCP tool through it (whether a session needs it is unmeasured: AC4 limit 2 of the contract). It is allowed only for a query of the exact
 # form SCHEMA_PREFIX followed by one or more of MCP_TOOLS joined by commas (no space); every other ToolSearch call stays "uncovered".
 SCHEMA_TOOL = 'ToolSearch'
 SCHEMA_PREFIX = 'select:'
