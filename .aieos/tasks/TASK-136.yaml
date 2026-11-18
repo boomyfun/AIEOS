@@ -1,5 +1,5 @@
 task: TASK-136
-contract_version: v1
+contract_version: v2
 task_type: implementation
 objective: >-
   Make the change that intent INT-002 states, within the write set.
@@ -13,7 +13,8 @@ write_set:
     - docs/Deferred/DEF-0095-the-handoff-file-of-the-claim-tools-for-the-launcher.md
 read_set:
   paths:
-    - "**"
+    - docs/Deferred/DEF-0095-the-handoff-file-of-the-claim-tools-for-the-launcher.md
+    - docs/plan/master-plan.md
   interfaces: []
   schemas: []
 forbidden:
