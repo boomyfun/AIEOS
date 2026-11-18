@@ -23,7 +23,7 @@ ROOT = 'C:\\aieos-root-132'
 SESSION = 'sess-132.a_b'
 BASE = 'a' * 40
 ENV = {'AIEOS_SESSION_ID': SESSION, 'AIEOS_ROOT': ROOT, 'AIEOS_BASE': BASE}
-EXE = 'C:\\Users\\Admin\\AppData\\Roaming\\Claude\\claude-code\\2.1.321\\d0e23af87588\\claude.exe'
+EXE = 'C:\\Users\\Admin\\AppData\\Roaming\\Claude\\claude-code\\2.1.326\\d31a4581af92\\claude.exe'
 MCP = 'C:\\Users\\Admin\\AIEOS-runtime\\claude-mcp.json'
 SETTINGS = 'C:\\Users\\Admin\\AIEOS-runtime\\claude-settings.json'
 EXE_BYTES = b'stand-in bytes of the executable'
@@ -181,7 +181,7 @@ class TASK132AC2Executable(unittest.TestCase):
     def test_the_pinned_constants_are_verbatim(self):
         """TASK-134 AC2: EXE_PATH and EXE_SHA256 are the pinned values of the contract, as constant strings."""
         self.assertEqual(claude_starter.EXE_PATH, EXE)
-        self.assertEqual(claude_starter.EXE_SHA256, 'e6dae5fc45902b15751f2591a02f51760351c4788c5fd8291b3f1443d40c13a4')
+        self.assertEqual(claude_starter.EXE_SHA256, '44e85ac6d3e36b924a0d631d3f69c13a6907491115d71e97c8eb6160c82b2aed')
 
     def test_refusals_of_the_executable(self):
         """TASK-134 AC2: a missing executable, one that is not a regular file and one whose hash differs each raise

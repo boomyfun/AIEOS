@@ -21,8 +21,8 @@ import re
 import subprocess
 from pathlib import Path
 
-EXE_PATH = 'C:\\Users\\Admin\\AppData\\Roaming\\Claude\\claude-code\\2.1.321\\d0e23af87588\\claude.exe'
-EXE_SHA256 = 'e6dae5fc45902b15751f2591a02f51760351c4788c5fd8291b3f1443d40c13a4'
+EXE_PATH = 'C:\\Users\\Admin\\AppData\\Roaming\\Claude\\claude-code\\2.1.326\\d31a4581af92\\claude.exe'
+EXE_SHA256 = '44e85ac6d3e36b924a0d631d3f69c13a6907491115d71e97c8eb6160c82b2aed'
 PROMPT = ('Call the AIEOS tool get_work_order of the connected aieos MCP server, do the work its Work Order describes '
           'within its limits, and stop when it is done.')
 MCP_FILE = 'C:\\Users\\Admin\\AIEOS-runtime\\claude-mcp.json'
