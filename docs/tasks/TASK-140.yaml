@@ -1,0 +1,88 @@
+# Task contract TASK-140 (r1; session 26136a0a, 2026-11-19; D-6389 to D-6399; the fix of DEF-0140).
+# Why: the one relaunch of TASK-136 served a model call and did no work (DEF-0140): the settings file of the runtime has no allow rule for the seven mcp__aieos__ tools (G1) and the pre-tool hook refuses ToolSearch as uncovered (G2).
+# Authority: the owner's "đồng ý tất cả" at the main transcript :15408 (D-6389 Q1: an allow rule for exactly the seven names and no other tool, "added only after the fix is checked and re-read"; Q2: exactly one more session, after the fix) and D-6393 (the settings route).
+# Not in this task: the CI revision 22 (form B, D-6395: check_starter of .github/workflows/aieos-checks.yml accepts BOTH settings hashes, bb9c8724... and 242533e1..., by a new ALSO_ACCEPTED dict; its own decision under A66; it must have LANDED on main BEFORE this task's commit is pushed, so that no commit of main or of the task branch fails check_starter; and the CI revision 23, which drops the old hash after this task has landed and the settings file is written), the second session, TASK-137, the state commit, DEF-0140, the DM row A80, the finding that a session with no work ends with exit 0.
+# Risk: high (R3 matches src/** and tests/** until an architecture names components, risk-rules :18, :36-38); not critical (no docs/specs, no .github, no .claude in the write set; to be computed by script at approval). The hook change LOOSENS what a session may call and is named so.
+task: TASK-140
+contract_version: v1
+task_type: implementation
+objective: >-
+  (G1) Make the seven tools of the aieos MCP server callable without a prompt: the file C:\Users\Admin\AIEOS-runtime\claude-settings.json keeps its "hooks" object byte for byte and gains a "permissions" object whose "allow" list is exactly the seven names mcp__aieos__status, mcp__aieos__acknowledge, mcp__aieos__ask, mcp__aieos__report, mcp__aieos__handoff, mcp__aieos__get_work_order, mcp__aieos__query, in that order (the draft file is claude-settings.draft.json, 869 bytes, sha256 242533e144193b758532bd5c1e78aefc196ae5c5e430c055dd01a7044fef4512); in src/aieos_runtime/claude_starter.py change exactly one line, SETTINGS_SHA256 (line 31), to that hash; in tests/unit/test_claude_starter.py change exactly the pinned settings hash (line 249) to that hash. The write of the settings file is NOT done by the task commit (it lies outside the repository): it is an act of the executor after the fix is checked and re-read, and the machine may ask the owner for a click. The order (D-6395): the records commit; the CI revision 22 (form B); the contract commit; this task through its route to acceptance and landing; THEN the write of the settings file (its draft hash 242533e1... checked by the executor step); then the CI revision 23; then the launch decision for the one more session.
+  (G2) In src/aieos_bootstrap/claude_code.py make the tool ToolSearch covered with the narrowest verdict: "allow" (concern "schema", reason "schema", a new word of REASONS) only when tool_input is a mapping whose "query" is a string of the exact form `select:` followed by one or more of the seven names of MCP_TOOLS separated by commas, and nothing else, whatever other keys hold; every other ToolSearch call (a keyword query, an empty select, a name of another tool, a different case, a missing or non-string query) stays "uncovered". Add tests.
+traces_to:
+  - docs/tasks/TASK-134.yaml
+  - docs/tasks/TASK-135.yaml
+  - docs/Deferred/DEF-0140-the-relaunched-first-session-served-a-model-call-and-did-no-work.md
+input_state:
+  # base_commit: the tip of main when the contract is approved (after the state commit ecdbe443 (pushed, CI green), the records commit of DEF-0140 and A80, and the CI revision 22 (form B) have landed: D-6395's order); re-read from the refs at approval.
+  base_commit: 7d86a2649389e11749d2d42b5b08705e3919f52f
+  depends_on: [TASK-134, TASK-135]
+  intent_versions:
+    # sha256 of each file at base_commit, computed by script at approval (git show <base>:<path> | sha256sum), not retyped.
+    src/aieos_bootstrap/claude_code.py: 17193769bbafdc482e5c26cc6869f4b12a2c62bd8ff5e268abe74085dc90fe0a
+    src/aieos_runtime/claude_starter.py: 02d861be0704592abcb650087fc0387099d3ce62d41614691378e723cb25b02c
+    tests/unit/test_claude_code.py: aa800bc4ede75b837074009aae809cf3670863e6b568995ac5bbc09b5b05e837
+    tests/unit/test_claude_code_pretool_hook.py: 6f3bb10a5e8a8b69e2e06f0eb55927e314056d8f9abde6c1a127dcf468c303d1
+    tests/unit/test_claude_starter.py: 4b62dd9a1005bdc1d1389fc03465a7ee153dd8acc88ffa134db9301f80ae1fe6
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/pre-genesis/decision-matrix.md: 03940e2cc46037a8be690653b05e553dd2962381f6914358f715415a28b902de
+write_set:
+  paths:
+    - src/aieos_bootstrap/claude_code.py
+    - src/aieos_runtime/claude_starter.py
+    - tests/unit/test_claude_code.py
+    - tests/unit/test_claude_code_pretool_hook.py
+    - tests/unit/test_claude_starter.py
+read_set: {paths: [docs/plan/, docs/specs/, docs/Deferred/, docs/pre-genesis/, docs/tasks/, src/aieos_bootstrap/, src/aieos_runtime/, tests/, .github/workflows/], interfaces: [], schemas: []}
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - docs/**
+  - tests/conformance/**
+  - tests/integration/**
+  - tests/property/**
+  - tests/run_tests.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The pin. claude_starter.SETTINGS_SHA256 is exactly the sha256 of the new settings file (242533e1...4512 for the draft; the executor recomputes it from the file at approval and shows the command output unedited), a constant string as before (TASK-134 AC2); the new file parses as JSON, its "hooks" object equals the base file's, and its "permissions" is exactly {"allow": [the seven names in the order above]}; nothing else of the file changes. A diff of claude_starter.py and test_claude_starter.py against the base shows exactly the lines of the constants (line 31; line 249).
+  - AC2: >-
+      The hook. For ToolSearch with query `select:mcp__aieos__get_work_order` (and any non-empty comma list of the seven names) judge gives verdict allow, concern schema, reason schema, and the pre-tool hook gives exit 0 reason tied_allow; for a query with any other name, a keyword query, an empty select, a different case, a missing or non-string query, a tool_input that is not a mapping, and for every tool name other than the nine judged ones and ToolSearch, the verdict is "uncovered" as at the base; MCP_TOOLS, READ_TOOLS, WRITE_TOOLS and SHELL_TOOLS and every other branch of judge are unchanged; the module docstring is updated (the uncovered list at :17-18) and states that the shape of ToolSearch's tool_input (a "query" string) is taken from the tool's own definition in the session and is unmeasured in a hook input.
+  - AC3: >-
+      Tests. The new cases are in tests/unit/test_claude_code.py (judge: allowed and refused forms; REASONS holds "schema"; the names compared by exact string equality with MCP_TOOLS) and tests/unit/test_claude_code_pretool_hook.py (exit 0 for an allowed ToolSearch select, exit 2 for the others); no test is removed, weakened or skipped; the existing cases that name uncovered tools stay as they are. The whole suite passes by the slice method (D-6249 C2, D-6328 E1.6), because the whole suite exceeds 110 s.
+  - AC4: >-
+      Limits stated at acceptance: (1) whether the runtime honours a "permissions.allow" rule with exact MCP tool names together with `--permission-prompts none` for the named build is measured only by the second real session; (2) whether ToolSearch is needed at all to call a deferred MCP tool is unmeasured; (3) the shape of ToolSearch's tool_input in a hook input is unmeasured; (4) the rule takes effect only when the settings file is written (not by this task's commit); (5) the CI revision 22 (form B) must have landed on main before this task's commit is pushed, else the CI refuses the new settings hash; the CI revision 23 drops the old hash after this task has landed and the settings file is written; (6) a session that ends with no work and exit 0 stays a named finding.
+  - AC5: >-
+      Scope and purity (INV-001, INV-002, INV-004). Exactly G1 and G2; no file is added; the modules keep their imports and start no process at import; the new text uses none of the words MEASURED, ENFORCED and GUARANTEED.
+  - AC6: >-
+      Class, evidence and departures. The risk class is high; the evidence profile is that of docs/pre-genesis/assurance-model.md :82 as for TASK-138 and TASK-135 (unit_test, integration_test named at acceptance or its absence stated, deterministic_rule, static_security_analysis, ai_review by a pair of reviews on Haiku 5.5 in their own sessions (D-6206; same vendor, stated as a departure), a per-article review and a separate decision_agent_review); the governor's shadow result at the GOV-003 row is a stated departure as in TASK-125 to TASK-139; the loosening of what a session may call (ToolSearch select of the seven names; the allow rule) is named in the acceptance and to the owner.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [src/aieos_bootstrap/claude_code.py, src/aieos_runtime/claude_starter.py, tests/unit/test_claude_code.py, tests/unit/test_claude_code_pretool_hook.py, tests/unit/test_claude_starter.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 400k, wall_time: 3h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC5]}
+  - {gate: G3, check: constitution, args: [AC4, AC5, AC6, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND the aieos-checks and aieos-native runs of the accepted commit succeed AND the CI revision 22 (form B) had landed on main before the task commit was pushed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false for the edits in the write set. The one owner-kept part, the write of the permission rule into C:\Users\Admin\AIEOS-runtime\claude-settings.json, is NOT in this task: it is an act of the executor after the fix is checked and re-read, under the owner's yes at :15408, and the machine may ask the owner for a click.
+owner_kept_act: false
