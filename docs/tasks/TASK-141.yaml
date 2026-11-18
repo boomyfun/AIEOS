@@ -1,0 +1,80 @@
+# Task contract TASK-141 (r1 DRAFT; session 26136a0a, 2026-11-19; D-6424 BQ2; the fix of DEF-0143 part A).
+# Why (the record DEF-0143, to be written by the records commit; this contract does not trace to it, because the file is not on main when the contract is committed): the fourth launch of TASK-136 ended in a violation (a Bash call, stopped by the hook). The violation path writes a decision.execution record "STOP: violation" (violation.py) that has no head_commit by design; the INV-010 replay (decision_replay.py) treats every decision.execution as a Resume Check record, so it fails on that line ("head_commit is not a commit id"), and the standing gate refuses to commit the log. Measured in a scratch clone: 5 records, 4 replayed and passed, 1 failed.
+# Authority: D-6424 (route A first). Not in this task: the standing-gate amendment (B, a gate script outside the repository, its own decision), the 50,000-character limit of the Work Order (C), the replacement task for TASK-136 (D), the launch of any session (the owner's), TASK-137.
+# Risk: high (R3 matches src/** and tests/** until an architecture names components, risk-rules :18, :36-38); not critical (no docs/specs, no .github, no .claude in the write set; to be computed by script at approval). The change LOOSENS what the INV-010 CI step accepts and is named so.
+task: TASK-141
+contract_version: v1
+task_type: implementation
+objective: >-
+  In src/aieos_bootstrap/decision_replay.py add the function violation_path_record(lines, index) -> bool (pure, never raises) that is True only when the line at index is a decision.execution event of the form that violation.py writes: payload.decision equals violation.DECISION and payload.recorder equals violation.RECORDER (both imported from aieos_bootstrap.violation, not retyped), the payload has no key head_commit, the event_id equals payload.refers_to followed by "/decision", and payload.refers_to is the event_id of an EARLIER line of the same log whose type is violation.detected and whose task_id equals this line's task_id. In main's per-line loop, for a decision.execution line for which that function is True, print "NOT REPLAYED: violation-path record (no Resume Check ran) <record_id> <path>:<seq>", count it separately and do not replay it and do not count it as failed or as passed; the summary line becomes "replay: event logs N, decision records: T, replayed and passed: P, failed: F, not replayed (violation path): V". Every other decision.execution line is replayed exactly as before; a decision.acceptance line still prints "NOT REPLAYED: decision.acceptance" and fails. The module docstring (the paragraph at :39-41 and the Limits list) is updated: it states that a recognised violation-path record is reported and not replayed, because no Resume Check ran for it (violation.py UNCOVERED), and that the recognition is a limit (the record is accepted on its own form and on the earlier violation.detected line it names; nothing recomputes it). Tests are added in tests/unit/test_decision_replay.py.
+traces_to:
+  - docs/tasks/TASK-139.yaml
+  - docs/tasks/TASK-140.yaml
+input_state:
+  # base_commit: the tip of main when the contract is approved; re-read from the refs at approval (76963129 when drafted).
+  base_commit: 7696312984dcf6c09f58b42d4504fc3a161c7e0e
+  depends_on: [TASK-139, TASK-140]
+  intent_versions:
+    # sha256 of each file at base_commit, computed by script at approval (git show <base>:<path> | sha256sum), not retyped. The values below are those at 76963129.
+    src/aieos_bootstrap/decision_replay.py: 52fcf5646d4b35a5a33b7087ff0dfdd268b2c6f282bf3bcb7ed06fbcb77fb143
+    tests/unit/test_decision_replay.py: 97548790ce2abd49c3497de7c6a8b5ccda0622946584f2a7b0111b2a6c3ce30a
+    src/aieos_bootstrap/violation.py: 60335d248da2b7c3e3fa94bff0529661efd78ce405e24ef08037c79a51df9736
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/pre-genesis/decision-matrix.md: 03940e2cc46037a8be690653b05e553dd2962381f6914358f715415a28b902de
+write_set:
+  paths:
+    - src/aieos_bootstrap/decision_replay.py
+    - tests/unit/test_decision_replay.py
+read_set: {paths: [src/aieos_bootstrap/decision_replay.py, src/aieos_bootstrap/violation.py, tests/unit/test_decision_replay.py, docs/tasks/TASK-139.yaml], interfaces: [], schemas: []}
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - docs/**
+  - tests/conformance/**
+  - tests/integration/**
+  - tests/property/**
+  - tests/run_tests.py
+  - src/aieos_bootstrap/violation.py
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-010, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      Recognition. violation_path_record is True for the exact form above, measured on the real log's line 24 of the fourth launch (True) and line 22, a Resume Check record (False), by a scratch prototype. It is False, and the line still fails exactly as before (a record finding), in each of these cases, each a test: (a) decision "STOP: violation" with another recorder; (b) recorder violation.RECORDER with another decision; (c) refers_to naming no violation.detected line; (d) refers_to naming a violation.detected line of another task; (e) a "STOP: violation" record that carries a head_commit; (f) an event_id that is not refers_to + "/decision"; (g) the violation.detected line placed AFTER the record; (h) an unparsable or non-object line (never raises).
+  - AC2: >-
+      The replay of the real log. With the four lines committed in a scratch clone, the command of the CI (PYTHONPATH=src python -B -P -m aieos_bootstrap.decision_replay <repo> b03c0b8a...2e76) prints REPLAYED for lines 13, 15, 17 and 22 unchanged, "NOT REPLAYED: violation-path record (no Resume Check ran)" for line 24, "decision records: 5, replayed and passed: 4, failed: 0, not replayed (violation path): 1" and exits 0 (the prototype did). Without this task it prints "failed: 1" and exits 1.
+  - AC3: >-
+      No silent pass. A decision.execution line that is not recognised is replayed as before and fails as before; a decision.acceptance line still fails; the exit code is 0 only when failed is 0; a recognised line is never added to the replayed count. A test shows a log holding ONLY a recognised violation-path record exits 0 with "replayed and passed: 0" and the "not replayed" count 1 (the limit of AC5 states what that means).
+  - AC4: >-
+      Tests and purity. The new cases are in tests/unit/test_decision_replay.py; no test is removed, weakened or skipped; the existing summary-line assertions (substring "decision records: 1, replayed and passed: 1, failed: 0") still hold. The CI step "INV-010 replay" (.github/workflows/aieos-checks.yml :636-670) judges the entry by its exit code only (:666, subprocess.run(...).returncode) and parses no summary text, so the added text of the summary line breaks no reader there. The whole suite passes by the slice method (D-6249 C2, D-6328 E1.6). The module keeps its imports except one added import of aieos_bootstrap.violation (constants only), starts no process at import, uses no exec, compile or importlib (INV-004); the new text uses none of the words MEASURED, ENFORCED and GUARANTEED.
+  - AC5: >-
+      Limits stated at acceptance: (1) a violation-path record is not recomputed by anything; the replay checks only its form and the violation.detected line it names, so a forged pair of such lines would be reported NOT REPLAYED and not fail; the standing gate amendment (B) closes that for the four named lines only; (2) a violation of a task makes every later evaluation of that task reject (violation.py :32-39), so TASK-136 cannot be accepted after this change and needs a new task (D); (3) this module runs from the tree under check, so GOV-003 is not met by it (the stated departure of TASK-139); (4) the CI step of INV-010 is unchanged (.github is not in the write set).
+  - AC6: >-
+      Class, evidence and departures. The risk class is high; the evidence profile is that of docs/pre-genesis/assurance-model.md :82 as for TASK-139 and TASK-140 (unit_test, integration_test named at acceptance or its absence stated, deterministic_rule, static_security_analysis, ai_review by a pair of reviews on Haiku 5.5 in their own sessions (D-6206; same vendor, stated as a departure), a per-article review and a separate decision_agent_review); the governor's shadow result at the GOV-003 row is a stated departure as in TASK-125 to TASK-140; the loosening of what the INV-010 CI step accepts is named in the acceptance and to the owner.
+capabilities:
+  filesystem: {read: [src/aieos_bootstrap/decision_replay.py, src/aieos_bootstrap/violation.py, tests/unit/test_decision_replay.py, docs/tasks/TASK-139.yaml], write: [src/aieos_bootstrap/decision_replay.py, tests/unit/test_decision_replay.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 400k, wall_time: 3h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4]}
+  - {gate: G3, check: constitution, args: [AC4, AC5, AC6, INV-001, INV-002, INV-003, INV-004, INV-010, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND the aieos-checks and aieos-native runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
