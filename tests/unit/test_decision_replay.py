@@ -541,9 +541,12 @@ def _log_with_violation(detected=DETECTED, stop=STOP):
 
 
 class ViolationPathTests(unittest.TestCase):
+    # Each condition of the form that violation_path_record requires has a test below that fails if that condition ALONE is removed (the mutation check of the worker, build2_t141, removes each in turn).
+    def lines_with(self, detected=DETECTED, stop=STOP):
+        return _log_with_violation(detected, stop).split(b'\n')
+
     def recognised(self, detected=DETECTED, stop=STOP):
-        lines = _log_with_violation(detected, stop).split(b'\n')
-        return decision_replay.violation_path_record(lines, 13 + 1)
+        return decision_replay.violation_path_record(self.lines_with(detected, stop), 14)
 
     def test_the_form_that_the_violation_path_writes_is_recognised(self):
         self.assertTrue(self.recognised())
@@ -551,30 +554,26 @@ class ViolationPathTests(unittest.TestCase):
     def test_a_resume_check_record_is_not_a_violation_path_record(self):
         self.assertFalse(decision_replay.violation_path_record(LOG13.split(b'\n'), 12))
 
-    def test_a_stop_record_with_another_recorder_is_not_recognised(self):
-        self.assertFalse(self.recognised(stop=_payload_changed(STOP, recorder='another recorder')))
+    # NEGATIVES: (what is changed, the earlier line, the record, a substring that the entry's own output must hold when it replays and fails the record)
+    NEGATIVES = (
+        ('the decision is another one', DETECTED, _payload_changed(STOP, decision='CONTINUE'), ': record'),
+        ('the recorder is another one', DETECTED, _payload_changed(STOP, recorder='another recorder'), ': record'),
+        ('the record carries a head_commit', DETECTED, _payload_changed(STOP, head_commit=HEAD), ': record'),
+        ('the event_id is not refers_to plus /decision (refers_to still names the earlier line)', DETECTED, _changed(STOP, event_id='another id'), ': record'),
+        ('refers_to and event_id both name a line that does not exist', DETECTED, _changed(_payload_changed(STOP, refers_to='nothing'), event_id='nothing/decision'), ': record'),
+        ('the earlier line is not of type violation.detected (its event_id still matches)', _changed(DETECTED, type='record.added'), STOP, ': record'),
+        ('the earlier line is of another task', _changed(DETECTED, task_id='TASK-137'), STOP, ': record'),
+        ('the record is of another type with the same form', DETECTED, _changed(STOP, type='decision.acceptance'), 'NOT REPLAYED: decision.acceptance'),
+    )
 
-    def test_the_violation_recorder_with_another_decision_is_not_recognised(self):
-        self.assertFalse(self.recognised(stop=_payload_changed(STOP, decision='CONTINUE')))
+    def test_each_condition_of_the_form_is_tested_alone(self):
+        for what, detected, stop, _ in self.NEGATIVES:
+            with self.subTest(what):
+                self.assertFalse(self.recognised(detected, stop), what)
 
-    def test_a_refers_to_that_names_no_violation_detected_line_is_not_recognised(self):
-        self.assertFalse(self.recognised(stop=_payload_changed(STOP, refers_to='nothing')))
-
-    def test_a_violation_detected_line_of_another_task_is_not_recognised(self):
-        self.assertFalse(self.recognised(detected=_changed(DETECTED, task_id='TASK-137')))
-
-    def test_a_stop_record_that_carries_a_head_commit_is_not_recognised(self):
-        self.assertFalse(self.recognised(stop=_payload_changed(STOP, head_commit=TIP)))
-
-    def test_an_event_id_that_is_not_refers_to_and_decision_is_not_recognised(self):
-        self.assertFalse(self.recognised(stop=_changed(STOP, event_id='another id')))
-
-    def test_a_violation_detected_line_after_the_record_is_not_recognised(self):
+    def test_the_earlier_line_must_stand_before_the_record(self):
         log = LOG13 + _line(STOP) + b'\n' + _line(DETECTED) + b'\n'
         self.assertFalse(decision_replay.violation_path_record(log.split(b'\n'), 13))
-
-    def test_a_line_of_another_type_with_the_same_form_is_not_recognised(self):
-        self.assertFalse(self.recognised(stop=_changed(STOP, type='decision.acceptance')))
 
     def test_unusable_lines_are_never_recognised_and_never_raise(self):
         for line in (b'not json', b'[1, 2]', b'\xff\xfe', b'{"type":"decision.execution","payload":5}', b'', b'{"type":"decision.execution","task_id":3}'):
@@ -583,49 +582,73 @@ class ViolationPathTests(unittest.TestCase):
         self.assertFalse(decision_replay.violation_path_record([_line(STOP)], 5))
         self.assertFalse(decision_replay.violation_path_record([_line(STOP)], -5))
 
-    def run_main(self, text, detail=None):
+    def entry(self, text, argv=None, detail=None):
+        # the entry over a synthetic log; check_log is stubbed (the lines are synthetic); with no detail the REAL replay_detail runs
         lines = []
 
         def read_file(repo, commit, path, read=None):
             return ({'blob': 'b', 'text': ENGINE_TEXT if path == decision_replay.ENGINE_PATH else text}, None)
         with mock.patch.object(decision_replay.base_files, 'list_paths', return_value=(['.aieos/events.jsonl'], None)), \
                 mock.patch.object(decision_replay.base_files, 'read_file', side_effect=read_file), \
-                mock.patch.object(decision_replay.records, 'check_log', return_value=NoFindings()), \
-                mock.patch.object(decision_replay, 'replay_detail', detail or (lambda *a, **k: ([], []))):
-            rc = decision_replay.main([str(ROOT), PIN], read=clean_read, out=lines.append, engine=Engine())
+                mock.patch.object(decision_replay.records, 'check_log', return_value=NoFindings()):
+            if detail is not None:
+                with mock.patch.object(decision_replay, 'replay_detail', detail):
+                    rc = decision_replay.main(argv or [str(ROOT), PIN], read=clean_read, out=lines.append, engine=Engine())
+            else:
+                rc = decision_replay.main(argv or [str(ROOT), PIN], read=clean_read, out=lines.append, engine=Engine())
         return rc, lines
 
     def test_the_entry_reports_the_record_not_replayed_and_counts_it_apart(self):
-        rc, lines = self.run_main(_log_with_violation().decode('utf-8'))
+        rc, lines = self.entry(_log_with_violation().decode('utf-8'), detail=lambda *a, **k: ([], []))
         self.assertEqual(rc, 0, lines)
         self.assertTrue(any(l.startswith('REPLAYED ') and l.endswith(':13 ok') for l in lines))
         self.assertTrue(any(l.startswith('NOT REPLAYED: violation-path record (no Resume Check ran) ') and l.endswith(':15') for l in lines), lines)
         self.assertIn('decision records: 2, replayed and passed: 1, failed: 0, not replayed (violation path): 1', lines[-1])
 
     def test_a_log_with_only_the_recognised_record_exits_0_with_nothing_replayed(self):
-        rc, lines = self.run_main((_line(DETECTED) + b'\n' + _line(STOP) + b'\n').decode('utf-8'))
+        rc, lines = self.entry((_line(DETECTED) + b'\n' + _line(STOP) + b'\n').decode('utf-8'))
         self.assertEqual(rc, 0, lines)
         self.assertFalse(any(l.startswith('REPLAYED ') for l in lines))
         self.assertIn('decision records: 1, replayed and passed: 0, failed: 0, not replayed (violation path): 1', lines[-1])
 
-    def test_a_record_that_is_not_recognised_is_replayed_and_fails_as_before(self):
-        text = _log_with_violation(stop=_payload_changed(STOP, recorder='another recorder')).decode('utf-8')
-        rc, lines = self.run_main(text, detail=lambda *a, **k: (['record: head_commit is not a commit id'], []))
-        self.assertEqual(rc, 1)
+    def test_with_no_accepted_engine_the_recognised_record_fails_too(self):
+        # the engine gate comes first: with zero accepted pins every decision.execution line fails, a recognised one included
+        rc, lines = self.entry((_line(DETECTED) + b'\n' + _line(STOP) + b'\n').decode('utf-8'), argv=[str(ROOT)])
+        self.assertEqual(rc, 1, lines)
         self.assertFalse(any(l.startswith('NOT REPLAYED: violation-path record') for l in lines))
-        self.assertTrue(any(l.startswith('FAIL ') and 'head_commit is not a commit id' in l for l in lines), lines)
-        self.assertIn('decision records: 2, replayed and passed: 0, failed: 2, not replayed (violation path): 0', lines[-1])
+        self.assertTrue(any(l.startswith('FAIL ') and 'not an accepted engine' in l for l in lines), lines)
+        self.assertIn('decision records: 1, replayed and passed: 0, failed: 1, not replayed (violation path): 0', lines[-1])
+
+    def test_each_negative_fails_through_the_real_record_finding(self):
+        # the REAL replay_detail runs (no stub): the record of the log is replayed and fails through the record finding of _record (or, for another type, the acceptance rule)
+        for what, detected, stop, expected in self.NEGATIVES:
+            with self.subTest(what):
+                rc, lines = self.entry((_line(detected) + b'\n' + _line(stop) + b'\n').decode('utf-8'))
+                self.assertEqual(rc, 1, (what, lines))
+                self.assertFalse(any(l.startswith('NOT REPLAYED: violation-path record') for l in lines), (what, lines))
+                self.assertTrue(any(expected in l and (l.startswith('FAIL ') or l.startswith('NOT REPLAYED')) for l in lines), (what, lines))
+                self.assertIn('failed: 1, not replayed (violation path): 0', lines[-1])
+
+    def test_a_late_violation_detected_line_fails_the_record_through_the_real_finding(self):
+        rc, lines = self.entry((_line(STOP) + b'\n' + _line(DETECTED) + b'\n').decode('utf-8'))
+        self.assertEqual(rc, 1, lines)
+        self.assertTrue(any(l.startswith('FAIL ') and ': record' in l for l in lines), lines)
 
     def test_an_acceptance_line_still_fails_beside_a_recognised_record(self):
         text = _log_with_violation().decode('utf-8') + '{"type":"decision.acceptance","seq":16,"payload":{"record_id":"r"}}\n'
-        rc, lines = self.run_main(text)
+        rc, lines = self.entry(text, detail=lambda *a, **k: ([], []))
         self.assertEqual(rc, 1)
         self.assertTrue(any(l.startswith('NOT REPLAYED: decision.acceptance') for l in lines))
         self.assertIn('failed: 1, not replayed (violation path): 1', lines[-1])
 
-    def test_the_docstring_states_the_exception_and_its_limit(self):
+    def test_the_printed_limits_name_the_exception_and_its_forged_pair_limit(self):
+        rc, lines = self.entry(_log_with_violation().decode('utf-8'), detail=lambda *a, **k: ([], []))
+        self.assertTrue(any(l.startswith('LIMIT: ') and 'violation-path record' in l and 'forged pair' in l for l in lines), lines)
+
+    def test_the_docstring_states_the_exception_its_limit_and_the_gate_order(self):
         doc = ' '.join(decision_replay.__doc__.split())
-        for part in ('TASK-141', 'violation_path_record', 'NOT REPLAYED: violation-path record', 'no Resume Check ran', 'a forged pair of such lines'):
+        for part in ('TASK-141', 'violation_path_record', 'NOT REPLAYED: violation-path record', 'no Resume Check ran', 'a forged pair of such lines',
+                     'a recognised record included', 'the module violation'):
             self.assertIn(part, doc)
 
     def test_the_constants_are_taken_from_the_violation_module(self):

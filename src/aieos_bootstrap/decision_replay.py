@@ -40,7 +40,7 @@ and base_files.read_file; a refused listing or read is a failure, never a skip. 
 decision.acceptance line is reported "NOT REPLAYED: decision.acceptance" and fails (their replay is a separate task); no record is
 skipped or counted as passing without a replay, with ONE exception (task TASK-141): a record of the violation path, recognised by violation_path_record
 (the form that violation.py writes and the earlier violation.detected line that it names), is reported "NOT REPLAYED: violation-path record (no Resume Check ran)"
-and counted apart; it is neither replayed nor counted as passed or as failed, because no Resume Check ran for it (violation.py UNCOVERED).
+and counted apart; it is neither replayed nor counted as passed or as failed, because no Resume Check ran for it (violation.py UNCOVERED). The engine gate comes first: when the engine is not an accepted one, every decision.execution line fails, a recognised record included.
 
 Limits, stated (erratum E1; D-6314 C2 and C3; D-6313 C5):
 - The reader modules (resume_inputs, resume_log_inputs, execution, base_files, gitread and records, whose check_log is used) are those of
@@ -48,7 +48,7 @@ Limits, stated (erratum E1; D-6314 C2 and C3; D-6313 C5):
   that the record is reproducible by the checked tree's readers and the pinned engine, NOT that it is what head_commit's readers computed.
 - Any difference, including one that a later reader change causes, fails closed, with no skip list. The named remedy for a historical
   record that a reader change makes differ is to load the readers from head_commit, to be ruled on by the decision agent.
-- This module and the reader modules run from the tree under check, not from a base or a pinned ref, so GOV-003 is not met by them: a change that
+- This module, the module violation (whose DECISION and RECORDER decide which record is recognised, task TASK-141) and the reader modules run from the tree under check, not from a base or a pinned ref, so GOV-003 is not met by them: a change that
   alters them can change what passes. Only the engine is pinned (decision D-6332).
 - After a pinned engine upgrade, records written under the old engine fail closed ("no historical-engine loader") until such a loader
   exists; it is a later task, not this one.
@@ -132,6 +132,7 @@ LIMITS = (
     'after a pinned engine upgrade, records written under the old engine fail closed until a historical-engine loader exists (erratum E1)',
     'runtime.max_risk is taken from the record; the held lease is None and the clock is a fixed constant',
     'decision.acceptance records are not replayed and fail this entry; the python value of engine_identity is reported, not compared',
+    'a record of the violation path is recognised by its form and by the violation.detected line that it names, and nothing recomputes it (task TASK-141): a forged pair of such lines is reported NOT REPLAYED: violation-path record and does not fail this entry; the module violation, read from the tree under check, decides what is recognised',
     'the status read does not see assume-unchanged or skip-worktree flags and counts untracked files that are not ignored: run in a clean checkout where no file shadows a library module',
     'this entry and its reader modules run from the tree under check, not from a base or a pinned ref: GOV-003 is not met by them, and a change to them can change what passes; only the engine is pinned (decision D-6332)',
     'the guard against a run without -P only detects a missing -P: a module that shadows a library module and is imported before the guard is not caught; the defence is the invocation with -P and -B (erratum E1.7)',
@@ -230,7 +231,7 @@ def violation_path_record(lines, index):
     """True only for the record that the violation path writes (violation.py; task TASK-141): a decision.execution event whose decision is
     violation.DECISION and whose recorder is violation.RECORDER, with no head_commit (the path has none by design), whose event_id is its
     refers_to followed by "/decision", and whose refers_to is the event_id of an EARLIER line of the same log whose type is violation.detected
-    and whose task_id is the same. Every other line is not one. ``lines`` is the log split at newlines, ``index`` the 0-based position of the
+    and whose task_id is the same. Every other line is not one. It checks the FORM only: nothing recomputes the record. ``lines`` is the log split at newlines, ``index`` the 0-based position of the
     line. Never raises."""
     try:
         event = json.loads(lines[index].decode('utf-8'))
@@ -493,13 +494,13 @@ def _main(argv, read, out, engine):
                 failed += 1
                 out('NOT REPLAYED: decision.acceptance %s' % where)
                 continue
-            if violation_path_record(lines, index):
-                skipped += 1
-                out('NOT REPLAYED: violation-path record (no Resume Check ran) %s' % where)
-                continue
             if engine_gate is not None:
                 failed += 1
                 out('FAIL %s: %s' % (where, engine_gate))
+                continue
+            if violation_path_record(lines, index):
+                skipped += 1
+                out('NOT REPLAYED: violation-path record (no Resume Check ran) %s' % where)
                 continue
             if eng is None:
                 eng = _engine_module()
@@ -521,7 +522,7 @@ def _main(argv, read, out, engine):
 
 
 def main(argv, read=None, out=print, engine=None):
-    """The command-line entry: 0 only when every decision record of the tree was replayed and passed; any exception is a failure line
+    """The command-line entry: 0 only when every decision record of the tree was replayed and passed, a recognised record of the violation path excepted (task TASK-141); any exception is a failure line
     and the exit code 1."""
     try:
         return _main(argv, read, out, engine)
