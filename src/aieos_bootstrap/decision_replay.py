@@ -8,7 +8,7 @@ build_inputs=None)`` returns (True, []) or (False, findings), findings being non
 refuses and imports nothing (erratum E1.7). ``record_index`` is the 0-based position of the record among the lines of the log
 (``log_bytes`` is the whole log). ``main(argv, read=None, out=print)``
 is the command-line entry (run as ``PYTHONPATH=src python -B -P -m aieos_bootstrap.decision_replay <repo> [<accepted engine sha256> ...]``, erratum E1.7)
-and returns the exit code, 0 only when every decision record of the checked tree was replayed and passed.
+and returns the exit code, 0 only when every decision record of the checked tree was replayed and passed, a recognised record of the violation path excepted (task TASK-141).
 
 What a replay does, in order (each step a failure with its finding when it does not hold):
 1. The log is checked by records.check_log; the record is the line ``record_index``: a decision.execution event with a task_id and a payload
@@ -38,7 +38,9 @@ not be named in src (INV-004); git status never reports .git, so the exclusion h
 and every tracked file named events.jsonl (its last path component, at any depth) comes from base_files.list_paths(repo, HEAD, "")
 and base_files.read_file; a refused listing or read is a failure, never a skip. Each decision.execution line is replayed and each
 decision.acceptance line is reported "NOT REPLAYED: decision.acceptance" and fails (their replay is a separate task); no record is
-skipped or counted as passing without a replay.
+skipped or counted as passing without a replay, with ONE exception (task TASK-141): a record of the violation path, recognised by violation_path_record
+(the form that violation.py writes and the earlier violation.detected line that it names), is reported "NOT REPLAYED: violation-path record (no Resume Check ran)"
+and counted apart; it is neither replayed nor counted as passed or as failed, because no Resume Check ran for it (violation.py UNCOVERED).
 
 Limits, stated (erratum E1; D-6314 C2 and C3; D-6313 C5):
 - The reader modules (resume_inputs, resume_log_inputs, execution, base_files, gitread and records, whose check_log is used) are those of
@@ -53,6 +55,8 @@ Limits, stated (erratum E1; D-6314 C2 and C3; D-6313 C5):
 - runtime.max_risk is taken from the record: the launcher reads it from the adapter declaration (launcher.py), which the replay does not
   repeat. The held lease is None and ``now`` is a fixed constant, which only the argument checks of task_view use.
 - The replay of decision.acceptance records is not done here: their inputs (evaluation.py's declared and values) have no assembler in src.
+- A record of the violation path is recognised by its form and by the violation.detected line that it names, and nothing recomputes it (task TASK-141): a forged
+  pair of such lines would be reported "NOT REPLAYED: violation-path record" and would not fail the replay; the state-commit gate of the worker names the lines it accepts.
 - The interpreter of the CI runner may differ from the recorded python; it is reported, not failed.
 - The limits of the configuration and status reads are those of gitread (its docstring, "Limits", the sixth and fifth forms; TASK-109 and
   TASK-110), cited here and not repeated as new claims: (1) the configuration and the status are two reads made one after the other, not
@@ -108,7 +112,7 @@ import os
 import re
 
 import aieos_bootstrap
-from aieos_bootstrap import base_files, gitread, records
+from aieos_bootstrap import base_files, gitread, records, violation
 
 ENGINE_PATH = 'src/aieos_bootstrap/resume_check.py'
 EVENTS_NAME = 'events.jsonl'
@@ -220,6 +224,37 @@ def _record(lines, index):
         return None, 'record: seq %d is not log_seq + 1 (%d)' % (seq, log_seq + 1)
     return {'task_id': task_id, 'head': head, 'log_seq': log_seq, 'code_sha256': ident['code_sha256'], 'runtime': runtime,
             'payload': payload, 'seq': seq, 'record_id': payload.get('record_id')}, None
+
+
+def violation_path_record(lines, index):
+    """True only for the record that the violation path writes (violation.py; task TASK-141): a decision.execution event whose decision is
+    violation.DECISION and whose recorder is violation.RECORDER, with no head_commit (the path has none by design), whose event_id is its
+    refers_to followed by "/decision", and whose refers_to is the event_id of an EARLIER line of the same log whose type is violation.detected
+    and whose task_id is the same. Every other line is not one. ``lines`` is the log split at newlines, ``index`` the 0-based position of the
+    line. Never raises."""
+    try:
+        event = json.loads(lines[index].decode('utf-8'))
+        if not isinstance(event, dict) or event.get('type') != 'decision.execution':
+            return False
+        payload = event.get('payload')
+        task = event.get('task_id')
+        refers = payload.get('refers_to') if isinstance(payload, dict) else None
+        if not (isinstance(payload, dict) and isinstance(task, str) and isinstance(refers, str)):
+            return False
+        if payload.get('decision') != violation.DECISION or payload.get('recorder') != violation.RECORDER or 'head_commit' in payload:
+            return False
+        if event.get('event_id') != refers + '/decision':
+            return False
+        for line in lines[:index]:
+            try:
+                earlier = json.loads(line.decode('utf-8'))
+            except (ValueError, UnicodeDecodeError, RecursionError):
+                continue
+            if isinstance(earlier, dict) and earlier.get('type') == 'violation.detected' and earlier.get('event_id') == refers and earlier.get('task_id') == task:
+                return True
+        return False
+    except Exception:  # every failure is "not a violation-path record", and the line is then replayed as before
+        return False
 
 
 def _replay(repo, log_bytes, record_index, accepted_engines, checked_commit, read, engine, engine_text, build_inputs):
@@ -418,7 +453,7 @@ def _main(argv, read, out, engine):
         engine_gate = 'engine at the checked commit: %s' % _cut('; '.join(why))
     elif _sha(at_head) not in pins:
         engine_gate = 'engine: the engine at the checked commit is not an accepted engine (%d accepted); it is not imported' % len(pins)
-    total = replayed = failed = 0
+    total = replayed = failed = skipped = 0
     for path in files:
         got, found = base_files.read_file(repo, head, path, read)
         if found is not None:
@@ -458,6 +493,10 @@ def _main(argv, read, out, engine):
                 failed += 1
                 out('NOT REPLAYED: decision.acceptance %s' % where)
                 continue
+            if violation_path_record(lines, index):
+                skipped += 1
+                out('NOT REPLAYED: violation-path record (no Resume Check ran) %s' % where)
+                continue
             if engine_gate is not None:
                 failed += 1
                 out('FAIL %s: %s' % (where, engine_gate))
@@ -477,7 +516,7 @@ def _main(argv, read, out, engine):
         out('NOTE: no tracked file is named %s' % EVENTS_NAME)
     for limit in LIMITS:
         out('LIMIT: %s' % limit)
-    out('replay: event logs %d, decision records: %d, replayed and passed: %d, failed: %d' % (len(files), total, replayed, failed))
+    out('replay: event logs %d, decision records: %d, replayed and passed: %d, failed: %d, not replayed (violation path): %d' % (len(files), total, replayed, failed, skipped))
     return 0 if failed == 0 else 1
 
 

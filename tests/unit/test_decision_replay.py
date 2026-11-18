@@ -10,7 +10,7 @@ import pathlib
 import unittest
 from unittest import mock
 
-from aieos_bootstrap import decision_replay, resume_check
+from aieos_bootstrap import decision_replay, resume_check, violation
 
 HERE = pathlib.Path(__file__).resolve()
 ROOT = HERE.parents[2]
@@ -503,6 +503,136 @@ class MainTests(unittest.TestCase):
                 mock.patch.object(decision_replay.base_files, 'read_file', side_effect=read_file):
             decision_replay.main([str(ROOT), PIN], read=clean_read, out=lambda s: None, engine=Engine())
         self.assertEqual([p for p in read_paths if p != decision_replay.ENGINE_PATH], ['events.jsonl', 'd/events.jsonl'])
+
+
+class NoFindings:
+    lines = []
+
+    def findings(self):
+        return []
+
+
+DETECTED = {'type': 'violation.detected', 'event_id': 'launch-x/pretool/t1', 'task_id': 'TASK-136', 'seq': 14,
+            'payload': {'blocking_kind': 'violation', 'evidence_type': 'shell_not_allowed', 'subject': 'TASK-136'}}
+STOP = {'type': 'decision.execution', 'event_id': 'launch-x/pretool/t1/decision', 'task_id': 'TASK-136', 'seq': 15,
+        'payload': {'decision': violation.DECISION, 'recorder': violation.RECORDER, 'refers_to': 'launch-x/pretool/t1',
+                    'record_id': 'launch-x/pretool/t1/decision-record', 'subject': 'TASK-136'}}
+
+
+def _line(event):
+    return json.dumps(event, sort_keys=True, separators=(',', ':')).encode('utf-8')
+
+
+def _changed(base, **top):
+    event = json.loads(json.dumps(base))
+    event.update(top)
+    return event
+
+
+def _payload_changed(base, **changes):
+    event = json.loads(json.dumps(base))
+    event['payload'].update(changes)
+    return event
+
+
+def _log_with_violation(detected=DETECTED, stop=STOP):
+    # the log of the real tree up to line 13, then the violation.detected line and the record of the violation path
+    return LOG13 + _line(detected) + b'\n' + _line(stop) + b'\n'
+
+
+class ViolationPathTests(unittest.TestCase):
+    def recognised(self, detected=DETECTED, stop=STOP):
+        lines = _log_with_violation(detected, stop).split(b'\n')
+        return decision_replay.violation_path_record(lines, 13 + 1)
+
+    def test_the_form_that_the_violation_path_writes_is_recognised(self):
+        self.assertTrue(self.recognised())
+
+    def test_a_resume_check_record_is_not_a_violation_path_record(self):
+        self.assertFalse(decision_replay.violation_path_record(LOG13.split(b'\n'), 12))
+
+    def test_a_stop_record_with_another_recorder_is_not_recognised(self):
+        self.assertFalse(self.recognised(stop=_payload_changed(STOP, recorder='another recorder')))
+
+    def test_the_violation_recorder_with_another_decision_is_not_recognised(self):
+        self.assertFalse(self.recognised(stop=_payload_changed(STOP, decision='CONTINUE')))
+
+    def test_a_refers_to_that_names_no_violation_detected_line_is_not_recognised(self):
+        self.assertFalse(self.recognised(stop=_payload_changed(STOP, refers_to='nothing')))
+
+    def test_a_violation_detected_line_of_another_task_is_not_recognised(self):
+        self.assertFalse(self.recognised(detected=_changed(DETECTED, task_id='TASK-137')))
+
+    def test_a_stop_record_that_carries_a_head_commit_is_not_recognised(self):
+        self.assertFalse(self.recognised(stop=_payload_changed(STOP, head_commit=TIP)))
+
+    def test_an_event_id_that_is_not_refers_to_and_decision_is_not_recognised(self):
+        self.assertFalse(self.recognised(stop=_changed(STOP, event_id='another id')))
+
+    def test_a_violation_detected_line_after_the_record_is_not_recognised(self):
+        log = LOG13 + _line(STOP) + b'\n' + _line(DETECTED) + b'\n'
+        self.assertFalse(decision_replay.violation_path_record(log.split(b'\n'), 13))
+
+    def test_a_line_of_another_type_with_the_same_form_is_not_recognised(self):
+        self.assertFalse(self.recognised(stop=_changed(STOP, type='decision.acceptance')))
+
+    def test_unusable_lines_are_never_recognised_and_never_raise(self):
+        for line in (b'not json', b'[1, 2]', b'\xff\xfe', b'{"type":"decision.execution","payload":5}', b'', b'{"type":"decision.execution","task_id":3}'):
+            self.assertFalse(decision_replay.violation_path_record([line], 0), line)
+        self.assertFalse(decision_replay.violation_path_record([], 0))
+        self.assertFalse(decision_replay.violation_path_record([_line(STOP)], 5))
+        self.assertFalse(decision_replay.violation_path_record([_line(STOP)], -5))
+
+    def run_main(self, text, detail=None):
+        lines = []
+
+        def read_file(repo, commit, path, read=None):
+            return ({'blob': 'b', 'text': ENGINE_TEXT if path == decision_replay.ENGINE_PATH else text}, None)
+        with mock.patch.object(decision_replay.base_files, 'list_paths', return_value=(['.aieos/events.jsonl'], None)), \
+                mock.patch.object(decision_replay.base_files, 'read_file', side_effect=read_file), \
+                mock.patch.object(decision_replay.records, 'check_log', return_value=NoFindings()), \
+                mock.patch.object(decision_replay, 'replay_detail', detail or (lambda *a, **k: ([], []))):
+            rc = decision_replay.main([str(ROOT), PIN], read=clean_read, out=lines.append, engine=Engine())
+        return rc, lines
+
+    def test_the_entry_reports_the_record_not_replayed_and_counts_it_apart(self):
+        rc, lines = self.run_main(_log_with_violation().decode('utf-8'))
+        self.assertEqual(rc, 0, lines)
+        self.assertTrue(any(l.startswith('REPLAYED ') and l.endswith(':13 ok') for l in lines))
+        self.assertTrue(any(l.startswith('NOT REPLAYED: violation-path record (no Resume Check ran) ') and l.endswith(':15') for l in lines), lines)
+        self.assertIn('decision records: 2, replayed and passed: 1, failed: 0, not replayed (violation path): 1', lines[-1])
+
+    def test_a_log_with_only_the_recognised_record_exits_0_with_nothing_replayed(self):
+        rc, lines = self.run_main((_line(DETECTED) + b'\n' + _line(STOP) + b'\n').decode('utf-8'))
+        self.assertEqual(rc, 0, lines)
+        self.assertFalse(any(l.startswith('REPLAYED ') for l in lines))
+        self.assertIn('decision records: 1, replayed and passed: 0, failed: 0, not replayed (violation path): 1', lines[-1])
+
+    def test_a_record_that_is_not_recognised_is_replayed_and_fails_as_before(self):
+        text = _log_with_violation(stop=_payload_changed(STOP, recorder='another recorder')).decode('utf-8')
+        rc, lines = self.run_main(text, detail=lambda *a, **k: (['record: head_commit is not a commit id'], []))
+        self.assertEqual(rc, 1)
+        self.assertFalse(any(l.startswith('NOT REPLAYED: violation-path record') for l in lines))
+        self.assertTrue(any(l.startswith('FAIL ') and 'head_commit is not a commit id' in l for l in lines), lines)
+        self.assertIn('decision records: 2, replayed and passed: 0, failed: 2, not replayed (violation path): 0', lines[-1])
+
+    def test_an_acceptance_line_still_fails_beside_a_recognised_record(self):
+        text = _log_with_violation().decode('utf-8') + '{"type":"decision.acceptance","seq":16,"payload":{"record_id":"r"}}\n'
+        rc, lines = self.run_main(text)
+        self.assertEqual(rc, 1)
+        self.assertTrue(any(l.startswith('NOT REPLAYED: decision.acceptance') for l in lines))
+        self.assertIn('failed: 1, not replayed (violation path): 1', lines[-1])
+
+    def test_the_docstring_states_the_exception_and_its_limit(self):
+        doc = ' '.join(decision_replay.__doc__.split())
+        for part in ('TASK-141', 'violation_path_record', 'NOT REPLAYED: violation-path record', 'no Resume Check ran', 'a forged pair of such lines'):
+            self.assertIn(part, doc)
+
+    def test_the_constants_are_taken_from_the_violation_module(self):
+        text = SRC.read_bytes().decode('utf-8')
+        self.assertIn('violation.DECISION', text)
+        self.assertIn('violation.RECORDER', text)
+        self.assertNotIn('STOP: violation', text)
 
 
 class SourceTests(unittest.TestCase):
