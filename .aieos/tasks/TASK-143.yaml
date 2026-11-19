@@ -1,8 +1,11 @@
 task: TASK-143
-contract_version: v1
+contract_version: v2
 task_type: implementation
 objective: >-
-  Make the change that intent INT-002 states, within the write set.
+  On line 7 of docs/Deferred/DEF-0095-the-handoff-file-of-the-claim-tools-for-the-launcher.md (the line that begins '- Blocks v0.1: yes'),
+  change the citation 'master-plan.md :116' to 'master-plan.md :117'. Change no other byte of the file, and do not
+  change the same citation in its Log. (Intent INT-002.) Make NO shell call of any kind in this session (the shell is forbidden by this contract: shell allow is
+  empty); check your work only by a Read of the one file, and then stop.
 traces_to: []
 input_state:
   base_commit: b1f2e1cc335151c639a805d57c2dde4af31dd598
@@ -13,7 +16,7 @@ write_set:
     - docs/Deferred/DEF-0095-the-handoff-file-of-the-claim-tools-for-the-launcher.md
 read_set:
   paths:
-    - "**"
+    - docs/Deferred/DEF-0095-the-handoff-file-of-the-claim-tools-for-the-launcher.md
   interfaces: []
   schemas: []
 forbidden:
@@ -21,7 +24,9 @@ forbidden:
 constitution: []
 acceptance_criteria:
   - AC1: >-
-      The change does what intent INT-002 states, within the write set.
+      On line 7 of the file, the text 'master-plan.md :116' is replaced by 'master-plan.md :117' and no other byte of the
+      file differs from the base; the same citation in the Log is unchanged. (Intent INT-002.) The result is checked by a Read of the file only, with no
+      shell call.
   - AC2: >-
       No other path is changed.
 capabilities:
