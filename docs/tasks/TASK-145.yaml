@@ -1,0 +1,76 @@
+# Task contract TASK-145 (r1; session c0dc5bcc, 2026-11-19; D-6528 E2, D-6533 G1; the pin change for the second Edit allow rule of the first real run).
+# Why: TASK-137 (the planted-wrong-change task of the first real run, intent INT-003) must edit one file, docs/Deferred/DEF-0117-the-conversion-gap-of-the-owner-kept-act-field-for-run-made-contracts.md, and the runtime denies an Edit the settings file has no allow rule for (DEF-0146; the starter runs `claude -p --permission-prompts none`). The decision agent chose route (a) at D-6528: a new settings variant with the one rule Edit(//e/AIEOS/docs/Deferred/DEF-0117-the-conversion-gap-of-the-owner-kept-act-field-for-run-made-contracts.md), 990 bytes, sha256 f7f835a2bb07c0ec1bf09ace91ddde488c870133e3ed4e09bbd6d2032325d9ad (the method was validated: the DEF-0095 rule reproduces cfb055d0 exactly). The starter refuses to start unless the settings file has the pinned sha256 (claude_starter.py :94), so the pin must name the new file.
+# Authority: D-6528 (route and order: E1 CI revision 26, E2 this task, E3 the settings write at the owner's prompt, E4 CI revision 27 to a single value), D-6532 (CI revision 26 is on main at 122bb89b, both workflows green), D-6533 (E2 takes the task route in the TASK-144 form). Not in this task: the settings file itself (outside the repository; E3), CI revision 27 (.github, DM A66; E4), TASK-137, any launch of a session.
+# Risk: high (R3 matches src/** and tests/** until an architecture names components); not critical (no docs/specs, no .github, no .claude in the write set; to be computed by script at approval). Precedents: TASK-140 (6811ffb) and TASK-144 (docs/tasks/TASK-144.yaml).
+task: TASK-145
+contract_version: v1
+task_type: implementation
+objective: >-
+  In src/aieos_runtime/claude_starter.py change line 31 so that SETTINGS_SHA256 is 'f7f835a2bb07c0ec1bf09ace91ddde488c870133e3ed4e09bbd6d2032325d9ad' (it is 'cfb055d01c6e1d8b6137c3e464b6db38ab5b314a1eca48836b4679f09934d088' now), and in
+  tests/unit/test_claude_starter.py change line 249 (the expected value of claude_starter.SETTINGS_SHA256 in the test of the pinned values) from 'cfb055d01c6e1d8b6137c3e464b6db38ab5b314a1eca48836b4679f09934d088' to the same new value. Change no other byte of either file.
+  The settings file itself is not part of this task.
+traces_to:
+  - docs/tasks/TASK-144.yaml
+input_state:
+  # base_commit: the tip of main when the contract is approved: now 122bb89b70920b01c07597c268b0ba13d8728a10 (CI revision 26); re-read from the refs at approval.
+  base_commit: 122bb89b70920b01c07597c268b0ba13d8728a10
+  depends_on: [TASK-144]
+  intent_versions:
+    # sha256 of each file at base_commit, computed by script at approval (git show <base>:<path> | sha256sum), not retyped.
+    src/aieos_runtime/claude_starter.py: e5cad04936d64f54cd9c45007eeaaf59d231c88e78922d9a3c4cdb9a0dbc6a5f
+    tests/unit/test_claude_starter.py: 43317c525ab0f8a3b743ec04e7be794181419a64f9f5098d6d108e210574dee4
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/pre-genesis/decision-matrix.md: 03940e2cc46037a8be690653b05e553dd2962381f6914358f715415a28b902de
+write_set:
+  paths:
+    - src/aieos_runtime/claude_starter.py
+    - tests/unit/test_claude_starter.py
+read_set: {paths: [src/aieos_runtime/claude_starter.py, tests/unit/test_claude_starter.py, docs/tasks/TASK-144.yaml], interfaces: [], schemas: []}
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - docs/**
+  - tests/conformance/**
+  - tests/integration/**
+  - tests/property/**
+  - tests/run_tests.py
+  - src/aieos_bootstrap/**
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The pin. In src/aieos_runtime/claude_starter.py exactly one line differs from the base: line 31 reads SETTINGS_SHA256 = 'f7f835a2bb07c0ec1bf09ace91ddde488c870133e3ed4e09bbd6d2032325d9ad'. EXE_PATH, EXE_SHA256, PROMPT, MCP_FILE, MCP_SHA256, SETTINGS_FILE and the ten-element argument list of the one subprocess.run call are byte for byte unchanged (a diff against the base shows one changed line).
+  - AC2: >-
+      The test. In tests/unit/test_claude_starter.py exactly one line differs from the base: the expected value in the test of the pinned values (line 249) is the same new hash. No test is added, removed, weakened or skipped. The other places where a test names the settings hash (tests/unit/test_claude_starter.py :118 and tests/property/test_claude_starter_properties.py :96) compute it from test bytes and need no change; tests/property is not in the write set.
+  - AC3: >-
+      The suite. The whole suite passes by the slice method (D-6249 C2, D-6328 E1.6), and tests/unit/test_claude_starter.py passes alone. The starter's other behaviour is unchanged: a settings file whose sha256 differs from the pin still raises StarterError.
+  - AC4: >-
+      Limits, class, evidence and departures, stated at acceptance. (1) The settings file (C:\Users\Admin\AIEOS-runtime\claude-settings.json) is outside the repository and is NOT written by this task (E3, with the owner's own permission at the prompt); until it is written the starter refuses to start with the new pin, and no launch is planned before. (2) This task lands under CI revision 26 (the two-hash window: the CI check_starter pin accepts cfb055d0 or f7f835a2); revision 27 (E4) returns the check to the single value f7f835a2 and is an open obligation, its own decision under DM A66. (3) The risk class is high; the evidence profile is that of docs/pre-genesis/assurance-model.md :82 as for TASK-139, TASK-140 and TASK-144 (unit_test, deterministic_rule, static_security_analysis, ai_review by a pair of reviews on Haiku 5.5 in their own sessions (D-6206; same vendor, stated as a departure), a per-article review and a separate decision_agent_review); the governor's shadow result at the GOV-003 row is a stated departure as in TASK-125 to TASK-144. No launched session is used for this task (no launch is planned before the owner's new yes).
+capabilities:
+  filesystem: {read: [src/aieos_runtime/claude_starter.py, tests/unit/test_claude_starter.py, docs/tasks/TASK-144.yaml], write: [src/aieos_runtime/claude_starter.py, tests/unit/test_claude_starter.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 400k, wall_time: 3h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3]}
+  - {gate: G3, check: constitution, args: [AC3, AC4, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND the aieos-checks and aieos-native runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
