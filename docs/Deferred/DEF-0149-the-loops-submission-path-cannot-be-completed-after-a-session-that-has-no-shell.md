@@ -1,0 +1,27 @@
+# DEF-0149: the loop's submission path cannot be completed after a session that has no shell: the submission commit needs the AIEOS-Fence of a held lease, and the refusal itself writes a record into the log
+
+- Status: open
+- Opened: 2026-11-19 (session 26136a0a)
+- Deferred by: decision agent (A41, A51), D-6467 (the finding, measured in a scratch clone by the rehearsal dh1)
+- Decision group: A
+- Blocks v0.1: yes (the first real run must pass "through ... the governor", master-plan.md :117; the governor evaluates a task in VERIFYING, which only a task.submitted gives)
+- Scheduled in: not scheduled
+
+## What
+The rehearsal (dh1_rehearse.py, output dh1_out.txt sha256 1b08d010...), in a scratch clone at main 1a89b972: a submission commit on task/TASK-143 (tree of the executor's capture commit fc0ab21d, parent 49c22626, a body, exactly one "AIEOS-Task: TASK-143" line, no AIEOS-Fence line) given to adapter.submit with the real writer gave: result "refused", reason "core", the core's reason "fence", findings "trailer: the commit carries no usable AIEOS-Fence", "fence: no lease is given", "store: the refusal record was appended"; the clone's log gained ONE line (seq 45, record.added, the refusal record); no task.submitted was appended; evaluate_task was not run. records.check_log found 0 and the standing gate C3 passed over the clone's log. E:\AIEOS was unchanged before and after.
+## Meaning
+In the loop the session's own commit carries the AIEOS-Fence trailer of the lease that the start granted (conformance.py :1440-1449: start, submit, end, then evaluate); the launched session had no shell, so it could not commit (statement v6, limit 6) and its lease was released at the end; the executor's capture commit and any trailer commit made after the end have no held lease to name. So the submit and the evaluation cannot be reached afterwards, and doing it in the real log would add a refusal record.
+## Options (none chosen)
+(a) the governor is run as a SHADOW (governor.evaluate called directly in scratch, nothing written) and its result is the measurement of the first real run; the acceptance of the task stays the decision agent's single approval (CR-002 Đ7); (b) a task whose session can commit (shell allow limited to `git commit` of the write set, with the hook's guard) so that the session submits with its own fence; (c) the launcher captures and submits at the end of a session that left a change inside the write set (an executor step with the lease, before release); (b) and (c) are src changes (class high) as tasks.
+## Limits and not measured
+One rehearsal; the values for the evaluation are not built by any real caller (the tests and conformance cases hand-build them), so a governor run needs hand-built, illustrative values; whether a fenced submission by a session that commits would pass is not measured.
+## Resume when
+Before the second real run, and at the decision on how the first real run is judged by the governor.
+## Depends on
+TASK-025, TASK-027, TASK-051, DEF-0146, DEF-0147.
+
+## Notes on sources
+
+File names written aj/... or S1\aj\... in this record are kept in the lasting copies under C:\Users\Admin\AIEOS-REG0-lite\sessions\26136a0a-b135-4cb1-9db0-95258ca6f5b5\scratchpad-evidence (the folder stretch-D6445-D6469 and the folders TASK-140, TASK-140-ci, TASK-141 and TASK-141-ci) or under C:\Users\Admin\AIEOS-REG0-lite\sessions\c0dc5bcc-c58f-46fa-a52d-d27469300fc7\scratchpad-evidence\def-sources (aj/launch5b, aj/launch5c, aj/ao8_compile.py, aj/ao8_out.txt, aj/make_drafts.py); the prefix aj/ names the old scratch folder, which no longer exists.
+
+Figures in this record that no decision file carries and that no script re-checked against a lasting copy (run times, byte counts, tool-call counts) are the worker's measurements and are not re-verified.
