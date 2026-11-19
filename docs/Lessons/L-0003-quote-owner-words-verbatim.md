@@ -36,6 +36,9 @@ Five in session 02bd7476 (../History/2026-10/2026-10-07-0033-hardening-choice-an
 - **D-041.** The first CR-001 draft added clauses that the source rows do not contain.
 - **D-046.** The first finding said the owner had opened Task Manager and kept a screenshot; the owner had reported only the comparison.
 
+One in session c0dc5bcc (2026-11-19; ../History/2026-11/2026-11-19-1806-m8-stage-8-the-records-of-tasks-140-141-and-144-and-the-push-of-their-branch-c0dc5bcc.md), caught by the decision agent before the commit:
+- **D-6496 correction 2.** The limits record of TASK-144 (line 30) said, under "the decision agent ruled ... that", that the Co-Authored-By trailer was dropped from new commits after the owner's answer (D-6473). Dropping the trailer was the owner's own instruction (his "có" to the second question, main transcript of session 26136a0a :28501; D-6473 :11 and :17). The sentence was replaced by "by the owner's own answer (D-6473), new commits from then on carry no Co-Authored-By trailer". An owner decision credited to the decision agent is the reverse of the pattern above and the same fault.
+
 ## Why it happens
 - Translating from Vietnamese and summarising both invite small changes.
 - Claude wrote both the question and the record, so its own wording feels like the owner's.
