@@ -1,8 +1,10 @@
 task: TASK-142
-contract_version: v2
+contract_version: v3
 task_type: implementation
 objective: >-
-  Make the change that intent INT-002 states, within the write set.
+  On line 7 of docs/Deferred/DEF-0095-the-handoff-file-of-the-claim-tools-for-the-launcher.md (the line that begins '- Blocks v0.1: yes'),
+  change the citation 'master-plan.md :116' to 'master-plan.md :117'. Change no other byte of the file, and do not
+  change the same citation in its Log. (Intent INT-002.)
 traces_to: []
 input_state:
   base_commit: 861b64b1956d9c45f0e9b73b4191110279db1531
@@ -21,7 +23,8 @@ forbidden:
 constitution: []
 acceptance_criteria:
   - AC1: >-
-      The change does what intent INT-002 states, within the write set.
+      On line 7 of the file, the text 'master-plan.md :116' is replaced by 'master-plan.md :117' and no other byte of the
+      file differs from the base; the same citation in the Log is unchanged. (Intent INT-002.)
   - AC2: >-
       No other path is changed.
 capabilities:
