@@ -1,0 +1,160 @@
+# Task contract TASK-152 (DRAFT v1, scratchpad only until approved; session dc7cf6ca, 2026-11-21; BT3b-1, the pure input assembler of the evaluation runner, DEF-0136 and DEF-0152; decisions D-6796, D-6826 (C2 to C4), D-6827 (C2 to C6), D-6828 (R1 to R7) and D-6829 (R8 to R10); v2 = v1 with D-6828 R1 to R7; v3 = v2 with D-6829 R8 to R10; the first contract draft of BT3b-1). The id TASK-152 is the next free one by Glob at this draft (docs/tasks ends at TASK-151, .aieos/tasks at TASK-143; re-read at approval). The contract is approved by the decision agent (A41, A51) at the decision of its commit, not by the owner.
+# Authority and scope: BT3b-1 is ONLY a pure module (option (A) of D-6827 in its REFUSING form): no process, no file, no clock, no network, no credential, no write to the event log. It takes plain data that the caller has read through the existing readers (base_inputs.contract_at, scope_reconcile.rules_from_policy for the risk rules, scope_reconcile.policy_block for the policy version, the writer's log reader) and returns either the full `declared` and `values` of evaluation.evaluate_task plus the CI records to append, or a refusal that names every open gap. It does NOT append anything (BT3b-2), does NOT wire `aieos evaluate` (BT3b-2), does NOT read or write a policy file (BT3c, D-6827 C5), does NOT settle G3 (DEF-0153, the owner's question) and does NOT change gate_records.py, ci_evidence.py, governor.py, evaluation.py, records.py, verification_records.py, writer.py, cli.py, the CI workflow or any DEF text.
+# Not in this task: any file under src/aieos_runtime or .github, any launch, any settings file, the executor fetch, the append of records, the `aieos evaluate` command, a policy snapshot (BT3c), the pin tasks (BT5), the second real run (the owner's typed yes), any change of DEF-0152 or DEF-0136 (their log lines are a records item of the acceptance commit).
+task: TASK-152
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add a pure core module src/aieos_bootstrap/eval_inputs.py with ONE public function eval_inputs(task_id, evaluated_commit, policy_ref, contract, contract_sha256, changed_paths, runs, sources, log_payloads, recorder) that assembles, from plain data, every input of evaluation.evaluate_task that a repository file can give, and refuses when one cannot be given (D-6606 C3: derive every input, nothing hand-typed, refuse a missing input; D-6827 C2). It imports re, aieos_bootstrap.ci_evidence and aieos_bootstrap.governor only (hashlib is not needed: the module computes no hash; D-6828 R7; the import list is tested by ast); no process, file, clock, environment variable or network; public names eval_inputs and nothing else defined. It returns a mapping with exactly the keys declared, values, ci_records, evidence and refusal; on a refusal declared and values are None, ci_records is [], evidence is None and refusal is {reason, detail}; the reasons form a closed set: argument, gap, retries, plan, risk_rules, policy_path, ci, conflict, incomplete. It never raises an Exception; a BaseException that is not an Exception passes through. THE ARGUMENTS (checked first, each failure is refusal argument and nothing else is read): task_id TASK- and digits; evaluated_commit and policy_ref 40 lowercase hexadecimal characters, and policy_ref differs from evaluated_commit (the policy is read at a pinned ref, never from the evaluated tree, D-6826 C4 (b); the module checks the form and the inequality, the caller reads the files at policy_ref); contract a dict (the mapping base_inputs.contract_at returns for the approved contract) holding traces_to (a non-empty list of non-empty texts), risk (one of low, medium, high, critical), owner_kept_act (the text true or false, as the subset reader of base_inputs gives scalars as texts: the module converts it to the bool and any other value is refusal argument; evaluation.evaluate_task binds the field to the contract bytes again), verification_plan (a non-empty list of dicts) and autonomy (a dict whose budgets is a dict); contract_sha256 64 lowercase hexadecimal characters; changed_paths a non-empty list of non-empty texts; runs a list (passed on to ci_evidence, which checks its own form); sources a dict (below); log_payloads a list of dicts (the payloads of the task's record.added events already in the log); recorder a non-empty text. THE GAPS (D-6827 C2): the closed list, in this order, of the values that no repository reader supplies today: intent_versions, owner_kept_rules, articles, default_profiles, requirement_profiles, evidence_comparison, delegation, auto_accept, level_version, ruleset_version; plus policy_version and risk_rules, which the caller passes as the output of the existing readers in the same dict. sources must be a dict whose keys are exactly intent_versions, owner_kept_rules, articles, default_profiles, requirement_profiles, evidence_comparison, delegation, auto_accept, level_version, ruleset_version, policy_version and risk_rules; a key whose value is None is an OPEN GAP; if any gap is open the answer is ONE refusal, reason gap, whose detail names EVERY open gap in the list order, one name each (never a partial mapping, never a fail-closed value passed on); a missing or extra key is refusal argument. The values of sources are plain data in the forms that governor.derive_inputs and evaluation.evaluate_task require; fixture values in the tests are not policy (the docstring says it and a test reads the sentence); no value is typed into the module (D-6826 C4 (a)). THE PARTS THAT HAVE SOURCES (D-6827 C3): (a) retries: contract['autonomy']['budgets']['retries'] must be a str of one to three decimal digits with no sign, no space and no leading zero (except the text 0) whose int is 0 to 100, else refusal retries with an exact detail (the contract reader gives the budgets as texts, resume_log_inputs docstring; the module is the strict reader of that one field). This departs from D-6827 C3 (a), which named the approved contract bytes: the module reads the mapping that base_inputs.contract_at gives, whose reader already refuses a repeated key (base_inputs.py :362-:363) and returns plain values as text (:380); the departure is decided at D-6828; (b) verification_plan: the gate ids are exactly the entries' gate values in order, each G and digits (the form of the run-made contracts that launcher.py writes: mappings {gate, check, args}, launcher.py :1693-:1695, :1848-:1850, :1883, :1898); an entry that is not a dict with a text gate, or a gate not G and digits, is refusal plan; the entries' check and args keys are passed to ci_evidence, which drops args; (c) risk_rules: sources['risk_rules'] is the list that scope_reconcile.rules_from_policy returns for the policy text read at policy_ref, in the governor's form (scope_reconcile.py :267-:293; a component_tags rule is given as TAGS_MATCH, :102 and :286-:287): each rule must be a dict with exactly the keys match and class, match a non-empty list of non-empty texts and class one of low, medium, high or critical; the refused rule {match: [], class: None} and any other form is refusal risk_rules; a rule in form is passed on as a copy; (d) policy_version is sources['policy_version'] (a non-empty text). THE POLICY PATHS (D-6826 C4 (b)): a task whose changed_paths include any of the four policy source files docs/specs/risk-rules-gov-aieos.md, docs/pre-genesis/constitution.md, docs/pre-genesis/assurance-model.md or docs/pre-genesis/decision-matrix.md (the exact text, case-sensitive; the decision matrix is the source of the owner-kept and delegation rules that BT3c will restate: D-6828) is refused with reason policy_path naming the path: a task cannot edit the rules that evaluate it (BT3c adds the policy file's own path to the constant). THE CI RECORDS: ci_evidence.ci_evidence is called ONCE with task_id, evaluated_commit, contract_sha256, a fresh copy of sources['intent_versions'], the plan entries as given, a copy of changed_paths, runs and recorder; a refusal of it is refusal ci with the detail 'ci_evidence refused: <its reason>: <its detail>'; its records are checked against log_payloads BEFORE anything is returned (D-6827 C2 (b), the order check-all-then-append): a log payload equal as a whole mapping to a CI record is not returned again (its record_id is listed in evidence.already_in_log), a log payload with the SAME record_id and other content is refusal conflict naming the record_id with ci_records empty; otherwise ci_records are the records to append. THE RESULT: declared is {intent_versions: a fresh copy, retries: the int}; values has exactly the thirteen governor.VALUE_KEYS (contract {traces_to, risk, owner_kept_act, verification_plan: the gate ids}, a copy of changed_paths, the mapped risk_rules and the other sources as given in copies) and a copy of governor.derive_inputs' view of it is computed as the last check: ValueError, a risk of None, an evidence profile of None or a delegation of None is refusal incomplete with the detail naming which (the module never returns values that the governor would turn into no decision); evidence is {policy_ref, evaluated_commit, contract_sha256, ci: the evidence mapping of ci_evidence, already_in_log: the listed record ids, gaps: []}. All values returned are fresh plain copies: no argument is changed and nothing returned aliases an argument.
+traces_to:
+  - docs/Deferred/DEF-0152-the-caller-of-the-gate-maker-must-bind-the-steps-to-the-task-and-the-commit-and-give-plain-data.md
+  - docs/Deferred/DEF-0136-no-maker-records-a-gate-result-that-the-governor-counts-for-a-run-made-task.md
+  - docs/Deferred/DEF-0153-the-run-made-plans-review-gate-has-no-ci-evidence-so-the-governor-cannot-count-it-and-the-plan-and-the-scenarios-disagree.md
+  - docs/runs/TASK-151-acceptance.md
+input_state:
+  # base_commit: the tip of main when the contract is approved (re-read from the refs at approval; c0e1b61f9dc7afa664d4bdf83bc0637eef8dbff7 at this draft).
+  base_commit: c0e1b61f9dc7afa664d4bdf83bc0637eef8dbff7
+  depends_on: []
+  intent_versions:
+    # sha256 of each file at base_commit, computed by script at approval (git show <base>:<path> | sha256sum), not retyped. The list: src/aieos_bootstrap/ci_evidence.py, src/aieos_bootstrap/gate_records.py, src/aieos_bootstrap/evaluation.py, src/aieos_bootstrap/governor.py, src/aieos_bootstrap/records.py, src/aieos_bootstrap/verification_records.py, src/aieos_bootstrap/base_inputs.py, src/aieos_bootstrap/resume_log_inputs.py, src/aieos_bootstrap/scope_reconcile.py, src/aieos_bootstrap/launcher.py, docs/pre-genesis/decision-matrix.md, docs/Deferred/DEF-0152-....md, docs/Deferred/DEF-0153-....md, docs/Deferred/DEF-0136-....md, docs/pre-genesis/constitution.md, docs/pre-genesis/assurance-model.md, docs/specs/risk-rules-gov-aieos.md, docs/runs/TASK-151-acceptance.md, tests/unit/test_ci_evidence.py, tests/unit/test_governor.py.
+    src/aieos_bootstrap/ci_evidence.py: 7dfa5ff7a49598d07e9e396a504fe917b53a279333309eed80960403857f56f7
+    src/aieos_bootstrap/gate_records.py: e58448bcc765fa013ff7cf6bd4af9f1640eb402a99a269e8159c3d83e6f300c2
+    src/aieos_bootstrap/evaluation.py: 9ea5969d8da752d4232ec3b282307437173631aa6650bcee15c27341502b8469
+    src/aieos_bootstrap/governor.py: 2f2dcd7525bcc39dcb3539ada93daff428a624cf2c47876c2d17599cf7ec022f
+    src/aieos_bootstrap/records.py: 2b7b456b1ef9fecde0c8b84eaf75b1fd85b7ac2e8f40e9e329a7dea3b7b31297
+    src/aieos_bootstrap/verification_records.py: 973a81a27f8ae4390fd369fb39746581ba4d9e12d0cc3d1d094ffc7a8145050a
+    src/aieos_bootstrap/base_inputs.py: 3b802be038fd1eacb295389e44b5f9b543456bc80668f7740409932ae560cbfb
+    src/aieos_bootstrap/resume_log_inputs.py: 7e3db86bef3b934dbd9f244a2ec2acef03a7f31234d8cf468e71f47c62fd7499
+    src/aieos_bootstrap/scope_reconcile.py: 2fc304b60cbd16a99bc0eb2c966b2dfb9d097f56c025f220ea0500d6a7c8af41
+    src/aieos_bootstrap/launcher.py: 27169dccd76b088d8cdc3eef0044793f3edd83088655dcf5bbe4acfb90c720c8
+    docs/pre-genesis/decision-matrix.md: 03940e2cc46037a8be690653b05e553dd2962381f6914358f715415a28b902de
+    docs/Deferred/DEF-0152-the-caller-of-the-gate-maker-must-bind-the-steps-to-the-task-and-the-commit-and-give-plain-data.md: 4fce8a462ccc67450c34d535bb0ea9aab0ceb9ebaebbab951066fc31e7d3058d
+    docs/Deferred/DEF-0153-the-run-made-plans-review-gate-has-no-ci-evidence-so-the-governor-cannot-count-it-and-the-plan-and-the-scenarios-disagree.md: e84d5f2716ba40fb99e78852e9199ce7b15ebc03f6905133d46ac2daff84e82f
+    docs/Deferred/DEF-0136-no-maker-records-a-gate-result-that-the-governor-counts-for-a-run-made-task.md: 729f252786229007abcbe16d85b2aa97ee3b58cd14afac809484e08eb3e316cf
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/runs/TASK-151-acceptance.md: 2ddf925e23a9a36e3a0a7f6cf1899ffb9d7a9f15010af21eb20b3b4efcf05ef7
+    tests/unit/test_ci_evidence.py: f78422d84b552bb6657a5bf3a41187069e8d4d56c4ed72bd47d86416a7a7ae18
+    tests/unit/test_governor.py: b820ba4a373294042b181c112a810f38fd4bef5903acca5f9bcfb6e1dac18bed
+write_set:
+  paths:
+    - src/aieos_bootstrap/eval_inputs.py
+    - tests/unit/test_eval_inputs.py
+read_set: {paths: [src/aieos_bootstrap/ci_evidence.py, src/aieos_bootstrap/gate_records.py, src/aieos_bootstrap/evaluation.py, src/aieos_bootstrap/governor.py, src/aieos_bootstrap/records.py, src/aieos_bootstrap/verification_records.py, src/aieos_bootstrap/base_inputs.py, src/aieos_bootstrap/resume_log_inputs.py, src/aieos_bootstrap/scope_reconcile.py, src/aieos_bootstrap/launcher.py, docs/pre-genesis/decision-matrix.md, docs/pre-genesis/constitution.md, docs/pre-genesis/assurance-model.md, docs/specs/risk-rules-gov-aieos.md, docs/runs/TASK-151-acceptance.md, tests/unit/test_ci_evidence.py, tests/unit/test_governor.py, tests/run_tests.py], interfaces: [], schemas: []}
+# The list under forbidden: is explicit and made by script at approval (every tracked file of src/aieos_bootstrap, plus .github/**, .aieos/**, .claude/**, CLAUDE.md, AIEOS-concept.md, .gitattributes, .gitignore, bench/**, native/**, docs/**, src/aieos_runtime/**, tests/conformance/**, tests/integration/**, tests/property/**, tests/run_tests.py, tests/unit/test_governor.py, tests/unit/test_gate_records.py and tests/unit/test_ci_evidence.py), checked against the write set (a script, its source brought first). tests/unit is not forbidden as a folder because test_eval_inputs.py is in the write set, following TASK-144, TASK-148, TASK-150 and TASK-151.
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - docs/**
+  - src/aieos_runtime/**
+  - tests/conformance/**
+  - tests/integration/**
+  - tests/property/**
+  - tests/run_tests.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_gate_records.py
+  - tests/unit/test_ci_evidence.py
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/adapter_declaration.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/capture_submit.py
+  - src/aieos_bootstrap/ci_evidence.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/cli.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/contract_path.py
+  - src/aieos_bootstrap/decision_replay.py
+  - src/aieos_bootstrap/done.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gate_records.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/handoff_file.py
+  - src/aieos_bootstrap/launcher.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/metrics_report.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/resume_log_inputs.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-008, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The module. eval_inputs.py defines eval_inputs and nothing else public; it imports re, aieos_bootstrap.ci_evidence and aieos_bootstrap.governor only (a test reads the file with read_bytes and ast, checks the import list, the defined public names, the public attributes of the module (eval_inputs and the three imports) and the absence of the direct calls open, exec, eval, compile and __import__ and of the names subprocess, system, environ, time and now); the return form has exactly the five keys and, on a refusal, declared and values None, ci_records [] and evidence None; every argument check of the objective is a test and each case asserts its EXACT refusal reason and detail (no case may pass for another reason); a bool where an int is required, a policy_ref equal to evaluated_commit, an upper-case commit, a non-dict contract and an owner_kept_act that is not the text true or false (a bool, 'True', 'yes', an empty text) are refused; a dict subclass whose own method raises RuntimeError gives refusal argument and no exception escapes; a test-defined BaseException raised from an argument's own method passes through.
+  - AC2: >-
+      The gaps (D-6827 C2). With every source given in form the module goes on; with ONE source None each of the twelve keys gives refusal gap naming exactly that key; with several None the detail names ALL of them in the list order of the objective; a missing key and an extra key of sources are refusal argument; the answer is never a partial mapping (declared and values None). The docstring says that fixture values in the tests are not policy and that no value is typed into the module; a test reads both sentences and a test shows that a gap is never filled (the same sources with one None never give values).
+  - AC3: >-
+      The parts that have sources (D-6827 C3). Retries: the texts '0', '3' and '100' are accepted and give the ints; '101', '-1', '+3', ' 3', '03', '', 'three', '3.0', a number given as an int and a missing budgets or retries key are each refused with reason retries and their own detail. Plan: the gate ids are the entries' gate values in order; an entry that is not a dict, without a gate, with a gate that is not a text or not G and digits is refused with reason plan; the {gate: G3, check: review, args: [AC1]} entry is accepted. Risk rules: a rule {match: [...], class: 'medium'} is passed on unchanged (as a copy); the refused rule {match: [], class: None}, a class of None, a class outside the four, a match that is not a list or is empty, a match holding a non-text and an extra key are each refused with reason risk_rules and their own detail. policy_version: a non-empty text is taken as given, anything else is refusal argument.
+  - AC4: >-
+      The policy paths (D-6826 C4 (b)). A changed path equal to docs/specs/risk-rules-gov-aieos.md, docs/pre-genesis/constitution.md, docs/pre-genesis/assurance-model.md or docs/pre-genesis/decision-matrix.md is refused with reason policy_path naming that path, one test per source file; a path that only contains one of them (docs/pre-genesis/constitution.md.bak, other/docs/pre-genesis/constitution.md) and a path in another case are NOT refused (the limit is stated: the rule is the exact text); policy_ref is carried in the evidence and a policy_ref equal to evaluated_commit is refusal argument.
+  - AC5: >-
+      The CI records (D-6827 C2). With the branch fixture of the TASK-151 tests (a run of the task branch whose log names the task) and the run-made plan the module returns the records of ci_evidence unchanged (compared as whole values) and its uncovered entries are not lost: ci_evidence's refusal is passed on as refusal ci with the detail 'ci_evidence refused: <reason>: <detail>' (a test per reason of ci_evidence that is easy to provoke: path, run, detect); the ci_evidence call is made once and receives a fresh copy of intent_versions; the evidence mapping of ci_evidence is carried in evidence.ci.
+  - AC6: >-
+      The guard against the log (D-6827 C2 (b)). With log_payloads empty every CI record is in ci_records; a log payload equal as a whole mapping to a CI record is not returned again and its record_id is listed in evidence.already_in_log; a log payload with the same record_id and other content (the outcome, any other key) is refusal conflict naming the record_id with ci_records [] even when other records were new (the order check-all-then-append: shown by a log holding one equal and one differing payload); each of these cases has its own test; the module appends nothing and calls no writer.
+  - AC7: >-
+      The result and the completeness check. With sources in form (test fixtures, not policy) the module returns declared {intent_versions: a copy, retries: the int} and values with exactly the thirteen governor.VALUE_KEYS (a test imports governor and compares the key set) and the contract mapping with exactly governor.CONTRACT_KEYS; a copy of the values given to governor.derive_inputs does not raise; a values that derive_inputs would turn into a risk of None, an evidence profile of None or a delegation of None is refusal incomplete naming which (fixtures that cause each); all returned values are fresh copies (no argument is changed: a deep comparison before and after; no returned container is an argument or a value inside an argument); equal arguments give equal results.
+  - AC8: >-
+      Nothing else changes. Only the two paths of the write set; the whole suite passes by the slice method (D-6249 C2, D-6328 E1.6); a pin scan of the existing tests (made at approval, brought to the decision agent) shows that no existing test pins the list or the count of the modules of src/aieos_bootstrap (TASK-150 and TASK-151 found none; test_writer.py :428 and test_autonomy.py :241 must pass with the new module); tests/run_tests.py discovers the new test file without a change.
+  - AC9: >-
+      The CI evidence of the task push (pre-registered before the commit exists, as at TASK-150 and TASK-151). deterministic_rule must report 0 findings and no FAIL line; bandit "No issues identified" and the pyflakes step silent; the GOV-003 step reports an evaluator change for the two paths (a report, not a block) and the "GOV-003 base tests (report only)" line shows NO failure; acceptance is by the decision agent's explicit decision only (GOV-003 :94 and INV-011 :78 of the constitution).
+  - AC10: >-
+      Limits and evidence, stated at acceptance. (1) The module reads nothing and appends nothing: the caller reads the repository through the existing readers and BT3b-2 appends the returned ci_records and wires `aieos evaluate` (D-6827 C5). (2) The module cannot check that the sources are the real policy: every policy value is plain data given by the caller, fixture values in tests are not policy, and until BT3c supplies a policy file ten of the twelve sources (all but policy_version and risk_rules, which have readers) have no producer, so no real evaluation can pass the gap check (D-6827 C5). (3) policy_ref is checked for form and inequality only; that the files were read at that ref is the caller's. (4) The policy-path rule is the exact text of four files; BT3c adds its own file and states any others. (5) The retries reader is strict and local to this module; the contract reader's own refusals (duplicate keys: base_inputs.py :362-:363) are the reader's; the module reads the mapping, not the contract bytes (D-6828). (6) intent_versions is a gap because no reader maps path to sha256 into the version form (D-634 E1); a reader found later replaces the gap in a new task. (7) The departure from D-6607 C2 on provenance (the record cannot name the fetch; the manifest, its hash printed by the command and its copy in the run record) is stated in BT3b-2's contract, not built here (D-6826 C3). (8) How decision_replay.py and reconcile.py treat an appended CI-class record.added is read at the BT3b-2 contract's base (D-6826 C2 (e)). (9) DEF-0153 (the owner's G3 question) and the owner's typed yes for the second real run stay open and this task depends on neither. (10) The evidence profile of the high class: unit_test, deterministic_rule, static_security_analysis, ai_review by a PAIR of blind reviews on Haiku 5.5 in their own sessions (same vendor, a stated departure), a per-article review (GOV-003 applies, INV-008 applies, INV-001 applies and is met: TASK-151 acceptance F7) and a decision_agent_review; no launched session judges its own work. (11) A launch needs the owner's typed yes; the contract authorises none. (12) The risk class is high (risk-rules R3, fail closed): the module decides whether the inputs of an evaluation may be used. (13) The module cannot check that contract is the contract whose bytes hash to contract_sha256; the caller takes both from one base_inputs.contract_at call (D-6828). (14) base_inputs.contract_at reads contracts through its subset reader, which refuses the self-build contracts of docs/tasks whose intent_versions keys begin with a dot (TASK-151.yaml at c0e1b61f: contract_at answers "line 24: a line out of the subset", the line ".github/workflows/aieos-checks.yml: <sha256>"; shown by readonly_checks_152.py); this assembler is for run-made contracts (.aieos/tasks, the form `aieos run` writes and the second real run produces: TASK-143 is read without a finding, with retries the text '1', the plan entries as mappings and owner_kept_act the text 'false'); evaluating a self-build task through this path is out of scope.
+capabilities:
+  filesystem: {read: [src/aieos_bootstrap/ci_evidence.py, src/aieos_bootstrap/gate_records.py, src/aieos_bootstrap/evaluation.py, src/aieos_bootstrap/governor.py, src/aieos_bootstrap/records.py, src/aieos_bootstrap/verification_records.py, src/aieos_bootstrap/base_inputs.py, src/aieos_bootstrap/resume_log_inputs.py, src/aieos_bootstrap/scope_reconcile.py, src/aieos_bootstrap/launcher.py, docs/pre-genesis/decision-matrix.md, docs/specs/risk-rules-gov-aieos.md, docs/pre-genesis/constitution.md, docs/pre-genesis/assurance-model.md, docs/runs/TASK-151-acceptance.md, tests/unit/test_ci_evidence.py, tests/unit/test_governor.py, tests/run_tests.py], write: [src/aieos_bootstrap/eval_inputs.py, tests/unit/test_eval_inputs.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 400k, wall_time: 3h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8]}
+  - {gate: G3, check: constitution, args: [AC9, AC10, INV-001, INV-002, INV-003, INV-004, INV-008, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND the aieos-checks run of the accepted commit succeeds
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
