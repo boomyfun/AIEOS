@@ -171,6 +171,17 @@
 # (not replayed: a separate task), a dirty or filter-configured tree or an unreadable log still FAILS; with no decision record it passes as before. The step also refuses a runner older than Python 3.11 and a top-level name under src that shadows a
 # standard-library module (B3 of decision D-6335 C4). It grants no write access, uses no secret or token and changes no setting. Limits: GOV-003 does not hold for the entry and its reader modules (they run from the tree under check; decision D-6332);
 # the entry's engine file is checked by path and by hash, not hashed again as it runs (B2); a pass shows reproducibility by the checked tree's readers, not what head_commit's readers computed; the replay of decision.acceptance records is task B.
+# Revision 28 (the capture step of the launcher, D-6605, D-6609, D-6610; the decision agent's own decision under DM A66, its own decision on the exact diff) LOOSENS, for exactly one path, and ADDS. LOOSENS: (1) deterministic_rule: the one path
+# src/aieos_runtime/task_capture.py may import subprocess (ALLOW) under a new pattern rule (check_capture) that, like revision 8's check_subprocess for gitread.py but stricter, accepts exactly ONE subprocess.run call whose only positional argument is
+# ['git'] + list(CAPTURE_OPTIONS) + ['-c', 'core.hooksPath=' + os.devnull] + <a name>, with keywords only from the revision-8 set and 'input' (the commit message goes to commit-tree on standard input), shell the constant False, timeout an int
+# constant and env a name, all three required; the keyword 'input' is allowed for that one path only; (2) static_security_analysis: that one file is run without B404, B603 and B607 (as gitread.py; git is found by name). ADDS: the module's literals CAPTURE_FORMS (the ten fixed forms of the nine git subcommands read-tree,
+# update-index, write-tree, commit-tree, update-ref, rev-parse, diff, restore and clean), CAPTURE_OPTIONS and CAPTURE_ENV_FIXED must each be bound once at module level to a literal equal to the pin in this file, and in no other way (no store,
+# augmented assignment, parameter, except-as name, import alias, global, nonlocal, match capture or definition of these names anywhere in the file; the name list is never bound; the name os is bound only by one top-level import os and no attribute
+# devnull is stored or deleted), and CAPTURE_FORMS and CAPTURE_ENV_FIXED must be read at least once; the paths under src/aieos_runtime/ are exactly __init__.py, claude_starter.py and task_capture.py. It grants no write access, uses no secret or token and changes no setting; the EVALUATOR lists are unchanged. Limits: the rule pins the call form and the three literals, not the run-time
+# validator of the module (its refusals of unsafe paths, of a state name and of a path not in the list given, and the repeated configuration read, are the task's tests; so is the environment, built from nothing, and the value '<null>' of CAPTURE_ENV_FIXED,
+# which stands for os.devnull and is substituted by the module at run time; a read of a pinned name does not prove that the run-time validator uses it; computed routes (setattr, sys.modules, vars(), globals()) stay with review, as the script's header says); the forms write Git objects, one ref under refs/heads/task/ and working-tree files
+# of the listed paths, so a filter driver named in the clone's own configuration would run (the launcher's configuration read is repeated just before the capture) and git is found by its name (the limit of gitread.py applies: on Windows a git program
+# placed in the directory of the Python program or the current directory is found first); the rule runs over the files Git tracks under src/ at HEAD of a task run, so it is inert while the module is absent.
 name: aieos-checks
 
 on:
@@ -1815,6 +1826,159 @@ jobs:
                                   continue
                               findings.append('%s:%d: import of aieos_runtime outside the entry line\'s main block (revision 20)' % (path, n.lineno))
           ALLOW[STARTER] = {'modules': frozenset({'subprocess'}), 'os': frozenset(), 'open_modes': frozenset(), 'aieos_string': False}
+          # revision 28 (the capture step, D-6609, D-6610): the one runtime path that may start git to write, its pinned literals and its pattern rule
+          CAPTURE = 'src/aieos_runtime/task_capture.py'
+          CAPTURE_FORMS = (('read-tree', 'HEAD'),
+                           ('update-index', '--add', '--remove', '--', '<paths>'),
+                           ('write-tree',),
+                           ('commit-tree', '--no-gpg-sign', '<tree>', '-p', '<id>', '-F', '-'),
+                           ('update-ref', '<taskref>', '<id>', '<zero>'),
+                           ('rev-parse', '--absolute-git-dir'),
+                           ('rev-parse', '--verify', 'HEAD'),
+                           ('diff', '--no-ext-diff', '--no-textconv', '--name-only', '<id>', '<id>'),
+                           ('restore', '--source=HEAD', '--worktree', '--', '<paths>'),
+                           ('clean', '-f', '--', '<paths>'))
+          CAPTURE_OPTIONS = ('--no-pager', '-c', 'core.fsmonitor=false', '-c', 'diff.external=', '-c', 'commit.gpgsign=false')
+          CAPTURE_ENV_FIXED = (('GIT_CONFIG_NOSYSTEM', '1'), ('GIT_CONFIG_GLOBAL', '<null>'), ('GIT_TERMINAL_PROMPT', '0'), ('GIT_OPTIONAL_LOCKS', '0'),
+                               ('GIT_NO_LAZY_FETCH', '1'), ('LC_ALL', 'C'))
+          CAPTURE_PINS = (('CAPTURE_FORMS', CAPTURE_FORMS), ('CAPTURE_OPTIONS', CAPTURE_OPTIONS), ('CAPTURE_ENV_FIXED', CAPTURE_ENV_FIXED))
+          CAPTURE_KEYWORDS = RUN_KEYWORDS | {'input'}
+          ALLOW[CAPTURE] = {'modules': frozenset({'subprocess'}), 'os': frozenset(), 'open_modes': frozenset(), 'aieos_string': False}
+
+
+          def _capture_list_ok(arg):
+              # the one positional argument is exactly ['git'] + list(CAPTURE_OPTIONS) + ['-c', 'core.hooksPath=' + os.devnull] + <a name>
+              if not (isinstance(arg, ast.BinOp) and isinstance(arg.op, ast.Add) and isinstance(arg.right, ast.Name)):
+                  return False
+              mid = arg.left
+              if not (isinstance(mid, ast.BinOp) and isinstance(mid.op, ast.Add)):
+                  return False
+              left, hooks = mid.left, mid.right
+              if not (isinstance(left, ast.BinOp) and isinstance(left.op, ast.Add)):
+                  return False
+              first, opts = left.left, left.right
+              if not (isinstance(first, ast.List) and len(first.elts) == 1 and isinstance(first.elts[0], ast.Constant) and first.elts[0].value == 'git'):
+                  return False
+              if not (isinstance(opts, ast.Call) and isinstance(opts.func, ast.Name) and opts.func.id == 'list' and not opts.keywords
+                      and len(opts.args) == 1 and isinstance(opts.args[0], ast.Name) and opts.args[0].id == 'CAPTURE_OPTIONS'):
+                  return False
+              # the hooks part: a list of the constant '-c' and the sum of the constant 'core.hooksPath=' and os.devnull (as gitread builds it)
+              if not (isinstance(hooks, ast.List) and len(hooks.elts) == 2 and isinstance(hooks.elts[0], ast.Constant) and hooks.elts[0].value == '-c'):
+                  return False
+              val = hooks.elts[1]
+              return (isinstance(val, ast.BinOp) and isinstance(val.op, ast.Add) and isinstance(val.left, ast.Constant) and val.left.value == 'core.hooksPath='
+                      and isinstance(val.right, ast.Attribute) and val.right.attr == 'devnull' and isinstance(val.right.value, ast.Name) and val.right.value.id == 'os')
+
+
+          def check_capture(path, tree, findings):
+              # the pattern rule for the one runtime path that may start git to write (revision 28): ONE process call of one form, three pinned literals
+              parent = _parents(tree)
+              runs = []
+              for n in ast.walk(tree):
+                  if isinstance(n, ast.ImportFrom) and n.module == 'subprocess':
+                      findings.append('%s:%d: from subprocess import is refused (revision 28)' % (path, n.lineno))
+                  if isinstance(n, ast.Import) and any(a.name == 'subprocess' and a.asname for a in n.names):
+                      findings.append('%s:%d: import subprocess as is refused (revision 28)' % (path, n.lineno))
+                  if isinstance(n, ast.Name) and n.id == 'subprocess':
+                      p = parent.get(id(n))
+                      if not (isinstance(p, ast.Attribute) and p.value is n):
+                          findings.append('%s:%d: the name subprocess used other than as an attribute\'s object (revision 28)' % (path, n.lineno))
+                          continue
+                      ap = parent.get(id(p))
+                      if p.attr == 'run':
+                          if not (isinstance(ap, ast.Call) and ap.func is p):
+                              findings.append('%s:%d: subprocess.run used other than as the function of a call (revision 28)' % (path, n.lineno))
+                              continue
+                          runs.append(ap)
+                      elif p.attr in ('DEVNULL', 'PIPE'):
+                          if not isinstance(ap, ast.keyword):
+                              findings.append('%s:%d: subprocess.%s used other than as a keyword value (revision 28)' % (path, n.lineno, p.attr))
+                      elif p.attr == 'TimeoutExpired':
+                          q = ap if isinstance(ap, ast.Tuple) else p
+                          h = parent.get(id(q))
+                          if not (isinstance(h, ast.ExceptHandler) and h.type is q):
+                              findings.append('%s:%d: subprocess.TimeoutExpired used other than in an except clause (revision 28)' % (path, n.lineno))
+                      else:
+                          findings.append('%s:%d: subprocess.%s is refused (revision 28)' % (path, n.lineno, p.attr))
+              if len(runs) != 1:
+                  findings.append('%s: exactly one subprocess.run call is required, found %d (revision 28)' % (path, len(runs)))
+              for call in runs:
+                  names = [kw.arg for kw in call.keywords]
+                  if None in names or len(set(names)) != len(names) or not set(names) <= CAPTURE_KEYWORDS:
+                      findings.append('%s:%d: subprocess.run keyword refused: %s (revision 28)' % (
+                          path, call.lineno, ', '.join(sorted(str(x) for x in set(names) - CAPTURE_KEYWORDS)) or 'a duplicate or **'))
+                  if not {'shell', 'timeout', 'env'} <= set(names):
+                      findings.append('%s:%d: subprocess.run lacks one of shell, timeout, env (revision 28)' % (path, call.lineno))
+                  for kw in call.keywords:
+                      v = kw.value
+                      if kw.arg == 'shell' and not (isinstance(v, ast.Constant) and v.value is False):
+                          findings.append('%s:%d: subprocess.run with a shell (revision 28)' % (path, call.lineno))
+                      if kw.arg == 'timeout' and not (isinstance(v, ast.Constant) and type(v.value) is int):
+                          findings.append('%s:%d: subprocess.run timeout is not an int constant (revision 28)' % (path, call.lineno))
+                      if kw.arg == 'env' and not isinstance(v, ast.Name):
+                          findings.append('%s:%d: subprocess.run env is not a name (revision 28)' % (path, call.lineno))
+                  if len(call.args) != 1 or not _capture_list_ok(call.args[0]):
+                      findings.append("%s:%d: subprocess.run must take one list ['git'] + list(CAPTURE_OPTIONS) + ['-c', 'core.hooksPath=' + os.devnull] + <a name> (revision 28)" % (path, call.lineno))
+              # the pinned names and the name list are bound once, at module level, and in no other way (K2: the checks of check_starter, for these names)
+              guarded = {'CAPTURE_FORMS', 'CAPTURE_OPTIONS', 'CAPTURE_ENV_FIXED', 'list'}
+              stores = {}
+              for n in ast.walk(tree):
+                  if isinstance(n, ast.Name) and n.id in guarded and not isinstance(n.ctx, ast.Load):
+                      stores[n.id] = stores.get(n.id, 0) + 1
+                  if isinstance(n, ast.AugAssign) and isinstance(n.target, ast.Name) and n.target.id in guarded:
+                      findings.append('%s:%d: augmented assignment to %s (revision 28)' % (path, n.lineno, n.target.id))
+                  if isinstance(n, ast.arg) and n.arg in guarded:
+                      findings.append('%s:%d: a parameter named %s (revision 28)' % (path, getattr(n, 'lineno', 0), n.arg))
+                  if isinstance(n, ast.ExceptHandler) and n.name in guarded:
+                      findings.append('%s:%d: an except clause binds %s (revision 28)' % (path, getattr(n, 'lineno', 0), n.name))
+                  if isinstance(n, ast.alias) and (n.asname or n.name.split('.')[0]) in guarded:
+                      findings.append('%s:%d: an import binds %s (revision 28)' % (path, getattr(n, 'lineno', 0), n.asname or n.name))
+                  if isinstance(n, (ast.Global, ast.Nonlocal)) and set(n.names) & guarded:
+                      findings.append('%s:%d: a global or nonlocal statement names a guarded name (revision 28)' % (path, getattr(n, 'lineno', 0)))
+                  if isinstance(n, (ast.MatchAs, ast.MatchStar)) and n.name in guarded:
+                      findings.append('%s:%d: a match pattern binds %s (revision 28)' % (path, getattr(n, 'lineno', 0), n.name))
+                  if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and n.name in guarded:
+                      findings.append('%s:%d: a definition named %s (revision 28)' % (path, getattr(n, 'lineno', 0), n.name))
+              if stores.get('list', 0):
+                  findings.append('%s: the name list is bound (revision 28)' % path)
+              # K6: the name os is bound by exactly one top-level `import os` and in no other way, and no attribute devnull is stored or deleted
+              os_imports = [n for n in tree.body if isinstance(n, ast.Import) and len(n.names) == 1 and n.names[0].name == 'os' and n.names[0].asname is None]
+              if len(os_imports) != 1:
+                  findings.append('%s: exactly one top-level import os is required, found %d (revision 28)' % (path, len(os_imports)))
+              os_ok = {id(os_imports[0].names[0])} if len(os_imports) == 1 else set()
+              for n in ast.walk(tree):
+                  if isinstance(n, ast.Name) and n.id == 'os' and not isinstance(n.ctx, ast.Load):
+                      findings.append('%s:%d: a store or delete of the name os (revision 28)' % (path, n.lineno))
+                  if isinstance(n, ast.arg) and n.arg == 'os':
+                      findings.append('%s:%d: a parameter named os (revision 28)' % (path, getattr(n, 'lineno', 0)))
+                  if isinstance(n, ast.ExceptHandler) and n.name == 'os':
+                      findings.append('%s:%d: an except clause binds os (revision 28)' % (path, getattr(n, 'lineno', 0)))
+                  if isinstance(n, ast.alias) and (n.asname or n.name.split('.')[0]) == 'os' and id(n) not in os_ok:
+                      findings.append('%s:%d: an import binds os other than the one top-level import os (revision 28)' % (path, getattr(n, 'lineno', 0)))
+                  if isinstance(n, (ast.Global, ast.Nonlocal)) and 'os' in n.names:
+                      findings.append('%s:%d: a global or nonlocal statement names os (revision 28)' % (path, getattr(n, 'lineno', 0)))
+                  if isinstance(n, (ast.MatchAs, ast.MatchStar)) and n.name == 'os':
+                      findings.append('%s:%d: a match pattern binds os (revision 28)' % (path, getattr(n, 'lineno', 0)))
+                  if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and n.name == 'os':
+                      findings.append('%s:%d: a definition named os (revision 28)' % (path, getattr(n, 'lineno', 0)))
+                  if isinstance(n, ast.Attribute) and n.attr == 'devnull' and not isinstance(n.ctx, ast.Load):
+                      findings.append('%s:%d: a store or delete of an attribute devnull (revision 28)' % (path, n.lineno))
+              loaded = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
+              for name in ('CAPTURE_FORMS', 'CAPTURE_ENV_FIXED'):
+                  if name not in loaded:
+                      findings.append('%s: %s is never read (revision 28)' % (path, name))
+              for name in ('CAPTURE_FORMS', 'CAPTURE_OPTIONS', 'CAPTURE_ENV_FIXED'):
+                  if stores.get(name, 0) != 1:
+                      findings.append('%s: %s must be bound exactly once, at module level (revision 28)' % (path, name))
+              for name, want in CAPTURE_PINS:
+                  subs = [n for n in tree.body if isinstance(n, ast.Assign) and len(n.targets) == 1
+                          and isinstance(n.targets[0], ast.Name) and n.targets[0].id == name]
+                  try:
+                      ok = len(subs) == 1 and ast.literal_eval(subs[0].value) == want
+                  except ValueError:
+                      ok = False
+                  if not ok:
+                      findings.append('%s: %s is not bound once to its pinned literal (revision 28)' % (path, name))
 
 
           def starts_with_git(node):
@@ -1890,6 +2054,8 @@ jobs:
                   check_subprocess(path, tree, findings)
               if path == STARTER:
                   check_starter(path, tree, findings)
+              if path == CAPTURE:
+                  check_capture(path, tree, findings)
               if path.startswith('src/'):
                   check_runtime_imports(path, tree, findings)
               # the Name nodes `open` that are the function of an allowed call open(<path>, <constant mode>) (revision 7)
@@ -1951,8 +2117,8 @@ jobs:
                       findings.append('%s: a vendored package folder (INV-002)' % p)
               files = [p for p in git('ls-files', 'src', 'tests').split('\n') if p]
               for p in files:
-                  if p.startswith(RUNTIME_DIR) and p not in (STARTER, RUNTIME_INIT):
-                      findings.append('%s: a path under %s other than the starter and its package file (revision 20)' % (p, RUNTIME_DIR))
+                  if p.startswith(RUNTIME_DIR) and p not in (STARTER, RUNTIME_INIT, CAPTURE):
+                      findings.append('%s: a path under %s other than the starter, the capture module and the package file (revision 20, revision 28)' % (p, RUNTIME_DIR))
               for p in files:
                   if not p.endswith('.py'):
                       findings.append('%s: not a Python source file (INV-002 file rule)' % p)
@@ -2048,10 +2214,12 @@ jobs:
           # src/aieos_runtime/claude_starter.py without B404 and B603 (not B607); every other file as before.
           GR="$GITHUB_WORKSPACE/work/src/aieos_bootstrap/gitread.py"
           SR="$GITHUB_WORKSPACE/work/src/aieos_runtime/claude_starter.py"
+          CR="$GITHUB_WORKSPACE/work/src/aieos_runtime/task_capture.py"
           S=0
-          "$A/venv/bin/bandit" -r "$GITHUB_WORKSPACE/work/src" -x "$GR,$SR" --ini "$A/empty.bandit" --ignore-nosec -f txt || S=1
+          "$A/venv/bin/bandit" -r "$GITHUB_WORKSPACE/work/src" -x "$GR,$SR,$CR" --ini "$A/empty.bandit" --ignore-nosec -f txt || S=1
           if [ -e "$GR" ]; then "$A/venv/bin/bandit" "$GR" --ini "$A/empty.bandit" --ignore-nosec --skip B404,B603,B607 -f txt || S=1; fi
           if [ -e "$SR" ]; then "$A/venv/bin/bandit" "$SR" --ini "$A/empty.bandit" --ignore-nosec --skip B404,B603 -f txt || S=1; fi
+          if [ -e "$CR" ]; then "$A/venv/bin/bandit" "$CR" --ini "$A/empty.bandit" --ignore-nosec --skip B404,B603,B607 -f txt || S=1; fi
           "$A/venv/bin/bandit" -r "$GITHUB_WORKSPACE/work/tests" --ini "$A/empty.bandit" --ignore-nosec --skip B101,B311 -f txt || S=1
           [ "$S" = 0 ]
 
