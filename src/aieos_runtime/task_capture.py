@@ -241,8 +241,8 @@ def _text(answer):
 
 def _printed_id(answer, step):
     """(the id, None) or (None, a refused mapping): the id that git printed (write-tree or commit-tree) must be 40
-    lowercase hexadecimal characters once the line end is cut off; any other answer is git's fault, not the caller's,
-    so the reason is git-failed and never invalid-argument."""
+    lowercase hexadecimal characters once any white space at its start and end, the line end included, is cut off;
+    any other answer is git's fault, not the caller's, so the reason is git-failed and never invalid-argument."""
     text = answer['out'].decode('ascii', 'replace').strip()
     if not _ID.fullmatch(text):
         return None, _refused('git-failed', ['%s: the printed id is malformed (not 40 lowercase hexadecimal characters)'

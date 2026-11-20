@@ -165,7 +165,8 @@ class Interface(unittest.TestCase):
         suite does not run the real git behaviour, that a git directory with a character outside ASCII is refused as
         git-failed, and the value 60 of the timeout constant; the check fails if one statement is removed."""
         doc = ' '.join(ast.get_docstring(ast.parse(source())).split())
-        statements = {'the state-name rule as coded': ('is not only a dot', 'holds no slash and no backslash'),
+        statements = {'the state-name rule as coded': ('begins with a dot', 'is not only a dot',
+                                                       'holds no slash and no backslash'),
                       'the real git behaviour is not run by the suite': ('does not run the real git behaviour',),
                       'a git directory outside ASCII is git-failed': ('outside ASCII is refused as git-failed',),
                       'the timeout constant': ('time limit of 60 seconds', 'the int constant 60')}
@@ -485,6 +486,21 @@ class Reasons(unittest.TestCase):
                 self.assertTrue(any(step in f and 'malformed' in f for f in r['findings']), (step, out))
                 self.assertEqual(forms_of(w)[-1][0], step, (step, out))
                 self.assertNotIn('update-ref', [f[0] for f in forms_of(w)], (step, out))
+
+    def test_a_printed_id_with_white_space_around_it_is_taken_as_the_bare_id(self):
+        """TASK-149 AC2: a printed id with white space around it (a leading space, and a trailing space and tab before
+        the line end) is taken as the bare id it surrounds: capture is done, and only the bare id reaches the next
+        step."""
+        for step, later, good in (('write-tree', 'commit-tree', TREE), ('commit-tree', 'update-ref', COMMIT)):
+            answer = (0, b' ' + good.encode('ascii') + b' \t\n', b'')
+            with World(self.scripted(**{step: answer})) as w:
+                r = task_capture.capture(**good_capture())
+            self.assertEqual(r, {'result': 'done', 'commit': COMMIT}, step)
+            forms = forms_of(w)
+            carried = [f for f in forms if f[0] == later]
+            self.assertEqual(len(carried), 1, step)
+            self.assertIn(good, carried[0], step)
+            self.assertTrue(all(' ' not in arg and '\t' not in arg for f in forms for arg in f), step)
 
     def test_a_git_directory_with_a_character_outside_ascii_is_git_failed(self):
         """TASK-149 AC3: when rev-parse --absolute-git-dir answers with exit 0 and an absolute directory that holds a
