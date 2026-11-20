@@ -69,7 +69,10 @@ What it does:
   "launch: <result> <reason>" then the answer's findings; an answer out of form, its types checked exactly, gives
   LAUNCH_OUT_OF_FORM; a raise in launch_outside gives "launch: a step raised <type>", and a raise in _render_launch
   "cli: a step raised <type>". As shipped, the entry line passes the starter of src/aieos_runtime, which starts the
-  pinned runtime; who decides each real launch, and the first real run, is set by specification 7 :35.
+  pinned runtime; who decides each real launch, and the first real run, is set by specification 7 :35. The entry line
+  also passes capture and restore (task TASK-148), the two functions of src/aieos_runtime.task_capture; launch hands
+  them to launcher.launch_outside as keywords only when both are given, and then the session's changes are captured on
+  refs/heads/task/<id> and submitted before the session's end (the capture step is capture_submit's).
 - approve <task>, edit <task> and reject <task> (task TASK-096; specification 7 section 4, specification 1 section
   12), ``aieos approve``, ``aieos edit`` and ``aieos reject``, record an approval, an edit note or a rejection of the
   task's drafted contract version through launcher.approval_act, which writes through the writer. --class is
@@ -475,14 +478,18 @@ def _render_launch(answer, as_json):
     return ''.join(line + '\n' for line in lines)
 
 
-def _launch(task, root, as_json, environ, clock, starter):
-    """(the exit code, the whole output) of launch."""
+def _launch(task, root, as_json, environ, clock, starter, capture=None, restore=None):
+    """(the exit code, the whole output) of launch. capture and restore (task TASK-148) are passed to
+    launcher.launch_outside as keywords only when both are not None; the four-argument call is otherwise unchanged."""
     if in_runtime(environ):
         return 1, _findings([LAUNCH_RUNTIME_REFUSAL], as_json)
     if starter is None:
         return 1, _findings([NO_STARTER], as_json)
     try:
-        answer = launcher.launch_outside(root, task, clock, starter)
+        if capture is not None and restore is not None:
+            answer = launcher.launch_outside(root, task, clock, starter, capture=capture, restore=restore)
+        else:
+            answer = launcher.launch_outside(root, task, clock, starter)
     except Exception as exc:
         return 1, _findings(['launch: a step raised %s' % type(exc).__name__], as_json)
     try:
@@ -669,7 +676,7 @@ def _intent_run(task, intent, root, source_class, who, write, as_json, environ, 
     return 0, _render_intent_run(answer, as_json)
 
 
-def _run(argv, environ, clock, starter=None):
+def _run(argv, environ, clock, starter=None, capture=None, restore=None):
     """(the exit code, the whole output)."""
     try:
         parsed = _parse(argv)
@@ -695,7 +702,7 @@ def _run(argv, environ, clock, starter=None):
             return 1, _findings(['cli: a step raised %s' % type(exc).__name__], as_json)
     if command == 'launch':
         try:
-            return _launch(session, root, as_json, environ, clock, starter)
+            return _launch(session, root, as_json, environ, clock, starter, capture, restore)
         except Exception as exc:
             return 1, _findings(['cli: a step raised %s' % type(exc).__name__], as_json)
     if command in APPROVAL_COMMANDS:
@@ -723,12 +730,14 @@ def _run(argv, environ, clock, starter=None):
         return 1, _findings(['cli: a step raised %s' % type(exc).__name__], as_json)
 
 
-def main(argv, stdout, environ, clock, starter=None):
+def main(argv, stdout, environ, clock, starter=None, capture=None, restore=None):
     """Run one command; return 0, 1 or 2; never raise an Exception. environ is read by end, init, launch, approve,
     edit, reject, import and run, after the parse, through in_runtime; tasks and status do not read it. starter is
-    None unless a caller passes one; the entry line passes the starter of src/aieos_runtime."""
+    None unless a caller passes one; the entry line passes the starter of src/aieos_runtime. capture and restore (task
+    TASK-148) are None unless a caller passes them; the entry line passes the two functions of
+    src/aieos_runtime.task_capture, and launch hands them to launcher.launch_outside only when both are given."""
     try:
-        code, text = _run(argv, environ, clock, starter)
+        code, text = _run(argv, environ, clock, starter, capture, restore)
     except Exception:
         return 1
     try:
@@ -746,5 +755,6 @@ def _clock():
 
 
 if __name__ == '__main__':
-    from aieos_runtime import claude_starter
-    sys.exit(main(sys.argv[1:], sys.stdout, os.environ, _clock, starter=claude_starter.starter))
+    from aieos_runtime import claude_starter, task_capture
+    sys.exit(main(sys.argv[1:], sys.stdout, os.environ, _clock, starter=claude_starter.starter,
+                  capture=task_capture.capture, restore=task_capture.restore))

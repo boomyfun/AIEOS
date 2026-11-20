@@ -291,6 +291,7 @@ from aieos_bootstrap import adapter
 from aieos_bootstrap import adapter_declaration
 from aieos_bootstrap import base_files
 from aieos_bootstrap import base_inputs
+from aieos_bootstrap import capture_submit
 from aieos_bootstrap import eventlog
 from aieos_bootstrap import execution
 from aieos_bootstrap import gitread
@@ -1070,7 +1071,7 @@ def init_project(root, init_layout=None):
 # ---- launch_outside, `aieos launch` (task TASK-094) ----
 
 LAUNCH_KEYS = ('result', 'reason', 'findings', 'session_id', 'start', 'run', 'end', 'handoff')
-LAUNCH_REASONS = ('argument', 'clock', 'start', 'contract', 'run', 'end', 'handoff', 'root after')
+LAUNCH_REASONS = ('argument', 'clock', 'start', 'contract', 'run', 'end', 'handoff', 'root after', 'capture')
 LAUNCH_LEASE = datetime.timedelta(hours=2)
 LAUNCH_ADAPTER = 'claude-code'
 LAUNCH_RECORDER = 'aieos cli launch'
@@ -1078,7 +1079,7 @@ LAUNCH_HOLDER = 'aieos cli launch'
 _LAUNCH_PATH = re.compile(r'[A-Za-z0-9._*/-]+')
 _LAUNCH_FOR = ' for session '
 _LAUNCH_ENVIRONMENT = frozenset({'AIEOS_SESSION_ID', 'AIEOS_ROOT', 'AIEOS_BASE'})
-_LAUNCH_CALLEES = ('begin', 'contract_at', 'finish', 'finish_outside', 'write_handoff', 'read')
+_LAUNCH_CALLEES = ('begin', 'contract_at', 'finish', 'finish_outside', 'write_handoff', 'read', 'capture', 'restore')
 _LAUNCH_AFTER = ('argument', 'record')
 _LAUNCH_NOT_WRITTEN = "handoff: not written, the session's end was not done"
 _LAUNCH_BAD_CLOCK = 'clock: the clock gave no timezone-aware UTC time with whole seconds'
@@ -1108,6 +1109,8 @@ def _launch_argument_findings(root, task_id, clock, starter, callees, base='main
     for name, value in zip(_LAUNCH_CALLEES, callees):
         if value is not None and not callable(value):
             found.append('argument: %s is neither None nor callable' % name)
+    if (callees[-2] is None) != (callees[-1] is None):
+        found.append('argument: capture and restore are given together or not at all')
     base_found = _base_finding(base)
     if base_found is not None:
         found.append(base_found)
@@ -1161,6 +1164,40 @@ def _launch_write_set(answer):
         if _under_state_dir(p):
             return None, ['contract: a write-set path is under the project-state directory']
     return list(paths), None
+
+
+def _launch_forbidden(answer):
+    """Step 5a (TASK-148): the forbidden list of the same contract answer, or None when it is not a list of str. The
+    contract step's own refusals are not changed: a contract with no usable forbidden list is refused later, by the
+    capture step, with reason "scope"."""
+    try:
+        value = answer[0] if type(answer) is tuple and len(answer) == 2 else None
+        forbidden = value[0].get('forbidden') if type(value) is tuple and type(value[0]) is dict else None
+        usable = type(forbidden) is list and bool(forbidden) and all(type(p) is str for p in forbidden)
+    except Exception:  # an answer whose own methods raise is not usable
+        return None
+    return list(forbidden) if usable else None
+
+
+def _launch_capture_step(state, clock, head, capture, restore):
+    """Step 5b (TASK-148): after a session whose starter returned, capture_submit.capture_and_submit with the grant's
+    head, the contract's write set and forbidden list, the clock, the recorder and the two injected callees; a refusal
+    sets the reason "capture" when no earlier reason is set; an Exception of the step is a finding and the same reason;
+    a BaseException is not caught here, so the end still runs in the caller's finally."""
+    findings = state['findings']
+    try:
+        got = capture_submit.capture_and_submit(state['root'], state['root'], state['task_id'], state['token'], head,
+                                                state['write_set'], state['forbidden'], writer.STATE_DIR, clock,
+                                                state['recorder'], state['read'], capture, restore)
+        ok = type(got) is dict and got.get('result') in ('done', 'none', 'refused')
+        if ok:
+            findings.append('capture: %s %s' % (got.get('result'), got.get('reason')))
+            findings.extend(_launch_strs(got.get('findings')))
+    except Exception as exc:
+        findings.append('capture: a step raised %s' % type(exc).__name__)
+        ok = False
+    if not ok or got.get('result') == 'refused':
+        state['reason'] = state['reason'] or 'capture'
 
 
 def _launch_end_call(callee, args, findings):
@@ -1240,7 +1277,7 @@ def _launch_finish(state, clock, finish, finish_outside, write_handoff):
 
 
 def launch_outside(root, task_id, clock, starter, begin=None, contract_at=None, finish=None, finish_outside=None,
-                   write_handoff=None, base='main', read=None):
+                   write_handoff=None, base='main', read=None, capture=None, restore=None):
     """Launch one session from outside the runtime (task TASK-094; `aieos launch`, specification 7 :34-35, sections 5
     and 7): start with no tier argument (the tier is the declaration read at the base, TASK-117), on a grant the
     contract's write set at the grant's head, the caller's starter, the
@@ -1258,8 +1295,21 @@ def launch_outside(root, task_id, clock, starter, begin=None, contract_at=None, 
     limits: a change made and undone within the session is not seen; a change after the read is not seen; aieos end
     after a crash makes no read; every limit of the step root applies again; an interrupt (a BaseException that is not
     an Exception) during the read is not caught: it escapes from launch_outside after the end, and no handoff is
-    written."""
-    callees = (begin, contract_at, finish, finish_outside, write_handoff, read)
+    written.
+
+    The keywords capture and restore (task TASK-148; default None; both None or both callable, else "refused" with reason
+    "argument" before the clock and begin are called) are the runtime's two git-writing functions, injected by the entry
+    line of cli.py. When both are given, the starter's run is "returned" and the contract's write set was read, the step
+    capture_submit.capture_and_submit is made once, inside the try whose finally makes the end, with the grant's head,
+    the write set and the forbidden list of the same contract answer: the session's changes are written as one commit
+    on refs/heads/task/<id> and submitted, and the tree is put back only after a submission that gave "submitted" or
+    "duplicate". The capture step starts no process itself, the injected callables do. A "refused" answer sets the reason
+    "capture" when no earlier reason is set, so that the result is "refused", as for "root after"; an Exception of the
+    step is a finding and the same reason; a BaseException is not caught there, so the end and the handoff are made and
+    it is re-raised after them. "none" and "done" add their findings only. The end goes on as before; a session that
+    submitted has had its lease released by the submission, so the end finds it gone. With the two keywords None nothing
+    changes (DEF-0147 stays true on that path)."""
+    callees = (begin, contract_at, finish, finish_outside, write_handoff, read, capture, restore)
     try:
         found = _launch_argument_findings(root, task_id, clock, starter, callees, base)
     except Exception as exc:  # an argument whose own methods raise
@@ -1299,7 +1349,8 @@ def launch_outside(root, task_id, clock, starter, begin=None, contract_at=None, 
     session_id, token = started.get('session_id'), started.get('fencing_token')
     head, environment = started.get('head_commit'), started.get('environment')
     state = {'root': root, 'task_id': task_id, 'now': now, 'started': started, 'findings': findings, 'reason': None,
-             'run': None, 'write_set': None, 'session_id': session_id, 'token': token, 'recorder': None, 'read': read}
+             'run': None, 'write_set': None, 'session_id': session_id, 'token': token, 'recorder': None, 'read': read,
+             'forbidden': None}
     if not _launch_grant_in_form(session_id, token, head, environment):
         findings.append('start: the granted answer is out of form')
         if type(session_id) is not str:
@@ -1307,7 +1358,9 @@ def launch_outside(root, task_id, clock, starter, begin=None, contract_at=None, 
         state['reason'] = 'start'
     else:
         try:
-            state['write_set'], found = _launch_write_set(contract_at(root, head, task_id))
+            answer = contract_at(root, head, task_id)
+            state['write_set'], found = _launch_write_set(answer)
+            state['forbidden'] = _launch_forbidden(answer)
         except Exception as exc:
             found = ['contract: a step raised %s' % type(exc).__name__]
         if state['write_set'] is None:
@@ -1324,6 +1377,8 @@ def launch_outside(root, task_id, clock, starter, begin=None, contract_at=None, 
             state['run'] = 'raised %s' % type(exc).__name__
             findings.append('run: the starter raised %s' % type(exc).__name__)
             state['reason'] = 'run'
+        if capture is not None and state['run'] == 'returned':
+            _launch_capture_step(state, clock, head, capture, restore)
     finally:
         out = _launch_finish(state, clock, finish, finish_outside, write_handoff)
     return out

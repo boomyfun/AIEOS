@@ -813,14 +813,15 @@ def dirty_reads():
 
 class TASK127AfterRead(unittest.TestCase):
     def test_the_keyword_and_the_reasons(self):
-        """TASK-094 AC1 (amended by TASK-127 AC1): launch_outside has the keyword read, default None, after base;
-        LAUNCH_REASONS keeps its seven values in order and ends with "root after"; a read neither None nor callable
-        gives "refused" with reason "argument", a finding naming read, and no callee and no read called."""
+        """TASK-094 AC1 (amended by TASK-127 AC1 and by TASK-148 AC5): launch_outside has the keywords read, capture
+        and restore, default None, after base; LAUNCH_REASONS keeps its seven values in order, then "root after" and
+        "capture"; a read neither None nor callable gives "refused" with reason "argument", a finding naming read,
+        and no callee and no read called."""
         params = list(inspect.signature(launcher.launch_outside).parameters.values())
-        self.assertEqual([p.name for p in params][-2:], ['base', 'read'])
-        self.assertIsNone(params[-1].default)
+        self.assertEqual([p.name for p in params][-4:], ['base', 'read', 'capture', 'restore'])
+        self.assertEqual([p.default for p in params][-3:], [None, None, None])
         self.assertEqual(launcher.LAUNCH_REASONS, ('argument', 'clock', 'start', 'contract', 'run', 'end', 'handoff',
-                                                   'root after'))
+                                                   'root after', 'capture'))
         for bad in (3, 'x', [], {}):
             world = World()
             out = launch(world, read=bad)
@@ -1019,6 +1020,241 @@ class TASK128StatementPaths(unittest.TestCase):
         doc = launcher._run_statement_findings.__doc__
         for word in ('./', 'backslash', 'trailing slash', 'by path'):
             self.assertIn(word, doc, word)
+
+
+FORBIDDEN = ['docs/**', '.github/**']
+STEP_NAME = 'step'
+
+
+def capture_stand_in(*args):
+    return {'result': 'done', 'commit': 'b' * 40}
+
+
+def restore_stand_in(*args):
+    return {'result': 'done'}
+
+
+def contract_forbidden(forbidden=GOOD, key=True):
+    """contract_at's answer with the forbidden key (TASK-148 AC4); key False leaves the key out."""
+    value = {'task': TASK, 'write_set': {'paths': list(PATHS)}}
+    if key:
+        value['forbidden'] = list(FORBIDDEN) if forbidden is GOOD else forbidden
+    return (value, 'f' * 64), None
+
+
+def step_answer(result='done', reason=None, findings=('step: a line',)):
+    return {'result': result, 'reason': reason, 'findings': list(findings), 'commit': None, 'paths': []}
+
+
+class StandKw:
+    """launcher.launch_outside as a stand-in that also takes keywords: records the positional arguments and the keywords."""
+
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, root, task_id, clock, starter, **kwargs):
+        self.calls.append(((root, task_id, clock, starter), kwargs))
+        return answer()
+
+
+class TASK148Cli(unittest.TestCase):
+    def main_with(self, **over):
+        sink, clock, stand = Sink(), Clock(), StandKw()
+        with mock.patch.object(launcher, 'launch_outside', stand):
+            rc = cli.main(cmd(), sink, {}, clock, starter=starter, **over)
+        return rc, stand, clock
+
+    def test_the_keywords_go_through_only_when_both_are_given(self):
+        """TASK-094 AC4, as TASK-148 AC6 changes it: main, _run and _launch have the keywords capture and restore after
+        starter, default None; launch_outside is called with them as keywords only when both are not None, and the
+        four-argument call stays as it was otherwise (a lone one is not passed on: launch_outside's own argument check
+        is for a caller that passes a lone one)."""
+        for name in ('main', '_run', '_launch'):
+            params = list(inspect.signature(getattr(cli, name)).parameters.values())
+            self.assertEqual([p.name for p in params][-3:], ['starter', 'capture', 'restore'], name)
+            self.assertEqual([p.default for p in params][-2:], [None, None], name)
+
+        def one(*args):
+            return None
+
+        def two(*args):
+            return None
+        rc, stand, clock = self.main_with()
+        self.assertEqual((rc, stand.calls), (0, [((ROOT, TASK, clock, starter), {})]))
+        rc, stand, clock = self.main_with(capture=one, restore=two)
+        self.assertEqual((rc, stand.calls), (0, [((ROOT, TASK, clock, starter), {'capture': one, 'restore': two})]))
+        for over in ({'capture': one}, {'restore': two}):
+            rc, stand, clock = self.main_with(**over)
+            self.assertEqual((rc, stand.calls), (0, [((ROOT, TASK, clock, starter), {})]), over)
+
+    def test_aieos_runtime_is_named_only_in_the_entry_block_in_one_statement(self):
+        """TASK-094 AC2, as TASK-148 AC6 changes it: by ast cli.py names aieos_runtime only in the entry block, in ONE
+        import statement that imports claude_starter and task_capture, and nowhere else."""
+        tree = ast.parse((SRC / 'cli.py').read_bytes().decode('utf-8'))
+        entry = tree.body[-1]
+        self.assertIsInstance(entry, ast.If)
+        inside = [n for n in ast.walk(entry) if isinstance(n, (ast.Import, ast.ImportFrom))]
+        self.assertEqual(len(inside), 1)
+        self.assertEqual((inside[0].module, [a.name for a in inside[0].names]),
+                         ('aieos_runtime', ['claude_starter', 'task_capture']))
+        outside = [n for top in tree.body[:-1] for n in ast.walk(top)
+                   if (isinstance(n, ast.ImportFrom) and (n.module or '').startswith('aieos_runtime'))
+                   or (isinstance(n, ast.Import) and any(a.name.startswith('aieos_runtime') for a in n.names))]
+        self.assertEqual(outside, [])
+        self.assertEqual([n.id for top in tree.body[:-1] for n in ast.walk(top)
+                          if isinstance(n, ast.Name) and n.id in ('claude_starter', 'task_capture')], [])
+
+
+class StopLaunch(BaseException):
+    """A test-defined BaseException that is not an Exception."""
+
+
+def step_patch(world, answer):
+    """capture_submit.capture_and_submit replaced by a stand-in that records its call in the world and answers."""
+    def stand_in(*args, **kwargs):
+        world.calls.append((STEP_NAME, args))
+        world.seq.append(STEP_NAME)
+        if isinstance(answer, BaseException):
+            raise answer
+        return answer
+    return mock.patch.object(launcher.capture_submit, 'capture_and_submit', side_effect=stand_in)
+
+
+STEP_ORDER = ['clock', 'begin', 'contract_at', 'starter', STEP_NAME, 'clock', 'finish', 'write_handoff']
+
+
+class TASK148LauncherCapture(unittest.TestCase):
+    def run_with(self, answer, world=None, **over):
+        world = World(contract_at=contract_forbidden()) if world is None else world
+        kw = {'capture': capture_stand_in, 'restore': restore_stand_in}
+        kw.update(over)
+        with step_patch(world, answer) as patched:
+            out = launch(world, **kw)
+        return world, out, patched
+
+    def test_the_order_and_the_arguments(self):
+        """TASK-094 AC1, as TASK-148 AC4 changes it: (D-6633 M3, D-6737 (i), (v)): with both callables and a returned run the order is clock,
+        begin, contract_at, starter, the step, clock, finish and write_handoff; the step gets the root twice, the task,
+        the grant's token and head, the write set and the forbidden list of the same contract answer, the
+        project-state directory's name, the clock, the recorder, the read and the two callees; contract_at is called
+        once; a done answer gives "done" and its findings join the launch's."""
+        world, out, patched = self.run_with(step_answer())
+        self.assertEqual(world.names(), STEP_ORDER)
+        self.assertEqual(world.args(STEP_NAME), [(ROOT, ROOT, TASK, TOKEN, HEAD, PATHS, FORBIDDEN, launcher.writer.STATE_DIR,
+                                                  world.clock, RECORDER, world.read, capture_stand_in,
+                                                  restore_stand_in)])
+        self.assertEqual(len(world.args('contract_at')), 1)
+        self.assertEqual((out['result'], out['reason'], out['run']), ('done', None, 'returned'))
+        self.assertEqual(out['findings'], ['gone_records: one line', 'capture: done None', 'step: a line', 'end: a line',
+                                           'root after: clean'])
+
+    def test_none_and_done_change_nothing(self):
+        """TASK-094 AC1, as TASK-148 AC4 changes it: the answers "none" and "done" add their findings only; the result stays "done"."""
+        for result in ('none', 'done'):
+            world, out, _ = self.run_with(step_answer(result))
+            self.assertEqual((out['result'], out['reason']), ('done', None), result)
+            self.assertIn('capture: %s None' % result, out['findings'])
+
+    def test_both_keywords_none_is_todays_launch(self):
+        """TASK-094 AC1, as TASK-148 AC4 changes it: with capture and restore None the step is not called and the order is today's ORDER."""
+        world = World(contract_at=contract_forbidden())
+        with step_patch(world, step_answer()) as patched:
+            out = launch(world)
+        self.assertEqual(world.names(), ORDER)
+        patched.assert_not_called()
+        self.assertEqual(out['result'], 'done')
+
+    def test_a_lone_or_bad_callable_is_an_argument_refusal(self):
+        """TASK-094 AC1, as TASK-148 AC4 changes it: a lone capture, a lone restore, or a non-callable one gives "refused" with reason "argument"
+        before the clock and begin are called."""
+        for over in ({'capture': capture_stand_in}, {'restore': restore_stand_in},
+                     {'capture': 3, 'restore': restore_stand_in}, {'capture': capture_stand_in, 'restore': 'x'}):
+            world = World(contract_at=contract_forbidden())
+            with step_patch(world, step_answer()) as patched:
+                out = launch(world, **over)
+            self.assertEqual((out['result'], out['reason']), ('refused', 'argument'), over)
+            self.assertEqual(world.calls, [], over)
+            patched.assert_not_called()
+
+    def test_the_step_runs_only_after_a_returned_run(self):
+        """TASK-094 AC1, as TASK-148 AC4 changes it: a starter that raises gives reason "run" and the step is not called; the end is made."""
+        world = World(contract_at=contract_forbidden(), starter=RuntimeError('x'))
+        world, out, patched = self.run_with(step_answer(), world=world)
+        patched.assert_not_called()
+        self.assertEqual((out['result'], out['reason']), ('refused', 'run'))
+        self.assertIn('finish', world.names())
+
+    def test_a_refused_answer_gives_the_reason_capture(self):
+        """TASK-094 AC1, as TASK-148 AC4 changes it: a "refused" answer gives the launch result "refused" with reason "capture"; the end and the
+        handoff are still made."""
+        world, out, _ = self.run_with(step_answer('refused', 'scope'))
+        self.assertEqual((out['result'], out['reason']), ('refused', 'capture'))
+        self.assertEqual(world.names(), STEP_ORDER)
+        self.assertIn('capture: refused scope', out['findings'])
+
+    def test_an_exception_or_a_bad_answer_gives_the_reason_capture(self):
+        """TASK-094 AC1, as TASK-148 AC4 changes it: (D-6633 M3): an Exception of the step, or an answer that is not a mapping with a known result,
+        is a finding and the reason "capture"; the end and the handoff are made."""
+        for answer in (RuntimeError('x'), 'x', {'result': 'maybe'}, None):
+            world, out, _ = self.run_with(answer)
+            self.assertEqual((out['result'], out['reason']), ('refused', 'capture'), answer)
+            self.assertEqual(world.names(), STEP_ORDER, answer)
+        world, out, _ = self.run_with(RuntimeError('x'))
+        self.assertIn('capture: a step raised RuntimeError', out['findings'])
+
+    def test_a_base_exception_runs_the_end_and_is_re_raised(self):
+        """TASK-094 AC1, as TASK-148 AC4 changes it: (D-6633 M3): a test-defined BaseException raised by the step is not caught there: finish and
+        write_handoff are called and the BaseException is re-raised after them."""
+        world = World(contract_at=contract_forbidden())
+        with step_patch(world, StopLaunch('stop')):
+            with self.assertRaises(StopLaunch):
+                launch(world, capture=capture_stand_in, restore=restore_stand_in)
+        self.assertEqual(world.names(), STEP_ORDER)
+
+    def test_the_forbidden_list_of_the_contract_answer(self):
+        """TASK-094 AC1, as TASK-148 AC4 changes it: (D-6737, D-6739): the forbidden list passed is the contract answer's own; a contract with no
+        forbidden key, an empty list or a list holding a non-str gives None to the step (which refuses it with reason
+        "scope"); the contract step's own refusals are unchanged: a contract with no usable write set gives the reason
+        "contract" and no step."""
+        for forbidden, key, expected in (([], True, None), (['a', 3], True, None), ('docs/**', True, None),
+                                         (GOOD, False, None), (['x/**'], True, ['x/**'])):
+            world = World(contract_at=contract_forbidden(forbidden, key))
+            world, out, _ = self.run_with(step_answer(), world=world)
+            self.assertEqual(world.args(STEP_NAME)[0][6], expected, (forbidden, key))
+        world = World(contract_at=(None, ['no contract']))
+        world, out, patched = self.run_with(step_answer(), world=world)
+        patched.assert_not_called()
+        self.assertEqual((out['result'], out['reason']), ('refused', 'contract'))
+
+    def test_the_root_after_the_step(self):
+        """TASK-094 AC1, as TASK-148 AC4 changes it: (D-6633 M6, D-6617 C4): after a done step a clean root read gives "root after: clean" and
+        "done"; a dirty read after it gives reason "root after" and "refused"."""
+        world, out, _ = self.run_with(step_answer())
+        self.assertIn('root after: clean', out['findings'])
+        self.assertEqual(out['result'], 'done')
+        world = World(contract_at=contract_forbidden(), reads=[read_answer(), read_answer(b' M a.py\0')])
+        world, out, _ = self.run_with(step_answer(), world=world)
+        self.assertEqual((out['result'], out['reason']), ('refused', 'root after'))
+
+    def test_the_end_goes_by_the_gone_path(self):
+        """TASK-094 AC1, as TASK-148 AC4 changes it: (D-6633 M4): with finish set to launcher.end, its store callees faked so that
+        session_leases gives no unexpired row (the submission released the lease), a done step gives an end by the
+        "gone" path with the result "done", the handoff is called and the launch result is "done"."""
+        done = launcher.writer.StoreResult('done', None, [], [])
+        leases = launcher.writer.StoreResult('done', None, [], {'ended': False, 'leases': []})
+        seen = []
+
+        def finish(*args):
+            return launcher.end(*args, session_leases=lambda *a: leases, stored_reads=lambda *a: done,
+                                remove_reads=lambda *a: done,
+                                observe_gone=lambda *a: seen.append(a) or {'result': 'written', 'findings': []})
+        world = World(contract_at=contract_forbidden())
+        with mock.patch.object(launcher.adapter, 'end', return_value={'result': 'done', 'findings': []}):
+            world, out, _ = self.run_with(step_answer(), world=world, finish=finish)
+        self.assertEqual((out['result'], out['reason']), ('done', None))
+        self.assertEqual(out['end']['path'], 'gone')
+        self.assertEqual(len(seen), 1)
+        self.assertIn('write_handoff', world.names())
 
 
 if __name__ == '__main__':

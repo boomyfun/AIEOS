@@ -267,17 +267,19 @@ class TASK091AC3NeverRaises(unittest.TestCase):
             self.assertIn(rc, (0, 1, 2))
 
     def test_entry_line(self):
-        """TASK-091 AC3, as changed by TASK-132 AC10: the module's entry block is exactly `if __name__ ==
-        '__main__':` followed by `from aieos_runtime import claude_starter` and `sys.exit(main(sys.argv[1:],
-        sys.stdout, os.environ, _clock, starter=claude_starter.starter))`, checked by ast."""
+        """TASK-091 AC3, as changed by TASK-132 AC10 and by TASK-148 AC5: the module's entry block is exactly `if
+        __name__ == '__main__':` followed by `from aieos_runtime import claude_starter, task_capture` and
+        `sys.exit(main(sys.argv[1:], sys.stdout, os.environ, _clock, starter=claude_starter.starter,
+        capture=task_capture.capture, restore=task_capture.restore))`, checked by ast."""
         tree = ast.parse((SRC / 'cli.py').read_bytes().decode('utf-8'))
         last = tree.body[-1]
         self.assertIsInstance(last, ast.If)
         self.assertEqual(ast.unparse(last.test), "__name__ == '__main__'")
         self.assertEqual([ast.unparse(s) for s in last.body],
-                         ['from aieos_runtime import claude_starter',
+                         ['from aieos_runtime import claude_starter, task_capture',
                           'sys.exit(main(sys.argv[1:], sys.stdout, os.environ, _clock, '
-                          'starter=claude_starter.starter))'])
+                          'starter=claude_starter.starter, capture=task_capture.capture, '
+                          'restore=task_capture.restore))'])
 
     def test_clock_form(self):
         """TASK-091 AC3: _clock gives a timezone-aware UTC datetime with microsecond 0."""
@@ -334,9 +336,9 @@ class TASK091AC5Module(unittest.TestCase):
         return ast.parse((SRC / 'cli.py').read_bytes().decode('utf-8'))
 
     def test_imports(self):
-        """TASK-091 AC5, as changed by TASK-092 and by TASK-132 AC10: cli.py imports exactly datetime, json, os, re,
-        sys, and execution and launcher from aieos_bootstrap, and claude_starter from aieos_runtime (inside the entry
-        block)."""
+        """TASK-091 AC5, as changed by TASK-092, by TASK-132 AC10 and by TASK-148 AC5: cli.py imports exactly datetime,
+        json, os, re, sys, and execution and launcher from aieos_bootstrap, and claude_starter and task_capture from
+        aieos_runtime (inside the entry block)."""
         names = set()
         for n in ast.walk(self.tree()):
             if isinstance(n, ast.Import):
@@ -344,7 +346,8 @@ class TASK091AC5Module(unittest.TestCase):
             elif isinstance(n, ast.ImportFrom):
                 names.update('%s.%s' % (n.module, a.name) for a in n.names)
         self.assertEqual(names, {'datetime', 'json', 'os', 're', 'sys', 'aieos_bootstrap.execution',
-                                 'aieos_bootstrap.launcher', 'aieos_runtime.claude_starter'})
+                                 'aieos_bootstrap.launcher', 'aieos_runtime.claude_starter',
+                                 'aieos_runtime.task_capture'})
 
     def test_refused_names(self):
         """TASK-091 AC5: cli.py names no open, exec, eval, compile, __import__, input, argparse, subprocess, writer,
