@@ -1,11 +1,13 @@
 """The gate maker (task TASK-150; BT2 of DEF-0136, option (A) of D-6770): a pure function that turns the step
 conclusions of ONE CI run on ONE commit into gate-result records that the governor counts for a task, honestly. A gate
-gets a record only when the CI evidence of every check that the plan names for that gate is present and concluded;
-every other gate is reported as uncovered.
+gets a "pass" record only when every check that the plan names for that gate is covered by CI evidence that is present
+and concluded and passed, and a "fail" record when a covered check failed (the rules below); an entry that is not
+covered is never turned into a record and is reported as uncovered.
 
 ``gate_records(task_id, commit, intent_versions, plan, steps, check_map, recorder)`` returns a mapping with exactly the
 keys records (a list of mappings), uncovered (a list of mappings with the keys gate, check and detail) and error (None,
-or a short text for a malformed argument, in which case records and uncovered are both empty). It starts no process,
+or a short text for a malformed argument or for an internal fault, which this function reports with the same kind of
+text, in which case records and uncovered are both empty). It starts no process,
 opens no file, reads no clock and no network; it imports the standard library only (hashlib and re). It never raises an
 Exception; a BaseException that is not an Exception passes through.
 
@@ -36,6 +38,16 @@ DEFAULT_CHECK_MAP names the CI steps of the workflow at the base for the checks 
 for review, tests or constitution: the run-made plan's review gate has no CI evidence, so it stays uncovered and the
 governor's INSUFFICIENT_EVIDENCE for it is the honest result. The maker reads no CI run and appends nothing: the caller
 gives the steps and takes the records.
+
+What the caller owes (the limits of this function): (1) the arguments are plain data, as loaded from JSON; an object of
+a subclass whose methods lie or change between two reads is outside the guarantee. (2) The plan entries are given
+without their optional args key: an entry with any key other than gate and check makes the whole call an error. (3) The
+steps are those of the CI run on the given commit; the function cannot check that, and it stamps the CI source class on
+what it is given. (4) The mapped steps of the default map (the task detection and scope steps, the build step and the
+lint step) also conclude as success in a run that has NO task, where each prints a note and exits 0; the caller must
+give steps only of a run whose detect step names this task. (5) The record_id binds the task, the commit and the gate,
+not the outcome or the intent versions: a rerun gives the same id, which the governor refuses within one request.
+(6) DEFAULT_CHECK_MAP is one shared module dict, not copied by the function; callers do not change it.
 """
 import hashlib
 import re
@@ -56,7 +68,6 @@ _ABSENT = 'step not present'
 _REPEATED = 'step named more than once'
 _NOT_CONCLUDED = 'conclusion is neither success nor failure'
 
-_RESULT_KEYS = ('records', 'uncovered', 'error')
 _PLAN_KEYS = frozenset({'gate', 'check'})
 _STEP_KEYS = frozenset({'name', 'conclusion'})
 

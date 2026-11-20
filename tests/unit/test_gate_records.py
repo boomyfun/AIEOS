@@ -20,6 +20,14 @@ MAP = gate_records.DEFAULT_CHECK_MAP
 SCOPE_STEPS = MAP['scope']
 BUILD_STEP = MAP['build'][0]
 LINT_STEP = MAP['lint'][0]
+# The exact names of the CI steps that spec-04 section 2 gives to the constitution gate (the names in the job of the CI run
+# of the task push); none of them is in the default map.
+CONSTITUTION_STEPS = [
+    'deterministic_rule (INV-001, INV-002, INV-004)', 'OPS-003 pattern rules',
+    'GOV-003 evaluator paths (reports an evaluator change)',
+    "SEC-001 secret scan (tip tree; every commit's message, file names and added lines)",
+    "SEC-002 pattern rules (every commit's added lines)", 'SEC-003 record (changes under .github/)',
+    'OPS-002 owner-kept paths', 'INV-010 replay', 'static_security_analysis (bandit, every package pinned by version and hash)']
 PLAN4 = [{'gate': 'G0', 'check': 'scope'}, {'gate': 'G1', 'check': 'build'}, {'gate': 'G2', 'check': 'lint'},
          {'gate': 'G3', 'check': 'review'}]
 
@@ -97,34 +105,53 @@ class AC1TheModule(unittest.TestCase):
             self.assertEqual(set(out), {'records', 'uncovered', 'error'})
 
     def test_every_argument_check(self):
+        # Each case names the EXACT error text it must give, so that a case cannot pass for another reason (a check
+        # removed, the failure caught by the general handler) than the one it names.
+        task_e = 'task_id is not TASK- and digits'
+        commit_e = 'commit is not 40 lowercase hexadecimal characters'
+        iv_map_e = 'intent_versions is not a non-empty mapping'
+        iv_entry_e = 'intent_versions holds an entry that is not a non-empty name and v and digits'
+        plan_list_e = 'plan is not a non-empty list'
+        plan_keys_e = 'a plan entry is not a mapping with exactly the keys gate and check'
+        plan_gate_e = 'a plan entry has a gate that is not G and digits'
+        plan_check_e = 'a plan entry has a check that is not a non-empty text'
+        steps_list_e = 'steps is not a list'
+        step_keys_e = 'a step is not a mapping with exactly the keys name and conclusion'
+        step_name_e = 'a step has a name that is not a non-empty text'
+        step_concl_e = 'a step has a conclusion that is neither a text nor None'
+        map_e = 'check_map is not a mapping'
+        map_entry_e = 'check_map holds an entry that is not a non-empty check and a non-empty list of step names'
+        rec_e = 'recorder is not a non-empty text'
         bad = [
-            ('task_id', dict(task='TASK-')), ('task_id', dict(task='task-1')), ('task_id', dict(task='TASK-1\n')),
-            ('task_id', dict(task=5)),
-            ('commit', dict(commit='a' * 39)), ('commit', dict(commit='A' * 40)), ('commit', dict(commit='a' * 40 + '\n')),
-            ('commit', dict(commit=None)),
-            ('iv', dict(iv={})), ('iv', dict(iv=[('a', 'v1')])), ('iv', dict(iv={'': 'v1'})), ('iv', dict(iv={'a': 'v'})),
-            ('iv', dict(iv={'a': 'v1x'})), ('iv', dict(iv={'a': 1})), ('iv', dict(iv={1: 'v1'})),
-            ('plan', dict(plan=[])), ('plan', dict(plan='G0')), ('plan', dict(plan=['G0'])),
-            ('plan', dict(plan=[{'gate': 'G0'}])),
-            ('plan', dict(plan=[{'gate': 'G0', 'check': 'scope', 'args': []}])),
-            ('plan', dict(plan=[{'gate': 'g0', 'check': 'scope'}])),
-            ('plan', dict(plan=[{'gate': 'G', 'check': 'scope'}])),
-            ('plan', dict(plan=[{'gate': 'G0', 'check': ''}])), ('plan', dict(plan=[{'gate': 'G0', 'check': 3}])),
-            ('steps', dict(steps=None)), ('steps', dict(steps=['x'])), ('steps', dict(steps=[{'name': 'a'}])),
-            ('steps', dict(steps=[{'name': '', 'conclusion': 'success'}])),
-            ('steps', dict(steps=[{'name': 'a', 'conclusion': 1}])),
-            ('steps', dict(steps=[{'name': 'a', 'conclusion': True}])),
-            ('steps', dict(steps=[{'name': 'a', 'conclusion': 'success', 'x': 1}])),
-            ('check_map', dict(check_map=None)), ('check_map', dict(check_map={'scope': []})),
-            ('check_map', dict(check_map={'scope': 'G1 build'})), ('check_map', dict(check_map={'scope': ['']})),
-            ('check_map', dict(check_map={'': ['a']})), ('check_map', dict(check_map={'scope': [3]})),
-            ('recorder', dict(recorder='')), ('recorder', dict(recorder=None)),
+            (task_e, dict(task='TASK-')), (task_e, dict(task='task-1')), (task_e, dict(task='TASK-1\n')),
+            (task_e, dict(task=5)),
+            (commit_e, dict(commit='a' * 39)), (commit_e, dict(commit='A' * 40)), (commit_e, dict(commit='a' * 40 + '\n')),
+            (commit_e, dict(commit=None)),
+            (iv_map_e, dict(iv={})), (iv_map_e, dict(iv=[('a', 'v1')])), (iv_entry_e, dict(iv={'': 'v1'})),
+            (iv_entry_e, dict(iv={'a': 'v'})), (iv_entry_e, dict(iv={'a': 'v1x'})), (iv_entry_e, dict(iv={'a': 1})),
+            (iv_entry_e, dict(iv={1: 'v1'})),
+            (plan_list_e, dict(plan=[])), (plan_list_e, dict(plan='G0')), (plan_keys_e, dict(plan=['G0'])),
+            (plan_keys_e, dict(plan=[{'gate': 'G0'}])),
+            (plan_keys_e, dict(plan=[{'gate': 'G0', 'check': 'scope', 'args': []}])),
+            (plan_gate_e, dict(plan=[{'gate': 'g0', 'check': 'scope'}])),
+            (plan_gate_e, dict(plan=[{'gate': 'G', 'check': 'scope'}])),
+            (plan_gate_e, dict(plan=[{'gate': 3, 'check': 'scope'}])),
+            (plan_check_e, dict(plan=[{'gate': 'G0', 'check': ''}])), (plan_check_e, dict(plan=[{'gate': 'G0', 'check': 3}])),
+            (steps_list_e, dict(steps=None)), (step_keys_e, dict(steps=['x'])), (step_keys_e, dict(steps=[{'name': 'a'}])),
+            (step_name_e, dict(steps=[{'name': '', 'conclusion': 'success'}])),
+            (step_name_e, dict(steps=[{'name': 3, 'conclusion': 'success'}])),
+            (step_concl_e, dict(steps=[{'name': 'a', 'conclusion': 1}])),
+            (step_concl_e, dict(steps=[{'name': 'a', 'conclusion': True}])),
+            (step_keys_e, dict(steps=[{'name': 'a', 'conclusion': 'success', 'x': 1}])),
+            (map_e, dict(check_map=None)), (map_entry_e, dict(check_map={'scope': []})),
+            (map_entry_e, dict(check_map={'scope': 'G1 build'})), (map_entry_e, dict(check_map={'scope': ['']})),
+            (map_entry_e, dict(check_map={'': ['a']})), (map_entry_e, dict(check_map={'scope': [3]})),
+            (rec_e, dict(recorder='')), (rec_e, dict(recorder=None)),
         ]
-        for label, kw in bad:
+        for want, kw in bad:
             out = make(**kw)
-            self.assertIsInstance(out['error'], str, (label, kw))
-            self.assertNotEqual(out['error'], '', (label, kw))
-            self.assertEqual((out['records'], out['uncovered']), ([], []), (label, kw))
+            self.assertEqual(out['error'], want, kw)
+            self.assertEqual((out['records'], out['uncovered']), ([], []), kw)
 
     def test_good_arguments_have_no_error_and_an_empty_steps_list_is_allowed(self):
         self.assertIsNone(make()['error'])
@@ -139,7 +166,7 @@ class AC1TheModule(unittest.TestCase):
                 raise RuntimeError('own method')
 
         out = make(iv=Bad(IV))
-        self.assertIsInstance(out['error'], str)
+        self.assertEqual(out['error'], 'an argument could not be read: RuntimeError')
         self.assertEqual((out['records'], out['uncovered']), ([], []))
 
     def test_a_base_exception_passes_through(self):
@@ -153,7 +180,8 @@ class AC1TheModule(unittest.TestCase):
 
 class AC2MatchingByCheck(unittest.TestCase):
     def test_review_gets_no_record_even_when_every_constitution_step_is_success(self):
-        steps = all_steps() + [step('constitution ' + n) for n in ('a', 'b', 'c')]
+        steps = all_steps() + [step(n) for n in CONSTITUTION_STEPS + ['unit_test']]
+        self.assertEqual(len(CONSTITUTION_STEPS), 9)
         out = make(steps=steps)
         self.assertEqual(by_gate(out), {'G0': 'pass', 'G1': 'pass', 'G2': 'pass'})
         self.assertEqual(out['uncovered'], [{'gate': 'G3', 'check': 'review', 'detail': 'no CI step is evidence of this check'}])
@@ -195,6 +223,13 @@ class AC2MatchingByCheck(unittest.TestCase):
         out = make(steps=all_steps() + [step(BUILD_STEP)])
         self.assertNotIn('G1', by_gate(out))
         self.assertIn({'gate': 'G1', 'check': 'build', 'detail': 'step named more than once'}, out['uncovered'])
+
+    def test_one_step_name_present_twice_with_different_conclusions_is_uncovered_never_fail_or_pass(self):
+        for first, second in (('success', 'failure'), ('failure', 'success')):
+            steps = [s for s in all_steps() if s['name'] != BUILD_STEP] + [step(BUILD_STEP, first), step(BUILD_STEP, second)]
+            out = make(plan=[{'gate': 'G1', 'check': 'build'}], steps=steps)
+            self.assertEqual(out['records'], [], (first, second))
+            self.assertEqual(out['uncovered'], [{'gate': 'G1', 'check': 'build', 'detail': 'step named more than once'}])
 
     def test_a_conclusion_that_is_not_success_or_failure_is_uncovered(self):
         for c in ('skipped', 'cancelled', None, 'neutral', 'timed_out', '', 'Success'):
@@ -313,6 +348,9 @@ class AC4TheRecords(unittest.TestCase):
         out = make()
         plan = [e['gate'] for e in PLAN4]
         decision = governor.evaluate(self._request(), self._inputs(plan), out['records'])
+        # missing_gates is the assertion that shows the records are counted: without them all four gates are missing
+        # (the next test). The decision alone does not prove the counting: this profile (build evidence, which these
+        # records do not carry) would give INSUFFICIENT_EVIDENCE even with no gate missing.
         self.assertEqual(decision['missing_gates'], ['G3'])
         self.assertEqual(decision['failed_gates'], [])
         self.assertEqual(decision['decision'], 'INSUFFICIENT_EVIDENCE')
