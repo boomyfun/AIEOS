@@ -1,6 +1,7 @@
 """The capture-and-submit step of `aieos launch` (task TASK-148; BT1b, the core part of route (c) of DEF-0149;
-specification 5 :24 puts the git-writing step in src/aieos_runtime, so the core takes the runtime's two functions by
-injection and holds none of its own): after a session, the changes it left in the working tree are written as one commit on
+specification 5 :24 sends a submission through the core's submission path, and the decision D-6609 puts the git-writing
+step in src/aieos_runtime, so the core takes the runtime's two functions by injection and holds none of its own):
+after a session, the changes it left in the working tree are written as one commit on
 refs/heads/task/<id> and submitted while the lease is held, and the tree is put back.
 
 ``capture_and_submit(root, repo, task_id, token, base_head, write_set, forbidden, state_name, clock, recorder, read,
@@ -28,8 +29,11 @@ order, each refusal ending the step with no capture and no restore unless stated
    restore is not called.
 8. A fresh clock read, then submit_fn(root, repo, commit, task_id, event_id, recorder, now2) with the event id the
    SHA-256 hex of "task.submitted", the task id and the commit id joined by LF. A result other than "submitted" or
-   "duplicate" is "submit"; the commit and the ref stay and restore is NOT called (the tree stays as the session left
-   it).
+   "duplicate" is "submit"; the commit and the ref stay, the lease is NOT released by a refused submission, and
+   restore is NOT called (the tree stays as the session left it). The answers "submitted" and "duplicate" are taken as
+   they are: submit.submit also gives them when its release of the lease raised or was not the commit's, or, for
+   "duplicate", when it released nothing (a finding of the answer, not a refusal), and the step then still restores
+   the tree and gives "done" with that finding in its findings.
 9. restore(repo, paths, classes, state_name) only after a done capture AND a submit that gave "submitted" or
    "duplicate"; a refused restore is "capture". The result is "done" when all three gave done.
 

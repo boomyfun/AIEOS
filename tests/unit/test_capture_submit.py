@@ -44,6 +44,10 @@ CONFIG = ('user.name\nA Name\0user.email\n' + EMAIL + '\0core.bare\nfalse\0').en
 MODIFIED = b' M src/aieos_bootstrap/mod.py\0'
 
 
+class StopStep(BaseException):
+    """A test-defined BaseException that is not an Exception."""
+
+
 def answer(out=b'', exit=0, error=None):
     return {'exit': exit, 'out': out, 'err': b'', 'error': error}
 
@@ -153,9 +157,10 @@ class TASK148AC1Module(unittest.TestCase):
         self.assertEqual(fake.args('head'), [(REPO, list(launcher.HEAD_ARGS), launcher.TIMEOUT)])
         self.assertEqual(fake.args('status'), [(REPO, list(gitread.STATUS_HEAD) + [':(exclude)' + STATE],
                                                 launcher.TIMEOUT)])
+        expected_message = ('AIEOS task submission TASK-148\n\nThe session left 1 changed path inside the contract\'s '
+                            'write set; this commit captures it.\n\nAIEOS-Task: TASK-148\nAIEOS-Fence: epoch-1:7\n')
         self.assertEqual(fake.args('capture'), [(REPO, 'refs/heads/task/' + TASK, HEAD, ['src/aieos_bootstrap/mod.py'],
-                                                 fake.args('capture')[0][3 + 1], {'name': 'A Name',
-                                                                                  'email': EMAIL},
+                                                 expected_message, {'name': 'A Name', 'email': EMAIL},
                                                  STATE)])
         self.assertEqual(fake.args('restore'), [(REPO, ['src/aieos_bootstrap/mod.py'],
                                                  {'src/aieos_bootstrap/mod.py': 'modified'}, STATE)])
@@ -176,6 +181,16 @@ class TASK148AC1Module(unittest.TestCase):
             self.assertEqual(out['result'], 'refused', name)
             self.assertIn(out['reason'], REASONS, name)
             self.assertTrue(all(isinstance(f, str) for f in out['findings']), name)
+
+    def test_a_base_exception_of_a_callee_escapes(self):
+        """TASK-148 AC1 (D-6633 M3; D-6752 C2 (b)): a BaseException that is not an Exception, raised by any callee (the
+        read at each of its three calls, the capture, the clock, the submission, the restore), is not caught by the
+        step and escapes capture_and_submit; the callees after it are not called."""
+        for name in ('config', 'head', 'status', 'capture', 'clock', 'submit', 'restore'):
+            fake = Fake(**{name: StopStep('stop')})
+            with self.assertRaises(StopStep, msg=name):
+                run(fake)
+            self.assertEqual(fake.names()[-1], name, name)
 
     def test_the_argument_refusals_call_nothing(self):
         """TASK-148 AC1: every argument that is out of form gives "refused" and no callee is called (reason "status";
@@ -354,6 +369,27 @@ class TASK148AC2Status(unittest.TestCase):
             self.assertEqual((out['result'], out['reason']), ('refused', 'scope'), path)
             self.assertEqual(fake.names(), ['config', 'head', 'status'], path)
             self.assertTrue(out['findings'][0].startswith('scope: 1 of 2'), out['findings'])
+
+    def test_each_scope_branch_decides_alone(self):
+        """TASK-148 AC2 (D-6633 M1, M2; D-6752 C2 (a)): each refusal is shown with a path that only that rule refuses:
+        a path INSIDE the write set and under a forbidden pattern; a path inside the write set and under the state
+        directory in any letter case; a path inside the write set and under .git in any letter case; each names its own
+        reason in the finding and nothing is captured."""
+        cases = (('docs/a.md', ['docs/**'], ['docs/**'], 'a path under a forbidden pattern'),
+                 ('src/aieos_bootstrap/secret.py', ['src/**'], ['src/aieos_bootstrap/secret.py'],
+                  'a path under a forbidden pattern'),
+                 ('.aieos/x', ['.aieos/**'], FORBIDDEN, 'a path under the state directory or .git'),
+                 ('.AIEOS/x', ['.AIEOS/**'], FORBIDDEN, 'a path under the state directory or .git'),
+                 ('tests/.git/x', ['tests/**'], FORBIDDEN, 'a path under the state directory or .git'),
+                 ('tests/.GIT/x', ['tests/**'], FORBIDDEN, 'a path under the state directory or .git'),
+                 ('.git/config', ['**'], FORBIDDEN, 'a path under the state directory or .git'))
+        for path, write_set, forbidden, why in cases:
+            self.assertTrue(any(conformance.path_matches(p, path) for p in write_set), (path, write_set))
+            fake = Fake(status=answer(b' M ' + path.encode() + b'\0'))
+            out = run(fake, write_set=write_set, forbidden=forbidden)
+            self.assertEqual((out['result'], out['reason']), ('refused', 'scope'), path)
+            self.assertEqual(fake.names(), ['config', 'head', 'status'], path)
+            self.assertTrue(any(f.endswith(why) for f in out['findings']), (path, out['findings']))
 
     def test_the_scope_findings_are_bounded(self):
         """TASK-148 AC2: a scope refusal names the count and at most twenty paths, each cut to 80 characters."""

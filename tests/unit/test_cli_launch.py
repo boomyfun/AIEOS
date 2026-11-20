@@ -1211,6 +1211,26 @@ class TASK148LauncherCapture(unittest.TestCase):
                 launch(world, capture=capture_stand_in, restore=restore_stand_in)
         self.assertEqual(world.names(), STEP_ORDER)
 
+    def test_a_base_exception_of_the_capture_callee_runs_the_end(self):
+        """TASK-094 AC1, as TASK-148 AC4 changes it (D-6752 C2 (b)): the BaseException is raised by the capture CALLEE
+        inside the REAL capture_and_submit (no stand-in for the step: the world's read gives the configuration, HEAD
+        and the status in order); it escapes the step, finish and write_handoff are called, and it is re-raised after
+        them."""
+        config = ('user.name\nA Name\0user.email\n' + 'a' + chr(64) + 'example.invalid' + '\0').encode()
+        reads = [read_answer(config), read_answer(HEAD.encode() + b'\n'),
+                 read_answer(b' M src/aieos_bootstrap/mod.py\0'), read_answer(), read_answer()]
+        seen = []
+
+        def capture_raises(*args):
+            seen.append(args)
+            raise StopLaunch('stop')
+        world = World(contract_at=contract_forbidden(), reads=reads)
+        with self.assertRaises(StopLaunch):
+            launch(world, capture=capture_raises, restore=restore_stand_in)
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(seen[0][1], 'refs/heads/task/' + TASK)
+        self.assertEqual(world.names(), ['clock', 'begin', 'contract_at', 'starter', 'clock', 'finish', 'write_handoff'])
+
     def test_the_forbidden_list_of_the_contract_answer(self):
         """TASK-094 AC1, as TASK-148 AC4 changes it: (D-6737, D-6739): the forbidden list passed is the contract answer's own; a contract with no
         forbidden key, an empty list or a list holding a non-str gives None to the step (which refuses it with reason
