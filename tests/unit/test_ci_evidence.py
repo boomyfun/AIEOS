@@ -112,6 +112,11 @@ class AC1TheModule(unittest.TestCase):
                 public.update(t.id for t in node.targets if isinstance(t, ast.Name) and not t.id.startswith('_'))
         self.assertEqual(public, {'ci_evidence'})
 
+    def test_the_public_attributes_of_the_module_are_the_function_and_the_three_imports(self):
+        # the imported modules are attributes of the module object; AC1 names them as the import list, not as public names
+        attrs = {n for n in dir(ci_evidence) if not n.startswith('_')}
+        self.assertEqual(attrs, {'ci_evidence', 'hashlib', 're', 'gate_records'})
+
     def test_imports_and_forbidden_names(self):
         tree = ast.parse(self.source)
         imports = set()
@@ -179,7 +184,8 @@ class AC1TheModule(unittest.TestCase):
             self.assertEqual(refusal(out), ('argument', want), kw)
             self.assertEqual((out['records'], out['uncovered'], out['evidence']), ([], [], None), kw)
 
-    def test_the_plan_may_carry_args_and_nothing_else(self):
+    def test_a_plan_entry_may_carry_args(self):
+        self.assertIn('args', PLAN4[3])  # the default call passes the review entry with its args key
         self.assertIsNone(call()['refusal'])
 
     def test_no_exception_escapes(self):
@@ -266,10 +272,58 @@ class AC2TheLog(unittest.TestCase):
         extra2 = det.replace('G0 task detection (the contract commit on main)', 'G0 scope (V0)') + '\n'
         self.assertIsNone(call(runs=[run(log=BRANCH_LOG + extra2)])['refusal'])
 
-    def test_crlf_and_the_byte_order_mark_are_read_in_the_pinned_form(self):
+    def test_crlf_is_read_in_the_pinned_form(self):
         crlf = BRANCH_LOG.replace('\n', '\r\n')
         self.assertIsNone(call(runs=[run(log=crlf)])['refusal'])
-        self.assertIn(chr(0xFEFF), BRANCH_LOG)
+
+    def test_the_byte_order_mark_is_allowed_at_the_start_of_the_text_only(self):
+        bom = chr(0xFEFF)
+        self.assertIn(bom, BRANCH_LOG)  # the fixture has it on the first line of a later step
+        det = [ln for ln in BRANCH_LOG.split('\n') if 'G0 detect: task' in ln][0]
+        job, name, text = det.split('\t', 2)
+        self.assertFalse(text.startswith(bom))
+        # at the start of the text of the detect line itself: accepted, and the detect line of the evidence is unchanged
+        out = call(runs=[run(log=with_log((det, job + '\t' + name + '\t' + bom + text)))])
+        self.assertIsNone(out['refusal'])
+        self.assertEqual(out['evidence']['detect_line'], call()['evidence']['detect_line'])
+        # in the job field of every line: no line of the job checks
+        self.assertEqual(refusal(call(runs=[run(log=BRANCH_LOG.replace('checks\t', bom + 'checks\t'))])),
+                         ('log_format', 'the log has no line of the job checks'))
+        # in the job field of the lines of the detect step only: no line of the detect step
+        step_lines = 'checks\tG0 task detection (the contract commit on main)\t'
+        self.assertEqual(refusal(call(runs=[run(log=BRANCH_LOG.replace(step_lines, bom + step_lines))])),
+                         ('detect', 'the log has no line of the detect step'))
+
+    def test_detect_and_contract_lines_that_only_start_like_the_pinned_form_are_not_read(self):
+        commit_e = 'contract commit 3572f9585da94f9ec2fb749a25e46a9e040f0033 base'
+        zero_detect = ('detect', 'the detect step output has 0 detect lines (exactly one is expected)')
+        # a task id with more digits is a well-formed detect line of ANOTHER task (TASK-1500 is not TASK-150)
+        self.assertEqual(refusal(call(runs=[run(log=with_log(('G0 detect: task TASK-150 contract', 'G0 detect: task TASK-1500 contract')))])),
+                         ('detect', 'the detect line names another task'))
+        # a commit of 41 characters is not a detect line of the pinned form
+        self.assertEqual(refusal(call(runs=[run(log=with_log((commit_e, commit_e.replace(' base', 'a base'))))])), zero_detect)
+        # text after the second sha of the detect line: not the pinned form
+        base_e = ' base f48804f6e3001a3c9dd070437e7ce339d7881150'
+        self.assertEqual(refusal(call(runs=[run(log=with_log((base_e, base_e + ' and more')))])), zero_detect)
+        zero_sum = ('detect', 'the detect step output has 0 contract sha256 lines (exactly one is expected)')
+        upper = with_log(('G0 contract sha256 ' + SHA, 'G0 contract sha256 ' + SHA.upper()))
+        self.assertEqual(refusal(call(runs=[run(log=upper)])), zero_sum)
+        # a contract line with 65 hexadecimal characters, or with text after the sha: not the pinned form
+        self.assertEqual(refusal(call(runs=[run(log=with_log(('G0 contract sha256 ' + SHA, 'G0 contract sha256 ' + SHA + 'a')))])), zero_sum)
+        self.assertEqual(refusal(call(runs=[run(log=with_log(('G0 contract sha256 ' + SHA, 'G0 contract sha256 ' + SHA + ' x')))])), zero_sum)
+
+    def test_a_log_that_is_not_utf_8_text_is_refused_as_a_log_format(self):
+        surrogate = BRANCH_LOG + 'checks\tSet up job\t2026-11-20T17:12:03.0000000Z a' + chr(0xD800) + 'b\n'
+        self.assertEqual(refusal(call(runs=[run(log=surrogate)])),
+                         ('log_format', 'run 100 attempt 1: the log is not UTF-8 text'))
+        out = call(runs=[run(log=surrogate)])
+        self.assertEqual((out['records'], out['uncovered'], out['evidence']), ([], [], None))
+        # the second attempt carries it; the first is a good log
+        self.assertEqual(refusal(call(runs=[run(), run(attempt=2, log=surrogate)])),
+                         ('log_format', 'run 100 attempt 2: the log is not UTF-8 text'))
+        # a log that has the surrogate and also no detect line is refused for the encoding first
+        self.assertEqual(refusal(call(runs=[run(log=MAIN_LOG + 'checks\tSet up job\t2026-11-20T17:12:03.0000000Z' + ' ' + chr(0xD800) + '\n')])),
+                         ('log_format', 'run 100 attempt 1: the log is not UTF-8 text'))
 
 
 class AC3TheRuns(unittest.TestCase):
@@ -341,6 +395,41 @@ class AC4TheRerunRule(unittest.TestCase):
         with mock.patch.object(ci_evidence.gate_records, 'gate_records', capture):
             self.assertIsNone(call(runs=[run(attempt=2, steps=second), run(attempt=1, steps=first)])['refusal'])
         self.assertEqual(seen, [second])
+
+    def _chosen_steps(self, runs):
+        seen = []
+
+        def capture(task_id, commit, intent_versions, plan, steps, check_map, recorder):
+            seen.append(copy.deepcopy(steps))
+            return {'records': [], 'uncovered': [], 'error': None}
+
+        with mock.patch.object(ci_evidence.gate_records, 'gate_records', capture):
+            out = call(runs=runs)
+        self.assertIsNone(out['refusal'])
+        return seen, out
+
+    def test_the_highest_pair_is_chosen_by_run_id_first_and_by_numbers(self):
+        s99 = all_steps() + [step('unit_test', 'failure')]
+        s100 = all_steps() + [step('unit_test', 'success')]
+        for runs in ([run(run_id=99, attempt=3, steps=s99), run(run_id=100, attempt=1, steps=s100)],
+                     [run(run_id=100, attempt=1, steps=s100), run(run_id=99, attempt=3, steps=s99)]):
+            seen, out = self._chosen_steps(runs)
+            self.assertEqual(seen, [s100])  # run 100 attempt 1 is higher than run 99 attempt 3
+            self.assertEqual([(r['run_id'], r['attempt']) for r in out['evidence']['runs']], [(99, 3), (100, 1)])
+        s9 = all_steps() + [step('unit_test', 'failure')]
+        s10 = all_steps() + [step('unit_test', 'success')]
+        for runs in ([run(run_id=9, steps=s9), run(run_id=10, steps=s10)], [run(run_id=10, steps=s10), run(run_id=9, steps=s9)]):
+            seen, out = self._chosen_steps(runs)
+            self.assertEqual(seen, [s10])  # numbers, not texts: 10 is higher than 9
+            self.assertEqual([r['run_id'] for r in out['evidence']['runs']], [9, 10])
+
+    def test_every_attempt_keeps_the_hash_of_its_own_log(self):
+        other = BRANCH_LOG + 'other\tSet up job\t2026-11-20T17:12:03.0000000Z another job line\n'
+        out = call(runs=[run(), run(attempt=2, log=other)])
+        self.assertIsNone(out['refusal'])
+        want = [hashlib.sha256(BRANCH_LOG.encode('utf-8')).hexdigest(), hashlib.sha256(other.encode('utf-8')).hexdigest()]
+        self.assertNotEqual(want[0], want[1])
+        self.assertEqual([r['log_sha256'] for r in out['evidence']['runs']], want)
 
     def test_the_cost_is_stated_in_the_docstring(self):
         self.assertIn('a new commit', ci_evidence.__doc__)

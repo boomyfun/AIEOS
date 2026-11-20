@@ -20,7 +20,8 @@ must be completed with the conclusion success or failure. (3) The log of each el
 ``gh run view --log`` (job TAB step TAB timestamp message): from the job checks, the output lines of the detect step
 after its single ##[endgroup] must hold exactly one line "G0 detect: task <task_id> contract commit <sha> base <sha>"
 and exactly one line "G0 contract sha256 <sha>" equal to the expected contract sha256; the lines before the endgroup
-echo the script's source and are never read. (4) The rerun agreement: ALL eligible runs and attempts must agree on the
+echo the script's source: every line of the log must still be in the pinned form, but the message text of those lines is
+never read. A log that is not UTF-8 text (a lone surrogate) is refused with log_format. (4) The rerun agreement: ALL eligible runs and attempts must agree on the
 detect line and, for every step name of DEFAULT_CHECK_MAP, on the list of the conclusions of the steps of that name; a
 flaky failure followed by a pass is therefore refused and the remedy is a new commit (the cost of this rule). (5) The
 maker: gate_records.gate_records is called once with the steps of the run with the highest (run_id, attempt), the plan
@@ -31,10 +32,18 @@ The evidence mapping, for the caller that keeps the provenance: head_sha, workfl
 runs (a list of run_id, attempt and the SHA-256 of the UTF-8 bytes of that attempt's log).
 
 Limits: the log is trusted as the executor's unedited fetch, which this function cannot check (the evidence mapping
-names it); the default map covers scope, build and lint only, so the run-made plan's review gate stays uncovered (the
-owner's question of DEF-0153); the module cannot see the mapping that evaluation.evaluate_task declares, so passing the
-same copy of the intent versions is the caller's duty; a change of the detect step's output wording or of the log form
-makes the answer a refusal (fail closed).
+names it); the step conclusions that become records come from the run metadata (the steps lists), which is trusted in the
+same way and is not tied to the log, so the caller keeps the hash of the metadata as well; the default map covers scope,
+build and lint only, so the run-made plan's review gate stays uncovered (the owner's question of DEF-0153); the module
+cannot see the mapping that evaluation.evaluate_task declares, so passing the same copy of the intent versions is the
+caller's duty; a change of the detect step's output wording or of the log form makes the answer a refusal (fail closed).
+The caller's duties: pass EVERY attempt of every run of the task branch (the module cannot know how many attempts there
+are, so an omitted earlier attempt is invisible and the highest attempt given decides); pass EVERY path the commit changes,
+including the old side of a rename (a diff without rename detection), because the .github rule sees only the list given
+and tests the exact text '.github' or a text that starts with '.github/'. The CI class of the records is asserted, not
+verified: the records carry no run id or log hash (the evidence mapping does), and gate_records stays callable directly.
+The arguments are plain data as loaded from JSON; a crafted subclass of dict, list or str whose methods answer differently
+on each call is outside the guarantee (the same reading as gate_records).
 """
 import hashlib
 import re
@@ -198,7 +207,12 @@ def ci_evidence(task_id, commit, contract_sha256, intent_versions, plan, changed
                 return _refuse('run', 'run %d attempt %d is not completed with success or failure' % key)
         eligible.sort(key=lambda r: (r['run_id'], r['attempt']))
         lines = []
+        digests = []
         for run in eligible:
+            try:
+                digests.append(hashlib.sha256(run['log'].encode('utf-8')).hexdigest())
+            except UnicodeEncodeError:
+                return _refuse('log_format', 'run %d attempt %d: the log is not UTF-8 text' % (run['run_id'], run['attempt']))
             line, problem = _detect_line(run['log'], task_id, contract_sha256)
             if problem is not None:
                 return _refuse(problem[0], problem[1])
@@ -221,8 +235,7 @@ def ci_evidence(task_id, commit, contract_sha256, intent_versions, plan, changed
             return _refuse('maker', made['error'])
         evidence = {
             'head_sha': commit, 'workflow_path': _WORKFLOW, 'detect_line': lines[0], 'contract_sha256': contract_sha256,
-            'runs': [{'run_id': r['run_id'], 'attempt': r['attempt'],
-                      'log_sha256': hashlib.sha256(r['log'].encode('utf-8')).hexdigest()} for r in eligible]}
+            'runs': [{'run_id': r['run_id'], 'attempt': r['attempt'], 'log_sha256': d} for r, d in zip(eligible, digests)]}
         return _answer(made['records'], made['uncovered'], evidence, None)
     except Exception as exc:
         return _refuse('argument', 'an argument could not be read: ' + type(exc).__name__)
