@@ -151,25 +151,25 @@ def _build(form_tuple, values):
     ids = list(values.get('ids', ()))
     allowed = values.get('allowed', ())
     out = []
-    for token in form_tuple:
-        if token == '<paths>':
+    for slot in form_tuple:
+        if slot == '<paths>':
             listed = values.get('paths')
             if not (isinstance(listed, list) and listed and all(p in allowed for p in listed)):
                 return None, ['form: the paths are not a non-empty part of the listed paths']
             out.extend(listed)
-        elif token in ('<tree>', '<id>'):
+        elif slot in ('<tree>', '<id>'):
             if not (ids and isinstance(ids[0], str) and _ID.fullmatch(ids[0])):
                 return None, ['form: an id is missing or not 40 lowercase hexadecimal characters']
             out.append(ids.pop(0))
-        elif token == '<taskref>':
+        elif slot == '<taskref>':
             ref = values.get('ref')
             if not (isinstance(ref, str) and _REF.fullmatch(ref)):
                 return None, ['form: the reference is not a task reference']
             out.append(ref)
-        elif token == '<zero>':
+        elif slot == '<zero>':
             out.append(ZERO)
         else:
-            out.append(token)
+            out.append(slot)
     if ids:
         return None, ['form: an id was given that the form does not take']
     return out, None
