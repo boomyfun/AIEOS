@@ -327,6 +327,45 @@ class AC3TheSourcesThatHaveReaders(unittest.TestCase):
             self.assertEqual(refusal(call(sources=good_sources(policy_version=bad))),
                              ('argument', 'policy_version is not a non-empty text'), bad)
 
+    def test_a_missing_budgets_key_is_a_retries_refusal_and_other_forms_stay_argument(self):
+        # AC3 names a missing budgets key under reason retries; the objective's general rule keeps the wrong forms as argument (D-6847).
+        c = good_contract()
+        del c['autonomy']['budgets']
+        self.assertEqual(refusal(call(contract=c)), ('retries', 'autonomy has no budgets'))
+        detail = 'contract has no autonomy with a budgets dict'
+        self.assertEqual(refusal(call(contract=good_contract(autonomy='x'))), ('argument', detail))
+        self.assertEqual(refusal(call(contract=good_contract(autonomy={'budgets': ['retries']}))), ('argument', detail))
+        self.assertEqual(refusal(call(contract=good_contract(autonomy={'budgets': None}))), ('argument', detail))
+
+    def test_requirement_profiles_must_be_a_list_whose_dict_entries_have_a_text_id(self):
+        # governor.py :614-:618 adds an entry only when its id is in the traced requirements, so a non-text id would silently drop its evidence.
+        add = [{'dimension': 'security', 'evidence_types': ['review']}]
+        for bad in (5, 'x', {}, {'id': 'SPEC-001', 'add': add}):
+            self.assertEqual(refusal(call(sources=good_sources(requirement_profiles=bad))),
+                             ('argument', 'requirement_profiles is not a list'), bad)
+        for bad_id in (5, 1.5, True, ['SPEC-001'], '', '\ud800'):
+            reqs = [{'id': bad_id, 'add': add}]
+            self.assertEqual(refusal(call(sources=good_sources(requirement_profiles=reqs))),
+                             ('argument', 'a requirement profile has no text id'), bad_id)
+        self.assertEqual(refusal(call(sources=good_sources(requirement_profiles=[{'add': add}]))),
+                         ('argument', 'a requirement profile has no text id'))
+        self.assertIsNone(call(sources=good_sources(requirement_profiles=[]))['refusal'])
+        # a non-dict entry or a dict with other keys stays with governor.derive_inputs, which raises: reason incomplete
+        out = call(sources=good_sources(requirement_profiles=[5]))
+        self.assertEqual(refusal(out), ('incomplete', 'governor.derive_inputs refused the values: a requirement profile is not {id, add}'))
+
+    def test_text_that_utf8_cannot_encode_is_refused_like_governor_does(self):
+        surrogate = 'v\ud800'
+        for name in ('policy_version', 'level_version', 'ruleset_version'):
+            self.assertEqual(refusal(call(sources=good_sources(**{name: surrogate}))),
+                             ('argument', name + ' is not a non-empty text'), name)
+        rules = [{'match': ['docs/**', 'a\ud800'], 'class': 'low'}]
+        self.assertEqual(refusal(call(sources=good_sources(risk_rules=rules))),
+                         ('risk_rules', 'a risk rule has a match that is not a non-empty list of non-empty texts'))
+        self.assertEqual(refusal(call(contract=good_contract(traces_to=['SPEC-001', '\ud800']))),
+                         ('argument', 'contract has no traces_to that is a non-empty list of non-empty texts'))
+        self.assertEqual(refusal(call(recorder='r\ud800')), ('argument', 'recorder is not a non-empty text'))
+
     def test_level_and_ruleset_versions_are_non_empty_texts(self):
         # governor.py :191-:193 needs a non-empty text for each of the three versions.
         for name in ('level_version', 'ruleset_version'):

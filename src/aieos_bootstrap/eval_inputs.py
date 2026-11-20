@@ -10,8 +10,9 @@ log_payloads, recorder)`` returns a mapping with exactly the keys declared, valu
 On a refusal declared and values are None, ci_records is [], evidence is None and refusal is {reason, detail}; otherwise
 refusal is None. The evidence holds policy_ref, evaluated_commit, contract_sha256, ci, uncovered (a fresh copy of the
 plan entries that ci_evidence could not cover, so they are not lost; this key is added to the objective's list by
-D-6836 to meet AC5), already_in_log and gaps. The reasons are a closed set: argument, gap, retries, plan, risk_rules, policy_path, ci, conflict and
-incomplete. It never raises an Exception; a BaseException that is not an Exception passes through.
+D-6836 to meet AC5), already_in_log and gaps. The reasons are a closed set: argument, gap, retries, plan, risk_rules,
+policy_path, ci, conflict and incomplete. It never raises an Exception; a BaseException that is not an Exception passes
+through.
 
 The checks, in order: (1) the arguments; (2) policy_path: a task whose changed paths include one of the four policy
 source files is refused (a task cannot edit the rules that evaluate it); (3) the gaps: ``sources`` is a dict with exactly
@@ -42,9 +43,17 @@ base_inputs.contract_at call. That reader refuses the self-build contracts of do
 begin with a dot, so this assembler is for run-made contracts. The arguments are plain data as loaded from JSON; a
 crafted subclass whose methods answer differently on each call is outside the guarantee. The CI class of the records is
 asserted, not verified (ci_evidence). The run-made review gate G3 stays uncovered (DEF-0153) and is listed in
-evidence.uncovered. Five sources (owner_kept_rules, evidence_comparison, auto_accept, level_version and
-ruleset_version) are refused with reason argument when their form is wrong, because governor.derive_inputs would turn
-such a form into a fail-closed value silently (governor.py :586-:594, :622, :191-:193).
+evidence.uncovered. Form checks of the sources (reason argument; D-6836, D-6847): a wrong form of owner_kept_rules,
+evidence_comparison or auto_accept would become a silent fail-closed value in governor.derive_inputs (governor.py
+:587-:590, :594, :622); a level_version or ruleset_version that is not a text would become an error record with no
+decision in evaluation (governor.py :191-:193). The commit 5302a2fe said "silently" of all five sources, which is wrong
+for these last two. auto_accept is checked as a dict only: a value that is not a bool gives no auto accept
+(governor.py :622, :629). requirement_profiles must be a list and each of its dict entries needs a text id, because an
+entry whose id is not a text never matches a traced requirement and its evidence entries would be dropped silently
+(governor.py :614-:618); every other form of it stays with governor.derive_inputs. A text that UTF-8 cannot encode (a
+lone surrogate) is refused as governor._text refuses it. Budgets: a contract whose autonomy is a dict with no budgets
+key is refused with reason retries, as AC3 says; this departs from the objective's rule that each failed argument check
+is reason argument, and an autonomy that is not a dict or a budgets that is not a dict stays reason argument (D-6847).
 """
 import re
 
@@ -75,7 +84,14 @@ def _refuse(reason, detail):
 
 
 def _text(value):
-    return isinstance(value, str) and value != ''
+    """A non-empty string that UTF-8 can encode (a lone surrogate cannot), as governor._text takes it."""
+    if not isinstance(value, str) or value == '':
+        return False
+    try:
+        value.encode('utf-8')
+    except UnicodeEncodeError:
+        return False
+    return True
 
 
 def _texts(value):
@@ -123,7 +139,7 @@ def _argument_error(task_id, evaluated_commit, policy_ref, contract, contract_sh
     if not isinstance(plan, list) or not plan:
         return 'contract has no verification_plan that is a non-empty list'
     autonomy = contract.get('autonomy')
-    if not isinstance(autonomy, dict) or not isinstance(autonomy.get('budgets'), dict):
+    if not isinstance(autonomy, dict) or ('budgets' in autonomy and not isinstance(autonomy['budgets'], dict)):
         return 'contract has no autonomy with a budgets dict'
     if not isinstance(contract_sha256, str) or _SHA256.fullmatch(contract_sha256) is None:
         return 'contract_sha256 is not 64 lowercase hexadecimal characters'
@@ -140,8 +156,11 @@ def _argument_error(task_id, evaluated_commit, policy_ref, contract, contract_sh
     return None
 
 
-def _retries(budgets):
-    """(int, None) or (None, detail)."""
+def _retries(autonomy):
+    """(int, None) or (None, detail); autonomy is a dict whose budgets, when present, is a dict."""
+    if 'budgets' not in autonomy:
+        return None, 'autonomy has no budgets'
+    budgets = autonomy['budgets']
     if 'retries' not in budgets:
         return None, 'budgets has no retries'
     text = budgets['retries']
@@ -213,7 +232,7 @@ def eval_inputs(task_id, evaluated_commit, policy_ref, contract, contract_sha256
         open_gaps = [name for name in _GAPS if sources[name] is None]
         if open_gaps:
             return _refuse('gap', 'open gaps: ' + ', '.join(open_gaps))
-        retries, detail = _retries(contract['autonomy']['budgets'])
+        retries, detail = _retries(contract['autonomy'])
         if detail is not None:
             return _refuse('retries', detail)
         gates, detail = _plan(contract['verification_plan'])
@@ -236,6 +255,11 @@ def eval_inputs(task_id, evaluated_commit, policy_ref, contract, contract_sha256
             return _refuse('argument', 'evidence_comparison is not a dict with exactly the key weakens and a bool value')
         if not isinstance(sources['auto_accept'], dict):
             return _refuse('argument', 'auto_accept is not a dict')
+        reqs = sources['requirement_profiles']
+        if not isinstance(reqs, list):
+            return _refuse('argument', 'requirement_profiles is not a list')
+        if not all(_text(r.get('id')) for r in reqs if isinstance(r, dict)):
+            return _refuse('argument', 'a requirement profile has no text id')
         try:
             copies = {name: _copy(sources[name]) for name in _GAPS}
             plan_entries = [_copy(e) for e in contract['verification_plan']]
