@@ -19,13 +19,21 @@ Limits, in plain words. (1) The classes of restore are the caller's and are trus
 seen by the caller's status read and so is not captured. (3) Directories that a clean leaves empty stay. (4) A filter
 driver named in the clone's own configuration runs under update-index and restore; the options close it only in part, and
 the caller's configuration read is the other half. (5) git is found by its name, as gitread does. (6) The state name rule
-accepts any name that begins with a dot. (7) restore discards uncaptured changes on the listed paths and does not check
+is the one the code applies: a name that begins with a dot, is not only a dot, and holds no slash and no backslash is
+accepted; nothing else about it is checked. (7) restore discards uncaptured changes on the listed paths and does not check
 that a capture came first; the order of the calls is the caller's. (8) A listed path that names a directory would make
 restore and clean act on everything below it; capture refuses it, because update-index fails on a directory, and the
 caller lists files only. (9) The stored content is git's form under the clone's attributes (eol and text conversion).
 (10) The text that tells an existing reference from another failure is git's English message under LC_ALL=C and can change
 between git versions; a changed text makes an existing reference read as git-failed, and the reference is left alone
 either way. (11) Nothing calls this module until the core part of the next task is built.
+(12) The suite does not run the real git behaviour of the steps; the unit test answers every step with a stand-in, and the
+real behaviour is shown at acceptance by a harness that lives outside the repository. (13) A git directory whose path
+holds a character outside ASCII is refused as git-failed, because the answer of rev-parse is read as ASCII. (14) Every
+git call has a time limit of 60 seconds (the int constant 60 in the one process call); a call that runs longer is
+refused as timeout. (15) An id that git prints for the tree or for the commit and that is not 40 lowercase hexadecimal
+characters is refused as git-failed, never as invalid-argument; that reason is for the arguments checked before any
+process starts.
 """
 
 import os
@@ -39,7 +47,7 @@ CAPTURE_FORMS = (('read-tree', 'HEAD'),
                  ('update-ref', '<taskref>', '<id>', '<zero>'),
                  ('rev-parse', '--absolute-git-dir'),
                  ('rev-parse', '--verify', 'HEAD'),
-                 ('diff', '--no-ext-diff', '--no-textconv', '--name-only', '<id>', '<id>'),
+                 ('diff', '--no-ext-diff', '--no-textconv', '--no-renames', '--name-only', '<id>', '<id>'),
                  ('restore', '--source=HEAD', '--worktree', '--', '<paths>'),
                  ('clean', '-f', '--', '<paths>'))
 CAPTURE_OPTIONS = ('--no-pager', '-c', 'core.fsmonitor=false', '-c', 'diff.external=', '-c', 'commit.gpgsign=false')
@@ -231,6 +239,17 @@ def _text(answer):
     return answer['out'].decode('ascii').strip()
 
 
+def _printed_id(answer, step):
+    """(the id, None) or (None, a refused mapping): the id that git printed (write-tree or commit-tree) must be 40
+    lowercase hexadecimal characters once the line end is cut off; any other answer is git's fault, not the caller's,
+    so the reason is git-failed and never invalid-argument."""
+    text = answer['out'].decode('ascii', 'replace').strip()
+    if not _ID.fullmatch(text):
+        return None, _refused('git-failed', ['%s: the printed id is malformed (not 40 lowercase hexadecimal characters)'
+                                             % step])
+    return text, None
+
+
 def _head_is(repo, old_head):
     """None when HEAD is old_head, else a refused mapping."""
     answer, refused = _ok_step(repo, CAPTURE_FORMS[_HEAD], {})
@@ -266,12 +285,16 @@ def _capture(repo, ref, old_head, paths, message, identity, state_name):
     answer, refused = _ok_step(repo, CAPTURE_FORMS[_WRITE_TREE], base, index)
     if refused is not None:
         return refused
-    tree = _text(answer)
+    tree, refused = _printed_id(answer, 'write-tree')
+    if refused is not None:
+        return refused
     answer, refused = _ok_step(repo, CAPTURE_FORMS[_COMMIT_TREE], {'ids': [tree, old_head]}, None, identity,
                                message.encode('utf-8'))
     if refused is not None:
         return refused
-    commit = _text(answer)
+    commit, refused = _printed_id(answer, 'commit-tree')
+    if refused is not None:
+        return refused
     answer, refused = _step(repo, CAPTURE_FORMS[_UPDATE_REF], {'ref': ref, 'ids': [commit]})
     if refused is not None:
         return refused

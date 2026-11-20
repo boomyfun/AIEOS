@@ -1,7 +1,8 @@
 """Unit tests of aieos_runtime.task_capture (task TASK-147, the capture step of route (c) of DEF-0149), standard library
 only. No test starts a process and none writes a file: the module's `subprocess` is replaced by a stand-in through
-mock.patch.object and the environment through mock.patch.dict, each restored after its test; the only file read is the
-module's own source and the CI workflow, with pathlib's read_bytes, for the ast checks. The behaviour against a real git
+mock.patch.object and the environment through mock.patch.dict, each restored after its test; the only files read are
+the module's own source, the CI workflow and this test file itself, with pathlib's read_bytes, for the ast and text
+checks (the test file is read by the identity test). The behaviour against a real git
 repository is not tested here: the CI's source rules refuse a test file that starts git or writes a file, so it is shown
 at acceptance by a harness outside the repository (TASK-147 AC5). Each test names its criteria in its own docstring."""
 
@@ -159,6 +160,19 @@ class Interface(unittest.TestCase):
         for label in ('MEAS' + 'URED', 'ENFOR' + 'CED', 'GUARAN' + 'TEED'):
             self.assertNotIn(label, doc)
 
+    def test_the_docstring_holds_the_four_statements_of_the_contract(self):
+        """TASK-149 AC3: the docstring states, by these key words, the state-name rule as the code applies it, that the
+        suite does not run the real git behaviour, that a git directory with a character outside ASCII is refused as
+        git-failed, and the value 60 of the timeout constant; the check fails if one statement is removed."""
+        doc = ' '.join(ast.get_docstring(ast.parse(source())).split())
+        statements = {'the state-name rule as coded': ('is not only a dot', 'holds no slash and no backslash'),
+                      'the real git behaviour is not run by the suite': ('does not run the real git behaviour',),
+                      'a git directory outside ASCII is git-failed': ('outside ASCII is refused as git-failed',),
+                      'the timeout constant': ('time limit of 60 seconds', 'the int constant 60')}
+        for statement, keys in statements.items():
+            for key in keys:
+                self.assertIn(key, doc, statement)
+
 
 class Refusals(unittest.TestCase):
     def check(self, call, args):
@@ -195,9 +209,21 @@ class Refusals(unittest.TestCase):
         self.check(task_capture.capture, good_capture(repo='relative'))
         self.check(task_capture.capture, good_capture(message='lone \ud800 surrogate'))
 
+    def test_the_refusals_before_any_process_are_invalid_argument_and_start_no_process(self):
+        """TASK-149 AC2: a bad path, a bad reference, an upper-case old head, a relative repository and a bad classes
+        value are refused with the reason invalid-argument and with no process started, as before the id check that
+        follows a printed id."""
+        self.check(task_capture.capture, good_capture(paths=['bad:name']))
+        self.check(task_capture.capture, good_capture(ref='refs/heads/main'))
+        self.check(task_capture.capture, good_capture(old_head='A' * 40))
+        self.check(task_capture.capture, good_capture(repo='relative'))
+        self.check(task_capture.restore, good_restore(classes=None))
+
     def test_each_argument_of_restore_is_checked_before_any_process_starts(self):
         """TASK-147 AC2: for restore a class that is missing, extra or not one of the three, a classes value that is not
-        a mapping, and every path and state-name refusal of capture are refused with no call."""
+        a mapping, an empty path list, a path with a backslash, a bad state name and a non-absolute repository are
+        refused with no call; of the path and state-name refusals of capture only these three are tried for restore,
+        the others are tried for capture alone."""
         for classes in ({}, {'a.txt': 'modified'}, dict(CLASSES, extra='added'), dict(CLASSES, **{'a.txt': 'x'}), None):
             self.check(task_capture.restore, good_restore(classes=classes))
         self.check(task_capture.restore, good_restore(paths=[], classes={}))
@@ -444,6 +470,30 @@ class Reasons(unittest.TestCase):
         self.assertEqual(r['reason'], 'git-failed')
         r, w = self.refusal(self.scripted(**{'write-tree': (0, b'\xff\n', b'')}))
         self.assertEqual(r['reason'], 'git-failed')
+
+    def test_a_printed_id_that_is_not_forty_lowercase_hex_is_git_failed_and_stops_the_steps_after_it(self):
+        """TASK-149 AC2: when write-tree or commit-tree answers with an id that is empty, only a line end, too short,
+        too long, upper-case, followed by garbage or not ASCII, capture is refused as git-failed, never as
+        invalid-argument, with a finding that names the step and says the id is malformed; no later step is called and
+        the reference is not written."""
+        bad = (b'', b'\n', b'b' * 39 + b'\n', b'b' * 41 + b'\n', b'B' * 40 + b'\n', b'b' * 40 + b' garbage\n',
+               b'b' * 40 + b'x\n', b'\xff' * 40 + b'\n')
+        for step in ('write-tree', 'commit-tree'):
+            for out in bad:
+                r, w = self.refusal(self.scripted(**{step: (0, out, b'')}))
+                self.assertEqual(r['reason'], 'git-failed', (step, out))
+                self.assertTrue(any(step in f and 'malformed' in f for f in r['findings']), (step, out))
+                self.assertEqual(forms_of(w)[-1][0], step, (step, out))
+                self.assertNotIn('update-ref', [f[0] for f in forms_of(w)], (step, out))
+
+    def test_a_git_directory_with_a_character_outside_ascii_is_git_failed(self):
+        """TASK-149 AC3: when rev-parse --absolute-git-dir answers with exit 0 and an absolute directory that holds a
+        character outside ASCII (as UTF-8 bytes with a line end), capture is refused as git-failed, as the docstring
+        says, and no read-tree or any later step is called."""
+        answer = (0, (GITDIR + 'é\n').encode('utf-8'), b'')
+        r, w = self.refusal(self.scripted(**{'rev-parse --absolute-git-dir': answer}))
+        self.assertEqual(r['reason'], 'git-failed')
+        self.assertEqual([f[0] for f in forms_of(w)], ['rev-parse'])
 
     def test_a_refused_step_stops_the_steps_after_it(self):
         """TASK-147 AC1: after a refusal no later form is called (the module neither continues nor undoes)."""
