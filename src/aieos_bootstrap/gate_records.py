@@ -1,0 +1,167 @@
+"""The gate maker (task TASK-150; BT2 of DEF-0136, option (A) of D-6770): a pure function that turns the step
+conclusions of ONE CI run on ONE commit into gate-result records that the governor counts for a task, honestly. A gate
+gets a record only when the CI evidence of every check that the plan names for that gate is present and concluded;
+every other gate is reported as uncovered.
+
+``gate_records(task_id, commit, intent_versions, plan, steps, check_map, recorder)`` returns a mapping with exactly the
+keys records (a list of mappings), uncovered (a list of mappings with the keys gate, check and detail) and error (None,
+or a short text for a malformed argument, in which case records and uncovered are both empty). It starts no process,
+opens no file, reads no clock and no network; it imports the standard library only (hashlib and re). It never raises an
+Exception; a BaseException that is not an Exception passes through.
+
+The arguments are checked first, each failure is an error and no record: task_id is TASK- and digits; commit is 40
+lowercase hexadecimal characters; intent_versions is a non-empty dict from a non-empty str to v and digits; plan is a
+non-empty list of dicts with exactly the keys gate (G and digits) and check (a non-empty str); steps is a list of dicts
+with exactly the keys name (a non-empty str) and conclusion (a str or None), the step conclusions of the CI run as
+data; check_map is a dict from a non-empty str to a non-empty list of non-empty str (the exact step names that are
+evidence of that check); recorder is a non-empty str.
+
+The matching is by CHECK, not only by gate. The plan's entries are grouped by gate in the order of the plan and every
+entry is evaluated. An entry whose check has no entry in check_map is uncovered ("no CI step is evidence of this
+check"), so a caller cannot turn the steps of another check into a pass for a check the map does not name. Otherwise
+every step name the map gives for the check must occur in steps exactly once (absent: uncovered, "step not present";
+twice or more: uncovered, "step named more than once"); when each is present once, a conclusion other than "success"
+and "failure" makes the entry uncovered ("conclusion is neither success nor failure"); otherwise the entry is covered,
+"fail" when a step concluded "failure" and "pass" when all concluded "success". A gate gets at most one record: "fail"
+when at least one of its entries is covered and failed (an uncovered entry of it is still listed), "pass" only when
+every entry of it is covered and passed, otherwise none. A "fail" therefore comes only from a check whose mapped steps
+are all present exactly once and concluded, never from a missing, duplicated or skipped step.
+
+The record of a gate has exactly the keys record_id, fact_kind, source_class, recorder, subject, commit,
+intent_versions, gate and outcome. Its record_id is the SHA-256 of the four texts "ci-gate", the task, the commit and
+the gate joined by LF (a form different from reconcile's "ci-rule" id, so the two cannot collide); it has no ci_run key
+because the records module has none.
+
+DEFAULT_CHECK_MAP names the CI steps of the workflow at the base for the checks scope, build and lint. It has no entry
+for review, tests or constitution: the run-made plan's review gate has no CI evidence, so it stays uncovered and the
+governor's INSUFFICIENT_EVIDENCE for it is the honest result. The maker reads no CI run and appends nothing: the caller
+gives the steps and takes the records.
+"""
+import hashlib
+import re
+
+_TASK = re.compile(r'TASK-[0-9]+')
+_COMMIT = re.compile(r'[0-9a-f]{40}')
+_VERSION = re.compile(r'v[0-9]+')
+_GATE = re.compile(r'G[0-9]+')
+
+DEFAULT_CHECK_MAP = {
+    'scope': ['G0 task detection (the contract commit on main)', 'G0 scope (V0)'],
+    'build': ['G1 build'],
+    'lint': ['lint (pyflakes 4.0.3, pinned by version and hash)'],
+}
+
+_NO_STEP_FOR_CHECK = 'no CI step is evidence of this check'
+_ABSENT = 'step not present'
+_REPEATED = 'step named more than once'
+_NOT_CONCLUDED = 'conclusion is neither success nor failure'
+
+_RESULT_KEYS = ('records', 'uncovered', 'error')
+_PLAN_KEYS = frozenset({'gate', 'check'})
+_STEP_KEYS = frozenset({'name', 'conclusion'})
+
+
+def _result(records, uncovered, error):
+    return {'records': records, 'uncovered': uncovered, 'error': error}
+
+
+def _text(value):
+    return isinstance(value, str) and value != ''
+
+
+def _argument_error(task_id, commit, intent_versions, plan, steps, check_map, recorder):
+    """The first malformed argument as a short text, or None."""
+    if not isinstance(task_id, str) or _TASK.fullmatch(task_id) is None:
+        return 'task_id is not TASK- and digits'
+    if not isinstance(commit, str) or _COMMIT.fullmatch(commit) is None:
+        return 'commit is not 40 lowercase hexadecimal characters'
+    if not isinstance(intent_versions, dict) or not intent_versions:
+        return 'intent_versions is not a non-empty mapping'
+    for key, value in intent_versions.items():
+        if not _text(key) or not isinstance(value, str) or _VERSION.fullmatch(value) is None:
+            return 'intent_versions holds an entry that is not a non-empty name and v and digits'
+    if not isinstance(plan, list) or not plan:
+        return 'plan is not a non-empty list'
+    for entry in plan:
+        if not isinstance(entry, dict) or set(entry) != _PLAN_KEYS:
+            return 'a plan entry is not a mapping with exactly the keys gate and check'
+        if not isinstance(entry['gate'], str) or _GATE.fullmatch(entry['gate']) is None:
+            return 'a plan entry has a gate that is not G and digits'
+        if not _text(entry['check']):
+            return 'a plan entry has a check that is not a non-empty text'
+    if not isinstance(steps, list):
+        return 'steps is not a list'
+    for step in steps:
+        if not isinstance(step, dict) or set(step) != _STEP_KEYS:
+            return 'a step is not a mapping with exactly the keys name and conclusion'
+        if not _text(step['name']):
+            return 'a step has a name that is not a non-empty text'
+        if step['conclusion'] is not None and not isinstance(step['conclusion'], str):
+            return 'a step has a conclusion that is neither a text nor None'
+    if not isinstance(check_map, dict):
+        return 'check_map is not a mapping'
+    for check, names in check_map.items():
+        if not _text(check) or not isinstance(names, list) or not names or not all(_text(n) for n in names):
+            return 'check_map holds an entry that is not a non-empty check and a non-empty list of step names'
+    if not _text(recorder):
+        return 'recorder is not a non-empty text'
+    return None
+
+
+def _entry(check, check_map, seen):
+    """One plan entry: ('uncovered', detail) or ('covered', 'pass' or 'fail'). ``seen`` maps a step name to the list
+    of its conclusions."""
+    names = check_map.get(check)
+    if names is None:
+        return 'uncovered', _NO_STEP_FOR_CHECK
+    for name in names:
+        found = len(seen.get(name, ()))
+        if found == 0:
+            return 'uncovered', _ABSENT
+        if found > 1:
+            return 'uncovered', _REPEATED
+    conclusions = [seen[name][0] for name in names]
+    if any(c not in ('success', 'failure') for c in conclusions):
+        return 'uncovered', _NOT_CONCLUDED
+    return 'covered', 'fail' if 'failure' in conclusions else 'pass'
+
+
+def gate_records(task_id, commit, intent_versions, plan, steps, check_map, recorder):
+    """The gate-result records of one CI run for one task and commit, and the entries that stay uncovered."""
+    try:
+        error = _argument_error(task_id, commit, intent_versions, plan, steps, check_map, recorder)
+        if error is not None:
+            return _result([], [], error)
+        seen = {}
+        for step in steps:
+            seen.setdefault(step['name'], []).append(step['conclusion'])
+        order, by_gate = [], {}
+        for item in plan:
+            if item['gate'] not in by_gate:
+                order.append(item['gate'])
+                by_gate[item['gate']] = []
+            by_gate[item['gate']].append(item['check'])
+        records, uncovered = [], []
+        for gate in order:
+            outcomes, open_entries = [], 0
+            for check in by_gate[gate]:
+                state, value = _entry(check, check_map, seen)
+                if state == 'uncovered':
+                    open_entries += 1
+                    uncovered.append({'gate': gate, 'check': check, 'detail': value})
+                else:
+                    outcomes.append(value)
+            if 'fail' in outcomes:
+                outcome = 'fail'
+            elif open_entries == 0:
+                outcome = 'pass'
+            else:
+                continue
+            ident = hashlib.sha256('\n'.join(('ci-gate', task_id, commit, gate)).encode('utf-8')).hexdigest()
+            records.append({
+                'record_id': ident, 'fact_kind': 'observation', 'source_class': 'deterministic_tool_external_ci',
+                'recorder': recorder, 'subject': task_id, 'commit': commit,
+                'intent_versions': dict(intent_versions), 'gate': gate, 'outcome': outcome})
+        return _result(records, uncovered, None)
+    except Exception as exc:
+        return _result([], [], 'an argument could not be read: ' + type(exc).__name__)
