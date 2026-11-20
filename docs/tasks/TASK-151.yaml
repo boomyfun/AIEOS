@@ -1,0 +1,155 @@
+# Task contract TASK-151 (DRAFT v1, scratchpad only until approved; session dc7cf6ca, 2026-11-21; BT3a, the pure CI-evidence module of the evaluation runner, DEF-0136 and DEF-0152; decisions D-6795, D-6796 (C3 and C4) and D-6797; v2 = v1 with D-6797 R1 to R6 and D-6798 R7; the first contract draft of BT3a). The id TASK-151 is the next free one by Glob at this draft (docs/tasks ends at TASK-150, .aieos/tasks at TASK-143; re-read at approval). The contract is approved by the decision agent (A41, A51) at the decision of its commit, not by the owner.
+# Authority and scope: BT3a is ONLY a pure module: no process, no file, no clock, no network, no credential (D-6796 C2, D-6607 C2). CI data enters it as plain data that an EXECUTOR step outside src has fetched (the saved, unedited output of `gh run view <id> --log` and the run metadata, with every attempt). It does NOT change gate_records.py, governor.py, evaluation.py, reconcile.py, launcher.py, cli.py, the CI workflow or any DEF text. It does NOT settle G3 (DEF-0153, the owner's question). BT3b (the D-6606 C3 input assembler, the provenance records, the `aieos evaluate` wiring, the cli test file) is a later task and needs a note v1 first (D-6796 C5).
+# Not in this task: any file under src/aieos_runtime or .github, any launch, any settings file, the fetch itself, the appending of records to the event log, the writer, the pin tasks (BT5), any change of DEF-0152 or DEF-0136 (their log lines are a records item of the acceptance commit, D-6796 Q4).
+task: TASK-151
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add a pure core module src/aieos_bootstrap/ci_evidence.py that decides whether the saved CI data of ONE task commit may be used as gate evidence, and if so turns it into the gate-result records of gate_records, so that the five duties of DEF-0152 (and the two refinements of D-6796) are checked in one place before the maker is called. NO process, no file, no clock, no network, no environment variable, no credential; it imports hashlib, re and aieos_bootstrap.gate_records only (the import list is tested by ast); public names ci_evidence and nothing else. ci_evidence(task_id, commit, contract_sha256, intent_versions, plan, changed_paths, runs, recorder) returns a mapping with exactly the keys records (a list of the maker's records), uncovered (the maker's list of mappings gate, check, detail), evidence (None, or a mapping, below) and refusal (None, or a mapping {reason, detail}); on any refusal records and uncovered are empty lists and evidence is None. The reasons form a closed set: argument, log_format, detect, run, rerun, path, maker. It never raises an Exception; a BaseException that is not an Exception passes through. THE ARGUMENTS (checked first; each failure is refusal reason argument and nothing else is read): task_id TASK- and digits; commit 40 lowercase hexadecimal characters; contract_sha256 64 lowercase hexadecimal characters; intent_versions a non-empty dict from a non-empty str to a str v and digits (a COPY of the declared mapping that evaluation.evaluate_task uses; the module checks the form and passes a fresh copy on, it cannot see the declared mapping itself: whether it is equal is the caller's, and a test shows that the records carry exactly the copy given); plan a non-empty list of dicts whose keys are gate (G and digits) and check (a non-empty str), plus the OPTIONAL key args which is dropped (a contract's verification_plan entry, DEF-0152 duty 4); any other key is an argument refusal; changed_paths a list of non-empty str (the task's changed paths, may be empty); runs a list (may be empty) of dicts with exactly the keys run_id (an int, not a bool, greater than 0), attempt (an int, not a bool, greater than 0), head_sha (a str), event (a str), head_branch (a str), workflow_path (a str), status (a str), conclusion (a str or None), steps (a list of dicts with exactly the keys name (a non-empty str) and conclusion (a str or None): the steps of the job "checks" of that run attempt) and log (a str: the saved, unedited text of `gh run view <run_id> --attempt <attempt> --log` for that attempt); recorder a non-empty str. THE ORDER OF THE CHECKS after the arguments: (1) path, (2) the eligible runs, (3) the log of each eligible run, (4) the rerun agreement, (5) the maker. (1) PATH (D-6796 C3 (g)): when any changed path is exactly '.github' or starts with '.github/' the answer is refusal reason path ('the workflow that produced the evidence comes from the pushed commit itself, so a task that changes .github cannot self-attest its CI evidence'; the stated limit is that a task which changes the workflow is refused, not evaluated). (2) ELIGIBLE RUNS: a run is eligible when head_sha equals commit, event is 'push', workflow_path is exactly '.github/workflows/aieos-checks.yml' AND head_branch is exactly 'task/' followed by task_id; every other run is IGNORED (a run of the same sha on main after a fast-forward, a pull_request run, a run of another workflow); with no eligible run the answer is refusal reason run ('no eligible run'); every eligible run must have status 'completed' and a conclusion that is 'success' or 'failure', else refusal reason run (a run in progress, queued, cancelled or skipped is refused; duplicates of (run_id, attempt) among the eligible runs are refused). (3) THE LOG of an eligible run (D-6796 C3 (a), (b)): the pinned form is the output of `gh run view --log`: every line (after dropping one final empty element from splitting on LF, and a CR at the end of a line) is `<job>` TAB `<step>` TAB `<text>`, split at the first two TAB characters only (the message may hold TABs), where text is an optional byte-order mark U+FEFF, an UTC timestamp of the form YYYY-MM-DDTHH:MM:SS, an optional fraction of digits, and Z, then end of line or a space and the message; a line of any other form, an empty log, or a log with no line of the job 'checks' is refusal reason log_format (no other format is parsed). From the lines whose job is 'checks' and whose step is exactly 'G0 task detection (the contract commit on main)': the step must have exactly one line whose message is '##[endgroup]' (else detect refusal); the OUTPUT lines are those that come after it in that step (the lines before it, which echo the script's source, are never read: a log whose 'no task' text occurs only in the echoed source is not a 'no task' log, and a log whose 'task' text occurs only in the echoed source names no task); among the output lines there must be exactly one line whose message matches `G0 detect: task (TASK-[0-9]+) contract commit ([0-9a-f]{40}) base ([0-9a-f]{40})` in full, with the task equal to task_id, and exactly one line whose message matches `G0 contract sha256 ([0-9a-f]{64})` in full and equals contract_sha256; any output line that begins 'G0 detect: no task' is refusal reason detect; any other shortfall is refusal reason detect (the detail names which). (4) THE RERUN AGREEMENT (D-6796 C3 (d)): ALL eligible runs and attempts must agree on the detect line (the same text) and, for EVERY step name of DEFAULT_CHECK_MAP, on the list, in order, of the conclusions of the steps of that name in the run's steps (so a mapped step absent in one attempt and present in another, or present once in one and twice in another, is a disagreement); any disagreement is refusal reason rerun; a mapped step absent or repeated alike in every attempt is not refused here: the maker lists it as uncovered ('a flaky failure then a pass refuses; the remedy is a new commit': that cost is stated in the module docstring and in the acceptance). The steps given to the maker are those of the eligible run with the highest (run_id, attempt) pair, built afresh as dicts with exactly name and conclusion. (5) THE MAKER: gate_records.gate_records(task_id, commit, a fresh copy of intent_versions, the plan entries rebuilt as dicts with exactly gate and check, the steps, a fresh copy of DEFAULT_CHECK_MAP (a dict of fresh lists: the constant is never passed and never mutated), recorder); an error text of the maker is refusal reason maker with that text as detail; otherwise the answer carries the maker's records and uncovered lists unchanged. THE EVIDENCE mapping (the provenance that BT3b keeps, D-6796 reason 6): exactly the keys head_sha (commit), workflow_path, detect_line (the full text of the detect output line), contract_sha256, and runs (a list, sorted by (run_id, attempt), of dicts with exactly run_id, attempt and log_sha256 = the SHA-256 hex of the log's UTF-8 bytes). All values are plain str, int, list and dict. THE G3 RESULT (D-6795 C2 (ii), DEF-0153): the default map has no entry for review, tests or constitution; for the run-made plan G0 scope, G1 build, G2 lint, G3 review the module gives records for G0, G1, G2 when their steps are present and concluded and G3 stays uncovered, and with the public governor.evaluate the missing gate is ['G3'] and the decision INSUFFICIENT_EVIDENCE; nothing here changes that.
+traces_to:
+  - docs/Deferred/DEF-0152-the-caller-of-the-gate-maker-must-bind-the-steps-to-the-task-and-the-commit-and-give-plain-data.md
+  - docs/Deferred/DEF-0136-no-maker-records-a-gate-result-that-the-governor-counts-for-a-run-made-task.md
+  - docs/Deferred/DEF-0153-the-run-made-plans-review-gate-has-no-ci-evidence-so-the-governor-cannot-count-it-and-the-plan-and-the-scenarios-disagree.md
+  - docs/specs/spec-04-verification-and-evidence.md
+input_state:
+  # base_commit: the tip of main when the contract is approved (re-read from the refs at approval; 7777bbf27375345a5609e5ed763e7edc35abdaf5 at this draft).
+  base_commit: 7777bbf27375345a5609e5ed763e7edc35abdaf5
+  depends_on: []
+  intent_versions:
+    # sha256 of each file at base_commit, computed by script at approval (git show <base>:<path> | sha256sum), not retyped. The list: src/aieos_bootstrap/gate_records.py, src/aieos_bootstrap/evaluation.py, src/aieos_bootstrap/governor.py, src/aieos_bootstrap/records.py, .github/workflows/aieos-checks.yml, docs/specs/spec-04-verification-and-evidence.md, docs/specs/spec-02-aieos-file-format.md, docs/Deferred/DEF-0152-....md, docs/Deferred/DEF-0153-....md, docs/Deferred/DEF-0136-....md, docs/pre-genesis/constitution.md, docs/pre-genesis/assurance-model.md, docs/specs/risk-rules-gov-aieos.md, tests/unit/test_gate_records.py, tests/unit/test_governor.py.
+    src/aieos_bootstrap/gate_records.py: e58448bcc765fa013ff7cf6bd4af9f1640eb402a99a269e8159c3d83e6f300c2
+    src/aieos_bootstrap/evaluation.py: 9ea5969d8da752d4232ec3b282307437173631aa6650bcee15c27341502b8469
+    src/aieos_bootstrap/governor.py: 2f2dcd7525bcc39dcb3539ada93daff428a624cf2c47876c2d17599cf7ec022f
+    src/aieos_bootstrap/records.py: 2b7b456b1ef9fecde0c8b84eaf75b1fd85b7ac2e8f40e9e329a7dea3b7b31297
+    .github/workflows/aieos-checks.yml: 953d133168ef100d3d3102db0bfb34a8429eb1de5ef4119160efa15da9f05809
+    docs/specs/spec-04-verification-and-evidence.md: 48d4f5bf06461ad49409f21bc6ea8d511d17a84eaac15adda14277483176a8d5
+    docs/specs/spec-02-aieos-file-format.md: ab56bc5a7be484663d188f984f4946450de5306bf1839401799fdb4172143b15
+    docs/Deferred/DEF-0152-the-caller-of-the-gate-maker-must-bind-the-steps-to-the-task-and-the-commit-and-give-plain-data.md: 291aadbec78d44e64eb4ca79eabe9640d22ba843f24ca9454dc2799c72502005
+    docs/Deferred/DEF-0153-the-run-made-plans-review-gate-has-no-ci-evidence-so-the-governor-cannot-count-it-and-the-plan-and-the-scenarios-disagree.md: e84d5f2716ba40fb99e78852e9199ce7b15ebc03f6905133d46ac2daff84e82f
+    docs/Deferred/DEF-0136-no-maker-records-a-gate-result-that-the-governor-counts-for-a-run-made-task.md: 729f252786229007abcbe16d85b2aa97ee3b58cd14afac809484e08eb3e316cf
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    tests/unit/test_gate_records.py: 96c9c3e380fed9fe46bb8556afbedb62d0d0d5d4639d85aedc785d0a43ecfefa
+    tests/unit/test_governor.py: b820ba4a373294042b181c112a810f38fd4bef5903acca5f9bcfb6e1dac18bed
+write_set:
+  paths:
+    - src/aieos_bootstrap/ci_evidence.py
+    - tests/unit/test_ci_evidence.py
+read_set: {paths: [src/aieos_bootstrap/gate_records.py, src/aieos_bootstrap/evaluation.py, src/aieos_bootstrap/governor.py, src/aieos_bootstrap/records.py, .github/workflows/aieos-checks.yml, docs/specs/spec-04-verification-and-evidence.md, docs/specs/spec-02-aieos-file-format.md, docs/Deferred/DEF-0152-the-caller-of-the-gate-maker-must-bind-the-steps-to-the-task-and-the-commit-and-give-plain-data.md, docs/Deferred/DEF-0136-no-maker-records-a-gate-result-that-the-governor-counts-for-a-run-made-task.md, docs/pre-genesis/constitution.md, docs/pre-genesis/assurance-model.md, docs/specs/risk-rules-gov-aieos.md, tests/unit/test_gate_records.py, tests/unit/test_governor.py, tests/run_tests.py], interfaces: [], schemas: []}
+# The list under forbidden: is explicit and made by script at approval (every tracked file of src/aieos_bootstrap, gate_records.py included, plus .github/**, .aieos/**, .claude/**, CLAUDE.md, AIEOS-concept.md, .gitattributes, .gitignore, bench/**, native/**, docs/**, src/aieos_runtime/**, tests/conformance/**, tests/integration/**, tests/property/**, tests/run_tests.py, tests/unit/test_governor.py and tests/unit/test_gate_records.py), checked against the write set (a script, its source brought first). tests/unit is not forbidden as a folder because test_ci_evidence.py is in the write set, following TASK-144, TASK-148 and TASK-150.
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - docs/**
+  - src/aieos_runtime/**
+  - tests/conformance/**
+  - tests/integration/**
+  - tests/property/**
+  - tests/run_tests.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_gate_records.py
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/adapter_declaration.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/capture_submit.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/cli.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/contract_path.py
+  - src/aieos_bootstrap/decision_replay.py
+  - src/aieos_bootstrap/done.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gate_records.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/handoff_file.py
+  - src/aieos_bootstrap/launcher.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/metrics_report.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/resume_log_inputs.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-008, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The module. ci_evidence.py defines ci_evidence and nothing else public; it imports hashlib, re and aieos_bootstrap.gate_records only (a test reads the file with read_bytes and ast and checks the import list and the absence of the direct calls open, exec, eval, compile and __import__, and of the names subprocess, system, environ, time and now); the return form has exactly the four keys and, on a refusal, empty lists and evidence None; every argument check of the objective is a test and each case asserts its EXACT refusal reason and detail text (no case may pass for another reason); a bool or a float where an int is required is refused; a dict subclass whose own method raises RuntimeError gives refusal reason argument and no exception escapes; a test-defined BaseException raised from an argument's own method passes through.
+  - AC2: >-
+      The log (D-6796 C3 (a), (b)). Fixtures are cut from the saved logs of the TASK-150 runs and embedded in the test file as constants (the tests read no log file): the job 'checks' lines of the detect step of the branch run (44780942904: the echoed source before '##[endgroup]', then the output lines 'G0 detect: task TASK-150 contract commit 3572f958... base f48804f6...' and 'G0 contract sha256 7c45fd60...') and of the main run (44777971143: the output 'G0 detect: no task ...'). The branch fixture is accepted; the main fixture is refused with reason detect; a log whose 'no task' text is only in the echoed source (before the endgroup) and whose output names the task is accepted; a log whose 'task TASK-<n>' text is only in the echoed source and whose output says 'no task' is refused; a log with no '##[endgroup]' line, with two, with two detect output lines, with no contract sha256 line, with a contract sha256 that differs from the argument, with another task id in the detect line, with a line out of the pinned form, with an empty log and with no 'checks' job line is each refused with its own reason and detail; lines of other jobs or other steps never count.
+  - AC3: >-
+      The runs (D-6796 C3 (c)). Ignored (not refused): a run of the same sha on main, a pull_request run, a run of another workflow path, a run of another sha; refused (reason run): no eligible run, an eligible run not completed, with a conclusion that is not success or failure, a repeated (run_id, attempt); a head_branch that is not exactly 'task/' + the task id is not eligible (a test with a branch 'task/TASK-1500' for the task 'TASK-150'); each is a test with the exact detail.
+  - AC4: >-
+      The rerun rule (D-6796 C3 (d)). Two eligible attempts that agree (same detect line, same conclusion of every mapped step) give the same records as one; two that differ in one mapped step's conclusion (failure then success, and success then failure) are refused with reason rerun; two that differ in the detect line are refused; a mapped step absent in one attempt and present in another, or present once in one and twice in another, is refused with reason rerun; a single eligible run whose mapped step is absent, or present twice, is not refused and the maker lists it as uncovered ('step not present', 'step named more than once'); the steps given to the maker are those of the highest (run_id, attempt) (shown by two agreeing attempts that differ only in the conclusion of an unmapped step, with a stand-in maker as in AC5 that captures the steps it receives); the cost is stated in the module docstring (a test reads the docstring for the sentence 'a new commit').
+  - AC5: >-
+      The maker and the duties (DEF-0152 duties 3 to 6). The records equal what gate_records.gate_records gives for the same steps, plan (args dropped), a copy of the given intent_versions and the recorder (compared as whole values); the plan entry {gate: G3, check: review, args: [AC1, AC2]} is accepted and G3 is uncovered ('no CI step is evidence of this check'); a plan entry with another extra key is refused; the intent_versions of every record equal the mapping given, are a copy (the argument is not changed and the records do not alias it); DEFAULT_CHECK_MAP is equal before and after every call (a deep comparison) and the object given to the maker is not the constant; the arguments are not changed (a deep comparison before and after); the same arguments give equal results; a maker error text is refusal reason maker with that detail: the module's own argument checks cover the maker's, so the branch is shown in the test by replacing the module's gate_records.gate_records attribute with a stand-in that returns an error text (unittest.mock.patch.object, undone after the test) and by a stand-in that raises RuntimeError (no refusal reason of its own: the call returns refusal reason maker with the exception's type name) and by one that raises a test-defined BaseException (which passes through).
+  - AC6: >-
+      The .github rule (D-6796 C3 (g)). A changed path '.github/workflows/aieos-checks.yml', '.github/x' or '.github' gives refusal reason path with that detail, before any run is read (a test with an otherwise unusable runs list shows the order); '.githubx/y' and 'docs/.github/z' do not.
+  - AC7: >-
+      The evidence mapping (D-6796 reason 6). On an accepted call the evidence has exactly the keys head_sha, workflow_path, detect_line, contract_sha256 and runs; each run entry has exactly run_id, attempt and log_sha256 (recomputed in the test from the UTF-8 bytes of the fixture log); the runs are sorted by (run_id, attempt); all values are plain types; on a refusal the evidence is None.
+  - AC8: >-
+      The G3 result and the governor. With the run-made plan G0 scope, G1 build, G2 lint, G3 review (args AC1, AC2) and the branch fixture, the records cover G0, G1, G2 and not G3; a test calls the PUBLIC governor.evaluate with a minimal request and inputs built in memory as test_gate_records.py builds them (the test reads no file; no private function) and shows missing_gates == ['G3'], failed_gates == [] and the decision INSUFFICIENT_EVIDENCE; with a failed mapped step the governor's failed_gates names the gate.
+  - AC9: >-
+      Nothing else changes. Only the two paths of the write set; the whole suite passes by the slice method (D-6249 C2, D-6328 E1.6); a pin scan of the existing tests (made at approval, brought to the decision agent) shows that no existing test pins the list or the count of the modules of src/aieos_bootstrap (TASK-150's scan found none; test_writer.py :428 and test_autonomy.py :241 must pass with the new module); tests/run_tests.py discovers the new test file without a change.
+  - AC10: >-
+      The CI evidence of the task push (pre-registered before the commit exists, as at TASK-150). deterministic_rule must report 0 findings and no FAIL line; bandit "No issues identified" and the pyflakes step silent; the GOV-003 step reports an evaluator change for the two paths (a report, not a block) and the "GOV-003 base tests (report only)" line shows NO failure; acceptance is by the decision agent's explicit decision only (constitution.md :94).
+  - AC11: >-
+      Limits and evidence, stated at acceptance. (1) The module reads no CI run and appends nothing: an executor step outside src fetches the data and BT3b assembles the inputs (D-6607 C2, D-6606 C3). (2) The log is trusted as the executor's unedited fetch; the module cannot check that it is unedited (BT3b keeps the sha256 and the run ids: the evidence mapping). (3) A task that changes anything under .github is refused: the workflow that made the evidence comes from the pushed commit itself (D-6796 reason 9). (4) A rerun that disagrees refuses; the remedy is a new commit. (5) The default map covers scope, build and lint only; G3 stays uncovered and the owner's question (DEF-0153) is not answered here. (6) The output lines of the detect step are read after its first and only '##[endgroup]'; a change of the step's output wording or of the log form refuses (fail closed). (7) The module does not check that intent_versions equals the declared mapping of evaluation.evaluate_task (it cannot see it); BT3b must pass the same copy (DEF-0152 log). (8) The evidence profile of the high class: unit_test, deterministic_rule, static_security_analysis, ai_review by a PAIR of blind reviews on Haiku 5.5 in their own sessions (same vendor, a stated departure), a per-article review (GOV-003, INV-008 applies, INV-001 not applicable) and a decision_agent_review; no launched session judges its own work. (9) A launch needs the owner's typed yes; the contract authorises none. (10) The risk class is high (risk-rules R3, fail closed): the module decides whether CI data may become gate evidence.
+capabilities:
+  filesystem: {read: [src/aieos_bootstrap/gate_records.py, src/aieos_bootstrap/evaluation.py, src/aieos_bootstrap/governor.py, src/aieos_bootstrap/records.py, .github/workflows/aieos-checks.yml, docs/specs/spec-04-verification-and-evidence.md, docs/specs/spec-02-aieos-file-format.md, docs/specs/risk-rules-gov-aieos.md, tests/unit/test_gate_records.py, tests/unit/test_governor.py, tests/run_tests.py], write: [src/aieos_bootstrap/ci_evidence.py, tests/unit/test_ci_evidence.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 400k, wall_time: 3h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9]}
+  - {gate: G3, check: constitution, args: [AC10, AC11, INV-001, INV-002, INV-003, INV-004, INV-008, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND the aieos-checks run of the accepted commit succeeds
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
