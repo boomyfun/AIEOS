@@ -1,0 +1,93 @@
+# Task contract TASK-149 (r1; session dc7cf6ca, 2026-11-20; BT1c, the fix of DEF-0150 in the runtime capture module src/aieos_runtime/task_capture.py: the diff form of its pin, one reason word, the docstring and the unit test's wording). It follows TASK-147 (accepted at D-6660; on main at cf7842c5; its acceptance text is docs/runs/TASK-147-acceptance.md) and the CI revision 29 (on main at 8ff21ea6; D-6672 to D-6679), whose pin it meets. The contract is approved by the decision agent (A41, A51) at the decision of its commit, not by the owner.
+# Authority and order (the decision agent's, never the owner's): BT1c was decided as a separate small task at D-6658 C3 and D-6659; its CI revision 29 came first as its own A66 commit (D-6673, D-6675, D-6678, CI accepted at D-6679); its task id is TASK-149 (D-6679, D-6680). TASK-148 STAYS RESERVED FOR BT1b (the core part that calls the module), which keeps its draft header; the order of work is BT1c, then the backlog series, then TASK-148 (D-6664 R3, D-6679 C3). The ids skip a number until BT1b lands; G0 finds a task by its trailer id and its contract file, and the execution list sorts approved tasks by number whatever the order of landing (D-6680).
+# Not in this task: the core part (BT1b, TASK-148), any launch, any .github change (the pin is already on main), the gate maker (BT2), the evaluation runner (BT3), any change of tests/unit/test_gitread.py (its list of modules that import subprocess is unchanged: the module still imports it), the backlog of records (DEF-0141 to DEF-0149 and the records of TASK-140, TASK-141 and TASK-144). The real-git behaviour is shown at acceptance by the scratch harness (BT1a_harness_v3.py plus ONE new case, as a v4 whose exact source the decision agent releases before acceptance), not by a test file (the CI's source rules refuse a test file that starts git).
+task: TASK-149
+contract_version: v1
+task_type: implementation
+objective: >-
+  Change the module src/aieos_runtime/task_capture.py and its unit test tests/unit/test_task_capture.py so that they meet the CI revision 29 and close the three items of DEF-0150 that lie in the write set. THE PIN: in the module-level literal CAPTURE_FORMS the diff form becomes exactly ('diff', '--no-ext-diff', '--no-textconv', '--no-renames', '--name-only', '<id>', '<id>') (the literal of the workflow's pin at aieos-checks.yml on main, revision 29; every other form, CAPTURE_OPTIONS and CAPTURE_ENV_FIXED stay as they are, byte for byte; the module's single subprocess.run call, its keywords and its call-list form stay as they are). THE REASON WORD: an id that git itself printed (the tree id printed by write-tree and the commit id printed by commit-tree) and that is not 40 lowercase hexadecimal characters is refused with the reason git-failed and a finding that says so, never with invalid-argument (the contract of TASK-147 reserves invalid-argument for validation before any process starts); no other behaviour of capture or restore changes (the closed set of six reason words stays; each function still returns exactly the keys of TASK-147's objective; no exception escapes either). THE DOCSTRING: it states, in plain words and without the labels MEASURED, ENFORCED or GUARANTEED (OPS-003), the state-name rule as the code applies it (a name that begins with a dot and is not only a dot and holds no slash and no backslash; AC8 (19) of TASK-147), that the real-git behaviour is not run by the suite (AC8 (13)), that a git directory with a non-ASCII character is refused as git-failed (AC8 (20)), and the int timeout constant 60. THE TEST WORDING (review B10 of TASK-147): the header docstring of the unit test says which files it reads (the module, the workflow and the test file itself), and the docstring that says restore refuses every refusal of capture says exactly which refusals the test covers; no test is removed, weakened or skipped.
+traces_to:
+  - docs/tasks/TASK-147.yaml
+  - docs/Deferred/DEF-0150-the-capture-modules-name-list-check-runs-under-gits-default-rename-detection.md
+input_state:
+  # base_commit: the tip of main when the contract is approved (re-read from the refs at approval); at this draft main is 8ff21ea6d27f6b88504f8fc83563d0bc45ad6744.
+  base_commit: 8ff21ea6d27f6b88504f8fc83563d0bc45ad6744
+  depends_on: []
+  intent_versions:
+    # sha256 of each file at base_commit, computed by script (git show <base>:<path> | sha256sum), not retyped.
+    src/aieos_runtime/task_capture.py: 9b27c67451bc92c7f2759648987897f6f07bba483a47a1083bebc9ec87e6377f
+    tests/unit/test_task_capture.py: 46afe9b18bfdce94a88eb6ee94c684374dec885d9443a558c1a6a2c7dcd59241
+    tests/unit/test_gitread.py: e89ebb2b9d6be78573e33354f796d17f4b23595b045fa87106c37551daacce98
+    tests/run_tests.py: 13e0b22b11cfb12dc9c5f536ea0b4d61bd57641ce51cc5702840f1cb1fbdccfe
+    .github/workflows/aieos-checks.yml: 953d133168ef100d3d3102db0bfb34a8429eb1de5ef4119160efa15da9f05809
+    docs/Deferred/DEF-0150-the-capture-modules-name-list-check-runs-under-gits-default-rename-detection.md: bfef7be6dd0a850373e18e35971b1a7131e5dbcbed1c54205495fe74610c6bf1
+    docs/runs/TASK-147-acceptance.md: e6fe550c18209ceea896334d8a3d3aa12b0141c92e6314cb9e68fd87fd586a6d
+    docs/tasks/TASK-147.yaml: 7d936e4acde7da57606e9141b7387ee5124e71bfd2e6cdeeccdca3bf4b5a2d91
+    docs/specs/spec-05-adapter-contract.md: 5a0d6f03130b973d137fbf2012ab2d3436c37ef4663296479603fb8af9802056
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/pre-genesis/decision-matrix.md: 03940e2cc46037a8be690653b05e553dd2962381f6914358f715415a28b902de
+write_set:
+  paths:
+    - src/aieos_runtime/task_capture.py
+    - tests/unit/test_task_capture.py
+read_set: {paths: [src/aieos_runtime/task_capture.py, src/aieos_runtime/__init__.py, tests/unit/test_task_capture.py, tests/unit/test_gitread.py, tests/run_tests.py, .github/workflows/aieos-checks.yml, docs/Deferred/DEF-0150-the-capture-modules-name-list-check-runs-under-gits-default-rename-detection.md, docs/runs/TASK-147-acceptance.md, docs/tasks/TASK-147.yaml, docs/specs/spec-05-adapter-contract.md, docs/specs/risk-rules-gov-aieos.md, docs/pre-genesis/constitution.md, docs/pre-genesis/assurance-model.md, docs/pre-genesis/decision-matrix.md], interfaces: [], schemas: []}
+# The list under forbidden: is explicit; every write-set path is absent from it and every entry is absent from the write set (a script check at approval, its source brought first, unedited output shown). tests/unit is NOT forbidden (its write set holds a tests/unit file), as in TASK-144 and TASK-147; tests/unit/test_gitread.py is not in the write set and is not to be touched.
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - docs/**
+  - src/aieos_bootstrap/**
+  - src/aieos_runtime/__init__.py
+  - src/aieos_runtime/claude_starter.py
+  - tests/conformance/**
+  - tests/integration/**
+  - tests/property/**
+  - tests/run_tests.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The pin. The module's CAPTURE_FORMS literal holds the diff form of the objective exactly and every other form unchanged; CAPTURE_OPTIONS and CAPTURE_ENV_FIXED are unchanged; the module still has exactly one subprocess.run call of the form that check_capture judges, one top-level import os and each of the three literals bound once. The existing pin test of the unit test (it reads the workflow's literals and compares) passes with no change of its mechanism; the cut-out check_capture and check_source on the module (the workflow of the same commit) give 0 findings, shown by the scratch harness of AC5 and by the CI run of AC7.
+  - AC2: >-
+      The reason word. The unit test has a test with a stand-in process function that answers write-tree, then commit-tree, with an output that is not 40 lowercase hexadecimal characters (empty, too short, upper-case, with a trailing garbage) and sees {'result': 'refused', 'reason': 'git-failed', 'findings': [..]} (exactly those three keys, a finding that names the step and says that the id is malformed), the steps after it not called and the ref not written; and a test that the refusals before any process (invalid-argument) still start no process. The closed set of reason words is unchanged (the existing test of the set passes).
+  - AC3: >-
+      The docstring and the test wording. The module's docstring states the four items of the objective in plain words, with no label MEASURED, ENFORCED or GUARANTEED (the existing docstring test passes), and names the value 60 of the timeout constant; the unit test's header docstring names the files it reads and the docstring of the restore-refusal test names the refusals it covers; the unit test has a test that the docstring holds the four statements (a substring check of each statement's key words; the check is written so that it fails if a statement is removed).
+  - AC4: >-
+      No other change. The diff of the task commit touches only the two paths of the write set; in the module the only changed lines are the diff form of CAPTURE_FORMS, the id check of the two process outputs (and the finding text), the docstring and, if needed, one helper for the id check; no new import; the validation before any process (the findings of capture and of restore, reason invalid-argument) and the argument builder _build with its own id check are unchanged; the new check of a printed id runs after write-tree or commit-tree has answered and before that id reaches _build; in the unit test no test is removed, weakened or skipped.
+  - AC5: >-
+      The real-git behaviour, shown at acceptance by the scratch harness: BT1a_harness_v3.py with ONE new case (a v4, its exact source released by the decision agent before acceptance; outside the repository, never run in E:\AIEOS; it builds a throwaway repository in the scratchpad, imports a COPY of the module taken from the task's commit (git show) and reads a COPY of the workflow from the same commit): a capture of a deleted path and an added path of IDENTICAL content in one commit gives {'result': 'done', 'commit': <id>} and the tree differs from HEAD's exactly in those two paths ('D' and 'A', not one rename); a second capture, of a deleted path and an added path of near-identical content, is judged the same way; every case of v3 stays OK (the capture of modified, added and deleted paths, the parent, the modes, the refusals, the index and HEAD byte-equal, restore, the hooks, the filter INFO, check_capture and check_source 0 findings). As a negative control, shown once, the same new case on the module of main at 8ff21ea6 (the old diff form) is expected to give name-list-mismatch (or the harness's FAIL line for the case), which is the observation that DEF-0150 describes; the negative control also pre-registers that check_capture on the module of 8ff21ea6 reports the diff-form mismatch with the workflow of 8ff21ea6. The unedited output is acceptance evidence, labelled worker-supplied; if git's behaviour breaks a case, that is a finding and is brought to the decision agent, the case is not loosened.
+  - AC6: >-
+      The suite. tests/run_tests.py discovers the changed unit test without a change; the whole suite passes by the slice method (D-6249 C2, D-6328 E1.6) in a scratch clone of the base holding the two changed files, per group as the CI discovers them, with the count of tests of the base (3236 at the draft; re-read at the base by the slice method and stated at acceptance) plus the new tests of AC2 and AC3 and no failure and no error (one known skip, Windows-only); the changed unit test passes alone; the test identity has an e-mail value with no '@' at all and no GitHub URL appears in an added line; the CI's own SEC-002 rule and the CI's source rules (the script of D-6649 K5, ci_rules_147.py or a counted transform) are run on the two files before the task push (L-0048, L-0050); no test file works around the deny sets of check_source. tests/unit/test_gitread.py is unchanged.
+  - AC7: >-
+      The evidence of the task push. On the CI run of the task branch the read must show: the deterministic_rule summary "deterministic_rule: files N, changed paths 2, findings 0" with N equal to the number of entries of `git ls-files src tests` at the base commit (the rule's own file list, aieos-checks.yml :2122; the task adds no file), printed by command before the contract commit and written here as a number: N = 264, and no FAIL line; the bandit invocation of `[ -e "$CR" ]` run on src/aieos_runtime/task_capture.py with its own output lines ("No issues identified"); the unit step's pin test passing against the workflow of the same commit (this is the FIRST task run in which revision 29's pin meets the module); the GOV-003 report 'GOV-003 evaluator change: yes (1 of 2 changed paths)' and 'GOV-003 evaluator path: tests/unit/test_task_capture.py' (tests/unit/** is an EVALUATOR path, aieos-checks.yml :532; src/aieos_runtime/** is not; a report, not a block), and the result of the step 'GOV-003 base tests (report only)' (the base's unit test run against the change; expected to pass; a failing base test is named and explained at acceptance). An absent line is a finding, not a pass; a finding from either step blocks acceptance and is fixed inside the write set before main moves.
+  - AC8: >-
+      Limits, class, evidence and departures, stated at acceptance. (1) The limits (1) to (22) of TASK-147's AC8 stand as stated there, except that (13), (19) and (20) are now also stated in the docstring and the rename-detection item of DEF-0150 is closed by this task and the revision 29. (2) New limits found at the TASK-147 review and still open: the bare name git is looked up by the operating system (on Windows the caller's current directory may be searched first); a timeout or kill can leave a lock file for the index file or the new ref; Windows device names and the 8.3 short form of '.git' are not refused by the module's own validation; calls other than commit-tree inherit the caller's standard input; the unit tests use a stand-in process function. (3) The module is not called by anything until BT1b (TASK-148, reserved). (4) The risk class is high; the evidence profile is that of docs/pre-genesis/assurance-model.md :82 as for TASK-147 (unit_test, deterministic_rule, static_security_analysis, ai_review by a PAIR of blind reviews on Haiku 5.5 in their own sessions (same vendor, a stated departure), a per-article review, a decision_agent_review; the shadow governor result is a stated departure; no launched session is used). (5) The review pair reads the whole task (one commit) with the harness output apart from it. (6) The ids: TASK-149 for BT1c while TASK-148 stays reserved for BT1b (D-6679, D-6680). (7) No vendor attribution trailer (the owner's rule); the commit carries the "AIEOS-Task: TASK-149" trailer once and a "Decided by" line. (8) The contract was written in TASK-147's structure as a rewrite, not as a counted transform of TASK-147.yaml: a departure from D-6679 C2 and D-6680 C2, accepted at D-6681.
+capabilities:
+  filesystem: {read: [src/aieos_runtime/task_capture.py, src/aieos_runtime/__init__.py, tests/unit/test_task_capture.py, tests/unit/test_gitread.py, tests/run_tests.py, .github/workflows/aieos-checks.yml, docs/Deferred/DEF-0150-the-capture-modules-name-list-check-runs-under-gits-default-rename-detection.md, docs/runs/TASK-147-acceptance.md, docs/tasks/TASK-147.yaml, docs/specs/spec-05-adapter-contract.md, docs/specs/risk-rules-gov-aieos.md, docs/pre-genesis/constitution.md, docs/pre-genesis/assurance-model.md, docs/pre-genesis/decision-matrix.md], write: [src/aieos_runtime/task_capture.py, tests/unit/test_task_capture.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 300k, wall_time: 2h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC6]}
+  - {gate: G3, check: constitution, args: [AC5, AC6, AC7, AC8, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND the aieos-checks and aieos-native runs of the accepted commit succeed AND AC5's harness output and AC7's evidence are shown
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
+# Rough size: src/aieos_runtime/task_capture.py about +25 lines (the id check, two findings, the docstring statements); tests/unit/test_task_capture.py about +60 lines (the stand-in answers for the malformed ids, the docstring test, the wording of two docstrings). The harness v4 (outside the repository) is v3 plus about 25 lines for the one new case.
