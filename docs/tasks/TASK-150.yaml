@@ -1,0 +1,148 @@
+# Task contract TASK-150 (DRAFT v1, scratchpad only until approved; session dc7cf6ca, 2026-11-20; BT2, the gate maker, DEF-0136; decisions D-6767 to D-6771; v2 = v1 with D-6771 R1 to R8; the first contract draft of BT2, option (A) of D-6769/D-6770). The id TASK-150 is the next free one by Glob at this draft (docs/tasks ends at TASK-149; re-read at approval). The contract is approved by the decision agent (A41, A51) at the decision of its commit, not by the owner.
+# Authority and scope: BT2 is ONLY the pure maker of gate records (option (A), D-6770): no I/O, a new module only, nothing under .github/. It does NOT change the governor, reconcile.py, launcher.py (the run-made plan), the CI workflow or any DEF text. The question whether the run-made plan's G3 'review' gate may be replaced is the OWNER's (escalated at D-6770; CR-002 part 4 limit 8) and is not part of this task. Wiring (reading a CI run, appending the records, running the governor) is BT3 and is not here.
+# Not in this task: the governor (pinned), reconcile.py, evaluation.py, launcher.py, cli.py, any change under src/aieos_runtime or .github, any launch, any settings file, BT3 (the evaluation runner), BT5 (the pins), the DEF for the G3 crux (its text is a records item of the acceptance commit, D-6770 C4).
+task: TASK-150
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add a pure core function that turns the step conclusions of ONE CI run on ONE commit into gate-result records that the governor counts for a task, honestly: a gate gets a record only when the CI evidence of the check that the plan NAMES for that gate is present and concluded, and every other gate is reported as uncovered. THE NEW MODULE src/aieos_bootstrap/gate_records.py (no process, no file, no clock, no network; it imports the standard library only: hashlib and re; it does not import records, reconcile or governor): public names gate_records and DEFAULT_CHECK_MAP only. gate_records(task_id, commit, intent_versions, plan, steps, check_map, recorder) returns a mapping with exactly the keys records (a list of mappings), uncovered (a list of mappings {gate, check, detail}) and error (None, or a short text for a malformed argument, in which case records and uncovered are both empty). It never raises an Exception; a BaseException that is not an Exception passes through (as TASK-148). THE ARGUMENTS (checked first, each failure is an error and no record): task_id TASK- followed by digits; commit 40 lowercase hexadecimal characters; intent_versions a non-empty mapping from a non-empty str to a str of the form v followed by digits; plan a non-empty list of mappings with exactly the keys gate (G followed by digits) and check (a non-empty str) (the entries of a contract's verification_plan; the optional args key of an entry is NOT passed); steps a list of mappings with exactly the keys name (a non-empty str) and conclusion (a str or None) (the step conclusions of the CI run as DATA: the caller reads them); check_map a mapping from a non-empty str to a non-empty list of non-empty str (the exact step names that are evidence of that check); recorder a non-empty str. THE MATCHING, by CHECK and not only by gate (D-6770 C3 (a)): the plan's entries are grouped by gate in the order of the plan; for each gate every one of its entries is evaluated; an entry whose check has NO entry in check_map is uncovered with the detail 'no CI step is evidence of this check' (so a caller cannot turn the steps of another check into a pass for 'review' by keying on the gate); otherwise each step name that check_map gives for the check must occur in steps EXACTLY once (absent: uncovered, 'step not present'; twice or more: uncovered, 'step named more than once'); when every mapped step of the check is present once, a conclusion other than 'success' and 'failure' (skipped, cancelled, None, anything else) makes the entry uncovered ('conclusion is neither success nor failure'); otherwise the entry's outcome is 'fail' when any of its steps concluded 'failure' and 'pass' when all concluded 'success'. A gate gets at most ONE record: 'fail' when at least one of its entries is covered and failed, even when another entry of the gate is uncovered (that entry is still listed under uncovered); 'pass' only when every entry of the gate is covered and passed; otherwise no record, and each uncovered entry of the gate is listed (D-6771 R1, the ruling on D-6770 C3 (c): a 'fail' comes only from a check whose mapped steps are all present exactly once and concluded, never from a missing, duplicated or skipped step). THE RECORD of a gate: record_id the SHA-256 hex of the four texts 'ci-gate', task_id, commit and the gate id joined by LF (a form different from reconcile's 'ci-rule' id, so the two cannot collide), fact_kind 'observation', source_class 'deterministic_tool_external_ci', recorder, subject task_id, commit, intent_versions (a copy of the given mapping), gate, outcome; and NO other key (in particular no ci_run: it is not a key of records.py, RECORD_KEYS :106-109). DEFAULT_CHECK_MAP is a module constant (a mapping from check to a list of the exact CI step names of .github/workflows/aieos-checks.yml at the base): 'scope' -> ['G0 task detection (the contract commit on main)', 'G0 scope (V0)'] (spec-04 :24), 'build' -> ['G1 build'] (spec-04 :25), 'lint' -> ['lint (pyflakes 4.0.3, pinned by version and hash)'] (DEF-0118 :32 and :35; spec-04 :32, which says its table is illustrative and a task checks it against the workflow at its base); it has NO entry for 'review' (the plan's G3 'review' has no CI evidence: spec-04 :27 gives G3 as 'constitution' and :32 says V3 and V5 are evidence types of a profile, not gates; governor.py :428 counts only CI-class gate results), and none for 'tests' or 'constitution' (a later decision or the owner's answer may add them). THE EXPECTED GOVERNOR OUTCOME with this maker alone (D-6770 C3 (e)): for a run-made LOW task (the plan G0 scope, G1 build, G2 lint, G3 review [AC1, AC2], launcher.py :1848-1849 and :1883) the maker gives records for G0, G1 and G2 when their steps are present and concluded, and G3 is uncovered, so the governor still decides INSUFFICIENT_EVIDENCE for G3 (governor.py :467-473): that is honest, and master-plan.md :117 is not met by this task alone.
+traces_to:
+  - docs/Deferred/DEF-0136-no-maker-records-a-gate-result-that-the-governor-counts-for-a-run-made-task.md
+  - docs/Deferred/DEF-0118-the-low-default-evidence-profile-names-a-lint-entry-that-the-ci-does-not-produce.md
+  - docs/specs/spec-04-verification-and-evidence.md
+  - docs/specs/spec-02-aieos-file-format.md
+input_state:
+  # base_commit: the tip of main when the contract is approved (re-read from the refs at approval; f48804f6e3001a3c9dd070437e7ce339d7881150 at this draft).
+  base_commit: f48804f6e3001a3c9dd070437e7ce339d7881150
+  depends_on: []
+  intent_versions:
+    # sha256 of each file at base_commit, computed by script at approval (git show <base>:<path> | sha256sum), not retyped. The list: src/aieos_bootstrap/records.py, src/aieos_bootstrap/reconcile.py, src/aieos_bootstrap/governor.py, src/aieos_bootstrap/launcher.py, .github/workflows/aieos-checks.yml, docs/specs/spec-04-verification-and-evidence.md, docs/specs/spec-02-aieos-file-format.md, docs/Deferred/DEF-0136-....md, docs/Deferred/DEF-0118-....md, docs/pre-genesis/constitution.md, docs/pre-genesis/assurance-model.md, docs/pre-genesis/governor-spec.md, docs/pre-genesis/CR-002-concept-errata.md, docs/specs/risk-rules-gov-aieos.md, tests/unit/test_governor.py.
+    src/aieos_bootstrap/records.py: 2b7b456b1ef9fecde0c8b84eaf75b1fd85b7ac2e8f40e9e329a7dea3b7b31297
+    src/aieos_bootstrap/reconcile.py: 22528eb17f017c322e3e8dc57749402e63208f37e00629148e7e94dbf3611db2
+    src/aieos_bootstrap/governor.py: 2f2dcd7525bcc39dcb3539ada93daff428a624cf2c47876c2d17599cf7ec022f
+    src/aieos_bootstrap/launcher.py: 27169dccd76b088d8cdc3eef0044793f3edd83088655dcf5bbe4acfb90c720c8
+    .github/workflows/aieos-checks.yml: 953d133168ef100d3d3102db0bfb34a8429eb1de5ef4119160efa15da9f05809
+    docs/specs/spec-04-verification-and-evidence.md: 48d4f5bf06461ad49409f21bc6ea8d511d17a84eaac15adda14277483176a8d5
+    docs/specs/spec-02-aieos-file-format.md: ab56bc5a7be484663d188f984f4946450de5306bf1839401799fdb4172143b15
+    docs/Deferred/DEF-0136-no-maker-records-a-gate-result-that-the-governor-counts-for-a-run-made-task.md: 729f252786229007abcbe16d85b2aa97ee3b58cd14afac809484e08eb3e316cf
+    docs/Deferred/DEF-0118-the-low-default-evidence-profile-names-a-lint-entry-that-the-ci-does-not-produce.md: 49f006556df84b7c7535a70af51b18b0f3d80f8cbd0bada5247ca0baae7d9201
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+    docs/pre-genesis/CR-002-concept-errata.md: 446c8523339a11c62ada936ba4b3001cde26dc5e3eac6ea234b78cec13b4a3e1
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    tests/unit/test_governor.py: b820ba4a373294042b181c112a810f38fd4bef5903acca5f9bcfb6e1dac18bed
+write_set:
+  paths:
+    - src/aieos_bootstrap/gate_records.py
+    - tests/unit/test_gate_records.py
+read_set: {paths: [src/aieos_bootstrap/records.py, src/aieos_bootstrap/reconcile.py, src/aieos_bootstrap/governor.py, src/aieos_bootstrap/launcher.py, .github/workflows/aieos-checks.yml, docs/specs/spec-04-verification-and-evidence.md, docs/specs/spec-02-aieos-file-format.md, docs/Deferred/DEF-0136-no-maker-records-a-gate-result-that-the-governor-counts-for-a-run-made-task.md, docs/Deferred/DEF-0118-the-low-default-evidence-profile-names-a-lint-entry-that-the-ci-does-not-produce.md, docs/pre-genesis/constitution.md, docs/pre-genesis/assurance-model.md, docs/pre-genesis/governor-spec.md, docs/pre-genesis/CR-002-concept-errata.md, docs/specs/risk-rules-gov-aieos.md, tests/unit/test_governor.py, tests/run_tests.py], interfaces: [], schemas: []}
+# The list under forbidden: is explicit and made by script at approval (every OTHER tracked file of src/aieos_bootstrap, plus .github/**, .aieos/**, .claude/**, CLAUDE.md, AIEOS-concept.md, .gitattributes, .gitignore, bench/**, native/**, docs/**, src/aieos_runtime/**, tests/conformance/**, tests/integration/**, tests/property/**, tests/run_tests.py and every other tests/unit file as needed by the pin scan), checked against the write set (a script, its source brought first). tests/unit is not forbidden as a folder because test_gate_records.py is in the write set, following TASK-144 and TASK-148.
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - docs/**
+  - src/aieos_runtime/**
+  - tests/conformance/**
+  - tests/integration/**
+  - tests/property/**
+  - tests/run_tests.py
+  - tests/unit/test_governor.py
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/adapter_declaration.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/capture_submit.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/cli.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/contract_path.py
+  - src/aieos_bootstrap/decision_replay.py
+  - src/aieos_bootstrap/done.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/handoff_file.py
+  - src/aieos_bootstrap/launcher.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/metrics_report.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/resume_log_inputs.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The module. gate_records.py defines gate_records and DEFAULT_CHECK_MAP and nothing else public; it imports the standard library only (hashlib, re) (a test reads the file with read_bytes and ast and checks the import list and the absence of open, exec, eval, compile, subprocess, os.system, environ, time, now); no exception escapes (arguments whose own methods raise give an error); the return form has exactly the three keys; every argument check of the objective is a test (including a step whose conclusion is neither a str nor None, which is an error and gives no records); a test raises a test-defined BaseException subclass from an argument's own method and shows that it passes through.
+  - AC2: >-
+      The matching by check (D-6770 C3 (a)). A plan whose G3 entry has the check 'review' and steps that include every constitution step as success gives NO record for G3 and one 'uncovered' entry; the same steps keyed under a check that the map names give a record only for that check's gate; two entries of one gate, one covered and passed and one uncovered, give no record for the gate and one uncovered entry; one covered and failed and one uncovered give one 'fail' record and one uncovered entry; a check absent from the map is uncovered with the detail of the objective; a map entry whose step is absent, or present twice, or has a conclusion that is not 'success' or 'failure' (skipped, cancelled, None, any other str) is uncovered with its own detail; each is a test.
+  - AC3: >-
+      The outcomes (D-6770 C3 (c)). All steps success: 'pass'; every step present and one concluded 'failure': 'fail' (and a CHECK with one step 'failure' and another mapped step missing, duplicated or skipped is uncovered, never 'fail'); a gate of two entries, one failing, one passing: 'fail'; no record is ever made for an absent or skipped step; each is a test.
+  - AC4: >-
+      The records (D-6770 C3 (d)). Every record has exactly the keys record_id, fact_kind, source_class, recorder, subject, commit, intent_versions, gate, outcome (no other key; no ci_run); subject is the task; source_class deterministic_tool_external_ci; the intent_versions are a copy (the argument is not changed and the record does not alias it); the record_id is the SHA-256 hex of 'ci-gate', task, commit and gate joined by LF (recomputed in the test); the same arguments give equal results (INV-010 reading); and every record passes records.check_record with no finding (the test imports records, which the module does not) and is counted by the governor: a test calls the PUBLIC governor.evaluate with a minimal request and inputs built as the governor's own tests build them (the test file reads them from no file), with the maker's records as its records and a plan of G0, G1, G2, G3, and shows that the governor's result names no missing gate among G0, G1, G2 and names G3 as missing (the expected outcome of the objective; governor.py :334-336 subject, :357-364 binding, :365-368 observation only, :428 CI class are the conditions that this exercises); no private function of the governor is called. If building that request needs more than the contract allows, it is brought to the decision agent as a named departure before the test is written.
+  - AC5: >-
+      The default map (D-6770 C3 (b), (g)). DEFAULT_CHECK_MAP has exactly the three checks 'scope', 'build', 'lint' with the exact step names of the objective; a test reads .github/workflows/aieos-checks.yml of the checkout with read_bytes and shows that each named step exists there as a `- name:` line exactly once (the names are the workflow's at the base, spec-04 being illustrative); there is no entry for 'review', 'tests' or 'constitution' (a test).
+  - AC6: >-
+      Nothing else changes. Only the two paths of the write set; the whole suite passes by the slice method (D-6249 C2, D-6328 E1.6); a pin scan of the existing tests (made at approval, brought to the decision agent) shows that no existing test pins the list or the count of the modules of src/aieos_bootstrap (if one does, its amendment is a named departure, as D-6738 did); tests/run_tests.py discovers the new test file without a change.
+  - AC7: >-
+      The CI evidence of the task push. deterministic_rule must report 0 findings and no FAIL line; bandit "No issues identified" and the pyflakes step silent; the GOV-003 step reports an evaluator change for the two paths (a report, not a block; src/aieos_bootstrap and tests/unit are evaluator paths) and the "GOV-003 base tests (report only)" line shows NO failure (the change adds a module and a test file and edits no existing test); acceptance is by the decision agent's explicit decision only (constitution.md :94).
+  - AC8: >-
+      Limits and evidence, stated at acceptance. (1) The maker reads no CI run: the caller gives the steps (BT3). (2) It appends nothing: the records are the caller's to append (spec-01 :93-94). (3) The default map covers 'scope', 'build' and 'lint' only; the run-made plan's G3 'review' is uncovered by design and the governor's INSUFFICIENT_EVIDENCE for it is the honest result; whether that gate may be replaced is the owner's question (D-6770, escalated) and is NOT answered here; a deferred item for that crux is made in the acceptance records (D-6770 C4): the run-made plan's G3 'review' has no CI evidence, with launcher.py :1883, spec-04 :27 and :32, governor.py :428 and the DEF-0118 :35 inaccuracy against conformance-scenarios-initial.md :11. (4) A gate passes on the conclusions of the steps of the CI run as given: whether the steps are of the run on the right commit is the caller's. (5) The step names are the workflow's at the base; a later rename of a step makes the maker report 'step not present' (fail closed). (6) The record has no ci_run key because records.py has none (spec-02 :151 describes one). (7) The evidence profile of the high class: unit_test, deterministic_rule, static_security_analysis, ai_review by a PAIR of blind reviews on Haiku 5.5 in their own sessions (same vendor, a stated departure), a per-article review (GOV-003, INV-001 not applicable, OPS-003) and a decision_agent_review; no launched session judges its own work. (8) A launch needs the owner's typed yes; the contract authorises none. (9) The risk class is high (risk-rules R3, fail closed): the maker's records decide whether the governor can accept a task.
+capabilities:
+  filesystem: {read: [src/aieos_bootstrap/records.py, src/aieos_bootstrap/reconcile.py, src/aieos_bootstrap/governor.py, src/aieos_bootstrap/launcher.py, .github/workflows/aieos-checks.yml, docs/specs/spec-04-verification-and-evidence.md, docs/specs/spec-02-aieos-file-format.md, docs/specs/risk-rules-gov-aieos.md, tests/unit/test_governor.py, tests/run_tests.py], write: [src/aieos_bootstrap/gate_records.py, tests/unit/test_gate_records.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 400k, wall_time: 3h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6]}
+  - {gate: G3, check: constitution, args: [AC7, AC8, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND the aieos-checks run of the accepted commit succeeds
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
+# Rough size: gate_records.py about 200 lines (arguments 60, the matching 70, the records 30, the constants and the docstring 40); tests/unit/test_gate_records.py about 450 lines.
