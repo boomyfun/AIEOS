@@ -7,7 +7,7 @@ Rule: Before an executor, a message template or a commit-message constant is rel
 - Binding: record only. Related: L-0044 (read the owner's standing rules before a choice), L-0043, L-0039; decisions D-6473, D-6569, D-6570, D-6571, D-6578.
 
 ## Pattern
-An executor reused under an owner's rule kept a constant that breaks the rule (CS/session_capture.py :85 hard-codes "Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>" in TASK_TRAILERS). The rehearsal printed the full messages, and neither the worker nor the decision agent read them for the rule, so two new local commits carried the line.
+An executor reused under an owner's rule kept a constant that breaks the rule (CS/session_capture.py :85 hard-codes "Co-Authored-By: Claude Sonnet 5.5" followed by the vendor's no-reply e-mail address in angle brackets in TASK_TRAILERS). The rehearsal printed the full messages, and neither the worker nor the decision agent read them for the rule, so two new local commits carried the line.
 
 ## Occurrences
 - 2026-11-20 (session dc7cf6ca; the worker's own claim until checked): the capture of TASK-137 (D-6569) made the state commit de152471 and the task-branch commit 9377cb5c, both with the trailer; found by the worker in the after-checks' printed messages, before any push; D-6570 and D-6571 replaced both commits by plumbing (same tree, parent, identity and dates, the message minus that one line; D-6571 pinned the script); the decision agent noted its own miss at D-6569 :51 (it read the rehearsal's message text and accepted it). The state commit made later (D-6578) was checked in its dry output and carries no trailer.
