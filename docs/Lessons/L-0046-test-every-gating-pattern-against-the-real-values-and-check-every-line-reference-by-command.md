@@ -38,6 +38,7 @@ Session ce14b08a, later part (2026-11-06; ../History/2026-11/2026-11-06-2156-m8-
 
 Session d01f63a5 (2026-11-07; checkpoint file d01f63a5, cp692; D-5377; the worker's own claim until checked):
 - D-5377: the first dry run of write_dec_5372_5375h.py stopped on an assert (script line 48) because the assert and the regex on the next line looked for "ID / SUBJECT: next / " while the raw ID line of that hand-back reads "ID / SUBJECT: next free number after D-5373 (the writer assigns it) / ..."; I had written the pattern from the ID field that the scan printed, not from the raw line, and two narrow Grep -o matches on the subagent file found the real line. Nothing was written; the copy i fixed the two patterns and the two record texts that named the ID line (D-5377).
+- 2026-11-20 (session dc7cf6ca, D-6577; the worker's own claim until checked): the header comment of make_partc_record.py said that the MODE line is line 8; it is line 10 (accepted as harmless; the real copy's comment was corrected to line 10 by the same Edit that set the mode).
 
 ## Why it happens
 A pattern is written from a look at two or three names, and a comment is written before the last edit of the script; no step runs the pattern against the full listing or the comment against the file.

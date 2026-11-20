@@ -327,6 +327,7 @@ Occurrences in session 43f86835 (2026-11-05; ../History/2026-11/2026-11-05-1258-
 
 Occurrence in session ce14b08a (part 3, 2026-11-07; the worker's own claim until checked; checkpoint a0a0bdef lines 1825 and 1827):
 - **D-5355.** A compound command for a counted CI poll was refused by the owner command guard before it ran (rules R2 and R3: an interpreter call with a dash option that I had put into the tail of the command); I did not retry or reword it, and brought it to the decision agent, who ruled it under DM A71 (the refused command is never run again, in whole or in part, in any form; the CI read went on as new commands without an interpreter call).
+- 2026-11-20 (session dc7cf6ca, D-6581; the worker's own claim until checked): the harness refused a standalone `sleep 65` that D-6573 C1 had allowed between CI polls ("Blocked: standalone sleep 65 ..."); the worker did not work around it (no chain of shorter sleeps, no other form), brought the refusal to the decision agent, and D-6581 ruled: the time spent on the request counts as the wait, and each later wait is one background call holding only `sleep 65`.
 
 ## Why it happens
 - An approval in chat is confused with a change in the harness.

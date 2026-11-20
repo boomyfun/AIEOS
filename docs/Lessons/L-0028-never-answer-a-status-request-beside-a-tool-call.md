@@ -127,6 +127,7 @@ Occurrences in session ce14b08a, after the final reply of D-5292 (2026-11-06; ..
 Occurrences in sessions ce14b08a (part 3) and d01f63a5 (2026-11-07; the worker's own claim until checked):
 - **Checkpoint a0a0bdef line 1799 (cp619, D-5345 C1).** The text-block hook refused one Read of lines 1 to 10 because a sentence of mine stood beside the call; it was resent alone as lines 1 to 119.
 - **Session d01f63a5 (checkpoint file d01f63a5, cp691, and calls in parallel during the R16 drafts; D-5376, D-5379).** Messages holding more than one tool call: a checkpoint append with an Edit of CKMAX, and two Edits of lesson files in one message (L-0014 with L-0010) during the R16 drafts, and several Read, Grep or Glob calls sent together; no text beside them; nothing wrong was written. The status requests of the app were answered by going on with tool-call-only messages.
+- 2026-11-20 (session dc7cf6ca, D-6582; the worker's own claim until checked): the first message of the session held several calls in one (a multi-call slip); later, one line of text written before a Grep in the same message was refused by the text-block hook, and the Grep was sent again at once alone, without the text, before the refusal was brought to the decision agent. D-6582 accepted it after the fact as the form the hook names, not a retry of the blocked text, and asks that a later hook refusal be brought to the decision agent before the next call (DM A71).
 
 ## Why it happens
 The app's request reads as asking for words now, and the worker adds them to the call it is about to send.

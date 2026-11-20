@@ -87,6 +87,7 @@ Occurrences in sessions ce14b08a (part 3) and d01f63a5 (2026-11-07; ../History/2
 - D-5370 C3 (checkpoint line 1859; D-5371 C5): the push output was not read whole; the decision agent read all 141 lines.
 - D-5375 C2 (checkpoint file d01f63a5, cp690; D-5376): the exit code of the scan was not printed.
 - D-5378 C2 (cp694, cp695; D-5379): the Grep count of equal lines of the real writer output was not run; the decision agent compared the lines itself.
+- 2026-11-20 (session dc7cf6ca, D-6565 R3, D-6566, D-6572 C1, D-6573; the worker's own claim until checked): two conditions of the decision agent asked for its FOR THE OWNER text to be relayed "in the reply just before the command" (D-6565 R3) and "before the push" (D-6572 C1); a reply without a tool call ends the turn in this app, and a turn is never ended only to report (D-1266 :14). For D-6565 R3 the worker brought the conflict to the decision agent before the act, and D-6566 moved the relay to the turn-final reply; for D-6572 C1 the worker flagged the departure in checkpoint 75 before the push and brought it afterwards, and D-6573 accepted it and said that the decision agent's relay conditions will say "the turn-final reply" from then on (the fault was partly the decision agent's: D-6566 :21, D-6573 :29).
 
 ## Why it happens
 - Claude treats a step as mechanical (a display, a change of order, a turn end) and does not see it as a decision.
