@@ -1,6 +1,6 @@
 # DEF-0150: the capture module's name-list check runs under git's default rename detection, so a capture of a moved file would be refused after the ref is written; one reason word and the docstring are inexact (BT1a, TASK-147)
 
-- Status: open
+- Status: closed (2026-11-20, by the task TASK-149 on main at 34eb70ee: the commits fabad6c6 and 34eb70ee; the acceptance text docs/runs/TASK-149-acceptance.md, decided at D-6702)
 - Opened: 2026-11-20 (../History/2026-11/2026-11-20-1640-m8-stage-8-bt1a-task-147-the-capture-module-accepted-and-landed-dc7cf6ca.md)
 - Deferred by: decision agent (A41, A51), D-6658 (the item and its deadline), D-6659 (the vehicle), D-6660 (the acceptance of TASK-147)
 - Decision group: A (scheduling)
@@ -23,3 +23,4 @@ TASK-147 (the acceptance record docs/runs/TASK-147-acceptance.md, decisions D-66
 
 ## Log
 - 2026-11-20: opened (session dc7cf6ca; decisions D-6658, D-6659, D-6660, D-6664, D-6665).
+- 2026-11-20: closed (session dc7cf6ca): CI revision 29 (8ff21ea6, D-6672 to D-6679) pins the diff form with --no-renames; the task TASK-149 (contract commit ef36594d, D-6683) changed the module to that form (fabad6c6, D-6693, D-6694), refuses a malformed id that git printed as git-failed, corrected the docstring and the test wording, and gave the AC5 harness two cases with a deleted and an added path of the same and of near-identical content, each with a positive control; the harness showed the defect on the old module (4 expected FAIL, D-6692) and none on the new one (0 FAIL on the accepted head, D-6701); a second commit (34eb70ee, D-6699, D-6700) corrected two review findings; accepted at D-6702 (docs/runs/TASK-149-acceptance.md); landed on main at 34eb70ee (D-6703, D-6704; the CI of main read at D-6705).
