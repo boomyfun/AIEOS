@@ -11,6 +11,7 @@ Two small overstatements of one session. (1) A request to the decision agent sai
 
 ## Occurrences
 - 2026-11-20 (session dc7cf6ca; the worker's own claim until checked): the two cases above. The decision agent found the second one by reading the memory tail itself and recorded it as an undisclosed departure; for the first it ruled that the checkpoint itself records the misstatement openly and that nothing was relied on (D-6597, D-6598).
+- 2026-11-20 (session dc7cf6ca, D-6611, D-6613; the worker's own claim until checked): numbers and facts in requests that were not copied from the output at hand and were found wrong by the decision agent or by the worker in the next request: "190+" added lines for the CI revision where the machine gave 171 (D-6613); "the after file has 2106 lines before my edits" where 2106 is the before file and the after file had 2253 (D-6611). None of them reached a repository file; each was found before a write. The practice that follows: copy each number into a request from the command's printed output.
 
 ## Why it happens
 A message that holds a request and the command that makes its premise true is written as if the command had already run; a diff is read for the differences that were intended, and the report is written from the intention instead of the diff output.
