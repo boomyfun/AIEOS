@@ -12,6 +12,7 @@ A helper such as run(argv, answer=None) reads None as "use the good default". A 
 ## Occurrences
 One, in session ea6ea0a3 (2026-10-25, TASK-093):
 - **D-3104.** test_answers_out_of_form listed the answer None among its out-of-form cases, and run() took None as the default good answer; the first unit run gave one failure (exit 0 and the good lines where the out-of-form finding was expected). The code under test was right. The helper was given GOOD = object() as its default (one Edit, chk93 and diff93 rerun, the file placed again by place93b), and the runs were then green.
+- 2026-11-21 (session dc7cf6ca, TASK-150; the worker's own claim until checked): the first run of the new test file of the gate maker had a failing case that tested nothing: the helper make(plan=None, steps=None, check_map=None, iv=None) read None as "use the good default", while the argument test listed steps=None and check_map=None as bad cases, so the helper swapped in the good value and the function returned no error. It was found at the first run and fixed by a private sentinel (DEFAULT = object()) in the test file; the case list was read against the helper's defaults before the second run. The fix is in the task commit 06880dd8 (the tests as committed).
 
 ## Why it happens
 The helper's default and the cases are written at different moments, and None reads as both "nothing given" and "a value to test".

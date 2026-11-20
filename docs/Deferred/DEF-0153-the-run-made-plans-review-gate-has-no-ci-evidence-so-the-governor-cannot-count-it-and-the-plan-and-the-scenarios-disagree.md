@@ -1,0 +1,26 @@
+# DEF-0153: the run-made plan's G3 "review" gate has no CI evidence, so the governor cannot count it (INSUFFICIENT_EVIDENCE for G3), and the plan, spec-04 and the conformance scenarios disagree about what G3 is (BT2, TASK-150)
+
+- Status: open
+- Opened: 2026-11-21 (the acceptance text docs/runs/TASK-150-acceptance.md, decided at D-6789)
+- Deferred by: decision agent (A41, A51), D-6770 C4 (the crux is filed as a deferred item in the acceptance records) and D-6789 (the filing at the acceptance of TASK-150)
+- Decision group: B (the owner's: a change that weakens an evidence requirement, or lets a kind of review count where it does not count yet, is not the decision agent's to approve, CR-002 part 4 limit 8, cited at D-6770, where the question was escalated)
+- Blocks v0.1: yes, through DEF-0136 (master-plan.md :117 expects ACCEPT or NEEDS_REVIEW for the correct change of the first real run; with G3 as "review" the governor gives INSUFFICIENT_EVIDENCE for any run-made task, whatever the gate maker does)
+- Scheduled in: not scheduled; waits for the owner's answer
+
+## What
+The plan that `aieos run` writes for a low contract is G0 scope, G1 build, G2 lint and G3 review with args AC1 and AC2 (src/aieos_bootstrap/launcher.py, the gates text at :1883: `{gate: G3, check: review, args: [AC1, AC2]}`; TASK-129 added its G2 lint, DEF-0118 follow-up 2, and G3 review was already in the plan before that, DEF-0118 :13). The governor counts only gate results of the CI source class (governor.py :428: `gate_results = [r for r in current if 'gate' in r and r['source_class'] == CI]`) and a gate that has no current passing result gives INSUFFICIENT_EVIDENCE. No CI step is evidence of a check named "review". The gate maker of TASK-150 (gate_records.py) therefore leaves G3 uncovered by design: its default map has no entry for review, tests or constitution, and the governor's INSUFFICIENT_EVIDENCE for G3 is the honest result.
+Three texts disagree about G3: (1) the plan above, G3 = review; (2) docs/specs/spec-04-verification-and-evidence.md :27, G3 = "constitution" with nine CI steps (deterministic_rule, OPS-003 pattern rules, GOV-003 evaluator paths, SEC-001, SEC-002, SEC-003, OPS-002 owner-kept paths, INV-010 replay, static_security_analysis), and :32, which says its table is illustrative and that "Lint has no step of its own" (stale: the lint step was added by TASK-124); (3) docs/pre-genesis/conformance-scenarios-initial.md :11, the default plan G0 scope, G1 build, G2 lint, with no G3. DEF-0118 :35 says the plan written for a low contract is "as the default plan of conformance-scenarios-initial.md:11", which is not accurate for G3 (the scenarios have no G3).
+The question for the owner (escalated at D-6770, CR-002 part 4 limit 8): may the run-made plan's G3 "review" gate be replaced by checks that CI can do (the constitution steps of spec-04 :27), so that a run-made task can reach NEEDS_REVIEW? The decision agent recommended yes (D-6770); with no answer nothing changes. Nothing on the plan (launcher.py templates, their tests, DEF-0118) is drafted before the answer.
+
+## Consequences
+Until the plan and the map agree, the first real run's correct change cannot be accepted by the governor alone, whatever BT3 wires. If the owner says no, the plan keeps G3 "review"; since the governor counts only gate results of the CI source class (governor.py :428), a run-made task then keeps INSUFFICIENT_EVIDENCE on G3 unless a later change of the plan or of the governor is made; a human or decision-agent review is profile evidence (spec-04 :32), not a gate result.
+
+## Options (none chosen)
+(a) Replace G3 "review" in the run-made plan by the constitution checks (G3 constitution) and add the default-map entries for the nine steps in a later task (a change of launcher.py, its tests, DEF-0118 and the map: a new task, after the owner's answer). (b) Keep G3 "review" and let a record of another class (a human or decision-agent approval) count for that gate: a change of the governor's reading at :428 (CI results only), a governor change that is also the owner's (CR-002 part 4 limit 8: a kind of review counted where it is not counted yet, D-6770). (c) Drop G3 from the run-made plan, as the conformance scenarios' default plan has no G3.
+
+## Resume when
+When the owner answers the question above, and before the second real run is judged by the governor.
+
+## Log
+- 2026-11-21 (TASK-150, acceptance D-6789): opened. Sources: D-6770 (the crux and the escalation), D-6767 to D-6772, the contract docs/tasks/TASK-150.yaml (objective: option (A); AC8 (3)), the reports of the blind reviews (B finding 9: absent entries are the safe choice; the CI steps that spec-04 :26-27 would give to G2 and G3 are not mapped; whether they may be is the owner's question).
+- Candidate, not filed as fact (D-6788 C2): the stale sentence "Lint has no step of its own" of spec-04 :32 (the lint step exists, TASK-124; reviewer A finding 9) may be corrected by a later change of that spec; no change is made here.
