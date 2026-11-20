@@ -182,6 +182,10 @@
 # which stands for os.devnull and is substituted by the module at run time; a read of a pinned name does not prove that the run-time validator uses it; computed routes (setattr, sys.modules, vars(), globals()) stay with review, as the script's header says); the forms write Git objects, one ref under refs/heads/task/ and working-tree files
 # of the listed paths, so a filter driver named in the clone's own configuration would run (the launcher's configuration read is repeated just before the capture) and git is found by its name (the limit of gitread.py applies: on Windows a git program
 # placed in the directory of the Python program or the current directory is found first); the rule runs over the files Git tracks under src/ at HEAD of a task run, so it is inert while the module is absent.
+# Revision 29 (BT1c, DEF-0150; the decision agent's own decision under DM A66, its own decision on the exact diff) TIGHTENS one pin of revision 28 and adds no rule: the diff form of the pin CAPTURE_FORMS gains the option --no-renames after --no-textconv, so that the name-list check
+# of the capture module sees a deleted path and an added path of similar content as two names (git's default rename detection would print them as one name, and the module would refuse the capture after the ref is written). The rule that holds the module to its pins (check_capture over CAPTURE_PINS) is unchanged
+# and now holds its literal CAPTURE_FORMS to the new form; no ALLOW entry, keyword set, deny set or other pin changes. It grants no write access, uses no secret or token and changes no setting; the EVALUATOR lists are unchanged. Limit: until the module's own commit (task BT1c) has landed, the literal in
+# src/aieos_runtime/task_capture.py differs from this pin, so check_capture and the pin test of tests/unit/test_task_capture.py would report that difference on a task run; nothing runs them on a push to main without a task.
 name: aieos-checks
 
 on:
@@ -1835,7 +1839,7 @@ jobs:
                            ('update-ref', '<taskref>', '<id>', '<zero>'),
                            ('rev-parse', '--absolute-git-dir'),
                            ('rev-parse', '--verify', 'HEAD'),
-                           ('diff', '--no-ext-diff', '--no-textconv', '--name-only', '<id>', '<id>'),
+                           ('diff', '--no-ext-diff', '--no-textconv', '--no-renames', '--name-only', '<id>', '<id>'),
                            ('restore', '--source=HEAD', '--worktree', '--', '<paths>'),
                            ('clean', '-f', '--', '<paths>'))
           CAPTURE_OPTIONS = ('--no-pager', '-c', 'core.fsmonitor=false', '-c', 'diff.external=', '-c', 'commit.gpgsign=false')
