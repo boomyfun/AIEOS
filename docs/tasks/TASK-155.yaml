@@ -1,0 +1,197 @@
+# Task contract TASK-155 (DRAFT v1; it SUPERSEDES TASK-154 (D-6932): the contract docs/tasks/TASK-154.yaml stays on main at cde0d879 unedited and its branch task/TASK-154 at 488a7c56 stays as pushed, not accepted, because the CI G0 step binds a task to the commit that ADDS its contract file (git log --diff-filter=A) and so would silently read the old contract; the text of this contract is the text of TASK-154 as amended by D-6931 (candidate v3 of the data file, the widened scopes) and re-targeted by D-6932; scratchpad only until approved; session dc7cf6ca, 2026-11-21; BT3c-2, the policy data file, DEF-0152 item 1 and DEF-0136; decisions D-6874 (C1 to C4: BT3c is split), D-6915, D-6916, D-6918, D-6919, D-6920 (D1 to D4, K1 to K4), D-6921, D-6931 and D-6932; the id TASK-155 is the next free id after docs/tasks/TASK-154.yaml and is NOT reserved by this draft).
+# Authority and scope: BT3c-2 creates ONLY the policy data file docs/specs/evaluation-policy-gov-aieos.md and ONE new unit test file. It changes no .github file (E7, the GOV-003 evaluator-list edit, is its own A66 decision and is taken before any BT3b-2 contract that calls the reader), no source file and no existing test. The three owner-level values are the owner's, given in the owner's own words: "1 không, 2 có, 3 có" (main transcript of session dc7cf6ca-d094-4438-af81-93586ed7658b, line 37957): owner_kept_rules option A (OWNER_PATHS only; no rule for .github/**), delegation true, auto_accept false for all four risks.
+# Not in this task: any .github edit (E7), BT3b-2 (the evidence writer and the derivations), BT5, the second real run (the owner's typed yes), a change of the reader (evaluation_policy.py is read-only here).
+task: TASK-155
+contract_version: v1
+task_type: implementation
+objective: >-
+  Create docs/specs/evaluation-policy-gov-aieos.md whose text is the DATA TEXT pinned below (sha256 of the draft file made by script, 0777508cafbc5c0c09fb1718bebbf2f8233c492b0569849137d76da14aef8ddb at this draft, 6143 bytes; D-6920 D1 to D4: the owner's values are "given by" the owner's answer, with no matrix row yet), which is candidate v2 (a0d6c3b7..., D-6915 as corrected) with fourteen replaced lines (the six of the first draft listed here, and eight more named after them): the title line, "Statements of this candidate:" -> "Statements of this file:", the statement line on the owner's values, and the three comment lines of owner_kept_rules, delegation and auto_accept, each citing the owner's answer and the transcript line instead of "NOT DECIDED"; and the eight lines of D-6931 C1 (native/** added as the last scope entry of INV-001, INV-004, INV-005, INV-006, INV-007 and INV-008, .aieos/** added to GOV-005, and D-6931 cited on the statement line about the scopes). The reader read_evaluation_policy (TASK-153, in main) returns result present, findings [], six sources, GOV-003 scope of 40 entries on it (local run at this draft). Add ONE new test file tests/unit/test_evaluation_policy_file.py that reads the committed file and checks it.
+traces_to:
+  - docs/Deferred/DEF-0152-the-caller-of-the-gate-maker-must-bind-the-steps-to-the-task-and-the-commit-and-give-plain-data.md
+  - docs/Deferred/DEF-0136-no-maker-records-a-gate-result-that-the-governor-counts-for-a-run-made-task.md
+  - docs/runs/TASK-153-acceptance.md
+  - docs/tasks/TASK-154.yaml
+input_state:
+  # base_commit (cde0d879, the tip of main; set by make_contract_v3_154.py at v3 and kept) and intent_versions (re-checked by git show at cde0d879 by that script; one entry added by make_task155_154.py: docs/tasks/TASK-154.yaml, the superseded contract, sha256 by git show at cde0d879).
+  base_commit: cde0d879d0b6313b2720100c3167512b8e3c0d37
+  depends_on: []
+  intent_versions:
+    src/aieos_bootstrap/evaluation_policy.py: 90c1db549b5c83aff5d55ade5ebdd386628a92f7d61477351c394338a4f94d19
+    src/aieos_bootstrap/eval_inputs.py: 07147f6a23b6972d429362df0477d5b90a8fcf8f09d479b97ac8db503b42d987
+    src/aieos_bootstrap/governor.py: 2f2dcd7525bcc39dcb3539ada93daff428a624cf2c47876c2d17599cf7ec022f
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/pre-genesis/decision-matrix.md: 03940e2cc46037a8be690653b05e553dd2962381f6914358f715415a28b902de
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+    docs/runs/TASK-153-acceptance.md: a49bbdc837fa656eb952c790f080456b9185b2bb9aebcb1e9e77b98133cf2709
+    docs/tasks/TASK-154.yaml: bd14b45f15179f2acebcdc503ea2bbba7be2bd4b7a75240a25b2392220d49c7f
+write_set:
+  paths:
+    - docs/specs/evaluation-policy-gov-aieos.md
+    - tests/unit/test_evaluation_policy_file.py
+read_set: {paths: [src/aieos_bootstrap/evaluation_policy.py, src/aieos_bootstrap/eval_inputs.py, src/aieos_bootstrap/governor.py, docs/pre-genesis/constitution.md, docs/pre-genesis/assurance-model.md, docs/pre-genesis/decision-matrix.md, docs/pre-genesis/governor-spec.md, docs/runs/TASK-153-acceptance.md, docs/tasks/TASK-154.yaml]}
+# forbidden: explicit list MADE BY SCRIPT at approval (make_contract_154c.py): directory patterns for every other area, the tracked files of tests/unit and docs/specs one by one, all but the two write-set paths (which do not exist at base).
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - src/**
+  - tests/conformance/**
+  - tests/integration/**
+  - tests/property/**
+  - tests/run_tests.py
+  - docs/Deferred/**
+  - docs/History/**
+  - docs/Lessons/**
+  - docs/Progress/**
+  - docs/records/**
+  - docs/runs/**
+  - docs/tasks/**
+  - docs/genesis/**
+  - docs/plan/**
+  - docs/pre-genesis/**
+  - docs/WORKING-RECORDS.md
+  - docs/specs/conformance-files.md
+  - docs/specs/risk-rules-gov-aieos.md
+  - docs/specs/spec-01-state-and-event-model.md
+  - docs/specs/spec-02-aieos-file-format.md
+  - docs/specs/spec-03-resume-check-and-decision-engine.md
+  - docs/specs/spec-04-verification-and-evidence.md
+  - docs/specs/spec-05-adapter-contract.md
+  - docs/specs/spec-06-mcp-protocol-and-work-orders.md
+  - docs/specs/spec-07-cli-and-zero-friction-path.md
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_adapter_declaration.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_base_files.py
+  - tests/unit/test_base_inputs.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_capture_submit.py
+  - tests/unit/test_ci_evidence.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_claude_starter.py
+  - tests/unit/test_cli.py
+  - tests/unit/test_cli_approve.py
+  - tests/unit/test_cli_import.py
+  - tests/unit/test_cli_init.py
+  - tests/unit/test_cli_launch.py
+  - tests/unit/test_cli_run.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_contract_path.py
+  - tests/unit/test_decision_replay.py
+  - tests/unit/test_done.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_eval_inputs.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_policy.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_execution_list_tasks.py
+  - tests/unit/test_execution_status.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_governor.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_resume.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gate_records.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_handoff_file.py
+  - tests/unit/test_launcher.py
+  - tests/unit/test_launcher_end.py
+  - tests/unit/test_launcher_gone.py
+  - tests/unit/test_launcher_outside.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_mcp_server_work_order.py
+  - tests/unit/test_metrics_report.py
+  - tests/unit/test_native_isolation.py
+  - tests/unit/test_read_set_gone.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_resume_inputs.py
+  - tests/unit/test_resume_log_inputs.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_capture.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-008, GOV-002, GOV-003, GOV-004, GOV-005, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The file. The committed docs/specs/evaluation-policy-gov-aieos.md has exactly the pinned bytes (sha256 0777508cafbc5c0c09fb1718bebbf2f8233c492b0569849137d76da14aef8ddb, 6143 bytes; candidate v3 of D-6931) (the test compares its sha256 with the pinned value, and the approval script compares the staged file); it contains no "NOT DECIDED" and no "CANDIDATE"; it is valid UTF-8 with LF line ends.
+  - AC2: >-
+      The reader accepts it. read_evaluation_policy(text of the file) gives result present and findings []; the six source keys are exactly owner_kept_rules, articles, default_profiles, requirement_profiles, delegation, auto_accept and none is None (a test).
+  - AC3: >-
+      The owner's values. owner_kept_rules equals [{match: [docs/pre-genesis/measurement-protocol.md, docs/pre-genesis/measurements/**]}] (option A; no rule matches .github/**); delegation is True; auto_accept equals {low: False, medium: False, high: False, critical: False}; the three comment lines of the file name the answer "1 không, 2 có, 3 có" and the transcript line 37957 (tests; the quoted answer is the owner's words and is not edited).
+  - AC4: >-
+      The articles and profiles. The articles are exactly the 15 ids INV-001 to INV-008 (eight), GOV-003, GOV-004, GOV-005, GOV-006, SEC-002, OPS-002, OPS-003 with each evidence_required as in candidate v2 and each scope as in candidate v3 (the scopes of candidate v2 with the widenings of D-6931); each article has a non-empty scope; GOV-003 has 40 scope entries; default_profiles has exactly the risks low, medium, high, critical with 1, 2, 5, 7 entries; requirement_profiles is [] (tests with the values written out in the test as the expected data, not read from the file).
+  - AC5: >-
+      The meeting with the governor and the paths. The six sources merged with the other governor.VALUE_KEYS as fixtures are accepted by governor.derive_inputs (a test, as TASK-153 AC4); and eval_inputs._POLICY_PATHS still contains docs/specs/evaluation-policy-gov-aieos.md (a test; so a change of this file by a later task is refused with reason policy_path).
+  - AC6: >-
+      Nothing else changes. Only the two paths of the write set; no .github change; no source change; the whole suite passes by the slice method (D-6249 C2, D-6328 E1.6); a pin scan (made at approval, brought to the decision agent) shows that no existing test pins a count or a list that the new file could change.
+  - AC7: >-
+      The CI evidence of the task push (pre-registered before the commit exists, with the D-6865 C3 rules: patterns anchored to the exact line form, run counts that name the branch): deterministic_rule 0 findings and no FAIL line; bandit "No issues identified"; the pyflakes step silent; the GOV-003 step: the CI's evaluator lists at base do not contain docs/specs/evaluation-policy-gov-aieos.md (E7 open), so the step does not treat it as an evaluator path; tests/unit/test_evaluation_policy_file.py is under tests/unit/**, which the lists name, so the step reports it as an evaluator change; the exact expected lines are made by script from .github/workflows/aieos-checks.yml at base and brought with the contract, stated, not hidden.
+  - AC8: >-
+      Limits and evidence, stated at acceptance. (1) The values are form-checked by the reader and value-checked by this task's tests against the pinned bytes; whether the policy is RIGHT is the decision agent's and the owner's judgment, not a test. (2) The scopes of the articles are the worker's proposal, each equal to or broader than the constitution's prose scope (D-6915; D-6931 widens the scopes of INV-001, INV-004, INV-005, INV-006, INV-007 and INV-008 to the native code, native/**, and the scope of GOV-005 to .aieos/**, after the blind review found them narrower than the constitution, finding F1); the high and critical default profiles are the text of assurance-model.md revision 5 that the owner approved (A59, A60), whose own label "Claude's, proposed" is kept. (3) The single type property_test is stricter than assurance-model :84. (4) E7 (the evaluator lists of GOV-003 in .github) is still open and is the decision agent's under A66 and SEC-003; BT3b-2 may not call the reader before it. (5) Acceptance is by explicit decision of the decision agent (GOV-003 :94, INV-011 :78 bar auto-accept). (6) This task creates a path of eval_inputs._POLICY_PATHS and of EVIDENCE_DEFINING_PATHS: once the runner exists such a change is refused with reason policy_path and has no evidence_comparison {weakens: false}; this task is therefore not run-evaluated and is accepted only by the decision agent's explicit decision. (7) The owner's answer is quoted from the transcript; no row of the decision matrix records it (GOV-005).
+capabilities:
+  filesystem: {read: [src/aieos_bootstrap/evaluation_policy.py, src/aieos_bootstrap/eval_inputs.py, src/aieos_bootstrap/governor.py, docs/pre-genesis/constitution.md, docs/pre-genesis/assurance-model.md, docs/pre-genesis/decision-matrix.md, docs/pre-genesis/governor-spec.md, docs/runs/TASK-153-acceptance.md, docs/tasks/TASK-154.yaml], write: [docs/specs/evaluation-policy-gov-aieos.md, tests/unit/test_evaluation_policy_file.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 300k, wall_time: 3h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6]}
+  - {gate: G3, check: constitution, args: [AC7, AC8, INV-001, INV-002, INV-003, INV-004, INV-008, GOV-002, GOV-003, GOV-004, GOV-005, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND the aieos-checks run of the accepted commit succeeds
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
