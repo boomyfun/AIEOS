@@ -1,0 +1,176 @@
+# Task contract TASK-156 r2 (E7: the four uncovered entries of EVIDENCE_DEFINING_PATHS into both embedded EVALUATOR lists of the CI workflow; session 0be70981, 2026-11-21; decisions D-6888 C4, D-6896 F5, D-6915 (ii), D-6967, D-6968 and the decision that approves this text; the id TASK-156 is the next free id after docs/tasks/TASK-155.yaml).
+# Authority and scope: a change under .github/ for the self-build is the decision agent's own decision under DM A66, each change its own decision and bound by SHA-256 (the after-file below); the change grants no write access, uses no secret or token and changes no setting, which would stay the owner's (A73). It ADDS four entries to both EVALUATOR lists and one coverage test; it removes and loosens no check.
+# Risk: critical (R9, .github/**, is critical in risk-rules section 3); every path of the write set is a GOV-003 evaluator path; the profile is that of TASK-103 (assurance-model section 5: unit_test, integration_test, deterministic_rule, static_security_analysis, ai_review (cross-model), plus functional [property/fuzz] met by property_test records, and architecture [human_review]); acceptance is by the decision agent's explicit decision (GOV-003 :94, INV-011 :78 bar auto-accept).
+# Not in this task: BT3b-2, any other workflow change, any change of EVIDENCE_DEFINING_PATHS, the second real run.
+task: TASK-156
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add to both embedded EVALUATOR lists of .github/workflows/aieos-checks.yml (the two literals that the step "GOV-003 evaluator lists equal" holds equal) the four entries of EVIDENCE_DEFINING_PATHS (src/aieos_bootstrap/evaluation_policy.py :91-:101) that the lists do not match, appended after '**/package-lock.json' in lexical order of the full path: docs/pre-genesis/assurance-model.md, docs/pre-genesis/decision-matrix.md, docs/pre-genesis/governor-spec.md, docs/specs/evaluation-policy-gov-aieos.md (D-6967 C2 as amended by D-6968), with a "Revision 30" header comment, and add ONE new unit test file tests/unit/test_evaluator_covers_evidence_paths.py that checks that every entry of EVIDENCE_DEFINING_PATHS is matched by the workflow's list. The after-file of the workflow is the file whose sha256 is fa670081233f1e27c4a367256f672fe4093881b1d4834e2236a9fd3ef65fc990 (169333 bytes; the base file at d39e67aa has sha256 953d133168ef100d3d3102db0bfb34a8429eb1de5ef4119160efa15da9f05809); the test file draft has sha256 e8395e4f678e632e830518a4d1684544ddf913af7194bec40bee01b0ce5271eb. Every other line of the workflow stays byte-equal.
+traces_to:
+  - docs/Deferred/DEF-0152-the-caller-of-the-gate-maker-must-bind-the-steps-to-the-task-and-the-commit-and-give-plain-data.md
+  - docs/runs/TASK-155-acceptance.md
+  - docs/tasks/TASK-103.yaml
+input_state:
+  base_commit: d39e67aa732b61ebe75d013738d1bfee371426f9
+  depends_on: [TASK-155]
+  intent_versions:
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/pre-genesis/decision-matrix.md: 03940e2cc46037a8be690653b05e553dd2962381f6914358f715415a28b902de
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/specs/evaluation-policy-gov-aieos.md: 0777508cafbc5c0c09fb1718bebbf2f8233c492b0569849137d76da14aef8ddb
+    docs/runs/TASK-155-acceptance.md: 24af26e06c59b42063f96a920569e4161a4509f920fa9be5da06085f13c7a849
+    docs/tasks/TASK-103.yaml: 467a238ecf7f037ec4d6ffe31c18183bedf95714f22f1861d39df99d957e233a
+    src/aieos_bootstrap/evaluation_policy.py: 90c1db549b5c83aff5d55ade5ebdd386628a92f7d61477351c394338a4f94d19
+    src/aieos_bootstrap/scope_reconcile.py: 2fc304b60cbd16a99bc0eb2c966b2dfb9d097f56c025f220ea0500d6a7c8af41
+    .github/workflows/aieos-checks.yml: 953d133168ef100d3d3102db0bfb34a8429eb1de5ef4119160efa15da9f05809
+write_set:
+  paths:
+    - .github/workflows/aieos-checks.yml
+    - tests/unit/test_evaluator_covers_evidence_paths.py
+read_set: {paths: [.github/workflows/, docs/pre-genesis/constitution.md, docs/pre-genesis/assurance-model.md, docs/pre-genesis/decision-matrix.md, docs/specs/risk-rules-gov-aieos.md, docs/specs/evaluation-policy-gov-aieos.md, docs/runs/TASK-155-acceptance.md, docs/tasks/TASK-103.yaml, src/aieos_bootstrap/evaluation_policy.py, src/aieos_bootstrap/scope_reconcile.py, src/aieos_bootstrap/governor.py, tests/]}
+# forbidden: explicit list MADE BY SCRIPT (make_contract_156.py): directory patterns for every other area, the other two workflows by name, and the tracked files of tests/unit one by one (the new test file does not exist at base).
+forbidden:
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - src/**
+  - docs/**
+  - tests/conformance/**
+  - tests/integration/**
+  - tests/property/**
+  - tests/run_tests.py
+  - .github/workflows/aieos-bench.yml
+  - .github/workflows/aieos-native.yml
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_adapter_declaration.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_base_files.py
+  - tests/unit/test_base_inputs.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_capture_submit.py
+  - tests/unit/test_ci_evidence.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_claude_starter.py
+  - tests/unit/test_cli.py
+  - tests/unit/test_cli_approve.py
+  - tests/unit/test_cli_import.py
+  - tests/unit/test_cli_init.py
+  - tests/unit/test_cli_launch.py
+  - tests/unit/test_cli_run.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_contract_path.py
+  - tests/unit/test_decision_replay.py
+  - tests/unit/test_done.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_eval_inputs.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_policy.py
+  - tests/unit/test_evaluation_policy_file.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_execution_list_tasks.py
+  - tests/unit/test_execution_status.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_governor.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_resume.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gate_records.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_handoff_file.py
+  - tests/unit/test_launcher.py
+  - tests/unit/test_launcher_end.py
+  - tests/unit/test_launcher_gone.py
+  - tests/unit/test_launcher_outside.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_mcp_server_work_order.py
+  - tests/unit/test_metrics_report.py
+  - tests/unit/test_native_isolation.py
+  - tests/unit/test_read_set_gone.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_resume_inputs.py
+  - tests/unit/test_resume_log_inputs.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_capture.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      Scope and bytes. The task commit changes only the two paths of the write set. The committed .github/workflows/aieos-checks.yml equals, byte for byte, the after-file (sha256 fa670081233f1e27c4a367256f672fe4093881b1d4834e2236a9fd3ef65fc990); a diff against the base shows exactly three hunks: the Revision 30 header comment before the line "name: aieos-checks" and the four entries in each of the two lists (+7 -2 lines: one header line added before "name: aieos-checks", and in each list one line changed ('**/package-lock.json'] to '**/package-lock.json',) and two lines added); the committed test file has the sha256 e8395e4f678e632e830518a4d1684544ddf913af7194bec40bee01b0ce5271eb (the approval script compares the staged files).
+  - AC2: >-
+      The lists. Both EVALUATOR literals are single plain quoted lists that scope_reconcile.evaluator_from_workflow accepts, are identical and hold 40 entries: the 36 entries of the base list unchanged and in place, then the four added entries; no other line starts with "EVALUATOR = ["; the pattern order of the first 36 is the base's. Raw output of evaluator_from_workflow on the after text and on the base text (40 and 36 entries) is brought at acceptance.
+  - AC3: >-
+      The coverage test. The new test file reads the committed workflow and checks, with governor.matches, that every entry of EVIDENCE_DEFINING_PATHS is matched by the list that scope_reconcile.evaluator_from_workflow returns, that both literals hold the four added entries, that the check finds a missing entry, and that the four added paths are entries of the reader list; it passes on the after-file and FAILS on the base workflow (local sandbox run: 4 tests ok on the after-file, 2 failures on the base file; brought at acceptance).
+  - AC4: >-
+      Nothing else changes. Every other step and line of the workflow is byte-equal to the base; permissions stay "contents: read"; no secret, no token, no write access, no third-party action and no setting change; the isolation tests (test_native_isolation, test_bench_isolation, test_task_contract_repo, test_g0_detect_copies) pass unchanged; the tests that hold local copies of the list (test_scope_drift, test_scope_reconcile, the integration and property fixtures) do not read the workflow and do not pin its list (the C1 scan of D-6967, brought with r324); the test files that read the workflow (test_ci_evidence, test_ci_lint_step, test_ci_resume_pin_logic, test_capture_submit, test_task_capture, test_gate_records, test_launcher_repo, test_task_contract_repo, test_g0_detect_copies, test_native_isolation, test_bench_isolation) pass unchanged; the whole suite ran on a scratch clone of d39e67aa with the after-file and the test draft before approval: unit 3032, integration 229, property 226, every slice exit 0 (local); the whole suite passes by the slice method (D-6249 C2, D-6328 E1.6).
+  - AC5: >-
+      The CI evidence (pre-registered before the commit exists, with the D-6865 C3 rules: patterns anchored to the exact line form, run counts that name the branch). The step "GOV-003 evaluator lists equal" reads the checkout of the pushed commit, so on the task branch and on main after the landing it prints exactly "GOV-003 evaluator lists: 2 found, equal, 40 entries". The step "GOV-003 evaluator paths" prints "GOV-003 evaluator change: yes (2 of 2 changed paths)" and two "GOV-003 evaluator path:" lines, one for the workflow and one for the new test. Only the governor's judgment at acceptance (scope_reconcile) reads the BASE list of 36 entries, and under it both changed paths are still evaluator paths (.github/** and tests/unit/**). deterministic_rule 0 findings, bandit "No issues identified", pyflakes silent; unit, integration and property steps OK.
+  - AC6: >-
+      Limits and evidence, stated at acceptance. (1) The lists match by name: a later change of EVIDENCE_DEFINING_PATHS is covered only while the new test is kept and passes. (2) A later change to any of the four files is judged by the base version of the evaluator and is never auto-accepted; records commits that touch decision-matrix.md now print "evaluator change: yes". (3) This task is judged by the BASE evaluator (GOV-003 :94): acceptance is by the explicit decision of the decision agent; the evidence is same-lineage. (4) The pins of the old list text in fixtures stay as they are. (5) No BT3b-2 contract that calls read_evaluation_policy is approved before this task has landed and the main CI read shows 40 entries, equal (D-6967 C5). (6) A push of a workflow change may be refused for want of a workflow permission: that is a credential matter of the owner (A73). (7) The evidence profile for critical (assurance-model section 5, as for TASK-103): unit_test, integration_test, deterministic_rule and static_security_analysis (CI and the slices); ai_review (cross-model), met only by a pair: an other_model_review record of a way-2 review by a Claude model other than the implementer's, checked by machine against every model that did task work, and a separate decision_agent_review; architecture [human_review]: a second, separate decision_agent_review; functional [property/fuzz] by the property_test records; all bound to the evaluated commit and the intent versions.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [.github/workflows/aieos-checks.yml, tests/unit/test_evaluator_covers_evidence_paths.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: critical
+autonomy:
+  max_level: L1
+  budgets: {tokens: 1500k, wall_time: 8h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4]}
+  - {gate: G3, check: constitution, args: [AC5, AC6, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND the aieos-checks and aieos-native runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
