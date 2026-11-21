@@ -1,7 +1,7 @@
 """The reader of the evaluation policy file (task TASK-153; BT3c-1 of DEF-0152 item 1; decisions D-6873 to D-6877): a pure
 function that reads the TEXT of docs/specs/evaluation-policy-gov-aieos.md (the caller reads it at the pinned policy_ref
 through the Git object store, as claude_code_shell_allow.read_policy_text does) and returns the six sources that the file
-gives, in the governor's form, for eval_inputs. It opens no file, starts no process, reads no clock, no environment and no
+would give, in the governor's form, for eval_inputs. It opens no file, starts no process, reads no clock, no environment and no
 network, and never raises an Exception. It does not check that the values are the decided policy (the content of the file
 is BT3c-2's, and for owner_kept_rules, delegation and auto_accept the owner's): it checks the FORM.
 
@@ -43,12 +43,13 @@ the departures inside the block the finding is the one on the lowest line of the
 line departure comes first; each names the line where it is (a repeated id, rule, risk or requirement: the line of the
 second occurrence; a risk with no entry: its risk line; an id with no "add:", or an "add:" with no entry: the id line or
 the add line; an empty key block: the key line; a missing key: the line of the closing fence). A "```yaml" line anywhere
-other than the one that opens the block, before the heading too, is a block departure; a quoted text may not hold any
-character at which str.splitlines splits (reason scalar). Two readings that the contract leaves open are declared: an
+other than the one that opens the block, before the heading too, is a block departure; a quoted text may not hold a CR
+(reason line, the lexical rule) or any other character at which str.splitlines splits (reason scalar), except the LF, which
+cannot stand in a quoted text because it ends the line. Two readings that the contract leaves open are declared: an
 unexpected internal exception is reported as reason argument (line None), because the closed set has no internal-error
-reason; and a repeated whole owner rule is refused as a duplicate (stricter than the contract's list). A "no entry" or
-"no add:" finding names the earlier line only when the line that follows is itself of a form of that block, or the block
-ends; a line of no form of the block is reported on its own line (D-6885 N1).
+reason; and a repeated whole owner rule is refused as a duplicate (stricter than the contract's list). A "no entry" or "no
+add:" finding names the earlier line only when the line that follows is itself of a form of that block, or the block ends; a
+line of no form of the block is reported on its own line (D-6885 N1).
 
 EVIDENCE_DEFINING_PATHS is the list of repository paths whose change may weaken an evidence requirement (governor-spec :44),
 for the producer of evidence_comparison in BT3b-2 (D-6874 (e)): docs/pre-genesis/constitution.md (an evidence_required entry
@@ -71,7 +72,9 @@ Limits: the module checks form, not the decided policy; spec-02 section 7 :228 d
 (autonomy with a level_version per class; default_profiles for v0.1 low and medium only), whereas this file is the
 self-build's own policy file, as risk-rules-gov-aieos.md is, its reader is not the project.yaml reader, level_version is
 derived as named above and the grammar accepts all four risks in default_profiles (a departure from that description,
-stated and not hidden); until the GOV-003 evaluator-list decision this module is not an evaluator path of GOV-003.
+stated and not hidden); under the GOV-003 evaluator lists in force (src/aieos_bootstrap/** and tests/unit/**) this module and
+its tests are evaluator paths, so a change to them is judged by the base version; GOV-003 and INV-011 bar the auto-accept of a
+change to this evaluator: acceptance is by explicit decision of the decision agent.
 """
 import re
 
@@ -286,6 +289,11 @@ def _structure(items, close_no):
             sources[key] = _body(key, sub, n)
     if pos != len(items):
         n, l = items[pos]
+        m = _KEYLINE.fullmatch(l)
+        if m is not None and not l.startswith(' '):
+            if m.group(1) in _KEYS:
+                raise _Departure('key', n, 'the key %s is repeated (after the last key)' % m.group(1))
+            raise _Departure('key', n, 'an unknown key %s (after the last key)' % m.group(1))
         raise _Departure('line', n, 'a line after the last key: %r' % l[:40])
     return sources
 

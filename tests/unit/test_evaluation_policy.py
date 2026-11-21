@@ -47,6 +47,7 @@ def reason(text):
     out = read(text)
     assert out['result'] == 'refused', out
     assert len(out['findings']) == 1
+    assert out['sources'] == dict.fromkeys(KEYS), out
     return out['findings'][0]['reason']
 
 
@@ -143,6 +144,11 @@ class AC2TheGrammar(unittest.TestCase):
             {'id': 'SPEC-002', 'add': [{'dimension': 'functional', 'evidence_types': ['a', 'b']},
                                        {'dimension': 'security', 'evidence_types': ['c']}]}])
 
+    def test_an_empty_evidence_required_list_is_accepted_and_gives_an_empty_list(self):
+        out = read(make(replace_line('    evidence_required: [ai_review]', '    evidence_required: []')))
+        self.assertEqual(out['result'], 'present', out)
+        self.assertEqual(out['sources']['articles'], [{'id': 'INV-002', 'scope': ['src/**'], 'evidence_required': []}])
+
     def test_the_empty_list_gives_an_empty_list_for_the_three_list_keys(self):
         lines = replace_line('owner_kept_rules:', 'owner_kept_rules: []')
         lines = [x for x in lines if x != "  - match: ['docs/a.md', docs/b/**]"]
@@ -212,14 +218,15 @@ class AC3TheRefusals(unittest.TestCase):
             replace_line("    scope: [src/**]", "    scope:  [src/**]"),
             replace_line("  - id: INV-002", " - id: INV-002"),
             replace_line("  low:", "   low:"),
-            GOOD_LINES + ['trailing: stuff'],
+            GOOD_LINES + ['Trailing: stuff'],
             replace_line('requirement_profiles: []', '   '),
         ]
         for lines in cases:
             self.assertEqual(reason(make(lines)), 'line', lines)
 
     def test_key_refusals(self):
-        self.assertEqual(reason(make(GOOD_LINES + ['delegation: true'])), 'line')
+        self.assertEqual(reason(make(GOOD_LINES + ['delegation: true'])), 'key')
+        self.assertEqual(reason(make(GOOD_LINES + ['trailing: stuff'])), 'key')
         no_auto = GOOD_LINES[:-3]
         self.assertEqual(reason(make(no_auto)), 'key')
         unknown = replace_line('delegation: true', 'delegations: true')
@@ -244,7 +251,7 @@ class AC3TheRefusals(unittest.TestCase):
             replace_line('  - match: [\'docs/a.md\', docs/b/**]', '  - match: []'),
             replace_line('    scope: [src/**]', '    scope: []'),
             replace_line('    - {dimension: functional, evidence_types: [build, lint]}', '    - {dimension: functional, evidence_types: []}'),
-            replace_line('articles:', 'articles: gap\n'.strip()) + ['  - id: X'],
+            replace_line('articles:', 'articles: gap\n'.strip()),
             replace_line('default_profiles:', 'default_profiles: []'),
             replace_line('auto_accept:', 'auto_accept: []'),
             replace_line('delegation: true', 'delegation: gap now'),
@@ -494,13 +501,16 @@ class AC3dSurvivorsOfTheFirstMutationRun(unittest.TestCase):
         self.assertEqual(out['sources'], dict.fromkeys(KEYS))
 
 
+PINNED_REASON = {'\n': 'line', '\r': 'line', '\x0b': 'scalar', '\x0c': 'scalar', '\x1c': 'scalar', '\x1d': 'scalar', '\x1e': 'scalar', '\x85': 'scalar', '\u2028': 'scalar', '\u2029': 'scalar'}
+
+
 class AC3cQuotedTextsAndFences(unittest.TestCase):
     def test_a_quoted_text_refuses_every_line_boundary_character(self):
         for ch in ('\n', '\r', '\x0b', '\x0c', '\x1c', '\x1d', '\x1e', '\x85', '\u2028', '\u2029'):
             lines = replace_line("    scope: [src/**]", "    scope: ['a%sb']" % ch)
             out = read(make(lines))
             self.assertEqual(out['result'], 'refused', repr(ch))
-            self.assertIn(out['findings'][0]['reason'], ('scalar', 'line'), repr(ch))
+            self.assertEqual(out['findings'][0]['reason'], PINNED_REASON[ch], repr(ch))
         for ch in ('\u2028', '\x0c'):
             self.assertEqual(reason(make(replace_line("    scope: [src/**]", "    scope: ['a%sb']" % ch))), 'scalar', repr(ch))
         self.assertEqual(read(make(replace_line("    scope: [src/**]", "    scope: ['a\u00e9b']")))['result'], 'present')
