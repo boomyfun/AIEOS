@@ -11,6 +11,7 @@ docs/History holds file names that are longer than the Windows path limit; a pla
 
 ## Occurrences
 - **2026-10-30 (session 578ea88b, D-3895, D-3896, D-3897).** The first clone script (no long paths) stopped with seven "Filename too long" errors; the decision agent corrected the form (`git clone -c core.longpaths=true`, a check after `cd`); the retry cloned clone104r2 and the failed folder was kept.
+- **2026-11-21 (session dc7cf6ca, TASK-154 route, D-6928 C4).** The first clone made for the full-suite slices failed at checkout (the long path under the scratch folder, "Filename too long"); it was made again in a short path with core.longpaths (and again for TASK-155 under the scratchpad and Temp with core.longpaths) (the worker's own claim until checked).
 
 ## Why it happens
 The earlier sessions' scripts carried the setting in their briefs and notes, not in the clone script, and the decision agent approved the script without the setting.
