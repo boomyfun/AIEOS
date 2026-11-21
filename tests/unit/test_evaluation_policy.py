@@ -560,7 +560,7 @@ class AC6TheEvidenceDefiningPaths(unittest.TestCase):
     EXPECTED = ('docs/pre-genesis/constitution.md', 'docs/pre-genesis/assurance-model.md', 'docs/specs/risk-rules-gov-aieos.md',
                 'docs/pre-genesis/decision-matrix.md', 'docs/specs/evaluation-policy-gov-aieos.md',
                 'src/aieos_bootstrap/governor.py', 'docs/pre-genesis/governor-spec.md', 'src/aieos_bootstrap/evaluation_policy.py',
-                'src/aieos_bootstrap/eval_inputs.py')
+                'src/aieos_bootstrap/eval_inputs.py', 'src/aieos_bootstrap/evaluation_derive.py')
 
     def test_the_list_is_a_tuple_of_the_paths_of_the_contract(self):
         paths = evaluation_policy.EVIDENCE_DEFINING_PATHS

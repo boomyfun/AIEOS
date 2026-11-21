@@ -58,12 +58,12 @@ assurance-model.md (the default profiles: :76-:84, :95-:96), docs/specs/risk-rul
 governor-spec :44), docs/pre-genesis/decision-matrix.md (the pinned delegation and the approvals the policy mirrors; the
 policy paths of eval_inputs), docs/specs/evaluation-policy-gov-aieos.md (this policy file), src/aieos_bootstrap/governor.py
 (this governor's rules on which records satisfy an entry: governor-spec :44), docs/pre-genesis/governor-spec.md (the
-definitions of the inputs: :43-:44, :196), src/aieos_bootstrap/evaluation_policy.py and src/aieos_bootstrap/
-eval_inputs.py (the modules that give the sources). The list is INCOMPLETE against governor-spec :44 ("an evidence entry
+definitions of the inputs: :43-:44, :196), src/aieos_bootstrap/evaluation_policy.py, src/aieos_bootstrap/
+eval_inputs.py and src/aieos_bootstrap/evaluation_derive.py (the modules that give the sources). The list is INCOMPLETE against governor-spec :44 ("an evidence entry
 of a requirement"): where a requirement's evidence entries live is not established, so BT3b-2 may not give
 evidence_comparison {weakens: false} for any task until the requirement entities' paths are added by a decided change, or a
-decision records, with a Grep over every requirement entity, that none holds an evidence entry. Shrinking the list later is
-itself a weakens-evidence change. It names the derivations that BT3b-2 computes (not coded here): ruleset_version, the text
+decision records, with a Grep over every requirement entity, that none holds an evidence entry (done at D-7015, outcome (a): none does at main; the standing condition of TASK-157 AC3 stays). Shrinking the list later is
+itself a weakens-evidence change. It names the derivations that BT3b-2 computes (coded in src/aieos_bootstrap/evaluation_derive.py; the loader of their inputs is BT3b-2c's): ruleset_version, the text
 "governor-sha256:" and the sha256 of src/aieos_bootstrap/governor.py at the pinned policy_ref (refused if it differs from
 the CI's AIEOS_PINNED_GOVERNOR value printed by the same run); level_version, the text "L1:" and policy_version (L1 is the
 level in force for every risk class of the self-build, assurance-model :90, spec-04 :93, and is not a value of the file).
@@ -98,6 +98,7 @@ EVIDENCE_DEFINING_PATHS = (
     'docs/pre-genesis/governor-spec.md',
     'src/aieos_bootstrap/evaluation_policy.py',
     'src/aieos_bootstrap/eval_inputs.py',
+    'src/aieos_bootstrap/evaluation_derive.py',
 )
 
 
