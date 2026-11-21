@@ -420,6 +420,12 @@ class AC4ThePolicyPaths(unittest.TestCase):
         out = call(changed_paths=[POLICY_PATHS[0]], sources=good_sources(delegation=None))
         self.assertEqual(refusal(out)[0], 'policy_path')
 
+    def test_the_policy_file_of_task_153_is_refused_as_a_fifth_policy_path(self):
+        path = 'docs/specs/evaluation-policy-gov-aieos.md'
+        out = call(changed_paths=['src/x.py', path])
+        self.assertEqual(refusal(out), ('policy_path', 'a changed path is a policy source: ' + path))
+        self.assertEqual(tuple(eval_inputs._POLICY_PATHS), tuple(POLICY_PATHS) + (path,))
+
 
 class AC5TheCiRecords(unittest.TestCase):
     def test_the_records_equal_what_ci_evidence_gives_and_g3_has_none(self):

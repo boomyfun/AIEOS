@@ -14,7 +14,7 @@ D-6836 to meet AC5), already_in_log and gaps. The reasons are a closed set: argu
 policy_path, ci, conflict and incomplete. It never raises an Exception; a BaseException that is not an Exception passes
 through.
 
-The checks, in order: (1) the arguments; (2) policy_path: a task whose changed paths include one of the four policy
+The checks, in order: (1) the arguments; (2) policy_path: a task whose changed paths include one of the five policy
 source files is refused (a task cannot edit the rules that evaluate it); (3) the gaps: ``sources`` is a dict with exactly
 the twelve keys intent_versions, owner_kept_rules, articles, default_profiles, requirement_profiles,
 evidence_comparison, delegation, auto_accept, level_version, ruleset_version, policy_version and risk_rules; a value
@@ -37,7 +37,7 @@ to the bool; evaluation.evaluate_task binds the field to the contract bytes agai
 Limits: the module cannot check that the sources are the real policy; until the policy file of BT3c exists ten of the
 twelve sources (all but policy_version and risk_rules, which have readers) have no producer, so no real evaluation can
 pass the gap check. policy_ref is checked for its form and for being another commit than evaluated_commit; that the
-files were read at that ref is the caller's. The policy-path rule is the exact text of four files. The module cannot
+files were read at that ref is the caller's. The policy-path rule is the exact text of five files. The module cannot
 check that contract is the contract whose bytes hash to contract_sha256; the caller takes both from one
 base_inputs.contract_at call. That reader refuses the self-build contracts of docs/tasks whose intent_versions keys
 begin with a dot, so this assembler is for run-made contracts. The arguments are plain data as loaded from JSON; a
@@ -70,7 +70,8 @@ _GAPS = ('intent_versions', 'owner_kept_rules', 'articles', 'default_profiles', 
          'evidence_comparison', 'delegation', 'auto_accept', 'level_version', 'ruleset_version', 'policy_version',
          'risk_rules')
 _POLICY_PATHS = ('docs/specs/risk-rules-gov-aieos.md', 'docs/pre-genesis/constitution.md',
-                 'docs/pre-genesis/assurance-model.md', 'docs/pre-genesis/decision-matrix.md')
+                 'docs/pre-genesis/assurance-model.md', 'docs/pre-genesis/decision-matrix.md',
+                 'docs/specs/evaluation-policy-gov-aieos.md')
 _DEPTH = 50
 
 
