@@ -1,0 +1,242 @@
+# Task contract TASK-157 (BT3b-2b: the pure derivations of the evaluation sources; session 0be70981, 2026-11-21; decisions D-7014, D-7015, D-7016, D-7017 and D-7018, which approves this text; the id TASK-157 is the next free id after docs/tasks/TASK-156.yaml).
+# Authority and scope: BT3b-2b adds ONE new PURE module src/aieos_bootstrap/evaluation_derive.py with four functions, ONE new test file, and extends EVIDENCE_DEFINING_PATHS by the new module (D-7016 M1). The module does NO I/O: no file, no process, no clock, no network, no environment; it imports hashlib, math and evaluation_policy only. It writes no event, no record and no file, edits no .github file and no document, calls no eval_inputs and is called by no command yet.
+# THE LOADER MOVED (D-7017 C2): the safe loader of D-7015 C6 is no longer in this task. BT3b-2c inherits, by name: the git reads of the policy, governor and risk-rules files at the pinned ref (a tree walk by cat-file, since gitread offers no show ref:path); the non-blob tree entries; a missing file versus a refused read; UTF-8 decoding; the ref form (40 or 64 lowercase hex, as gitread and base_inputs accept); the sources policy_version (read by scope_reconcile.policy_block, scope_reconcile.py :46-:48 and :296-:298) and risk_rules (read by scope_reconcile.rules_from_policy, :267, from the section 3 block of the risk-rules file, risk-rules :24-:27), both required by eval_inputs.py :242-:246; the gitread-import allowance (the whole-repo scanning tests and the deterministic_rule); and D-7016 M2's loader sentence. Not in this task: the CI fetch, the provenance manifest, the append of ci_records (2c); the command and the decision_replay/reconcile treatment (2d); any .github change; DEF-0136, DEF-0153 and DEF-0154 stay open; master-plan :117 is not met; the second real run.
+task: TASK-157
+contract_version: v1
+task_type: implementation
+objective: >-
+  Add src/aieos_bootstrap/evaluation_derive.py and tests/unit/test_evaluation_derive.py, and extend EVIDENCE_DEFINING_PATHS (src/aieos_bootstrap/evaluation_policy.py) by the entry src/aieos_bootstrap/evaluation_derive.py (appended after src/aieos_bootstrap/eval_inputs.py; the list extension removes and loosens nothing), with the matching EXPECTED tuple in tests/unit/test_evaluation_policy.py. THE I/O: none; the four functions are pure and the module imports only hashlib, math and evaluation_policy (no other import). THE FUNCTIONS. (1) ruleset_version(governor_bytes, pinned_sha256) returns {value, findings}: value is the text "governor-sha256:" followed by the sha256 hex of governor_bytes (the bytes of src/aieos_bootstrap/governor.py that the caller read at the pinned policy_ref), or None with one finding {reason, detail} when that hex differs from pinned_sha256 (the value of the CI's AIEOS_PINNED_GOVERNOR printed by the same run: enforced by the caller; evaluation_policy.py :66-:68) or an argument is of a wrong form. (2) level_version(policy_version) returns {value, findings}: the text "L1:" followed by policy_version, a non-empty text that the caller took from the risk-rules file; L1 is the level in force for every class of the self-build (assurance-model :90, spec-04 :93). (3) evidence_comparison(changed_paths) returns the BARE mapping {weakens: bool} and never None (the consumers: eval_inputs.py :254-:256 requires a dict whose only key is weakens with a bool value; governor.py :592-:594 sets weakens_evidence unless it is exactly {weakens: false}); see AC3. (4) plain_data_problem(value) returns None for plain data or one {reason, detail}. PLAIN DATA is exactly: dict (every key a text), list, str, bool, None, int and finite float, nested; anything else is refused: a tuple, bytes, bytearray, set, frozenset, a subclass of these types or any other object, a float that is NaN, Infinity or -Infinity, a key that is not a text, and a nest of more than 50 levels (the top value is level 1; level 51 is refused); detail at most 40 characters. None of the four functions raises an Exception; ruleset_version and level_version never return a partial answer ({value, findings} is complete or value is None).
+traces_to:
+  - docs/Deferred/DEF-0152-the-caller-of-the-gate-maker-must-bind-the-steps-to-the-task-and-the-commit-and-give-plain-data.md
+  - docs/Deferred/DEF-0154-the-evaluator-inputs-outside-the-pinned-lists-and-evidence-defining-paths.md
+  - docs/Deferred/DEF-0136-no-maker-records-a-gate-result-that-the-governor-counts-for-a-run-made-task.md
+  - docs/runs/TASK-156-acceptance.md
+input_state:
+  # base_commit: the tip of main when the contract is approved (re-read from the refs at approval).
+  base_commit: 7b3fbc66234dd8f283552ad92f3eb39b057760fc
+  depends_on: [TASK-156]
+  intent_versions:
+    # sha256 of each file at base_commit, MADE BY SCRIPT (git show <base>:<path>), not retyped. No key begins with a dot (base_inputs.py :85 _KEY refuses such a key line, :176-:178; eval_inputs.py :42).
+    src/aieos_bootstrap/eval_inputs.py: 07147f6a23b6972d429362df0477d5b90a8fcf8f09d479b97ac8db503b42d987
+    src/aieos_bootstrap/evaluation_policy.py: 90c1db549b5c83aff5d55ade5ebdd386628a92f7d61477351c394338a4f94d19
+    src/aieos_bootstrap/governor.py: 2f2dcd7525bcc39dcb3539ada93daff428a624cf2c47876c2d17599cf7ec022f
+    src/aieos_bootstrap/base_inputs.py: 3b802be038fd1eacb295389e44b5f9b543456bc80668f7740409932ae560cbfb
+    src/aieos_bootstrap/scope_reconcile.py: 2fc304b60cbd16a99bc0eb2c966b2dfb9d097f56c025f220ea0500d6a7c8af41
+    tests/unit/test_evaluation_policy.py: 55f21842f08482dac9ef877b6343ce849652fc3775c03f755b80dbe77ba5b07b
+    tests/unit/test_evaluator_covers_evidence_paths.py: e8395e4f678e632e830518a4d1684544ddf913af7194bec40bee01b0ce5271eb
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/specs/evaluation-policy-gov-aieos.md: 0777508cafbc5c0c09fb1718bebbf2f8233c492b0569849137d76da14aef8ddb
+    docs/Deferred/DEF-0152-the-caller-of-the-gate-maker-must-bind-the-steps-to-the-task-and-the-commit-and-give-plain-data.md: f39f80567f8448f287d84e232915d376e7d11948a0a0b44d39a82886409994f9
+    docs/Deferred/DEF-0154-the-evaluator-inputs-outside-the-pinned-lists-and-evidence-defining-paths.md: 4296fbaf7355bbcd0bfc4b4cc066f6625aa94ce809d2cc371b4121d3f226b7db
+    docs/runs/TASK-156-acceptance.md: 2f01e771c7ba0a1a7082ea7b5ff3b96c3f86d56b8c00d43809682249ed2ddc3e
+write_set:
+  paths:
+    - src/aieos_bootstrap/evaluation_derive.py
+    - tests/unit/test_evaluation_derive.py
+    - src/aieos_bootstrap/evaluation_policy.py
+    - tests/unit/test_evaluation_policy.py
+read_set: {paths: [src/aieos_bootstrap/eval_inputs.py, src/aieos_bootstrap/governor.py, src/aieos_bootstrap/base_inputs.py, src/aieos_bootstrap/scope_reconcile.py, tests/unit/test_evaluator_covers_evidence_paths.py, docs/pre-genesis/governor-spec.md, docs/pre-genesis/constitution.md, docs/pre-genesis/assurance-model.md, docs/specs/risk-rules-gov-aieos.md, docs/specs/evaluation-policy-gov-aieos.md, docs/runs/TASK-156-acceptance.md, docs/Deferred/DEF-0154-the-evaluator-inputs-outside-the-pinned-lists-and-evidence-defining-paths.md, .github/workflows/aieos-checks.yml]}
+# Risk: high (D-7016): R2 (risk-rules :33-:35, src/** and tests/** medium) raised by R3 (:36-:38, component tags governor and policy: the module derives inputs of the governor); no rule R5 to R11 (:42-:62) matches a path of the write set. Every path of the write set is a GOV-003 evaluator path (src/aieos_bootstrap/**, tests/unit/**), judged by the base evaluator; GOV-003 and INV-011 bar auto-accept; acceptance is by explicit decision of the decision agent.
+# The list under forbidden: is explicit and MADE BY SCRIPT: the directory patterns, then every tracked file of src/aieos_bootstrap and of tests/unit that is not a write-set path (the two new files do not exist at base).
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - docs/**
+  - src/aieos_runtime/**
+  - tests/conformance/**
+  - tests/integration/**
+  - tests/property/**
+  - tests/run_tests.py
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/adapter_declaration.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/capture_submit.py
+  - src/aieos_bootstrap/ci_evidence.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/cli.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/contract_path.py
+  - src/aieos_bootstrap/decision_replay.py
+  - src/aieos_bootstrap/done.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/eval_inputs.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gate_records.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/handoff_file.py
+  - src/aieos_bootstrap/launcher.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/metrics_report.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/resume_log_inputs.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_adapter_declaration.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_base_files.py
+  - tests/unit/test_base_inputs.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_capture_submit.py
+  - tests/unit/test_ci_evidence.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_claude_starter.py
+  - tests/unit/test_cli.py
+  - tests/unit/test_cli_approve.py
+  - tests/unit/test_cli_import.py
+  - tests/unit/test_cli_init.py
+  - tests/unit/test_cli_launch.py
+  - tests/unit/test_cli_run.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_contract_path.py
+  - tests/unit/test_decision_replay.py
+  - tests/unit/test_done.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_eval_inputs.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_policy_file.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_evaluator_covers_evidence_paths.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_execution_list_tasks.py
+  - tests/unit/test_execution_status.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_governor.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_resume.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gate_records.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_handoff_file.py
+  - tests/unit/test_launcher.py
+  - tests/unit/test_launcher_end.py
+  - tests/unit/test_launcher_gone.py
+  - tests/unit/test_launcher_outside.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_mcp_server_work_order.py
+  - tests/unit/test_metrics_report.py
+  - tests/unit/test_native_isolation.py
+  - tests/unit/test_read_set_gone.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_resume_inputs.py
+  - tests/unit/test_resume_log_inputs.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_capture.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-008, INV-011, GOV-001, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      Scope and bytes. The task commit changes only the four paths of the write set. evaluation_policy.py differs from base by exactly: the added tuple entry, and three docstring changes (D-7017 C6 for (a) and (b); (c) was approved at D-7018, because the unchanged :62-:65 text would otherwise disagree with the behaviour of AC3). (a) Old text of the sentence at :61-:62: "src/aieos_bootstrap/evaluation_policy.py and src/aieos_bootstrap/" newline "eval_inputs.py (the modules that give the sources)"; new text: "src/aieos_bootstrap/evaluation_policy.py, src/aieos_bootstrap/" newline "eval_inputs.py and src/aieos_bootstrap/evaluation_derive.py (the modules that give the sources)". (b) Old text at :66: "It names the derivations that BT3b-2 computes (not coded here):"; new text: "It names the derivations that BT3b-2 computes (coded in src/aieos_bootstrap/evaluation_derive.py; the loader of their inputs is BT3b-2c's):". (c) (approved at D-7018) the words "that none holds an evidence entry." at :65 become "that none holds an evidence entry (done at D-7015, outcome (a): none does at main; the standing condition of TASK-157 AC3 stays)."; the rest of line :65 ("Shrinking the list later is") is unchanged and stays on that line; the exact old line :65 is "decision records, with a Grep over every requirement entity, that none holds an evidence entry. Shrinking the list later is" and the exact new line is "decision records, with a Grep over every requirement entity, that none holds an evidence entry (done at D-7015, outcome (a): none does at main; the standing condition of TASK-157 AC3 stays). Shrinking the list later is". Every other byte of evaluation_policy.py is equal, and the new docstring text contains no string with a dot directly before "aieos". test_evaluation_policy.py differs by exactly the EXPECTED tuple (:560-:563, the same entry added at the end) and nothing else. The after-files' sha256 and the new files' sha256 are brought at approval (the approval script compares the staged files). tests/unit/test_evaluator_covers_evidence_paths.py passes unchanged (src/aieos_bootstrap/** already matches the entry; no .github change).
+  - AC2: >-
+      ruleset_version and level_version. Tests: the exact texts "governor-sha256:" + 64 lowercase hex and "L1:" + policy_version; a governor_bytes whose hash differs from pinned_sha256 gives value None and one finding; a pinned_sha256 that is not 64 lowercase hex, governor_bytes that is not bytes, a policy_version that is empty or not a text, each a refusal (value None, one finding); no function raises (a table over None, int, list, bytearray, a very long text). A test computes the real hash of src/aieos_bootstrap/governor.py at the working tree and checks that ruleset_version accepts it as pinned value (the test reads the file; the module does not).
+  - AC3: >-
+      evidence_comparison, F3 and rule (f) (D-7015 C2, C3; D-7016 M3, M4; D-7017 C1, C3, C4, C5). The derivation returns {weakens: true} when changed_paths is not a list of non-empty texts; when any path is MALFORMED: a backslash, a leading "./" or "/", a ".." segment, an interior "." segment, an empty segment, a trailing "/", any control character (a code point below U+0020 or U+007F), whitespace (str.isspace) at either end of the path or of a segment, a colon, a trailing dot or space in a segment, any non-ASCII character, or a "~" in a segment; when any path equals, after str.casefold, an entry of EVIDENCE_DEFINING_PATHS (read from the tuple by name, not a copy); and, RULE (f), when any path has a first segment that begins with "." (this includes a bare ".aieos" and ".aieos/intent"; case does not matter for it, since a dot is a dot; only the FIRST segment is tested, so a nested directory such as "docs/<dot>aieos/x" gives {weakens: false}, which is consistent with the project-state directory being at the repository root, INV-004, aieos-checks.yml :2121). It returns {weakens: false} otherwise, and for the empty list (meaning "no path changed"). RULE (f) is chosen because the INV-004 guard (aieos-checks.yml :2103-:2105) refuses any string constant under src/ that contains a dot directly before "aieos", with only writer.py (:1662-:1663) and claude_code_shell_allow.py (:1672-:1674) allowed: the module therefore contains NO string constant, docstring included, with that text, and NEVER builds that text by concatenation, formatting, character codes or any other means (an ALLOW entry would be a .github change and an A66 decision; building the text would defeat the guard by disguise). The deterministic_rule step checks the constants (AC6); the reviewer of the contract and of the task checks by reading the code that no such construction exists. Rule (f) is a superset of D-7015 C3 (any path under .aieos/intent/). Its cost, STATED AS A LIMIT of option B (M4): the result is a path-based over-approximation, not the reference comparison of governor-spec :44; a change under .aieos/tasks, to .gitignore or .gitattributes, under .claude/ or .github/ also gives {weakens: true}; any later narrowing is a weakens-evidence change and needs its own decision. {weakens: false} says only that no evidence-defining path and no dot-first path was changed, and holds only under the F3 standing condition: a task that writes, reads or derives requirement entities adds the matching path to EVIDENCE_DEFINING_PATHS in the same change, with its A66 decision for the EVALUATOR lists (rule (f) covers a requirement source under .aieos/intent/, not a requirement source that might later live elsewhere). THIS task writes, reads and derives none. F3 status: the Grep arm is closed for the derivation as designed by D-7015 (outcome (a): at main no requirement entity holds an evidence entry; requirement_profiles is [] in docs/specs/evaluation-policy-gov-aieos.md :83-:84). Tests: every entry of EVIDENCE_DEFINING_PATHS alone and mixed with unrelated paths; ".aieos/intent/requirements/x.md", ".aieos/intent", ".aieos", ".AIEOS/Intent/x", ".aieos/project.yaml", ".aieos/tasks/TASK-1.yaml", ".github/workflows/x.yml", ".gitignore" and each mixed with unrelated paths, each asserted {weakens: true} (the tests are exempt from the INV-004 string rule: it needs path.startswith src/); one test for each malformed form above; a non-list, None, a str, an empty text, a non-text entry; the empty list gives {weakens: false}; an ordinary path such as "docs/runs/x.md" or "src/aieos_bootstrap/cli.py" gives {weakens: false}; the rows "SRC/AIEOS_BOOTSTRAP/GOVERNOR.PY" and "docs/Pre-Genesis/constitution.md" (upper and mixed case spellings of entries, free of any malformed form and of a leading dot, so only the casefold of the tuple comparison can flag them) each give {weakens: true}; a test pins that the function reads evaluation_policy.EVIDENCE_DEFINING_PATHS by name (unittest.mock.patch.object of the tuple to a tuple holding one extra entry, the call, and the restore: a path equal to the extra entry then gives {weakens: true}). TABLE-ADEQUACY CHECK (not a mutation of the shipped code; the guard forbids exec, compile and importlib): the test file holds at least three weaker reference implementations written by hand, one without rule (f), one without the casefold and one without the malformed check, and the test asserts that the table above REJECTS each of them (at least one table row on which each returns {weakens: false} where the shipped function returns {weakens: true}: for the reference without rule (f), the dot-first rows; for the one without the casefold, the two mixed-case rows; for the one without the malformed check, the malformed rows); no refused name is used.
+  - AC4: >-
+      Plain data and purity (D-7017 C2). Tests: plain_data_problem accepts nested dicts, lists, texts, bools, None and finite numbers; refuses float('nan'), float('inf'), -float('inf') anywhere in a nest, a key that is not a text, and a nest deeper than 50; one refusal test each for a tuple, bytes, bytearray, set, frozenset, a subclass of dict, a subclass of str (as a value and as a key) and an arbitrary object; one test that True and False are accepted while a subclass of int is refused (the code tests the exact type, not isinstance); a nest of exactly 50 levels accepted and 51 refused (top level = 1); the detail of every finding is at most 40 characters (a longer text is cut to 40; a test). The module imports exactly hashlib, math and evaluation_policy (a test reads the file with read_bytes and ast and checks the import list is a subset of these three; it does not import gitread, subprocess, os, sys, socket, importlib or builtins, and uses no name open, exec, eval, compile or __import__). The module does not call base_inputs.contract_at and reads no file (D12, resolved at D-7016: eval_inputs.py :42 is true; base_inputs.py :85 _KEY refuses a key that begins with a dot, so contract_at returns findings for a self-build contract with a dotted intent_versions key; the pin of that behaviour, if any, belongs to the task that calls contract_at). D14 is closed at the consumer (eval_inputs.py :135, :141); no code here.
+  - AC5: >-
+      EVIDENCE_DEFINING_PATHS (M1) and isolation. Tests: the tuple holds the nine paths of base in the same order and, appended, src/aieos_bootstrap/evaluation_derive.py (ten entries, no duplicates, all normalised relative paths); the E7 coverage test stays green; the tests that name the tuple (test_evaluation_policy.py :560-:583 at base, with EXPECTED at :560-:563; test_evaluation_policy_file.py) pass with the EXPECTED change only; a pin scan of every test that names EVIDENCE_DEFINING_PATHS is made at approval and brought. The new files contain neither the string "native/" nor the string "bench/" (test_native_isolation and test_bench_isolation scan src/ and tests/ for them). The five whole-repo scanning tests pass (tests/unit/test_native_isolation.py, test_bench_isolation.py, test_gitread.py, test_export_fixtures.py, tests/integration/test_conformance_rc_set.py); the whole suite passes by the slice method (D-6249 C2, D-6328 E1.6).
+  - AC6: >-
+      Nothing else changes and the CI evidence (pre-registered before the commit exists, with the D-6865 C3 rules: patterns anchored to the exact line form, run counts that name the branch). No .github, docs, .aieos or other src or tests path changes; no secret, token or write access. On the task branch and on main after the landing the step "GOV-003 evaluator lists equal" prints exactly "GOV-003 evaluator lists: 2 found, equal, 40 entries" (the lists do not change); the step "GOV-003 evaluator paths" prints "GOV-003 evaluator change: yes (4 of 4 changed paths)" and four "GOV-003 evaluator path:" lines; deterministic_rule 0 findings (it includes the rule that no string constant under src/ names the project-state directory with its leading dot, INV-004), bandit "No issues identified", pyflakes silent; unit, integration and property steps OK. The pre-registered form and compare script are made by script before the commit exists, with a selftest mode.
+  - AC7: >-
+      DEF-0154 and the limits, stated at acceptance (M6; DEF-0154 stays open). For each of the four inputs outside both the EVALUATOR lists and EVIDENCE_DEFINING_PATHS, under both questions, (i) is it an input of the A29 evaluator and (ii) can a change to it change an evidence requirement (governor-spec :44). (1) The project settings file (project.yaml in the project-state directory; read by claude_code_shell_allow.py, POLICY_FILE :70; written by writer.py :1313 and :1335): (i) not read by the CI evaluator; (ii) it holds no evidence entry TODAY (adapters and max_risk only), but the spec-2 layout would put the risk rules and the default profiles there (spec-02 :29 and :228; risk-rules :5; evaluation_policy.py :72-:73, for default_profiles), so the reading is "not today; yes if they move"; under rule (f) the comparison treats it as weakening anyway; the list question stays with the owner (D-7016 M6, question asked at the end of the session). (2) src/aieos_runtime/** (claude_starter.py, task_capture.py; imported by cli.py :758): (i) not read by the CI evaluator; (ii) no evidence entry in it; contracts are written by launcher.import_task (:1762, :1798, a drafting task) and launcher.run_task (:2094), not by launch_outside (:1279), which writes no contract (it writes a handoff file, :1259, and runs the capture step, :1381); the question to the owner covers it too. (3) AIEOS-concept.md: read by no src file; its edit is barred by GOV-001 (constitution :82-:85, hash rule on the concept file); (4) docs/pre-genesis/measurement-protocol.md and measurements/: read by no src file; a change is routed to the owner by OPS-002 (constitution :132-:135, path rule on the protocol; the measurements in OWNER_PATHS, aieos-checks.yml :542 and :614, launcher.py :1968-:1970; risk-rules :52, R8); the statement "covered by its own rule" is accepted at D-7018 (OPS-002 and the OWNER_PATHS route; DM A73 keeps protocol changes with the owner). Other limits: (a) {weakens: false} is an over-approximation of "no path changed" (AC3); the empty list gives {weakens: false} and eval_inputs.py :147-:148 refuses an empty list at the consumer; (b) nothing calls the module yet (2c, 2d); the evidence of this task is same-lineage (a Haiku 5.5 reviewer is a Claude model and is recorded as not independent); (c) DEF-0136 and DEF-0153 stay open and master-plan :117 is not met; (d) pinned_sha256 comes from the caller, so "printed by the same run" is enforced by the caller; the sha256 at approval, the CI outputs and the pin scan are approval-time criteria, not tests of the suite; the shell allow line uses POSIX timeout and /dev/null as every contract of the project does; (e) the duties of the plan note closed here: the four functions (D1 to D4 as the draft v1 section 6 names them), D12 resolved, D13 (the F3 test), D14 cited as closed; D5 to D9, D10 and D11 belong to 2c and 2d.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [src/aieos_bootstrap/evaluation_derive.py, tests/unit/test_evaluation_derive.py, src/aieos_bootstrap/evaluation_policy.py, tests/unit/test_evaluation_policy.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 400k, wall_time: 3h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5]}
+  - {gate: G3, check: constitution, args: [AC6, AC7, INV-001, INV-002, INV-003, INV-004, INV-008, INV-011, GOV-001, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of the task's risk class and applicable articles is satisfied AND the aieos-checks run of the accepted commit succeeds
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
