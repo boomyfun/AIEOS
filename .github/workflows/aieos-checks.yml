@@ -186,6 +186,7 @@
 # of the capture module sees a deleted path and an added path of similar content as two names (git's default rename detection would print them as one name, and the module would refuse the capture after the ref is written). The rule that holds the module to its pins (check_capture over CAPTURE_PINS) is unchanged
 # and now holds its literal CAPTURE_FORMS to the new form; no ALLOW entry, keyword set, deny set or other pin changes. It grants no write access, uses no secret or token and changes no setting; the EVALUATOR lists are unchanged. Limit: until the module's own commit (task BT1c) has landed, the literal in
 # src/aieos_runtime/task_capture.py differs from this pin, so check_capture and the pin test of tests/unit/test_task_capture.py would report that difference on a task run; nothing runs them on a push to main without a task.
+# Revision 30 (TASK-156, E7; the decision agent's own decision under DM A66, its own decision on the exact diff; DM A66, D-6888 C4, D-6896 F5, D-6967) ADDS four entries at the end of both embedded EVALUATOR lists: docs/pre-genesis/assurance-model.md, docs/pre-genesis/decision-matrix.md, docs/pre-genesis/governor-spec.md and docs/specs/evaluation-policy-gov-aieos.md, the entries of EVIDENCE_DEFINING_PATHS of src/aieos_bootstrap/evaluation_policy.py that the lists did not match (the five other entries are matched by the names constitution.md and risk-rules-gov-aieos.md and by src/aieos_bootstrap/**), so that a change to any of them is read by GOV-003 as an evaluator change and is judged by the base version, never auto-accepted. It removes and loosens no check, grants no write access, uses no secret or token and changes no setting; no step, rule, pin or other line changes; the step "GOV-003 evaluator lists equal" still holds (two equal copies of 40 entries). Limits: the lists match by name, so a later change of the reader list EVIDENCE_DEFINING_PATHS is covered only if the unit test that every entry is matched by both lists is kept and passes; the counts of the CI line "GOV-003 evaluator lists" change from 36 to 40 entries.
 name: aieos-checks
 
 on:
@@ -535,7 +536,9 @@ jobs:
                        '**/pyproject.toml', '**/setup.cfg', '**/setup.py', '**/requirements*.txt',
                        '**/go/**', '**/rust/**', '**/ts/**',
                        '**/go.mod', '**/go.sum', '**/Cargo.lock', '**/Cargo.toml', '**/tsconfig.json',
-                       '**/package-lock.json']
+                       '**/package-lock.json',
+                       'docs/pre-genesis/assurance-model.md', 'docs/pre-genesis/decision-matrix.md',
+                       'docs/pre-genesis/governor-spec.md', 'docs/specs/evaluation-policy-gov-aieos.md']
           OWNER_PATHS = ['docs/pre-genesis/measurement-protocol.md', 'docs/pre-genesis/measurements/**']
 
 
@@ -605,7 +608,9 @@ jobs:
                        '**/pyproject.toml', '**/setup.cfg', '**/setup.py', '**/requirements*.txt',
                        '**/go/**', '**/rust/**', '**/ts/**',
                        '**/go.mod', '**/go.sum', '**/Cargo.lock', '**/Cargo.toml', '**/tsconfig.json',
-                       '**/package-lock.json']
+                       '**/package-lock.json',
+                       'docs/pre-genesis/assurance-model.md', 'docs/pre-genesis/decision-matrix.md',
+                       'docs/pre-genesis/governor-spec.md', 'docs/specs/evaluation-policy-gov-aieos.md']
           OWNER_PATHS = ['docs/pre-genesis/measurement-protocol.md', 'docs/pre-genesis/measurements/**']
 
 
