@@ -16,7 +16,8 @@ workflow that made the evidence comes from the pushed commit itself and could pr
 task is refused, not evaluated). (2) The eligible runs: a run of this sha, the event push, the workflow file
 .github/workflows/aieos-checks.yml and the branch task/<task_id>; every other run of the sha (the run on main after a
 fast-forward, a pull request run, another workflow) is ignored; with none the answer is refusal run; every eligible run
-must be completed with the conclusion success or failure. (3) The log of each eligible run, in the pinned form of
+must be completed with the conclusion success or failure. The public function eligible_run(run, task_id, commit) is the
+rule of the eligible runs. (3) The log of each eligible run, in the pinned form of
 ``gh run view --log`` (job TAB step TAB timestamp message): from the job checks, the output lines of the detect step
 after its single ##[endgroup] must hold exactly one line "G0 detect: task <task_id> contract commit <sha> base <sha>"
 and exactly one line "G0 contract sha256 <sha>" equal to the expected contract sha256; the lines before the endgroup
@@ -183,6 +184,12 @@ def _mapped_names():
     return names
 
 
+def eligible_run(run, task_id, commit):
+    """Whether a run mapping is an eligible run of the task commit; it presumes the checked forms of ci_evidence."""
+    return (run['head_sha'] == commit and run['event'] == 'push' and run['workflow_path'] == _WORKFLOW
+            and run['head_branch'] == 'task/' + task_id)
+
+
 def ci_evidence(task_id, commit, contract_sha256, intent_versions, plan, changed_paths, runs, recorder):
     """The gate-result records of one task commit from its saved CI data, or the refusal."""
     try:
@@ -192,9 +199,7 @@ def ci_evidence(task_id, commit, contract_sha256, intent_versions, plan, changed
         for path in changed_paths:
             if path == '.github' or path.startswith('.github/'):
                 return _refuse('path', 'a changed path is under .github: ' + path)
-        branch = 'task/' + task_id
-        eligible = [r for r in runs if r['head_sha'] == commit and r['event'] == 'push'
-                    and r['workflow_path'] == _WORKFLOW and r['head_branch'] == branch]
+        eligible = [r for r in runs if eligible_run(r, task_id, commit)]
         if not eligible:
             return _refuse('run', 'no eligible run')
         seen = set()

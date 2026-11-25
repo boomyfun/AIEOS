@@ -305,10 +305,10 @@ class Base(unittest.TestCase):
 class AC1TheEntries(unittest.TestCase):
     def test_the_six_entries_follow_the_derive_entry_in_this_order(self):
         paths = evaluation_policy.EVIDENCE_DEFINING_PATHS
-        self.assertEqual(len(paths), 16)
-        self.assertEqual(len(set(paths)), 16)
+        self.assertEqual(len(paths), 17)
+        self.assertEqual(len(set(paths)), 17)
         self.assertEqual(paths[9], 'src/aieos_bootstrap/evaluation_derive.py')
-        self.assertEqual(paths[10:], NEW6)
+        self.assertEqual(paths[10:], NEW6 + ('src/aieos_bootstrap/evaluation_intake.py',))
 
     def test_each_entry_weakens_the_comparison_and_an_other_source_file_does_not(self):
         for path in NEW6:
@@ -687,6 +687,18 @@ class AC4ParseJson(unittest.TestCase):
             seen.add(ES.parse_json(text)['findings'][0]['reason'])
         seen.add(ES.parse_json(None)['findings'][0]['reason'])
         self.assertEqual(seen, {'argument', 'json', 'constant', 'duplicate', 'plain'})
+
+    def test_a_lone_surrogate_in_a_key_or_a_string_is_refused_as_not_plain(self):
+        for text in ('"\\ud800"', '{"\\ud800": 1}', '{"a": [1, {"b": "x\\udfff"}]}', '[["\\ud800"]]'):
+            r = ES.parse_json(text)
+            self.assertIsNone(r['value'], text)
+            self.assertEqual(len(r['findings']), 1)
+            self.assertEqual(r['findings'][0]['reason'], 'plain', text)
+
+    def test_a_paired_surrogate_escape_is_one_character_and_is_taken(self):
+        r = ES.parse_json('{"\\ud83d\\ude00": "\\ud83d\\ude00"}')
+        self.assertEqual(r['findings'], [])
+        self.assertEqual(r['value'], {'\U0001F600': '\U0001F600'})
 
     def test_a_str_subclass_does_not_matter_for_the_form(self):
         class S(str):

@@ -39,7 +39,8 @@ that form, must hold a line of the job checks whose message is exactly two space
 logs of the runs of the evaluated commit are chosen by the caller.
 
 parse_json(text) returns {value, findings}: a pure parser of JSON text that refuses NaN, Infinity, -Infinity, a repeated
-key in one object and anything evaluation_derive.plain_data_problem refuses.
+key in one object and anything evaluation_derive.plain_data_problem refuses; a decoded key or string that holds a lone
+surrogate, which UTF-8 cannot write, is refused with the reason plain.
 
 No function raises an Exception; an Exception inside the walk of the task's change is a refusal with the reason git.
 """
@@ -285,6 +286,24 @@ def _json_refused(reason, detail):
     return {'value': None, 'findings': [{'reason': reason, 'detail': detail[:_MAX_DETAIL]}]}
 
 
+def _holds_lone_surrogate(value):
+    """Whether a key or a string of plain data, at any depth, cannot be written as UTF-8."""
+    stack = [value]
+    while stack:
+        item = stack.pop()
+        if type(item) is dict:
+            stack.extend(item.keys())
+            stack.extend(item.values())
+        elif type(item) is list:
+            stack.extend(item)
+        elif type(item) is str:
+            try:
+                item.encode('utf-8')
+            except UnicodeEncodeError:
+                return True
+    return False
+
+
 def parse_json(text):
     try:
         if type(text) is not str:
@@ -304,6 +323,8 @@ def parse_json(text):
         problem = evaluation_derive.plain_data_problem(value)
         if problem is not None:
             return _json_refused('plain', problem['detail'])
+        if _holds_lone_surrogate(value):
+            return _json_refused('plain', 'a key or a string holds a lone surrogate')
         return {'value': value, 'findings': []}
     except Exception:
         return _json_refused('json', 'an unexpected error')

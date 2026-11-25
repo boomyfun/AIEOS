@@ -110,12 +110,12 @@ class AC1TheModule(unittest.TestCase):
                 public.add(node.name)
             elif isinstance(node, ast.Assign):
                 public.update(t.id for t in node.targets if isinstance(t, ast.Name) and not t.id.startswith('_'))
-        self.assertEqual(public, {'ci_evidence'})
+        self.assertEqual(public, {'ci_evidence', 'eligible_run'})
 
     def test_the_public_attributes_of_the_module_are_the_function_and_the_three_imports(self):
         # the imported modules are attributes of the module object; AC1 names them as the import list, not as public names
         attrs = {n for n in dir(ci_evidence) if not n.startswith('_')}
-        self.assertEqual(attrs, {'ci_evidence', 'hashlib', 're', 'gate_records'})
+        self.assertEqual(attrs, {'ci_evidence', 'eligible_run', 'hashlib', 're', 'gate_records'})
 
     def test_imports_and_forbidden_names(self):
         tree = ast.parse(self.source)
@@ -502,6 +502,34 @@ class AC6ThePathRule(unittest.TestCase):
         for p in ('.githubx/y', 'docs/.github/z', 'github/a'):
             self.assertIsNone(call(changed_paths=[p])['refusal'], p)
         self.assertIsNone(call(changed_paths=[])['refusal'])
+
+
+class AC2TheEligibleRun(unittest.TestCase):
+    """TASK-159 AC2: the one predicate of the eligible runs, which ci_evidence itself uses."""
+
+    def test_the_passing_row_and_each_condition_failing_alone(self):
+        self.assertIs(ci_evidence.eligible_run(run(), TASK, COMMIT), True)
+        rows = (('head_sha', 'a' * 40), ('event', 'pull_request'), ('workflow_path', '.github/workflows/aieos-native.yml'),
+                ('head_branch', 'main'), ('head_branch', 'task/TASK-1'), ('head_branch', 'task/' + TASK + '-x'))
+        for key, value in rows:
+            self.assertIs(ci_evidence.eligible_run(run(**{key: value}), TASK, COMMIT), False, (key, value))
+        self.assertIs(ci_evidence.eligible_run(run(), 'TASK-151', COMMIT), False)
+        self.assertIs(ci_evidence.eligible_run(run(), TASK, 'a' * 40), False)
+
+    def test_the_status_and_the_conclusion_are_no_part_of_the_predicate(self):
+        self.assertIs(ci_evidence.eligible_run(run(status='queued', conclusion=None), TASK, COMMIT), True)
+
+    def test_the_evidence_names_exactly_the_runs_that_the_predicate_accepts(self):
+        runs = [run(), run(run_id=101, event='pull_request'), run(run_id=102, head_branch='main'), run(attempt=2),
+                run(run_id=103, workflow_path='.github/workflows/aieos-native.yml'), run(run_id=104, head_sha='b' * 40)]
+        out = call(runs=runs)
+        self.assertIsNone(out['refusal'])
+        wanted = sorted((r['run_id'], r['attempt']) for r in runs if ci_evidence.eligible_run(r, TASK, COMMIT))
+        self.assertEqual([(r['run_id'], r['attempt']) for r in out['evidence']['runs']], wanted)
+        self.assertEqual(wanted, [(100, 1), (100, 2)])
+
+    def test_the_empty_intent_versions_stay_refused(self):
+        self.assertEqual(call(intent_versions={})['refusal']['reason'], 'argument')
 
 
 class AC7TheEvidence(unittest.TestCase):

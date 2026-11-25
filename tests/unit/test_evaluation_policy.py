@@ -562,7 +562,8 @@ class AC6TheEvidenceDefiningPaths(unittest.TestCase):
                 'src/aieos_bootstrap/governor.py', 'docs/pre-genesis/governor-spec.md', 'src/aieos_bootstrap/evaluation_policy.py',
                 'src/aieos_bootstrap/eval_inputs.py', 'src/aieos_bootstrap/evaluation_derive.py',
                 'src/aieos_bootstrap/evaluation_sources.py', 'src/aieos_bootstrap/scope_reconcile.py', 'src/aieos_bootstrap/base_inputs.py',
-                'src/aieos_bootstrap/base_files.py', 'src/aieos_bootstrap/evaluation.py', 'src/aieos_bootstrap/ci_evidence.py')
+                'src/aieos_bootstrap/base_files.py', 'src/aieos_bootstrap/evaluation.py', 'src/aieos_bootstrap/ci_evidence.py',
+                'src/aieos_bootstrap/evaluation_intake.py')
 
     def test_the_list_is_a_tuple_of_the_paths_of_the_contract(self):
         paths = evaluation_policy.EVIDENCE_DEFINING_PATHS

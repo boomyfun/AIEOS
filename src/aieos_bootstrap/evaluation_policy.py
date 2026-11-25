@@ -59,7 +59,7 @@ governor-spec :44), docs/pre-genesis/decision-matrix.md (the pinned delegation a
 policy paths of eval_inputs), docs/specs/evaluation-policy-gov-aieos.md (this policy file), src/aieos_bootstrap/governor.py
 (this governor's rules on which records satisfy an entry: governor-spec :44), docs/pre-genesis/governor-spec.md (the
 definitions of the inputs: :43-:44), src/aieos_bootstrap/evaluation_policy.py, src/aieos_bootstrap/
-eval_inputs.py, src/aieos_bootstrap/evaluation_derive.py and src/aieos_bootstrap/evaluation_sources.py (the modules that give the sources). Five other entries follow: src/aieos_bootstrap/scope_reconcile.py (the live producer of policy_version and risk_rules), src/aieos_bootstrap/base_inputs.py (contract_at, which gives the contract), src/aieos_bootstrap/base_files.py (the reader of every source at the pinned ref), src/aieos_bootstrap/evaluation.py (the computation of the task's change) and src/aieos_bootstrap/ci_evidence.py (the rule on which CI records count); each is an input of the evaluation whose change may change which records satisfy an entry (governor-spec :44). The list is INCOMPLETE against governor-spec :44 ("an evidence entry
+eval_inputs.py, src/aieos_bootstrap/evaluation_derive.py and src/aieos_bootstrap/evaluation_sources.py (the modules that give the sources). Five other entries follow: src/aieos_bootstrap/scope_reconcile.py (the live producer of policy_version and risk_rules), src/aieos_bootstrap/base_inputs.py (contract_at, which gives the contract), src/aieos_bootstrap/base_files.py (the reader of every source at the pinned ref), src/aieos_bootstrap/evaluation.py (the computation of the task's change) and src/aieos_bootstrap/ci_evidence.py (the rule on which CI records count). A further entry, src/aieos_bootstrap/evaluation_intake.py, selects the saved CI data of an evaluation and records what it read; each is an input of the evaluation whose change may change which records satisfy an entry (governor-spec :44). The list is INCOMPLETE against governor-spec :44 ("an evidence entry
 of a requirement"): where a requirement's evidence entries live is not established, so BT3b-2 may not give
 evidence_comparison {weakens: false} for any task until the requirement entities' paths are added by a decided change, or a
 decision records, with a Grep over every requirement entity, that none holds an evidence entry (done at D-7015, outcome (a): none does at main; the standing condition of TASK-157 AC3 stays). Shrinking the list later is
@@ -105,6 +105,7 @@ EVIDENCE_DEFINING_PATHS = (
     'src/aieos_bootstrap/base_files.py',
     'src/aieos_bootstrap/evaluation.py',
     'src/aieos_bootstrap/ci_evidence.py',
+    'src/aieos_bootstrap/evaluation_intake.py',
 )
 
 
