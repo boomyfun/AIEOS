@@ -66,6 +66,9 @@ Occurrences in session 08342c65, second part (../History/2026-11/2026-11-03-0157
 - D-4703: my CI statement on OPS-003 wrong (cp line 1986); D-4695: a parenthesis of my CI statement read backwards (cp line 1937).
 - D-4719 to D-4734 owner relays dropped from the owed lists from cp317 on, found at D-4750 (D-4750 file lines 26-31; cp line 2317).
 
+One incident in session 228f426b (2026-11-26; ../History/2026-11/2026-11-26-0353-m8-stage-8-bt3b-2d-1-task-159-the-pure-ci-intake-and-manifest-accepted-and-landed-228f426b.md; the worker's own claim until checked):
+- **2026-11-26 (D-7125).** The texts for the owner of the decisions from D-7109 on, one owner question (D-7116) and two notices of guard refusals were not put into the turn-final replies, although a checkpoint entry listed them as owed and one heading said a question had been asked that had not been sent; one catch-up reply carried them word for word, and from then on each turn-final reply was checked against the owed list (D-7125 C3, C5).
+
 ## Why it happens
 - Claude wants to keep momentum, and disclosure feels like an admission.
 - A note in a log is mistaken for telling the owner.

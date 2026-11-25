@@ -11,6 +11,7 @@ An executor reused under an owner's rule kept a constant that breaks the rule (C
 
 ## Occurrences
 - 2026-11-20 (session dc7cf6ca; the worker's own claim until checked): the capture of TASK-137 (D-6569) made the state commit de152471 and the task-branch commit 9377cb5c, both with the trailer; found by the worker in the after-checks' printed messages, before any push; D-6570 and D-6571 replaced both commits by plumbing (same tree, parent, identity and dates, the message minus that one line; D-6571 pinned the script); the decision agent noted its own miss at D-6569 :51 (it read the rehearsal's message text and accepted it). The state commit made later (D-6578) was checked in its dry output and carries no trailer.
+- 2026-11-26 (session 228f426b; the worker's own claim until checked): on the route of the records of the owner's answers, the scratch commit 0aa2f2f9 carried a Co-Authored-By trailer against D-6473 and was caught before any push; the commits 70f951f and 4e70266, already pushed to main, carry the trailer, which D-7082 and D-7110 had approved by precedent; they stay, with no history rewrite (D-7112).
 
 ## Why it happens
 A reused script keeps its old constants; "the executor is approved" is read as "its output is acceptable"; a rehearsal that prints a message is not read as a check against the standing rules.
