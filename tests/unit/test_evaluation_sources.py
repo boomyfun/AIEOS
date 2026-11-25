@@ -839,25 +839,29 @@ class AC6TheRefusals(Base):
         text = REAL[RISK]
         block = scope_reconcile.policy_block(text)
         version = [line for line in block if line.startswith('policy_version: ')][0]
-        for name, files in (
-                ('no block', dict(REAL, **{RISK: 'nothing\n'})),
-                ('no version', dict(REAL, **{RISK: text.replace(version, '')})),
-                ('two versions', dict(REAL, **{RISK: text.replace(version, version + '\n' + version)})),
+        for name, files, detail in (
+                ('no block', dict(REAL, **{RISK: 'nothing\n'}), 'the risk-rules file has no section 3 block'),
+                ('no version', dict(REAL, **{RISK: text.replace(version, '')}),
+                 'the block has 0 policy_version lines, not one'),
+                ('two versions', dict(REAL, **{RISK: text.replace(version, version + '\n' + version)}),
+                 'the block has 2 policy_version lines, not one'),
         ):
-            self.refused(load(*scenario(files)), 'rules')
+            self.assertEqual(self.refused(load(*scenario(files)), 'rules'), detail, name)
 
     def test_a_rule_out_of_form_and_an_empty_list_refuse_the_whole_read(self):
         text = REAL[RISK]
         block = scope_reconcile.policy_block(text)
         entry = [line for line in block if line.startswith('    risk: ')][0]
         bad = text.replace(entry, '    risk: unknown', 1)
-        self.refused(load(*scenario(dict(REAL, **{RISK: bad}))), 'rules')
+        self.assertEqual(self.refused(load(*scenario(dict(REAL, **{RISK: bad}))), 'rules'), 'risk rule 1 is refused')
         marker = [line for line in block if line.startswith('risk_rules:')][0]
         empty = text[:text.index(marker)] + marker + '\n'
         rest = text[text.index(marker) + len(marker):]
         stop = rest.find('\n```')
         empty += rest[stop + 1:] if stop >= 0 else ''
-        self.refused(load(*scenario(dict(REAL, **{RISK: empty}))), 'rules')
+        self.assertEqual(scope_reconcile.rules_from_policy(empty), [])
+        self.assertEqual(self.refused(load(*scenario(dict(REAL, **{RISK: empty}))), 'rules'),
+                         'the risk rules are an empty list')
 
     def test_the_order_of_the_checks(self):
         files = dict(REAL, **{POLICY: 'no block here\n'})
@@ -1018,6 +1022,53 @@ class AC6TheGenericPathAndTheRows(Base):
         commits = evaluation._task_commits(g, ROOT, TASK, e, 1000)
         self.assertEqual(len(commits), 3)
         self.assertEqual(evaluation._changed_paths(g, ROOT, commits), load(g, p, e)['changed_paths'])
+
+
+class AC6TheCheckOfEveryAnswer(Base):
+    """AC6: the answer of every call, present or refused, is checked once with plain_data_problem before it is given."""
+
+    def checked_once(self, call):
+        real = evaluation_derive.plain_data_problem
+        with mock.patch.object(evaluation_derive, 'plain_data_problem', wraps=real) as check:
+            answer = call()
+        self.assertIs(evaluation_derive.plain_data_problem, real)
+        self.assertEqual(check.call_count, 1)
+        self.assertIs(check.call_args.args[0], answer)
+        return answer
+
+    def refused_calls(self):
+        files = dict(REAL)
+        del files[RISK]
+        g, p, e = scenario()
+        return (('argument', lambda: load(g, p, e, task_id='x')), ('read', lambda: load(*scenario(files))),
+                ('git', lambda: load(g, p, e, task_id='TASK-999')), ('pin', lambda: load(g, p, e, ci_logs=[])))
+
+    def test_a_present_answer_is_checked_once(self):
+        self.assertEqual(self.checked_once(load)['result'], 'present')
+
+    def test_each_refused_answer_is_checked_once(self):
+        for reason, call in self.refused_calls():
+            self.refused(self.checked_once(call), reason)
+
+    def test_the_generic_refusal_of_an_unexpected_error_is_checked_once(self):
+        with mock.patch.object(ES, '_risk_sources', side_effect=LookupError):
+            answer = self.checked_once(load)
+        self.assertEqual(self.refused(answer, 'argument'), 'an unexpected error: LookupError')
+
+    def test_a_finding_on_a_refused_answer_gives_a_refusal_with_the_reason_plain(self):
+        found = {'reason': 'type', 'detail': 'a made-up detail'}
+        for reason, call in self.refused_calls():
+            with mock.patch.object(evaluation_derive, 'plain_data_problem', return_value=found) as check:
+                answer = call()
+            self.assertEqual(self.refused(answer, 'plain'), 'a made-up detail', reason)
+            self.assertEqual(check.call_count, 1, reason)
+
+    def test_an_error_inside_the_check_gives_the_generic_refusal_and_no_raise(self):
+        calls = [('present', load)] + list(self.refused_calls())
+        for name, call in calls:
+            with mock.patch.object(evaluation_derive, 'plain_data_problem', side_effect=RuntimeError('a text')):
+                answer = call()
+            self.assertEqual(self.refused(answer, 'argument'), 'an unexpected error: RuntimeError', name)
 
 
 class AC6F1NoSharedContainer(Base):

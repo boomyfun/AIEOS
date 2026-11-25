@@ -15,8 +15,9 @@ open gap that eval_inputs refuses, and a result present does not close it (DEF-0
 changed_paths are None, provenance is [] and findings is exactly ONE {reason, detail}; the answer is never partial.
 The reasons are a closed set: argument, read, policy, rules, pin, governor, git, plain. The order of the checks is: the
 arguments; the three reads (the policy file, the risk-rules file, governor.py); the parse of the policy; policy_version
-and risk_rules; level_version; the pin; ruleset_version; the task's change; evidence_comparison; the check of the answer
-with evaluation_derive.plain_data_problem. The first refusal ends the call.
+and risk_rules; level_version; the pin; ruleset_version; the task's change; evidence_comparison. The first refusal ends
+these steps. Every answer, present or refused, is then checked once with evaluation_derive.plain_data_problem; a finding
+there gives a refusal with the reason plain (that refusal is not checked again).
 
 The three files are read at policy_ref: docs/specs/evaluation-policy-gov-aieos.md gives owner_kept_rules, articles,
 default_profiles, requirement_profiles, delegation and auto_accept (requirement_profiles comes from this file only);
@@ -195,18 +196,21 @@ def _load(repo, policy_ref, evaluated_commit, task_id, ci_logs, read, max_commit
     ordered = {key: sources[key] for key in _SOURCES}
     provenance.append({'pin': 'ci_log', 'value': pin['value'], 'logs': len(ci_logs)})
     provenance.append({'source': 'intent_versions', 'state': 'open gap: no producer'})
-    answer = {'result': 'present', 'sources': ordered, 'changed_paths': paths, 'provenance': provenance, 'findings': []}
-    problem = evaluation_derive.plain_data_problem(answer)
-    if problem is not None:
-        raise _Refuse('plain', problem['detail'])
-    return answer
+    return {'result': 'present', 'sources': ordered, 'changed_paths': paths, 'provenance': provenance, 'findings': []}
 
 
 def load_sources(repo, policy_ref, evaluated_commit, task_id, ci_logs, read=None, max_commits=1000):
     try:
-        return _load(repo, policy_ref, evaluated_commit, task_id, ci_logs, read, max_commits)
-    except _Refuse as refusal:
-        return _refused(refusal.reason, refusal.detail)
+        try:
+            answer = _load(repo, policy_ref, evaluated_commit, task_id, ci_logs, read, max_commits)
+        except _Refuse as refusal:
+            answer = _refused(refusal.reason, refusal.detail)
+        except Exception as exc:
+            answer = _refused('argument', 'an unexpected error: ' + type(exc).__name__)
+        problem = evaluation_derive.plain_data_problem(answer)
+        if problem is not None:
+            return _refused('plain', problem['detail'])
+        return answer
     except Exception as exc:
         return _refused('argument', 'an unexpected error: ' + type(exc).__name__)
 
