@@ -268,10 +268,11 @@ class AC4PlainDataAndPurity(unittest.TestCase):
 class AC5TheEvidencePathEntry(unittest.TestCase):
     def test_the_module_is_an_entry_of_the_list(self):
         paths = evaluation_policy.EVIDENCE_DEFINING_PATHS
-        self.assertEqual(len(paths), 10)
-        self.assertEqual(len(set(paths)), 10)
-        self.assertEqual(paths[-1], 'src/aieos_bootstrap/evaluation_derive.py')
-        self.assertEqual(paths[-2], 'src/aieos_bootstrap/eval_inputs.py')
+        self.assertEqual(len(paths), 16)
+        self.assertEqual(len(set(paths)), 16)
+        self.assertEqual(paths[8], 'src/aieos_bootstrap/eval_inputs.py')
+        self.assertEqual(paths[9], 'src/aieos_bootstrap/evaluation_derive.py')
+        self.assertEqual(list(paths[10:16]), ['src/aieos_bootstrap/evaluation_sources.py', 'src/aieos_bootstrap/scope_reconcile.py', 'src/aieos_bootstrap/base_inputs.py', 'src/aieos_bootstrap/base_files.py', 'src/aieos_bootstrap/evaluation.py', 'src/aieos_bootstrap/ci_evidence.py'])
         for p in paths:
             self.assertFalse(p.startswith('/') or '..' in p.split('/') or '\\' in p, p)
         self.assertTrue((ROOT / paths[-1]).is_file())
