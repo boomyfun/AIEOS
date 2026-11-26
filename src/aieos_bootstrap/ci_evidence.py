@@ -35,7 +35,11 @@ runs (a list of run_id, attempt and the SHA-256 of the UTF-8 bytes of that attem
 Limits: the log is trusted as the executor's unedited fetch, which this function cannot check (the evidence mapping
 names it); the step conclusions that become records come from the run metadata (the steps lists), which is trusted in the
 same way and is not tied to the log, so the caller keeps the hash of the metadata as well; the default map covers scope,
-build and lint only, so the run-made plan's review gate stays uncovered (the owner's question of DEF-0153); the module
+build, lint and constitution, and a plan entry with the check review or tests stays uncovered; the CI steps of the
+constitution gate do not check the run-made contract's AC1 (the change does what the intent states), nor the path part of
+its AC2 (G0 scope checks that), each of its seven steps checks only what its own workflow text says, with the limits that
+text states (listed in the docstring of gate_records), and the run-made AC1 is judged by the decision agent's review while
+the task is in review (decision-matrix row A82); the module
 cannot see the mapping that evaluation.evaluate_task declares, so passing the same copy of the intent versions is the
 caller's duty; a change of the detect step's output wording or of the log form makes the answer a refusal (fail closed).
 The caller's duties: pass EVERY attempt of every run of the task branch (the module cannot know how many attempts there

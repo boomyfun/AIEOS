@@ -1888,8 +1888,12 @@ _RUN_SINGLE = {
     'criteria': ('  - AC1: >-\n      The change does what intent %(intent)s states, within the write set.\n'
                  '  - AC2: >-\n      No other path is changed.\n'),
     'risk': 'low',
-    # DEF-0118 follow-up 2 (TASK-129): the low default plan is G0 scope, G1 build, G2 lint, G3 review.
-    'gates': '  - {gate: G1, check: build}\n  - {gate: G2, check: lint}\n  - {gate: G3, check: review, args: [AC1, AC2]}\n',
+    # DEF-0118 follow-up 2 (TASK-129), amended by TASK-164 (decision-matrix row A82): the low default plan is G0 scope,
+    # G1 build, G2 lint, G3 constitution. The CI steps of the G3 constitution gate do not check AC1 (the change does what
+    # the intent states), nor the path part of AC2 (G0 scope checks that); each of the seven steps checks only what its own
+    # workflow text says, with the limits that text states. AC1 is judged by the decision agent's review while the task is
+    # in review (A82).
+    'gates': '  - {gate: G1, check: build}\n  - {gate: G2, check: lint}\n  - {gate: G3, check: constitution, args: [AC1, AC2]}\n',
     'success': 'the change is made within the write set and nothing else changed',
 }
 _RUN_DRAFTING = {

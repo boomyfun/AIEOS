@@ -34,18 +34,32 @@ intent_versions, gate and outcome. Its record_id is the SHA-256 of the four text
 the gate joined by LF (a form different from reconcile's "ci-rule" id, so the two cannot collide); it has no ci_run key
 because the records module has none.
 
-DEFAULT_CHECK_MAP names the CI steps of the workflow at the base for the checks scope, build and lint. It has no entry
-for review, tests or constitution: the run-made plan's review gate has no CI evidence, so it stays uncovered and the
-governor's INSUFFICIENT_EVIDENCE for it is the honest result. The maker reads no CI run and appends nothing: the caller
-gives the steps and takes the records.
+DEFAULT_CHECK_MAP names the CI steps of the workflow at the base for the checks scope, build, lint and constitution. The
+entry constitution holds seven steps of the constitution gate (spec-04 section 2), in the workflow's order (decision-matrix
+row A82). Three other steps are left out: "SEC-003 record (changes under .github/)" and "GOV-003 evaluator paths (reports
+an evaluator change)" only report and never fail, so counting them as passed would be false, and "GOV-003 evaluator lists
+equal" is not among the steps that spec-04 section 2 gives to the gate. The map has no entry for review or tests: a plan
+entry with either check stays uncovered. The maker reads no CI run and appends nothing: the caller gives the steps and
+takes the records.
+
+The limit of the constitution gate: its CI steps do not check the run-made contract's AC1 (the change does what the intent
+states), nor the path part of its AC2 (no other path is changed; G0 scope checks that). Each of the seven steps checks only
+what its own workflow text says, with the limits that text states (SEC-002 does not check account names; INV-010 replay
+does not replay decision.acceptance records; deterministic_rule is an accident filter; OPS-003 pattern rules checks only
+effect labels and three named words; bandit skips named rules for named files and for tests). The run-made AC1 is judged by
+the decision agent's review while the task is in review (decision-matrix row A82). Passing gates alone do not meet the
+evidence profile of a run-made low task, so the governor still answers INSUFFICIENT_EVIDENCE for it (the contract of
+TASK-164, AC7).
 
 What the caller owes (the limits of this function): (1) the arguments are plain data, as loaded from JSON; an object of
 a subclass whose methods lie or change between two reads is outside the guarantee. (2) The plan entries are given
 without their optional args key: an entry with any key other than gate and check makes the whole call an error. (3) The
 steps are those of the CI run on the given commit; the function cannot check that, and it stamps the CI source class on
-what it is given. (4) The mapped steps of the default map (the task detection and scope steps, the build step and the
-lint step) also conclude as success in a run that has NO task, where each prints a note and exits 0; the caller must
-give steps only of a run whose detect step names this task. (5) The record_id binds the task, the commit and the gate,
+what it is given. (4) The mapped steps of the default map for scope, build and lint (the task detection and scope
+steps, the build step and the lint step) and three of its constitution steps (deterministic_rule, OPS-003 pattern rules,
+static_security_analysis) also conclude as success in a run that has NO task, where each prints a note and exits 0; the
+other four constitution steps run their checks on every push (ci_evidence refuses a run whose detect step says no task).
+The caller must give steps only of a run whose detect step names this task. (5) The record_id binds the task, the commit and the gate,
 not the outcome or the intent versions: a rerun gives the same id, which the governor refuses within one request.
 (6) DEFAULT_CHECK_MAP is one shared module dict, not copied by the function; callers do not change it.
 """
@@ -61,6 +75,15 @@ DEFAULT_CHECK_MAP = {
     'scope': ['G0 task detection (the contract commit on main)', 'G0 scope (V0)'],
     'build': ['G1 build'],
     'lint': ['lint (pyflakes 4.0.3, pinned by version and hash)'],
+    'constitution': [
+        "SEC-001 secret scan (tip tree; every commit's message, file names and added lines)",
+        "SEC-002 pattern rules (every commit's added lines)",
+        'OPS-002 owner-kept paths',
+        'INV-010 replay',
+        'deterministic_rule (INV-001, INV-002, INV-004)',
+        'OPS-003 pattern rules',
+        'static_security_analysis (bandit, every package pinned by version and hash)',
+    ],
 }
 
 _NO_STEP_FOR_CHECK = 'no CI step is evidence of this check'

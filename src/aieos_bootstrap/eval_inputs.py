@@ -41,8 +41,11 @@ check that contract is the contract whose bytes hash to contract_sha256; the cal
 base_inputs.contract_at call. That reader refuses the self-build contracts of docs/tasks whose intent_versions keys
 begin with a dot, so this assembler is for run-made contracts. The arguments are plain data as loaded from JSON; a
 crafted subclass whose methods answer differently on each call is outside the guarantee. The CI class of the records is
-asserted, not verified (ci_evidence). The run-made review gate G3 stays uncovered (DEF-0153) and is listed in
-evidence.uncovered. Form checks of the sources (reason argument; D-6836, D-6847): a wrong form of owner_kept_rules,
+asserted, not verified (ci_evidence). For a run-made low contract the G3 gate is constitution and CI steps can
+cover it (they do not check the contract's AC1, nor the path part of its AC2; each step checks only what its own workflow
+text says, with the limits that text states, listed in the docstring of gate_records; the run-made AC1 is judged by the
+decision agent's review while the task is in review, decision-matrix row A82). For a run-made drafting contract the review
+gate G3 stays uncovered (DEF-0153) and is listed in evidence.uncovered. Form checks of the sources (reason argument; D-6836, D-6847): a wrong form of owner_kept_rules,
 evidence_comparison or auto_accept would become a silent fail-closed value in governor.derive_inputs (governor.py
 :587-:590, :594, :622); a level_version or ruleset_version that is not a text would become an error record with no
 decision in evaluation (governor.py :191-:193). The commit 5302a2fe said "silently" of all five sources, which is wrong

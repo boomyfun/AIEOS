@@ -21,7 +21,8 @@ SCOPE_STEPS = MAP['scope']
 BUILD_STEP = MAP['build'][0]
 LINT_STEP = MAP['lint'][0]
 # The exact names of the CI steps that spec-04 section 2 gives to the constitution gate (the names in the job of the CI run
-# of the task push); none of them is in the default map.
+# of the task push); the default map holds seven of them: the SEC-003 record and GOV-003 evaluator paths names are not
+# in the map.
 CONSTITUTION_STEPS = [
     'deterministic_rule (INV-001, INV-002, INV-004)', 'OPS-003 pattern rules',
     'GOV-003 evaluator paths (reports an evaluator change)',
@@ -365,13 +366,87 @@ class AC4TheRecords(unittest.TestCase):
         self.assertEqual(decision['decision'], 'NEEDS_REWORK')
 
 
+# TASK-164: the seven steps of the default map's entry constitution, in the workflow's order, and the three steps that the
+# entry leaves out.
+SEVEN_STEPS = [
+    "SEC-001 secret scan (tip tree; every commit's message, file names and added lines)",
+    "SEC-002 pattern rules (every commit's added lines)", 'OPS-002 owner-kept paths', 'INV-010 replay',
+    'deterministic_rule (INV-001, INV-002, INV-004)', 'OPS-003 pattern rules',
+    'static_security_analysis (bandit, every package pinned by version and hash)']
+LEFT_OUT = ['SEC-003 record (changes under .github/)', 'GOV-003 evaluator paths (reports an evaluator change)',
+            'GOV-003 evaluator lists equal']
+CONSTITUTION_PLAN = [{'gate': 'G3', 'check': 'constitution'}]
+RUN_LOW_PLAN = [{'gate': 'G0', 'check': 'scope'}, {'gate': 'G1', 'check': 'build'}, {'gate': 'G2', 'check': 'lint'},
+                {'gate': 'G3', 'check': 'constitution'}]
+
+
+def seven(changed=None, conclusion='success'):
+    """The seven steps, each successful except the one named by changed, which gets the given conclusion."""
+    return [step(n, conclusion if n == changed else 'success') for n in SEVEN_STEPS]
+
+
+class TASK164TheConstitutionEntry(unittest.TestCase):
+    def uncovered(self, steps, detail, message):
+        out = make(plan=CONSTITUTION_PLAN, steps=steps)
+        self.assertEqual((out['error'], out['records']), (None, []), message)
+        self.assertEqual(out['uncovered'], [{'gate': 'G3', 'check': 'constitution', 'detail': detail}], message)
+
+    def test_all_seven_steps_successful_is_pass(self):
+        out = make(plan=CONSTITUTION_PLAN, steps=seven())
+        self.assertEqual((out['error'], out['uncovered']), (None, []))
+        self.assertEqual(by_gate(out), {'G3': 'pass'})
+
+    def test_one_failed_step_is_fail(self):
+        for name in SEVEN_STEPS:
+            out = make(plan=CONSTITUTION_PLAN, steps=seven(name, 'failure'))
+            self.assertEqual(by_gate(out), {'G3': 'fail'}, name)
+            self.assertEqual(out['uncovered'], [], name)
+
+    def test_an_absent_repeated_or_otherwise_concluded_step_leaves_the_gate_uncovered(self):
+        for name in SEVEN_STEPS:
+            self.uncovered([s for s in seven() if s['name'] != name], 'step not present', name)
+            self.uncovered(seven() + [step(name)], 'step named more than once', name)
+            self.uncovered(seven(name, 'skipped'), 'conclusion is neither success nor failure', name)
+
+    def test_the_three_steps_left_out_never_count(self):
+        for conclusion in ('success', 'failure'):
+            others = [step(n, conclusion) for n in LEFT_OUT]
+            out = make(plan=CONSTITUTION_PLAN, steps=seven() + others)
+            self.assertEqual(by_gate(out), {'G3': 'pass'}, conclusion)
+            self.uncovered(others, 'step not present', conclusion)
+            self.uncovered(seven()[1:] + others, 'step not present', conclusion)
+
+    def test_a_run_made_low_plan_has_no_missing_gate_and_its_profile_is_not_met(self):
+        out = make(plan=RUN_LOW_PLAN, steps=all_steps() + seven())
+        self.assertEqual(by_gate(out), {'G0': 'pass', 'G1': 'pass', 'G2': 'pass', 'G3': 'pass'})
+        request = {'task_id': TASK, 'task_content_hash': 'c' * 64, 'evaluated_commit': COMMIT, 'intent_versions': dict(IV),
+                   'task_state': 'VERIFYING', 'changed_paths': ['docs/Deferred/a.md'],
+                   'retry_count': {'used': 0, 'limit': 1}}
+        articles = [('GOV-004', 'human_review'), ('GOV-005', 'human_review'), ('OPS-002', 'human_review'),
+                    ('SEC-002', 'ai_review'), ('OPS-003', 'ai_review')]
+        inputs = {'traces_to': ['SPEC-001'], 'risk': 'low', 'owner_kept_act': False, 'weakens_evidence': False,
+                  'delegation_in_force': True, 'auto_accept': False, 'verification_plan': ['G0', 'G1', 'G2', 'G3'],
+                  'evidence_profile': [{'dimension': 'functional', 'evidence_types': ['build', 'lint']}],
+                  'applicable_articles': [{'id': a, 'evidence_required': [t]} for a, t in articles],
+                  'policy_version': 'v2', 'level_version': 'v1', 'ruleset_version': 'v1'}
+        decision = governor.evaluate(request, inputs, out['records'])
+        self.assertEqual((decision['missing_gates'], decision['failed_gates']), ([], []))
+        self.assertEqual((decision['decision'], decision['table_row']), ('INSUFFICIENT_EVIDENCE', 3))
+        self.assertEqual(decision['next_task_state'], 'REWORK')
+        want = [{'dimension': 'functional', 'required': ['build', 'lint'], 'satisfied_by': [],
+                 'missing_types': ['build', 'lint']}]
+        want += [{'dimension': a, 'required': [t], 'satisfied_by': [], 'missing_types': [t]} for a, t in articles]
+        self.assertEqual(decision['profile_used'], want)
+
+
 class AC5TheDefaultMap(unittest.TestCase):
-    def test_exactly_the_three_checks_with_the_exact_step_names(self):
+    def test_exactly_the_four_checks_with_the_exact_step_names(self):
         self.assertEqual(gate_records.DEFAULT_CHECK_MAP, {
             'scope': ['G0 task detection (the contract commit on main)', 'G0 scope (V0)'],
             'build': ['G1 build'],
-            'lint': ['lint (pyflakes 4.0.3, pinned by version and hash)']})
-        for check in ('review', 'tests', 'constitution'):
+            'lint': ['lint (pyflakes 4.0.3, pinned by version and hash)'],
+            'constitution': SEVEN_STEPS})
+        for check in ('review', 'tests'):
             self.assertNotIn(check, gate_records.DEFAULT_CHECK_MAP)
 
     def test_each_named_step_is_a_name_line_of_the_workflow_exactly_once(self):

@@ -435,6 +435,46 @@ class AC4TheRerunRule(unittest.TestCase):
         self.assertIn('a new commit', ci_evidence.__doc__)
 
 
+# TASK-164: the seven steps of the default map's entry constitution, and a plan with that check that is not a run-made one.
+SEVEN_STEPS = [
+    "SEC-001 secret scan (tip tree; every commit's message, file names and added lines)",
+    "SEC-002 pattern rules (every commit's added lines)", 'OPS-002 owner-kept paths', 'INV-010 replay',
+    'deterministic_rule (INV-001, INV-002, INV-004)', 'OPS-003 pattern rules',
+    'static_security_analysis (bandit, every package pinned by version and hash)']
+CONSTITUTION_PLAN = [{'gate': 'G3', 'check': 'constitution', 'args': ['AC5', 'INV-001']}]
+
+
+def with_seven(changed=None, conclusion='success'):
+    """The four mapped steps and the seven, each successful except the one named by changed."""
+    return all_steps() + [step(n, conclusion if n == changed else 'success') for n in SEVEN_STEPS]
+
+
+class TASK164TheConstitutionSteps(unittest.TestCase):
+    def test_a_constitution_plan_gets_its_record_from_the_seven_steps(self):
+        out = call(plan=copy.deepcopy(CONSTITUTION_PLAN), runs=[run(steps=with_seven())])
+        self.assertIsNone(out['refusal'])
+        self.assertEqual((gates(out), out['uncovered']), ({'G3': 'pass'}, []))
+        for name in SEVEN_STEPS:
+            failed = run(conclusion='failure', steps=with_seven(name, 'failure'))
+            out = call(plan=copy.deepcopy(CONSTITUTION_PLAN), runs=[failed])
+            self.assertIsNone(out['refusal'], name)
+            self.assertEqual((gates(out), out['uncovered']), ({'G3': 'fail'}, []), name)
+            fewer = [s for s in with_seven() if s['name'] != name]
+            out = call(plan=copy.deepcopy(CONSTITUTION_PLAN), runs=[run(steps=fewer)])
+            self.assertIsNone(out['refusal'], name)
+            self.assertEqual(out['records'], [], name)
+            self.assertEqual(out['uncovered'], [{'gate': 'G3', 'check': 'constitution', 'detail': 'step not present'}], name)
+
+    def test_two_attempts_that_disagree_on_a_constitution_step_are_refused(self):
+        for name in SEVEN_STEPS:
+            failed = with_seven(name, 'failure')
+            first = [run(conclusion='failure', steps=failed), run(attempt=2, steps=with_seven())]
+            second = [run(steps=with_seven()), run(attempt=2, conclusion='failure', steps=failed)]
+            for runs in (first, second):
+                out = call(plan=copy.deepcopy(CONSTITUTION_PLAN), runs=runs)
+                self.assertEqual(refusal(out), ('rerun', 'the attempts disagree on the step ' + name))
+
+
 class AC5TheMakerAndTheDuties(unittest.TestCase):
     def test_the_records_equal_the_makers_for_the_same_arguments(self):
         out = call()

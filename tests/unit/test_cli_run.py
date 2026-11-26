@@ -84,7 +84,7 @@ def expected_single(task=TASK, head=HEAD, intent_id='INT-001', paths=('docs/a.md
         '  - {gate: G0, check: scope}',
         '  - {gate: G1, check: build}',
         '  - {gate: G2, check: lint}',
-        '  - {gate: G3, check: review, args: [AC1, AC2]}',
+        '  - {gate: G3, check: constitution, args: [AC1, AC2]}',
         'exit_conditions:',
         '  success: the change is made within the write set and nothing else changed',
         '  escalate: [needs_out_of_scope_change, needs_owner_act]',
@@ -181,7 +181,7 @@ GOLDEN_RUN_CONTRACT = '\n'.join((
     '  secrets: deny', '  external_side_effects: deny', 'risk: low', 'autonomy:', '  max_level: L1',
     '  budgets: {tokens: 400k, wall_time: 2h, retries: 1, human_attention: 0m}', 'verification_plan:',
     '  - {gate: G0, check: scope}', '  - {gate: G1, check: build}', '  - {gate: G2, check: lint}',
-    '  - {gate: G3, check: review, args: [AC1, AC2]}',
+    '  - {gate: G3, check: constitution, args: [AC1, AC2]}',
     'exit_conditions:', '  success: the change is made within the write set and nothing else changed',
     '  escalate: [needs_out_of_scope_change, needs_owner_act]', 'owner_kept_act: true')) + '\n'
 PATH = '.aieos/tasks/%s.yaml' % TASK
@@ -373,7 +373,7 @@ class TASK098AC1Runs(unittest.TestCase):
         for text, paths, risk, gates in (
                 (expected_single(), ['docs/a.md'], 'risk: low',
                  ['  - {gate: G1, check: build}', '  - {gate: G2, check: lint}',
-                  '  - {gate: G3, check: review, args: [AC1, AC2]}']),
+                  '  - {gate: G3, check: constitution, args: [AC1, AC2]}']),
                 (expected_drafting(), proposals(), 'risk: critical',
                  ['  - {gate: G3, check: review, args: [AC1, AC2, AC3, AC4]}'])):
             parsed = task_contract.parse_contract(text, TASK)
