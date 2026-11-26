@@ -1099,7 +1099,8 @@ class EvaluateCommandChainFiles(unittest.TestCase):
             'auto_accept': {}, 'level_version': 'v1', 'ruleset_version': 'v1', 'policy_version': 'v2',
             'risk_rules': [{'match': ['src/**', 'tests/**'], 'class': 'medium'}]}
         return {'result': 'present', 'sources': sources, 'changed_paths': ['src/x.py'],
-                'provenance': [{'path': 'stand-in', 'commit': self.BASE}], 'findings': []}
+                'provenance': [{'path': 'stand-in', 'commit': self.BASE},
+                               {'contract': self.SHA, 'commit': self.COMMIT}], 'findings': []}
 
     def git(self, fail_diff):
         message = 'Work\n\nThe body.\n\nAIEOS-Task: TASK-162\n'

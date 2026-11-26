@@ -101,7 +101,8 @@ class World:
         self.intake = {'result': 'present', 'runs': [{'log': 'log one'}, {'log': 'log two'}],
                        'files': [{'name': 'run-1-1.log', 'sha256': 'f' * 64}], 'findings': []}
         shared = ['same']
-        self.provenance = [{'path': 'p', 'list': shared}, {'path': 'q', 'list': shared}]
+        self.provenance = [{'path': 'p', 'list': shared}, {'path': 'q', 'list': shared},
+                           {'contract': SHA, 'commit': COMMIT}]
         self.loaded = {'result': 'present', 'sources': {'s': 1}, 'changed_paths': ['src/x.py'],
                        'provenance': self.provenance, 'findings': []}
         self.ci_records = [record(1), record(2)]
@@ -578,6 +579,38 @@ class TASK162AC9Decision(unittest.TestCase):
             self.assertEqual((out['reason'], out['findings']),
                              ('evaluate', ['evaluate: evaluate_task gave an answer out of form']), answer)
             self.assertEqual(text_sha(out['manifest']), out['manifest_sha256'])
+
+
+class TASK163AC6Contract(unittest.TestCase):
+    def test_another_contract_of_the_loader_refuses(self):
+        """TASK-163 AC6: a provenance that is not a list of mappings, none or two mappings with the key contract, a
+        further key, or another digest or commit gives "sources" with one finding, before the inputs and with nothing
+        appended."""
+        good = {'contract': SHA, 'commit': COMMIT}
+        other = {'path': 'p'}
+        finding = "sources: the loader's contract digest or commit differs from the command's"
+        for provenance in ([other], [other, good, dict(good)], [dict(good, path='p')], [{'contract': SHA}],
+                           [dict(good, contract='f' * 64)], [dict(good, commit=BASE)], [good, 'x'], (good,), None):
+            w = World(loaded={'result': 'present', 'sources': {'s': 1}, 'changed_paths': ['src/x.py'],
+                              'provenance': provenance, 'findings': []})
+            out = w.run()
+            self.assertEqual((out['result'], out['reason'], out['findings'], w.log.calls, out['appended']),
+                             ('refused', 'sources', [finding], [], []), provenance)
+            self.assertEqual((out['manifest'], out['manifest_sha256'], out['uncovered']), (None, None, None))
+            self.assertNotIn('eval_inputs', w.calls)
+
+    def test_an_answer_without_provenance_refuses(self):
+        """TASK-163 AC6: a present answer of the loader without a provenance is refused the same way."""
+        w = World(loaded={'result': 'present', 'sources': {'s': 1}, 'changed_paths': ['src/x.py'], 'findings': []})
+        out = w.run()
+        self.assertEqual((out['reason'], w.log.calls), ('sources', []), out['findings'])
+
+    def test_the_same_contract_goes_on(self):
+        """TASK-163 AC6: the one entry with the command's digest and commit goes on to the decision."""
+        w = World(loaded={'result': 'present', 'sources': {'s': 1}, 'changed_paths': ['src/x.py'],
+                          'provenance': [{'contract': SHA, 'commit': COMMIT}], 'findings': []})
+        out = w.run()
+        self.assertEqual((out['result'], len(out['appended'])), ('evaluated', 3), out['findings'])
 
 
 if __name__ == '__main__':

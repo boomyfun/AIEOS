@@ -269,7 +269,13 @@ scope_reconcile.read_base, rules_from_policy and scope_drift.path_class, each pa
 lowercased form against the rules with their patterns lowercased, failing closed to no class; a low class gives a
 single task from a fixed template, anything else a drafting task from another fixed template, both ending owner_kept_act: true, or owner_kept_act: false
 when the caller states the text false (task TASK-115: accepted only with source_class decision_agent, and refused when
-a write path is under .github/, is the measurement protocol or is under docs/pre-genesis/measurements/). It writes the contract through writer.write_contract before any
+a write path is under .github/, is the measurement protocol or is under docs/pre-genesis/measurements/). Each file of
+the keyword trace (task TASK-163; specification 7 section 3) is written into the contract's traces_to, and into its
+input_state.intent_versions with the SHA-256 of the UTF-8 text that base_files.read_file gives at the head read: step
+"trace", after the intent's checks and before the contract is made; a file not read there refuses with reason "trace"
+and nothing is written or appended. With no trace the contract is made as before. Step argument takes at most 100
+distinct entries of a write path's form whose first character is an ASCII letter, digit or "_", without "#", not an
+ADR id and not beginning "owner_kept_act" in any letter case. It writes the contract through writer.write_contract before any
 append, then appends the intent's claim and task.drafted through writer.append_event; the claim names who stated the
 intent, as approval_act's records do, with decision_ref for decision_agent (r3). run_task reads the caller's
 clock once, an exception to "reads no clock" above. Since task TASK-104 it refuses with reason "intent", before
@@ -1824,13 +1830,16 @@ def import_task(root, task_id, clock, read=None, read_log=None, write_contract=N
 
 RUN_KEYS = ('result', 'reason', 'findings', 'intent_id', 'claim_id', 'kind', 'risk', 'path', 'contract_hash',
             'event_ids', 'appends')
-RUN_REASONS = ('argument', 'clock', 'head', 'log', 'exists', 'intent', 'layout', 'write', 'append')
+RUN_REASONS = ('argument', 'clock', 'head', 'log', 'exists', 'intent', 'trace', 'layout', 'write', 'append')
 RUN_KINDS = ('single', 'drafting')
 RUN_RECORDER = 'aieos cli run'
 RUN_INTENT_MAX = 2000
 RUN_WRITE_MAX = 50
+RUN_TRACE_MAX = 100
 _RUN_CALLEES = ('read', 'read_log', 'read_base', 'write_contract', 'append')
 _RUN_PATH = re.compile(r'[A-Za-z0-9_./-]+')
+_RUN_TRACE_FIRST = re.compile(r'[A-Za-z0-9_]')
+_RUN_ADR = re.compile(r'ADR-[0-9]+')
 _RUN_INTENT_ID = re.compile(r'INT-([0-9]+)')
 _RUN_APPENDED = ('appended', 'duplicate')
 _RUN_BAD_CLOCK = 'clock: the clock gave no timezone-aware UTC time with whole seconds'
@@ -1856,11 +1865,11 @@ _RUN_HEAD = '''task: %(task)s
 contract_version: v1
 task_type: %(kind)s
 objective: >-
-%(objective)straces_to: []
+%(objective)straces_to:%(traces)s
 input_state:
   base_commit: %(head)s
   depends_on: []
-  intent_versions: {}
+  intent_versions:%(versions)s
 write_set:
   paths:
 %(paths)sread_set:
@@ -1944,6 +1953,39 @@ def _run_argument_findings(root, task_id, intent, source_class, who, write, cloc
         if value is not None and not callable(value):
             found.append('argument: %s is neither None nor callable' % name)
     return found
+
+
+def _run_trace_ok(path):
+    """One entry of the trace (task TASK-163): a write path's form (_run_path_ok), and one that every reader of the
+    contract takes as written: its first character an ASCII letter, digit or "_" (the contract reader refuses another
+    as an intent_versions key), no "#" (a traces_to entry is split there), not an ADR id and not beginning
+    "owner_kept_act" in any letter case (the evaluation would count its line as a second owner_kept_act line)."""
+    if not _run_path_ok(path):
+        return False
+    return (_RUN_TRACE_FIRST.match(path) is not None and '#' not in path and _RUN_ADR.fullmatch(path) is None
+            and not path.lower().startswith('owner_kept_act'))
+
+
+def _run_trace_findings(trace):
+    """Step 1, the trace (task TASK-163): a list or tuple of at most RUN_TRACE_MAX distinct entries in form."""
+    if (isinstance(trace, (list, tuple)) and len(trace) <= RUN_TRACE_MAX and all(_run_trace_ok(p) for p in trace)
+            and len(set(trace)) == len(trace)):
+        return []
+    return ['argument: trace is not up to %d distinct file paths that the readers of the contract take as written'
+            % RUN_TRACE_MAX]
+
+
+def _run_trace_versions(read, root, head, trace):
+    """Step "trace" (task TASK-163): ((entry, the SHA-256 of its text at head), ...) in the order given, or a stop
+    with reason "trace" at the first entry that is not read."""
+    versions = []
+    for path in trace:
+        value, found = base_files.read_file(root, head, path, read)
+        if value is None:
+            raise _import_stop('trace', ['trace: %s was not read at the base' % path]
+                               + ['trace: %s' % f for f in found])
+        versions.append((path, hashlib.sha256(value['text'].encode('utf-8')).hexdigest()))
+    return tuple(versions)
 
 
 def _run_statement_findings(source_class, write, owner_kept_act):
@@ -2061,15 +2103,18 @@ def _run_conflict(report, log, record, claim_event, moment):
             'one (intent %s, recorder %s); the subject alone can cause this' % tuple(named)]
 
 
-def _run_contract(kind, task_id, head, intent_id, write, owner_kept_act=None):
-    """Step 8: the template of the kind, filled with the task id, the head, the intent id and the write set; the
+def _run_contract(kind, task_id, head, intent_id, write, owner_kept_act=None, versions=()):
+    """Step 8: the template of the kind, filled with the task id, the head, the intent id, the write set and the
+    traced files with their versions (traces_to [] and intent_versions {} when there are none, task TASK-163); the
     contract ends owner_kept_act: true unless the statement is the text false."""
     form = _RUN_SINGLE if kind == 'single' else _RUN_DRAFTING
     paths = list(write) if kind == 'single' else ['docs/proposals/%s-%s.md' % (intent_id, p) for p in _RUN_PROPOSALS]
     values = {'task': task_id, 'head': head, 'intent': intent_id, 'state': writer.STATE_DIR}
     filled = dict((k, v % values) if k in ('objective', 'criteria') else (k, v) for k, v in form.items())
+    traces = ''.join('\n  - %s' % p for p, _ in versions) or ' []'
+    entries = ''.join('\n    %s: %s' % pair for pair in versions) or ' {}'
     text = _RUN_HEAD % dict(values, kind=filled['kind'], objective=filled['objective'], criteria=filled['criteria'],
-                            paths=''.join('    - %s\n' % p for p in paths))
+                            paths=''.join('    - %s\n' % p for p in paths), traces=traces, versions=entries)
     return text + _RUN_TAIL % {'risk': filled['risk'], 'gates': filled['gates'], 'success': filled['success'],
                                'kept': 'false' if owner_kept_act == 'false' else 'true'}
 
@@ -2092,14 +2137,15 @@ def _run_append(append, root, event_type, payload, event_id, now, recorder, task
 
 
 def run_task(root, task_id, intent, source_class, who, write, clock, read=None, read_log=None, read_base=None,
-             write_contract=None, append=None, owner_kept_act=None):
+             write_contract=None, append=None, owner_kept_act=None, trace=()):
     """Record an intent and make and record its task (task TASK-098; `aieos run`, specification 7 section 3 :30): a
     mapping with exactly RUN_KEYS; it never raises an Exception. Its steps, each step's name being the reason of a
     refusal or a raise at it: argument (who as approval_act checks it, r3; the statement owner_kept_act, None or the
-    text false, TASK-115); clock; head (start's own reader, _head, 40
+    text false, TASK-115, and the trace's entries, TASK-163); clock; head (start's own reader, _head, 40
     lowercase hex); log (read_log, then records.check_log); exists (any event of the task in the log); the class at the
     base (never a refusal); the intent's id and claim; intent (a dry run of eventlog.append: a claim that would answer
-    "conflict" is refused before anything is written, TASK-104); the kind and its template; write (write_contract,
+    "conflict" is refused before anything is written, TASK-104); the kind; trace (only with a trace, TASK-163: each
+    entry read at the head); the kind's template; write (write_contract,
     before any append, whose "exists" and "layout" pass through); append (the intent's claim with its record's
     recorder, then task.drafted with RUN_RECORDER, no fencing token)."""
     callees = (read, read_log, read_base, write_contract, append)
@@ -2109,10 +2155,10 @@ def run_task(root, task_id, intent, source_class, who, write, clock, read=None, 
     event_ids, appends = [], []
     try:
         bad = (_run_argument_findings(root, task_id, intent, source_class, who, write, clock, callees)
-               + _run_statement_findings(source_class, write, owner_kept_act))
+               + _run_statement_findings(source_class, write, owner_kept_act) + _run_trace_findings(trace))
         if bad:
             raise _import_stop('argument', bad)
-        write = tuple(write)
+        write, trace = tuple(write), tuple(trace)
         read = gitread.run if read is None else read
         read_log = writer.read_log if read_log is None else read_log
         read_base = scope_reconcile.read_base if read_base is None else read_base
@@ -2139,7 +2185,11 @@ def run_task(root, task_id, intent, source_class, who, write, clock, read=None, 
         if clash is not None:
             raise _import_stop('intent', clash)
         kind = 'single' if risk == 'low' else 'drafting'
-        text = _run_contract(kind, task_id, head, intent_id, write, owner_kept_act)
+        versions = ()
+        if trace:
+            step = 'trace'
+            versions = _run_trace_versions(read, root, head, trace)
+        text = _run_contract(kind, task_id, head, intent_id, write, owner_kept_act, versions)
         digest = hashlib.sha256(text.encode('utf-8')).hexdigest()
         step = 'write'
         path = _import_write(write_contract, root, task_id, text)

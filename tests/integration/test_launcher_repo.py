@@ -175,5 +175,31 @@ class TASK086AC11Repository(unittest.TestCase):
         self.assertEqual(args[4]['runtime'], {'adapter': 'integration', 'max_risk': None})
 
 
+class TASK163TraceRepository(unittest.TestCase):
+    def test_a_traced_run_over_the_history(self):
+        """TASK-163 AC4, AC5: run_task with a trace, HEAD stood in as f216376e and every other Git read forwarded,
+        writes the file's SHA-256 at that commit into the contract; a path absent at that commit refuses with nothing
+        written."""
+        texts = []
+
+        def write_contract(root, task_id, text):
+            texts.append(text)
+            return writer.StoreResult('done', value=writer.STATE_DIR + '/tasks/' + task_id + '.yaml')
+
+        def go(trace):
+            return launcher.run_task(REPO, 'TASK-999', 'Trace a made-up task.', 'decision_agent', 'D-1', (),
+                                     lambda: NOW, read=Intercept(), read_log=lambda root: b'',
+                                     write_contract=write_contract, append=written, trace=trace)
+
+        out = go(['docs/pre-genesis/constitution.md'])
+        self.assertEqual((out['result'], len(texts)), ('done', 1), out['findings'])
+        self.assertIn('traces_to:\n  - docs/pre-genesis/constitution.md\ninput_state:\n', texts[0])
+        self.assertIn('  intent_versions:\n    docs/pre-genesis/constitution.md: '
+                      '9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a\n', texts[0])
+        out = go(['docs/pre-genesis/constitution.md', 'docs/no-such-file.md'])
+        self.assertEqual((out['result'], out['reason'], len(texts)), ('refused', 'trace', 1))
+        self.assertEqual(out['findings'][0], 'trace: docs/no-such-file.md was not read at the base')
+
+
 if __name__ == '__main__':
     unittest.main()

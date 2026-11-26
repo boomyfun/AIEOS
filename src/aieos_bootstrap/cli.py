@@ -13,7 +13,8 @@ What it does:
   edit, reject, import, run and evaluate their task as argv[1]; run takes its intent as argv[2] (a non-empty value not beginning
   "--"); the flags are --root <path> (required, once, a non-empty value not beginning "--") and --json (optional,
   once); approve, edit and reject also take --class and --by (each required, once) and edit --note (required, once,
-  edit only); run also takes --class and --by (each required, once), --write <path> (any number of times) and
+  edit only); run also takes --class and --by (each required, once), --write <path> (any number of times),
+  --trace <path> (any number of times, task TASK-163) and
   --owner-kept-act false (optional, once, only with --class decision_agent: the caller's statement that the task's
   contract ends owner_kept_act: false); evaluate also takes --repo <path> (required, once).
   Anything else gives exit 2 and USAGE, with neither the clock nor a command's callee called.
@@ -119,7 +120,10 @@ What it does:
   call, who being --by, the decision id (decision_agent) or the name (human_authority), as approve's is (r3).
   With --owner-kept-act false (task TASK-115) the call also passes the keyword owner_kept_act='false', and run_task
   writes the contract ending owner_kept_act: false; without the flag no keyword is passed and the contract ends
-  owner_kept_act: true. "done" gives exit 0 and the lines "intent: <id> <claim id>", "contract: <path> <hash> <kind> <risk or none>" and
+  owner_kept_act: true. With --trace (task TASK-163; specification 7 section 3) the call also passes the keyword
+  trace, the paths in the order given, and run_task writes each into the contract's traces_to and intent_versions;
+  without the flag no keyword is passed. aieos import has no such flag.
+  "done" gives exit 0 and the lines "intent: <id> <claim id>", "contract: <path> <hash> <kind> <risk or none>" and
   "event: <id> <appended or duplicate>" twice, then "finding: <text>" per finding, or under --json one sorted JSON
   line; "refused" gives exit 1 and the findings "run: refused <reason>" then the answer's findings; an answer out of
   form, its types checked exactly, gives RUN_OUT_OF_FORM; a raise in run_task gives "run: a step raised <type>", and
@@ -164,7 +168,7 @@ USAGE = ('usage: python -m aieos_bootstrap.cli tasks --root <path> [--json]\n'
          '       python -m aieos_bootstrap.cli import <task> --root <path> [--json]\n'
          '       python -m aieos_bootstrap.cli run <task> <intent> --root <path> '
          '--class <decision_agent|human_authority> --by <decision id or name> [--owner-kept-act false] '
-         '[--write <path>]... [--json]\n'
+         '[--write <path>]... [--trace <path>]... [--json]\n'
          '       python -m aieos_bootstrap.cli evaluate <task> --root <path> --repo <path> [--json]\n'
          '  tasks          the tasks that may be taken\n'
          '  end <session>  end a crashed session from outside the runtime\n'
@@ -183,6 +187,7 @@ USAGE = ('usage: python -m aieos_bootstrap.cli tasks --root <path> [--json]\n'
          '  --by <who>     the decision id (decision_agent) or the name (human_authority)\n'
          '  --note <text>  the edit note (edit only)\n'
          '  --write <path> a file the run task may change (run only; any number of times)\n'
+         '  --trace <path> a file the run task traces to (run only; any number of times)\n'
          '  --owner-kept-act false  the caller\'s statement that the run task ends owner_kept_act: false (run only; '
          'once; with --class decision_agent)\n'
          '  --json         one JSON line in place of text lines\n')
@@ -240,12 +245,13 @@ def _session_in_form(session):
 
 
 def _parse(argv):
-    """(command, session or task, root, as_json, source_class, who, note, write, owner_kept_act) for a well-formed
+    """(command, session or task, root, as_json, source_class, who, note, write, owner_kept_act, trace) for a
+    well-formed
     argv, else None (a usage error); source_class, who and note are None except for approve, edit and reject, and for
     run, whose --class is source_class, whose --by is who and whose intent is in the note's place; write is run's
     --write paths, a tuple, () for every other command; owner_kept_act is None, or the text false when run was given
     --owner-kept-act false (once, with --class decision_agent only; it is kept out of the required flags); for
-    evaluate, --repo is in the note's place."""
+    evaluate, --repo is in the note's place; trace is run's --trace paths, a tuple, () for every other command."""
     if type(argv) is not list or not argv or any(type(a) is not str for a in argv):
         return None
     if argv[0] not in COMMANDS:
@@ -270,10 +276,11 @@ def _parse(argv):
         allowed = _APPROVAL_FLAGS[:2]
     elif command == 'evaluate':
         allowed = ('--repo',)
-    root, as_json, values, write, kept, i = None, False, {}, [], None, 0
+    root, as_json, values, write, kept, i, trace = None, False, {}, [], None, 0, []
     while i < len(rest):
         flag = rest[i]
-        if flag == '--root' or flag in allowed or (command == 'run' and flag in ('--write', '--owner-kept-act')):
+        if flag == '--root' or flag in allowed or (command == 'run'
+                                                   and flag in ('--write', '--owner-kept-act', '--trace')):
             if ((flag == '--root' and root is not None) or flag in values or i + 1 >= len(rest)
                     or (flag == '--owner-kept-act' and kept is not None)):
                 return None
@@ -284,6 +291,8 @@ def _parse(argv):
                 root = value
             elif flag == '--write':
                 write.append(value)
+            elif flag == '--trace':
+                trace.append(value)
             elif flag == '--owner-kept-act':
                 if value != 'false':
                     return None
@@ -309,7 +318,8 @@ def _parse(argv):
         note = values.get('--repo')
     else:
         note = values.get('--note')
-    return (command, session, root, as_json, values.get('--class'), values.get('--by'), note, tuple(write), kept)
+    return (command, session, root, as_json, values.get('--class'), values.get('--by'), note, tuple(write), kept,
+            tuple(trace))
 
 
 def _findings(texts, as_json):
@@ -686,16 +696,16 @@ def _render_intent_run(answer, as_json):
     return ''.join(line + '\n' for line in lines)
 
 
-def _intent_run(task, intent, root, source_class, who, write, as_json, environ, clock, owner_kept_act=None):
+def _intent_run(task, intent, root, source_class, who, write, as_json, environ, clock, owner_kept_act=None,
+                trace=()):
     """(the exit code, the whole output) of run."""
     if in_runtime(environ):
         return 1, _findings([RUN_RUNTIME_REFUSAL], as_json)
     try:
-        if owner_kept_act is None:
-            answer = launcher.run_task(root, task, intent, source_class, who, write, clock)
-        else:
-            answer = launcher.run_task(root, task, intent, source_class, who, write, clock,
-                                       owner_kept_act=owner_kept_act)
+        keywords = {} if owner_kept_act is None else {'owner_kept_act': owner_kept_act}
+        if trace:
+            keywords['trace'] = trace
+        answer = launcher.run_task(root, task, intent, source_class, who, write, clock, **keywords)
     except Exception as exc:
         return 1, _findings(['run: a step raised %s' % type(exc).__name__], as_json)
     try:
@@ -773,7 +783,7 @@ def _run(argv, environ, clock, starter=None, capture=None, restore=None, stdin=N
         return 1, _findings(['cli: a step raised %s' % type(exc).__name__], False)
     if parsed is None:
         return 2, USAGE
-    command, session, root, as_json, source_class, who, note, write, owner_kept_act = parsed
+    command, session, root, as_json, source_class, who, note, write, owner_kept_act, trace = parsed
     if command == 'end':
         try:
             return _end(session, root, as_json, environ, clock)
@@ -807,7 +817,7 @@ def _run(argv, environ, clock, starter=None, capture=None, restore=None, stdin=N
     if command == 'run':
         try:
             return _intent_run(session, note, root, source_class, who, write, as_json, environ, clock,
-                               owner_kept_act)
+                               owner_kept_act, trace)
         except Exception as exc:
             return 1, _findings(['cli: a step raised %s' % type(exc).__name__], as_json)
     if command == 'evaluate':

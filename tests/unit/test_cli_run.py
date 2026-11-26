@@ -4,7 +4,9 @@ write_contract, append) are stand-ins given as keyword arguments, over event log
 eventlog.append, the append stand-in bound to writer.append_event's signature; the command is run by
 mock.patch.object of launcher.run_task, restored after each test. No test writes a file, runs Git or starts a
 process; the only files read are the package's own launcher.py and cli.py and this file, with pathlib's read_bytes,
-for the ast checks; the root is a literal Windows path that names no folder (L-0032). Stand-in defaults are
+for the ast checks; the root is a literal Windows path that names no folder (L-0032), but for the trace tests of
+task TASK-163, whose root is this repository's folder, since base_files takes only an existing one (their Git
+objects are in memory). Stand-in defaults are
 sentinels, never a value a case passes (L-0033). Each test names its criteria in its own docstring."""
 
 import ast
@@ -17,8 +19,8 @@ import unittest
 from collections import OrderedDict
 from unittest import mock
 
-from aieos_bootstrap import (ac_coverage, base_inputs, cli, eventlog, gitread, launcher, records, scope_drift,
-                             scope_reconcile, task_contract, writer)
+from aieos_bootstrap import (ac_coverage, base_files, base_inputs, cli, eventlog, gitread, launcher, records,
+                             scope_drift, scope_reconcile, task_contract, writer)
 
 REAL_APPEND_EVENT = writer.append_event
 APPEND_SIGNATURE = inspect.signature(REAL_APPEND_EVENT)
@@ -463,8 +465,8 @@ class TASK098AC1Runs(unittest.TestCase):
         refused one have exactly RUN_KEYS."""
         self.assertEqual(launcher.RUN_KEYS, ('result', 'reason', 'findings', 'intent_id', 'claim_id', 'kind', 'risk',
                                              'path', 'contract_hash', 'event_ids', 'appends'))
-        self.assertEqual(launcher.RUN_REASONS, ('argument', 'clock', 'head', 'log', 'exists', 'intent', 'layout',
-                                                'write', 'append'))
+        self.assertEqual(launcher.RUN_REASONS, ('argument', 'clock', 'head', 'log', 'exists', 'intent', 'trace',
+                                                'layout', 'write', 'append'))
         self.assertEqual(launcher.RUN_KINDS, ('single', 'drafting'))
         self.assertEqual(launcher.RUN_RECORDER, 'aieos cli run')
         for out in (go(World()), go(World(), task='x')):
@@ -937,8 +939,8 @@ class TASK098AC5Modules(unittest.TestCase):
         self.assertNotIn('owner', appends[0][3]['recorder'].lower())
 
     def test_this_test_file(self):
-        """TASK-098 AC5: this file imports no tempfile, sqlite3, shutil or subprocess, names no open, roots only the
-        literal 'C:/run-root-98', and has no one-argument .replace() and no .replace(target=...)."""
+        """TASK-098 AC5: this file imports no tempfile, sqlite3, shutil or subprocess, names no open, holds no 'C:/'
+        constant other than ROOT, and has no one-argument .replace() and no .replace(target=...)."""
         tree = ast.parse(HERE.read_bytes().decode('utf-8'))
         imported = set()
         for n in ast.walk(tree):
@@ -977,7 +979,8 @@ class TASK098AC6Docs(unittest.TestCase):
         main_doc = ' '.join(cli.main.__doc__.split())
         self.assertIn('edit, reject, import, run and evaluate, after the parse, through in_runtime', main_doc)
         self.assertIn('run <task> <intent> --root <path> --class <decision_agent|human_authority> '
-                      '--by <decision id or name> [--owner-kept-act false] [--write <path>]... [--json]', cli.USAGE)
+                      '--by <decision id or name> [--owner-kept-act false] [--write <path>]... '
+                      '[--trace <path>]... [--json]', cli.USAGE)
         self.assertEqual(cli.COMMANDS[-2:], ('run', 'evaluate'))
 
     def test_every_test_names_its_criteria(self):
@@ -993,7 +996,8 @@ class TASK098AC6Docs(unittest.TestCase):
 REFUSED_STATEMENTS = (False, True, 'True', 'true', 'False', 'FALSE', '', ' false', 'false ', 0, 1, b'false')
 STATEMENT_ARGV = ['run', 'TASK-1', 'do it', '--root', ROOT, '--class', 'decision_agent', '--by', 'D-1']
 RUN_USAGE_LINE = ('run <task> <intent> --root <path> --class <decision_agent|human_authority> '
-                  '--by <decision id or name> [--owner-kept-act false] [--write <path>]... [--json]')
+                  '--by <decision id or name> [--owner-kept-act false] [--write <path>]... [--trace <path>]... '
+                  '[--json]')
 
 
 class TASK115AC1Statement(unittest.TestCase):
@@ -1260,6 +1264,198 @@ class TASK115AC4Stale(unittest.TestCase):
         self.assertNotIn('launch: no runtime starter (a runtime is started by the owner; specification 7 :35, '
                          'DEF-0101)', text['cli.py'])
         self.assertIn('no runtime starter', doc('cli.py'))
+
+
+REPO_DIR = str(HERE.parents[2])
+SHA_ONE = '2c8b08da5ce60398e1f19af0e5dccc744df274b826abe585eaba68c525434806'
+SHA_TWO = '27dd8ed44a83ff94d557f9fd0412ed5a8cbca69ea04922d88c01184a07300a5a'
+FILES = {'docs/t.md': b'one\n', 'src/u.py': b'two\n'}
+TRACED = ('docs/t.md', 'src/u.py')
+TRACE_FINDING = ('argument: trace is not up to 100 distinct file paths that the readers of the contract take as '
+                 'written')
+
+
+class GitStore:
+    """A stand-in Git read over one commit, HEAD, whose files are given as {path: bytes}: it answers in memory the
+    forms base_files, base_inputs and task_contract ask (rev-parse, cat-file -t and cat-file -p of the commit, its
+    trees and its blobs) and records each call."""
+
+    def __init__(self, files):
+        self.calls = []
+        self.objects = {}
+        root = {}
+        for path, data in files.items():
+            node = root
+            names = path.split('/')
+            for name in names[:-1]:
+                node = node.setdefault(name, {})
+            node[names[-1]] = data
+        tree = self.tree(root)
+        self.objects[HEAD] = ('tree %s\nauthor a 0 +0000\ncommitter a 0 +0000\n\nm\n' % tree).encode('ascii')
+
+    def put(self, data):
+        oid = hashlib.sha1(b'blob %d\x00' % len(data) + data, usedforsecurity=False).hexdigest()
+        self.objects[oid] = data
+        return oid
+
+    def tree(self, node):
+        lines = []
+        for name in sorted(node):
+            value = node[name]
+            if isinstance(value, dict):
+                lines.append('040000 tree %s\t%s\n' % (self.tree(value), name))
+            else:
+                lines.append('100644 blob %s\t%s\n' % (self.put(value), name))
+        data = ''.join(lines).encode('utf-8')
+        oid = hashlib.sha1(b'tree %d\x00' % len(data) + data, usedforsecurity=False).hexdigest()
+        self.objects[oid] = data
+        return oid
+
+    def read(self, repo, args, timeout=30):
+        self.calls.append(tuple(args))
+        if args[0] == 'rev-parse':
+            out = (HEAD + '\n').encode('ascii')
+        elif list(args[:2]) == ['cat-file', '-t']:
+            out = b'commit\n'
+        else:
+            out = self.objects[args[2]]
+        return {'exit': 0, 'out': out, 'err': b'', 'error': None}
+
+
+def traced_run(world, store, trace=TRACED, write=('docs/a.md',), clock=None):
+    kw = world.kw()
+    kw['read'] = store.read
+    return launcher.run_task(REPO_DIR, TASK, INTENT, CLASS, WHO, write, clock or (lambda: NOW), trace=trace, **kw)
+
+
+def with_trace(text):
+    """The expected text of a template with the two traced files, written out."""
+    text = text.replace('traces_to: []\n', 'traces_to:\n  - docs/t.md\n  - src/u.py\n')
+    return text.replace('  intent_versions: {}\n', '  intent_versions:\n    docs/t.md: ' + SHA_ONE
+                        + '\n    src/u.py: ' + SHA_TWO + '\n')
+
+
+class TASK163Trace(unittest.TestCase):
+    def test_both_kinds_with_a_trace(self):
+        """TASK-098 AC1 as TASK-163 AC4 and AC5 add to it: with a trace, each kind's contract holds the traced files
+        in traces_to and in intent_versions with the SHA-256 of their bytes, nothing else differing."""
+        for write, expected in ((('docs/a.md',), expected_single()), ((), expected_drafting())):
+            w = World()
+            out = traced_run(w, GitStore(FILES), write=write)
+            self.assertEqual((out['result'], out['findings']), ('done', []), write)
+            self.assertEqual(written(w)[0][3], with_trace(expected), write)
+            self.assertEqual(out['contract_hash'], digest(with_trace(expected)))
+
+    def test_the_reads_and_none_without_a_trace(self):
+        """TASK-098 AC2 as TASK-163 AC4 adds to it: each entry is read at the head in the order given, after the other
+        steps' reads; without a trace the only Git read is the head's."""
+        store = GitStore(FILES)
+        self.assertEqual(traced_run(World(), store, trace=())['result'], 'done')
+        self.assertEqual(store.calls, [tuple(launcher.HEAD_ARGS)])
+        store = GitStore(FILES)
+        w = World()
+        self.assertEqual(traced_run(w, store, trace=('src/u.py', 'docs/t.md'))['result'], 'done')
+        self.assertEqual(w.names(), ['read_log', 'read_base', 'write_contract', 'append', 'append'])
+        commit = [('rev-parse', '--verify', '--end-of-options', HEAD), ('cat-file', '-t', HEAD),
+                  ('cat-file', '-p', HEAD)]
+        self.assertEqual(len(store.calls), 13)
+        self.assertEqual([store.calls[1:4], store.calls[7:10]], [commit, commit])
+        self.assertEqual([store.objects[store.calls[6][2]], store.objects[store.calls[12][2]]], [b'two\n', b'one\n'])
+
+    def test_the_contract_readers_take_a_traced_contract(self):
+        """TASK-098 AC1 as TASK-163 AC5 adds to it: base_inputs.contract_at gives the traced files and versions, and
+        task_contract.read_contract reads the contract."""
+        w = World()
+        traced_run(w, GitStore(FILES))
+        text = written(w)[0][3]
+        store = GitStore({'docs/tasks/%s.yaml' % TASK: text.encode('utf-8')})
+        answer, found = base_inputs.contract_at(REPO_DIR, HEAD, TASK, read=store.read)
+        self.assertIsNone(found)
+        self.assertEqual(answer[0]['traces_to'], ['docs/t.md', 'src/u.py'])
+        self.assertEqual(answer[0]['input_state']['intent_versions'], {'docs/t.md': SHA_ONE, 'src/u.py': SHA_TWO})
+        self.assertEqual(answer[1], digest(text))
+        read = task_contract.read_contract(REPO_DIR, HEAD, TASK, run=store.read)
+        self.assertEqual((read['result'], read['write_set']), ('read', ['docs/a.md']), read['findings'])
+
+    def test_the_trace_argument_refusals(self):
+        """TASK-098 AC2 as TASK-163 AC3 adds to it: a trace out of form is refused at "argument" with nothing read,
+        written or appended."""
+        entries = ('.x/a', '/a', './a', '-a', 'a#b', 'ADR-1', 'owner_kept_act', 'OWNER_Kept_Act/a.md',
+                   writer.STATE_DIR + '/a', 'a/../b', 'a/', 'a b', 'a.', '', 3, None)
+        bad = ['docs/t.md', None, {'docs/t.md'}, ('docs/t.md', 'docs/t.md'), ['f%d' % i for i in range(101)]]
+        for trace in bad + [('docs/t.md', e) for e in entries]:
+            w = World()
+            store = GitStore(FILES)
+            clock = Clock()
+            out = traced_run(w, store, trace=trace, clock=clock)
+            self.assertEqual((out['result'], out['reason'], out['findings']),
+                             ('refused', 'argument', [TRACE_FINDING]), trace)
+            self.assertEqual((w.calls, store.calls, clock.calls), ([], [], 0), trace)
+        for entry in ('_a', 'ADR-1.md', 'docs/.hidden', 'a/ADR-1'):
+            out = traced_run(World(), GitStore({entry: b'one\n'}), trace=[entry])
+            self.assertEqual(out['result'], 'done', (entry, out['findings']))
+        self.assertEqual(launcher.RUN_TRACE_MAX, 100)
+        out = traced_run(World(), GitStore(FILES), trace=['f%d' % i for i in range(100)])
+        self.assertEqual(out['reason'], 'trace')
+
+    def refused_at_trace(self, w, out):
+        self.assertEqual((out['result'], out['reason'], out['intent_id'], out['claim_id'], out['kind'], out['risk']),
+                         ('refused', 'trace', 'INT-001', RID, 'single', 'low'), out['findings'])
+        self.assertEqual((out['path'], out['contract_hash'], out['event_ids'], out['appends']), (None, None, [], []))
+        self.assertEqual(w.names(), ['read_log', 'read_base'])
+        self.assertEqual(tuple(out), launcher.RUN_KEYS)
+
+    def test_a_file_that_is_not_read_refuses(self):
+        """TASK-098 AC2 as TASK-163 AC4 and AC7 add to it: a path absent at the head refuses at "trace" with the
+        reader's findings, nothing written or appended."""
+        w = World()
+        out = traced_run(w, GitStore(FILES), trace=('docs/t.md', 'docs/missing.md'))
+        self.refused_at_trace(w, out)
+        self.assertEqual(out['findings'], ['trace: docs/missing.md was not read at the base',
+                                           'trace: docs/missing.md is missing'])
+
+    def test_a_raising_read_refuses(self):
+        """TASK-098 AC2 as TASK-163 AC4 and AC7 add to it: a raising read becomes the reader's finding in a "trace"
+        refusal, and any other raise at the step gives "trace" naming its type."""
+        store = GitStore(FILES)
+
+        def raising(repo, args, timeout=30):
+            if args[0] == 'cat-file':
+                raise OSError('x')
+            return GitStore.read(store, repo, args, timeout)
+
+        store.read = raising
+        w = World()
+        out = traced_run(w, store)
+        self.refused_at_trace(w, out)
+        self.assertEqual(out['findings'], ['trace: docs/t.md was not read at the base',
+                                           'trace: cat-file -t raised OSError'])
+        w = World()
+        with mock.patch.object(base_files, 'read_file', side_effect=ValueError('x')):
+            out = traced_run(w, GitStore(FILES))
+        self.refused_at_trace(w, out)
+        self.assertEqual(out['findings'], ['trace: a step raised ValueError'])
+
+    def test_the_flag(self):
+        """TASK-098 AC4 as TASK-163 AC2 adds to it: --trace, any number of times, passes the keyword trace in the order
+        given; without it no keyword is passed; a wrong form or another command gives USAGE with nothing called."""
+        rc, _, stand, clock = run(ARGV + ['--trace', 'a.md', '--write', 'b.md', '--trace', 'c/d.py'])
+        self.assertEqual((rc, stand.calls, stand.kwargs),
+                         (0, [(ROOT, 'TASK-1', 'do it', 'decision_agent', 'D-1', ('b.md',), clock)],
+                          [{'trace': ('a.md', 'c/d.py')}]))
+        rc, _, stand, _ = run(ARGV + ['--owner-kept-act', 'false', '--trace', 'a.md'])
+        self.assertEqual((rc, stand.kwargs), (0, [{'owner_kept_act': 'false', 'trace': ('a.md',)}]))
+        rc, _, stand, _ = run(ARGV)
+        self.assertEqual((rc, stand.kwargs), (0, [{}]))
+        bad = [ARGV + ['--trace'], ARGV + ['--trace', ''], ARGV + ['--trace', '--json'],
+               ['tasks', '--root', ROOT, '--trace', 'a.md'],
+               ['import', 'TASK-1', '--root', ROOT, '--trace', 'a.md'],
+               ['evaluate', 'TASK-1', '--root', ROOT, '--repo', ROOT, '--trace', 'a.md'],
+               ['approve', 'TASK-1', '--root', ROOT, '--class', 'decision_agent', '--by', 'D-1', '--trace', 'a.md']]
+        for argv in bad:
+            rc, out, stand, clock = run(argv)
+            self.assertEqual((rc, out, stand.calls, clock.calls), (2, cli.USAGE, [], 0), argv)
+        self.assertIn('  --trace <path> a file the run task traces to (run only; any number of times)\n', cli.USAGE)
 
 
 if __name__ == '__main__':

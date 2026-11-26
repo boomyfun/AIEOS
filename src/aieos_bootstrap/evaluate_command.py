@@ -25,8 +25,11 @@ same commit through base_files.read_file at the places of contract_path.candidat
 contract_at gave and the approved contract_hash. (3) The CI data is parsed by evaluation_sources.parse_json and read by
 evaluation_intake.read_ci_data. (4) policy_ref is the contract's input_state.base_commit, 40 lowercase hexadecimal
 characters other than the evaluated commit, and evaluation_sources.load_sources is given the logs of the runs of step 3
-and no other. (5) eval_inputs.eval_inputs assembles the inputs. (6) evaluation_intake.manifest makes the manifest from
-fresh copies of what it is given. (7) The records to append are eval_inputs' CI records and then the manifest record,
+and no other. The loader's provenance must then hold exactly one mapping with the key contract, whose keys are
+contract and commit and whose values are the SHA-256 of step 2 and the evaluated commit; anything else refuses with
+reason sources and nothing is appended (task TASK-163; D-7351). With the real loader it holds by construction.
+(5) eval_inputs.eval_inputs assembles the inputs. (6) evaluation_intake.manifest makes the manifest from fresh
+copies of what it is given. (7) The records to append are eval_inputs' CI records and then the manifest record,
 left out when the log holds an equal payload under its record_id (a different one is a refusal with nothing written);
 the event id of a record is the SHA-256 of "evaluation-record", the task id and the record id joined by line feeds. Each
 is first decided with eventlog.append over the log and the lines decided so far; only then is each written through append
@@ -62,6 +65,7 @@ RESULT_KEYS = ('result', 'reason', 'findings', 'event_id', 'decision', 'next_tas
                'manifest', 'appended', 'uncovered')
 EVENT_ID_PREFIX = 'evaluation-record'
 _RECORD_EVENT = 'record.added'
+_OTHER_CONTRACT = "sources: the loader's contract digest or commit differs from the command's"
 _TASK = re.compile(r'TASK-[0-9]+')
 _COMMIT = re.compile(r'[0-9a-f]{40}')
 _ZERO = datetime.timedelta(0)
@@ -153,6 +157,15 @@ def _policy_ref(contract, commit):
     return ref
 
 
+def _same_contract(provenance, sha, commit):
+    """Whether the loader's provenance, a list of mappings, holds exactly one mapping with the key contract, and that
+    one is the contract the command read: sha at commit (task TASK-163; D-7351)."""
+    if type(provenance) is not list or not all(type(entry) is dict for entry in provenance):
+        return False
+    found = [entry for entry in provenance if 'contract' in entry]
+    return len(found) == 1 and found[0] == {'contract': sha, 'commit': commit}
+
+
 def _records_to_append(ci_records, manifest_record, payloads):
     """The CI records, then the manifest record unless the log holds it already; a conflicting one refuses."""
     held = [p for p in payloads if p.get('record_id') == manifest_record['record_id']]
@@ -234,6 +247,8 @@ def evaluate(root, repo, task_id, ci_text, recorder, now, read=None, read_log=No
         loaded = evaluation_sources.load_sources(repo, policy_ref, commit, task_id, [r['log'] for r in runs], read)
         if loaded['result'] != 'present':
             raise _Refuse('sources', _texts(loaded['findings']))
+        if not _same_contract(loaded.get('provenance'), sha, commit):
+            raise _Refuse('sources', [_OTHER_CONTRACT])
         step = 'inputs'
         made = eval_inputs.eval_inputs(task_id, commit, policy_ref, contract, sha, loaded['changed_paths'], runs,
                                        loaded['sources'], payloads, recorder)
