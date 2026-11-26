@@ -30,6 +30,7 @@ One, in session 87e2584b (2026-10-29, TASK-099):
   for the GOV-003 article; the governor satisfies an ai_review entry only by a way-2 record whose reviewer's model
   differs from the implementer's (governor.py :270-319), and a failed way-2 record gives NEEDS_REWORK at row 2. The
   rule was read from the governor's code after the dry runs, not before.
+- **2026-11-26 (session 228f426b, TASK-161, D-7240; the worker's own claim until checked).** A sample event of the new tests (a record about a task with no task_id) was used without being passed through the writer's checks; the base writer refused it ("log_after"), which the computation of the pinned bytes from the base showed before any test run. The prevention above (pass each named form through the real append check in a scratch script) applies to test samples too.
 
 ## Why it happens
 The record's form is written from the specification's words, and the checker's own rules sit in code that no review
