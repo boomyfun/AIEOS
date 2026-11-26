@@ -5,7 +5,7 @@
 - Deferred by: decision agent (A41, A51), D-6310 (the route: a replay that recomputes the decision records; the stop-gap that loosens the step ruled out as the fix)
 - Decision group: A (scheduling)
 - Blocks v0.1: yes (every task acceptance needs "the aieos-checks and aieos-native runs of the accepted commit succeed"; with the step red, each acceptance would be a stated departure, and the relaunch of the first real run is held behind a green main)
-- Scheduled in: before the relaunch of the first session of the first real run; task TASK-139 (decision.execution records), then a task B for decision.acceptance records
+- Scheduled in: M8: before the first decision.acceptance record is committed to a pushed commit; the second real run (D-6606 C1 item 6)
 
 ## What
 The finding F-INV010, in the decision agent's words (D-6310 C1): "The loop's real launch writes a decision record into the tracked event log; the CI's INV-010 step fails on every decision record until a replay recomputes them; the state commit and push of that record were approved (D-6303, D-6309) without checking that step; main has been red at INV-010 since that push."
@@ -23,3 +23,4 @@ TASK-138 does not depend on it but waits for a green main (D-6309 C6); DEF-0136 
 
 ## Log
 - 2026-11-15: opened (session 26136a0a; decisions D-6310, D-6312, D-6313, D-6314).
+- 2026-11-27 (session 228f426b; closure pass 1 of the deferred items, D-7443, D-7444; decided by: decision agent (A41, A51), D-7444): narrowed, stays open. Done: the replay of decision.execution records (TASK-139, TASK-141). Open: decision.acceptance is not replayed (src/aieos_bootstrap/decision_replay.py :40, :57, :493-:495, "NOT REPLAYED: decision.acceptance"). Scheduled in is changed to name that event.

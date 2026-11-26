@@ -1,6 +1,6 @@
 # DEF-0140: the relaunched first session served a model call and did no work: no allow rule for the seven mcp__aieos__ tools and no hook coverage for ToolSearch
 
-- Status: open
+- Status: done
 - Opened: 2026-11-19 (the History page of the session 26136a0a is written at its end; this line names the session)
 - Deferred by: decision agent (A41, A51), D-6396 (the findings of the relaunched session; the owner's answer "đồng ý tất cả" at the main transcript :15408 is recorded in the decision-matrix row A80)
 - Decision group: A (scheduling)
@@ -30,3 +30,7 @@ When the contract of TASK-140 is approved (after this records commit and the CI 
 
 ## Depends on
 The contract TASK-136 (READY; its Resume Check fired CONTINUE_WITH at both launches); the decisions D-6386 to D-6396; the decision-matrix rows A79 and A80; DEF-0139 (the starter's pins and the stated limit of its docstring); the CI revision 21 (the A66 precedent of a stated loosening, 9148f6b).
+
+## Log
+
+- 2026-11-27 (session 228f426b; closure pass 1 of the deferred items, D-7443, D-7444; decided by: decision agent (A41, A51), D-7444): closed as done. Evidence: the Resume-when ("When the contract of TASK-140 is approved (after this records commit and the CI revision 22 have landed)") is met: TASK-140 is on main (6811ffb9, 8e2a5b5f; its contract 0f0357b6), with CI revisions 22 and 23 (7d86a264, 3a5b01e4); a later session reached the work-order tool (DEF-0143, title: "got its Work Order"). Carried: the review findings stay in DEF-0141; limit 3 of this file ("A session that ends with no work returned exit 0 and \"end: done\"") goes to DEF-0147 (its log of this date).

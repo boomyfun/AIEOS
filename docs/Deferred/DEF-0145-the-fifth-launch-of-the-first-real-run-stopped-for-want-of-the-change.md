@@ -5,7 +5,7 @@
 - Deferred by: decision agent (A41, A51), D-6441 (the finding and the fix (a) for the next task version); the choice of the general remedy is a later decision
 - Decision group: A (scheduling) for the record; any further session is the owner's (the "Có" at the main transcript :24777 covers one sixth session; it is recorded in the pre-launch statement of that launch)
 - Blocks v0.1: no (it blocks the first real run's session)
-- Scheduled in: fix (a) in the contract TASK-142 v3 (the objective and AC1 state the change); the src intent layer is not scheduled
+- Scheduled in: M8, after the second real run and before the M8 exit review: the src intent layer
 
 ## What
 The fifth launch (the owner's "Có" at :24380; the release D-6440; the scripts launch6; main d3215a5d, TASK-142 contract v2 with a one-file read set) ran on 2026-11-19 from 11:00:14 to 11:00:26 (local time). Its transcript (path only): C:\Users\Admin\.claude\projects\E--AIEOS\c42c6649-68d1-4059-bea2-95430749c51b.jsonl (sha256 8837b6ebb87dfae2a594cacd5e1516c5bce993bf0b7bb528e4bb4c723194fbcb). In short form: the starter's prompt; a ToolSearch of "select:mcp__aieos__get_work_order" (the narrow rule of TASK-140 passed the hook); mcp__aieos__get_work_order, whose result came back INLINE with 32,239 characters (not saved to a file: the one-file read set of TASK-142 worked, route C of D-6424); then the session's final text: "I stopped without changing anything. The Work Order for TASK-142 says to make the change that intent INT-002 states, but it never says what that change is." It made no Read, no Bash, no Edit, no status call: two tool calls. The launcher's summary: run returned, end done, handoff none, "root after: clean", exit 0. No violation; no tracked file changed; two lines were appended to .aieos/events.jsonl (30: the start's decision.execution CONTINUE; 31: the observed read set with read_paths []).
@@ -35,3 +35,7 @@ DEF-0140, DEF-0142, DEF-0143 (cause 4 corrected by this record), DEF-0144; the c
 File names written aj/... or S1\aj\... in this record are kept in the lasting copies under C:\Users\Admin\AIEOS-REG0-lite\sessions\26136a0a-b135-4cb1-9db0-95258ca6f5b5\scratchpad-evidence (the folder stretch-D6445-D6469 and the folders TASK-140, TASK-140-ci, TASK-141 and TASK-141-ci) or under C:\Users\Admin\AIEOS-REG0-lite\sessions\c0dc5bcc-c58f-46fa-a52d-d27469300fc7\scratchpad-evidence\def-sources (aj/launch5b, aj/launch5c, aj/ao8_compile.py, aj/ao8_out.txt, aj/make_drafts.py); the prefix aj/ names the old scratch folder, which no longer exists.
 
 Figures in this record that no decision file carries and that no script re-checked against a lasting copy (run times, byte counts, tool-call counts) are the worker's measurements and are not re-verified.
+
+## Log
+
+- 2026-11-27 (session 228f426b; closure pass 1 of the deferred items, D-7443, D-7444; decided by: decision agent (A41, A51), D-7444): narrowed, stays open. Done: fix (a) (the change text is in the contract; the sixth session made the right edit, DEF-0146, title). Open: the src intent layer: a Work Order carries no text of the intent a task refers to. The second half of the Resume-when ("when the first real run is closed") is met, so a schedule is given.

@@ -5,7 +5,7 @@
 - Deferred by: decision agent (A41), D-1200 Q4, after the owner's "đồng ý theo đề nghị" (:101).
 - Decision group: A (inputs to a contract of M5); B for any install or setting.
 - Blocks v0.1: no (inputs to the Claude Code adapter's channel; the live coverage is observed at the first real run)
-- Scheduled in: the first real run (master-plan section 7)
+- Scheduled in: M8, the adapter, violation-path and Claude Code hook fix task (adapter, replay, violation, claude_code, claude_code hooks), before the M8 exit review
 
 ## What
 - The self-build's call form, which chained a check script into every Bash command, was refused twice by Claude Code's auto-mode safety classifier ("[Auto-Mode Bypass]", session 1947b313 :45, :56). The owner chose to run the check automatically before each command instead (way B, :103), now a PreToolUse hook.
@@ -20,3 +20,4 @@
 ## Log
 - 2026-10-17: opened (session 1947b313; D-1200, D-1202, D-1203, D-1205).
 - 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass F batch 2, decision D-5268 (N3)): read in full; CC-2 (the channel and the hook entry) is built (TASK-061 to TASK-079); specification 5 point 8 and the adapter contracts on tool coverage were not re-read in this pass (the lines DEF-0076 cites have moved); the open points are the live findings (installing hooks needs the user's permission; a hook may not fire for every tool). State: open; Blocks v0.1: no (inputs to the Claude Code adapter's channel; the live coverage is observed at the first real run); Scheduled in: the first real run (master-plan section 7).
+- 2026-11-27 (session 228f426b; closure pass 1 of the deferred items, D-7443, D-7444; decided by: decision agent (A41, A51), D-7444): rescheduled: the event named before (the first real run) has passed. Closure pass 2 reads the item.

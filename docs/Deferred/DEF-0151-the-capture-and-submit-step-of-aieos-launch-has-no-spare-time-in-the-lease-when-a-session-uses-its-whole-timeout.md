@@ -5,7 +5,7 @@
 - Deferred by: decision agent (A41, A51), D-6737 (v) and D-6608 M2 (the item), D-6756 (the filing at the acceptance of TASK-148)
 - Decision group: A (scheduling)
 - Blocks v0.1: no (it does not stop a run; the refusal fails closed: the commit and the ref stay and the tree is left as the session left it); it must be looked at before the second real run uses the step (D-6756)
-- Scheduled in: not scheduled
+- Scheduled in: M8: BT4, looked at before the second real run uses the capture step (D-6756)
 
 ## What
 `aieos launch` (src/aieos_bootstrap/launcher.py, launch_outside) begins the session with a lease of LAUNCH_LEASE, two hours (launcher.py :1074, begun at :1282; launcher.py line numbers at the contract's base c3036085, TASK-148 moves them). The runtime's starter bounds the session by 6600 seconds (src/aieos_runtime/claude_starter.py :100), so 600 seconds remain in the lease when the session uses its whole timeout. After the session returns, the new step capture_submit.capture_and_submit (TASK-148) makes at most about ten git calls, each with a timeout of 60 seconds (the TASK-147 module's limit (14), task_capture.py :32-34: every git call has a time limit of 60 seconds; the core's own reads use launcher.TIMEOUT, 30 seconds, launcher.py :309; the count of about ten calls is the contract's, AC9 (14)), so 600 seconds in the worst case, equal to the margin. A submission made after the lease expired is refused by the writer (the step's reason "submit"; the launch's reason is then "capture"); the step then leaves the commit and the task ref, does not restore the tree (D-6608 Q4, D-6609 C3 (b)) and the next launch of the task is not granted until the tree is resolved by hand.
@@ -27,3 +27,4 @@ TASK-148 (the step; docs/runs/TASK-148-acceptance.md), TASK-147 (task_capture.py
 
 ## Log
 - 2026-11-20: opened (session dc7cf6ca; decisions D-6737, D-6608, D-6756).
+- 2026-11-27 (session 228f426b; closure pass 1 of the deferred items, D-7443, D-7444; decided by: decision agent (A41, A51), D-7444): scheduled.

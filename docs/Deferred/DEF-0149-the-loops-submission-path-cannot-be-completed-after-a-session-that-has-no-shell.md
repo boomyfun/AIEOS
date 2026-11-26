@@ -5,7 +5,7 @@
 - Deferred by: decision agent (A41, A51), D-6467 (the finding, measured in a scratch clone by the rehearsal dh1)
 - Decision group: A
 - Blocks v0.1: yes (the first real run must pass "through ... the governor", master-plan.md :117; the governor evaluates a task in VERIFYING, which only a task.submitted gives)
-- Scheduled in: not scheduled
+- Scheduled in: M8: BT4 and BT5 and the second real run (D-6606 C1 items 4 to 6; D-6607)
 
 ## What
 The rehearsal (dh1_rehearse.py, output dh1_out.txt sha256 1b08d010...), in a scratch clone at main 1a89b972: a submission commit on task/TASK-143 (tree of the executor's capture commit fc0ab21d, parent 49c22626, a body, exactly one "AIEOS-Task: TASK-143" line, no AIEOS-Fence line) given to adapter.submit with the real writer gave: result "refused", reason "core", the core's reason "fence", findings "trailer: the commit carries no usable AIEOS-Fence", "fence: no lease is given", "store: the refusal record was appended"; the clone's log gained ONE line (seq 45, record.added, the refusal record); no task.submitted was appended; evaluate_task was not run. records.check_log found 0 and the standing gate C3 passed over the clone's log. E:\AIEOS was unchanged before and after.
@@ -25,3 +25,8 @@ TASK-025, TASK-027, TASK-051, DEF-0146, DEF-0147.
 File names written aj/... or S1\aj\... in this record are kept in the lasting copies under C:\Users\Admin\AIEOS-REG0-lite\sessions\26136a0a-b135-4cb1-9db0-95258ca6f5b5\scratchpad-evidence (the folder stretch-D6445-D6469 and the folders TASK-140, TASK-140-ci, TASK-141 and TASK-141-ci) or under C:\Users\Admin\AIEOS-REG0-lite\sessions\c0dc5bcc-c58f-46fa-a52d-d27469300fc7\scratchpad-evidence\def-sources (aj/launch5b, aj/launch5c, aj/ao8_compile.py, aj/ao8_out.txt, aj/make_drafts.py); the prefix aj/ names the old scratch folder, which no longer exists.
 
 Figures in this record that no decision file carries and that no script re-checked against a lasting copy (run times, byte counts, tool-call counts) are the worker's measurements and are not re-verified.
+
+## Log
+
+- 2026-11-27 (session 228f426b; closure pass 1 of the deferred items, D-7443, D-7444; decided by: decision agent (A41, A51), D-7444): scheduled (its Resume-when: before the second real run).
+- 2026-11-27 (session 228f426b; closure pass 1 of the deferred items, D-7443, D-7444; decided by: decision agent (A41, A51), D-7444): carried from DEF-0146 at its closing, for BT5 (D-6607 C5): (1) option (d), the general rule that the hook approves an Edit inside the write set, not done; (2) the settings pin: src/aieos_runtime/claude_starter.py :31 SETTINGS_SHA256 is f7f835a2bb07c0ec1bf09ace91ddde488c870133e3ed4e09bbd6d2032325d9ad, and the SHA-256 of the live settings file C:/Users/Admin/AIEOS-runtime/claude-settings.json read on this date is 242533e144193b758532bd5c1e78aefc196ae5c5e430c055dd01a7044fef4512; they differ, and the starter checks the file against the pin (:94, _check_file).

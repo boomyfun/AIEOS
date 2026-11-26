@@ -1,6 +1,6 @@
 # DEF-0143: the owner's fourth launch of TASK-136 got its Work Order, but the runtime stored the 72 KB result in a file and the session then tried a shell call, which the hook stopped as a violation; the log now holds a STOP record that the standing gate and the CI replay refuse
 
-- Status: open (route A of D-6424 is chosen: TASK-141, the replay recognises the record of the violation path; C and D are deferred)
+- Status: done
 - Opened: 2026-11-19 (the History page of session 26136a0a names the session)
 - Deferred by: decision agent (A41, A51), D-6422 (the finding); the choice of a fix is a later decision
 - Decision group: A (scheduling) for the record; any fifth session is the owner's (the "có" at the main transcript :21384 covered exactly one, no fifth)
@@ -47,3 +47,7 @@ DEF-0140, DEF-0142, DEF-0141; TASK-140 (the hook rule for ToolSearch; the allow 
 File names written aj/... or S1\aj\... in this record are kept in the lasting copies under C:\Users\Admin\AIEOS-REG0-lite\sessions\26136a0a-b135-4cb1-9db0-95258ca6f5b5\scratchpad-evidence (the folder stretch-D6445-D6469 and the folders TASK-140, TASK-140-ci, TASK-141 and TASK-141-ci) or under C:\Users\Admin\AIEOS-REG0-lite\sessions\c0dc5bcc-c58f-46fa-a52d-d27469300fc7\scratchpad-evidence\def-sources (aj/launch5b, aj/launch5c, aj/ao8_compile.py, aj/ao8_out.txt, aj/make_drafts.py); the prefix aj/ names the old scratch folder, which no longer exists.
 
 Figures in this record that no decision file carries and that no script re-checked against a lasting copy (run times, byte counts, tool-call counts) are the worker's measurements and are not re-verified.
+
+## Log
+
+- 2026-11-27 (session 228f426b; closure pass 1 of the deferred items, D-7443, D-7444; decided by: decision agent (A41, A51), D-7444): closed as done. Evidence: the Resume-when is met: option 5 landed by TASK-141 (b6f8b814, 35754d16); option 1 was reached in substance by narrowing the read set, the fifth launch received the Work Order inline (commit 0a947c30: "inline (32,239 characters; the runtime did not save it to a file)"); the owner answered on a fifth session ("Có", transcript of session 26136a0a-b135-4cb1-9db0-95258ca6f5b5 :24380; D-6439, D-6442). Option 6 (the four log lines) and the standing-gate amendment C2 were settled by commit 861b64b1, on main: "the four log lines ... are committed under the gate C2 after TASK-141 landed on main at 35754d16" (D-6436). Carried: option 1 as a compiler change and option 4 (the size annotation in mcp_server.py) go to DEF-0142 (its log of this date).

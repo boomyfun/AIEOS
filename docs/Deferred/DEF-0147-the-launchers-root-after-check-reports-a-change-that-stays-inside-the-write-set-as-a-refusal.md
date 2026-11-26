@@ -5,7 +5,7 @@
 - Deferred by: decision agent (A41, A51), D-6465 (the finding, as read by the worker from the seventh launch)
 - Decision group: A (scheduling)
 - Blocks v0.1: no (it does not stop a run; it makes a correct run look refused)
-- Scheduled in: not scheduled
+- Scheduled in: M8: decided after the second real run (D-6756; docs/runs/TASK-148-acceptance.md :53)
 
 ## What
 The seventh launch (TASK-143 v2; 2026-11-19 17:30:18 to 17:30:31; the decision D-6464) ended with the lines (inner_out.txt): "finding: launch: refused root after", "finding: root after: root: 1 entries (changes against HEAD in the index or the working tree, or untracked files)", "finding: root after: root: b'docs/Deferred/DEF-0095-the-handoff-file-of-the-claim-tools-for-the-launcher.md'" and "cli.main exit code: 1". The session had done what the contract asks: one Edit of line 7 of that very file (the one path of the write set), checked by a Read, no shell call, no violation. The sixth launch (no edit made) ended with "root after: clean".
@@ -33,3 +33,8 @@ TASK-127 (the check), DEF-0143, DEF-0146; the seventh launch's evidence (inner_o
 File names written aj/... or S1\aj\... in this record are kept in the lasting copies under C:\Users\Admin\AIEOS-REG0-lite\sessions\26136a0a-b135-4cb1-9db0-95258ca6f5b5\scratchpad-evidence (the folder stretch-D6445-D6469 and the folders TASK-140, TASK-140-ci, TASK-141 and TASK-141-ci) or under C:\Users\Admin\AIEOS-REG0-lite\sessions\c0dc5bcc-c58f-46fa-a52d-d27469300fc7\scratchpad-evidence\def-sources (aj/launch5b, aj/launch5c, aj/ao8_compile.py, aj/ao8_out.txt, aj/make_drafts.py); the prefix aj/ names the old scratch folder, which no longer exists.
 
 Figures in this record that no decision file carries and that no script re-checked against a lasting copy (run times, byte counts, tool-call counts) are the worker's measurements and are not re-verified.
+
+## Log
+
+- 2026-11-27 (session 228f426b; closure pass 1 of the deferred items, D-7443, D-7444; decided by: decision agent (A41, A51), D-7444): scheduled.
+- 2026-11-27 (session 228f426b; closure pass 1 of the deferred items, D-7443, D-7444; decided by: decision agent (A41, A51), D-7444): carried from DEF-0140 at its closing: a session that ends with no work returned exit 0 and "end: done" (the starter does not detect a denied prompt), not changed by TASK-140; to be looked at where the end-of-run result is judged mechanically.

@@ -1,6 +1,6 @@
 # DEF-0146: the sixth launch of the first real run made the right edit, but the runtime denied it for want of a permission rule for the write-set file, and a following shell call was a violation
 
-- Status: open
+- Status: done
 - Opened: 2026-11-19 (the History page of the session 26136a0a names the session)
 - Deferred by: decision agent (A41, A51), D-6444 (the finding); the choice of the fix is a later decision, and a permission or settings change is carried out only with the owner's own permission at the prompt (master-plan.md :117: "any hook or settings change at a permission prompt waits for the owner")
 - Decision group: A (scheduling) for the record; any seventh session is the owner's (the "Có" at the main transcript :24777 covered exactly one, the sixth)
@@ -51,3 +51,7 @@ DEF-0140, DEF-0143, DEF-0145; TASK-140 (the allow rule), TASK-141 (the violation
 File names written aj/... or S1\aj\... in this record are kept in the lasting copies under C:\Users\Admin\AIEOS-REG0-lite\sessions\26136a0a-b135-4cb1-9db0-95258ca6f5b5\scratchpad-evidence (the folder stretch-D6445-D6469 and the folders TASK-140, TASK-140-ci, TASK-141 and TASK-141-ci) or under C:\Users\Admin\AIEOS-REG0-lite\sessions\c0dc5bcc-c58f-46fa-a52d-d27469300fc7\scratchpad-evidence\def-sources (aj/launch5b, aj/launch5c, aj/ao8_compile.py, aj/ao8_out.txt, aj/make_drafts.py); the prefix aj/ names the old scratch folder, which no longer exists.
 
 Figures in this record that no decision file carries and that no script re-checked against a lasting copy (run times, byte counts, tool-call counts) are the worker's measurements and are not re-verified.
+
+## Log
+
+- 2026-11-27 (session 228f426b; closure pass 1 of the deferred items, D-7443, D-7444; decided by: decision agent (A41, A51), D-7444): closed as done. Evidence: the Resume-when ("When the owner has been asked about the permission change and a seventh session, and the fix is chosen and landed") is met: fix (a) landed (9a3403a3, 21a9cde8, 94d8f7a4, b1f2e1cc), the seventh launch made the Edit (1a89b972: "the launched session made the right Edit"), and the removal duty is stated DONE in this file (D-6468). Carried to DEF-0149 (its log of this date): the general fix, option (d); the settings pin.
