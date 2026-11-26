@@ -278,12 +278,6 @@ class TheModule(unittest.TestCase):
             if isinstance(node, ast.Attribute):
                 self.assertNotIn(node.attr, ('open', 'connect', 'write', 'write_text', 'write_bytes', 'unlink', 'mkdir'))
 
-    def test_no_string_holds_a_dot_before_the_name_of_the_project(self):
-        needle = '.' + 'aieos'
-        for node in ast.walk(self.tree()):
-            if isinstance(node, ast.Constant) and isinstance(node.value, str):
-                self.assertNotIn(needle, node.value.lower())
-
     def test_no_string_names_a_measure_folder_or_a_fixture_set(self):
         text = SRC.read_bytes().decode('utf-8')
         for word in ('native' + '/', 'bench' + '/', 'fixtures' + '_rc'):

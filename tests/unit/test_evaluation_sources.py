@@ -444,6 +444,7 @@ class AC2TheTwelveSources(Base):
         load(g, p, e)
         calls = [call[1] for call in g.commands('rev-parse')]
         self.assertEqual(calls[:3], [['rev-parse', '--verify', '--end-of-options', p]] * 3)
+        self.assertTrue(calls[3:])
         for call in calls[3:]:
             self.assertEqual(call, ['rev-parse', '--verify', '--end-of-options', e])
 
