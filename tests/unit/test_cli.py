@@ -270,7 +270,8 @@ class TASK091AC3NeverRaises(unittest.TestCase):
         """TASK-091 AC3, as changed by TASK-132 AC10 and by TASK-148 AC5: the module's entry block is exactly `if
         __name__ == '__main__':` followed by `from aieos_runtime import claude_starter, task_capture` and
         `sys.exit(main(sys.argv[1:], sys.stdout, os.environ, _clock, starter=claude_starter.starter,
-        capture=task_capture.capture, restore=task_capture.restore))`, checked by ast."""
+        capture=task_capture.capture, restore=task_capture.restore, stdin=sys.stdin))`, as TASK-162 AC11 changes
+        it, checked by ast."""
         tree = ast.parse((SRC / 'cli.py').read_bytes().decode('utf-8'))
         last = tree.body[-1]
         self.assertIsInstance(last, ast.If)
@@ -279,7 +280,7 @@ class TASK091AC3NeverRaises(unittest.TestCase):
                          ['from aieos_runtime import claude_starter, task_capture',
                           'sys.exit(main(sys.argv[1:], sys.stdout, os.environ, _clock, '
                           'starter=claude_starter.starter, capture=task_capture.capture, '
-                          'restore=task_capture.restore))'])
+                          'restore=task_capture.restore, stdin=sys.stdin))'])
 
     def test_clock_form(self):
         """TASK-091 AC3: _clock gives a timezone-aware UTC datetime with microsecond 0."""
@@ -338,14 +339,16 @@ class TASK091AC5Module(unittest.TestCase):
     def test_imports(self):
         """TASK-091 AC5, as changed by TASK-092, by TASK-132 AC10 and by TASK-148 AC5: cli.py imports exactly datetime,
         json, os, re, sys, and execution and launcher from aieos_bootstrap, and claude_starter and task_capture from
-        aieos_runtime (inside the entry block)."""
+        aieos_runtime (inside the entry block); and evaluate_command from aieos_bootstrap, as TASK-162 AC11 adds
+        it."""
         names = set()
         for n in ast.walk(self.tree()):
             if isinstance(n, ast.Import):
                 names.update(a.name for a in n.names)
             elif isinstance(n, ast.ImportFrom):
                 names.update('%s.%s' % (n.module, a.name) for a in n.names)
-        self.assertEqual(names, {'datetime', 'json', 'os', 're', 'sys', 'aieos_bootstrap.execution',
+        self.assertEqual(names, {'datetime', 'json', 'os', 're', 'sys', 'aieos_bootstrap.evaluate_command',
+                                 'aieos_bootstrap.execution',
                                  'aieos_bootstrap.launcher', 'aieos_runtime.claude_starter',
                                  'aieos_runtime.task_capture'})
 

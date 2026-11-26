@@ -967,18 +967,18 @@ class TASK098AC6Docs(unittest.TestCase):
     def test_the_cli_docstring_and_usage(self):
         """TASK-098 AC6: cli.py's docstring holds the run phrases, the COMMANDS phrase, the in_runtime sentence and
         main's environ sentence naming run, and not the replaced COMMANDS phrase; USAGE names run; COMMANDS ends with
-        run."""
+        run and evaluate (as TASK-162 AC11 changes it)."""
         text = doc('cli.py')
         for phrase in ('aieos run', 'TASK-098', 'records the intent', 'drafts nothing', 'is not decided by this text',
-                       'COMMANDS, tasks, end, status, init, launch, approve, edit, reject, import or run',
+                       'COMMANDS, tasks, end, status, init, launch, approve, edit, reject, import, run or evaluate',
                        'end and init call it after the parse', 'run also calls it after the parse'):
             self.assertIn(phrase, text)
         self.assertNotIn('COMMANDS, tasks, end, status, init, launch, approve, edit, reject or import', text)
         main_doc = ' '.join(cli.main.__doc__.split())
-        self.assertIn('edit, reject, import and run, after the parse, through in_runtime', main_doc)
+        self.assertIn('edit, reject, import, run and evaluate, after the parse, through in_runtime', main_doc)
         self.assertIn('run <task> <intent> --root <path> --class <decision_agent|human_authority> '
                       '--by <decision id or name> [--owner-kept-act false] [--write <path>]... [--json]', cli.USAGE)
-        self.assertEqual(cli.COMMANDS[-1], 'run')
+        self.assertEqual(cli.COMMANDS[-2:], ('run', 'evaluate'))
 
     def test_every_test_names_its_criteria(self):
         """TASK-098 AC6: every test function of this module names "TASK-098 AC" in its own docstring, more than 20

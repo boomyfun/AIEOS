@@ -1,7 +1,7 @@
 """The bootstrap's command-line entry point and its commands, tasks, end, status, init, launch, approve, edit, reject,
-import and run (tasks TASK-091, TASK-092, TASK-093, TASK-095, TASK-094, TASK-096, TASK-097 and TASK-098;
-specification 7 revision 4, section 3 :26, :28, :29, :30, :31, :32, :33-35; section 4; section 5 :45, :48; section 10
-points 4, 5, 6, 10, 11 and 15).
+import, run and evaluate (tasks TASK-091, TASK-092, TASK-093, TASK-095, TASK-094, TASK-096, TASK-097, TASK-098 and
+TASK-162; specification 7 revision 4, section 3 :26, :28, :29, :30, :31, :32, :33-35; section 4; section 5 :45, :48; section 10
+points 4, 5, 6, 10, 11 and 15; specification 7 revision 14, section 3 :37-:46).
 
 What it does:
 - It is run as ``python -m aieos_bootstrap.cli <command> [flags]``; the installed name is open (specification 7 :26),
@@ -9,13 +9,13 @@ What it does:
   1 or 2 and never raises: every Exception is caught; KeyboardInterrupt and SystemExit are not. os.environ is read only
   in the entry line, which passes the starter of src/aieos_runtime.
 - Its own parser, not argparse: argv is exactly a list of str; argv[0] is a command of COMMANDS, tasks, end, status,
-  init, launch, approve, edit, reject, import or run; end takes its session as argv[1], and launch, approve, edit,
-  reject, import and run their task as argv[1]; run takes its intent as argv[2] (a non-empty value not beginning
+  init, launch, approve, edit, reject, import, run or evaluate; end takes its session as argv[1], and launch, approve,
+  edit, reject, import, run and evaluate their task as argv[1]; run takes its intent as argv[2] (a non-empty value not beginning
   "--"); the flags are --root <path> (required, once, a non-empty value not beginning "--") and --json (optional,
   once); approve, edit and reject also take --class and --by (each required, once) and edit --note (required, once,
   edit only); run also takes --class and --by (each required, once), --write <path> (any number of times) and
   --owner-kept-act false (optional, once, only with --class decision_agent: the caller's statement that the task's
-  contract ends owner_kept_act: false).
+  contract ends owner_kept_act: false); evaluate also takes --repo <path> (required, once).
   Anything else gives exit 2 and USAGE, with neither the clock nor a command's callee called.
 - tasks calls the clock once, then execution.list_tasks(root, now) once, looked up at each call. A list gives exit 0
   and one line "<task> <state> <contract_hash> lease=<lease>" per item (or "no task may be taken"), or under --json
@@ -96,6 +96,21 @@ What it does:
   "refused" gives exit 1 and the findings "import: refused <reason>" then the answer's findings; an answer out of form,
   its types checked exactly, gives IMPORT_OUT_OF_FORM; a raise in import_task gives "import: a step raised <type>",
   and a raise in _render_import "cli: a step raised <type>". Its use on a real project is not decided by this text.
+- evaluate <task> (task TASK-162; specification 7 section 3 :37-:46), ``aieos evaluate``, evaluates one submitted
+  task through evaluate_command.evaluate. After the parse it is refused inside a runtime: in_runtime(environ) true
+  gives exit 1 and the one finding EVALUATE_RUNTIME_REFUSAL, before standard input is read and before the clock.
+  Else stdin.buffer.read(STDIN_CAP + 1) is called once: a stdin that is None or has no buffer, an access or a read
+  that raises, a value that is not bytes, more than STDIN_CAP bytes (64 MiB) or bytes that are not UTF-8 give exit 1
+  and the one finding STDIN_REFUSAL; the text is the CI data. Then the clock once, then evaluate(root, repo, task,
+  text, EVALUATE_RECORDER, now) once, looked up at each call. "evaluated" and "duplicate" with a decision that is
+  not None give exit 0; "refused", and an answer whose decision is None (the governor's error record: appended, but
+  no decision), give exit 1; an answer out of form, its types checked exactly, gives exit 1 and EVALUATE_OUT_OF_FORM;
+  a raise in the clock or evaluate gives "evaluate: a step raised <type>". The text lines are "evaluate: <result>
+  <decision or none> <next state or none> <event id>" or "evaluate: refused <reason>", then "manifest-sha256: <hex>"
+  and "manifest: <text>" when the answer carries them, "appended: <record id>" per record, "uncovered: <JSON>" per
+  entry and "finding: <text>" per finding; --json gives one sorted JSON line of the whole answer. No line says that the
+  task was accepted: exit 0 says a decision was recorded or already held. Limit: the text lines are written in the
+  output's own encoding, so a character it cannot write gives exit 1 after the appends; --json writes ASCII only.
 - run <task> <intent> (task TASK-098; specification 7 section 3 :30), ``aieos run``, records the intent and makes
   and records its task through launcher.run_task, which classes the --write paths at the base and fills a fixed
   template; it drafts nothing: doing the change or drafting the proposal set is a launched session's.
@@ -114,7 +129,7 @@ What it does:
   name whose value is '' counts as present (two stated choices, both fail-closed); an environment whose membership
   test raises counts as inside. tasks and status do not call it; end and init call it after the parse; launch also
   calls it after the parse, then refuses with no starter; approve, edit and reject also call it after the parse; import
-  also calls it after the parse; run also calls it after the parse.
+  also calls it after the parse; run also calls it after the parse; evaluate also calls it after the parse.
 
 Limits, stated: a determined agent can start a nested runtime with an environment it chooses (spec 5 :120); a root
 value beginning "--" cannot be given; a root that names no folder gives only list_tasks' "a step raised" finding; a
@@ -129,11 +144,12 @@ import os
 import re
 import sys
 
+from aieos_bootstrap import evaluate_command
 from aieos_bootstrap import execution
 from aieos_bootstrap import launcher
 
 RUNTIME_VARS = ('AIEOS_SESSION_ID', 'AIEOS_ROOT', 'AIEOS_BASE')
-COMMANDS = ('tasks', 'end', 'status', 'init', 'launch', 'approve', 'edit', 'reject', 'import', 'run')
+COMMANDS = ('tasks', 'end', 'status', 'init', 'launch', 'approve', 'edit', 'reject', 'import', 'run', 'evaluate')
 USAGE = ('usage: python -m aieos_bootstrap.cli tasks --root <path> [--json]\n'
          '       python -m aieos_bootstrap.cli end <session> --root <path> [--json]\n'
          '       python -m aieos_bootstrap.cli status --root <path> [--json]\n'
@@ -149,6 +165,7 @@ USAGE = ('usage: python -m aieos_bootstrap.cli tasks --root <path> [--json]\n'
          '       python -m aieos_bootstrap.cli run <task> <intent> --root <path> '
          '--class <decision_agent|human_authority> --by <decision id or name> [--owner-kept-act false] '
          '[--write <path>]... [--json]\n'
+         '       python -m aieos_bootstrap.cli evaluate <task> --root <path> --repo <path> [--json]\n'
          '  tasks          the tasks that may be taken\n'
          '  end <session>  end a crashed session from outside the runtime\n'
          '  status         the status of the project\n'
@@ -159,7 +176,9 @@ USAGE = ('usage: python -m aieos_bootstrap.cli tasks --root <path> [--json]\n'
          '  reject <task>  reject the task\'s drafted contract version\n'
          '  import <task>  make and record a drafting task for a repository\'s proposals\n'
          '  run <task>     record an intent and make and record its task\n'
+         '  evaluate <task> evaluate a submitted task, its CI data given on standard input\n'
          '  --root <path>  the project root (required)\n'
+         '  --repo <path>  the Git repository (evaluate only; required)\n'
          '  --class <c>    who acts, decision_agent or human_authority, as the caller states it (not checked)\n'
          '  --by <who>     the decision id (decision_agent) or the name (human_authority)\n'
          '  --note <text>  the edit note (edit only)\n'
@@ -199,6 +218,12 @@ RUN_RUNTIME_REFUSAL = ('run: refused inside a runtime (it writes; specification 
                        'is refused for the same reason)')
 RUN_OUT_OF_FORM = 'run: run_task gave an answer out of form'
 _RUN_RISKS = ('low', 'medium', 'high', 'critical')
+EVALUATE_RECORDER = 'aieos cli evaluate'
+STDIN_CAP = 67108864
+EVALUATE_RUNTIME_REFUSAL = ('evaluate: refused inside a runtime (it writes; specification 7 :34 names end and launch, and '
+                            'evaluate is refused for the same reason)')
+STDIN_REFUSAL = 'evaluate: standard input gave no UTF-8 bytes within the cap'
+EVALUATE_OUT_OF_FORM = 'evaluate: evaluate gave an answer out of form'
 
 
 def in_runtime(environ):
@@ -219,7 +244,8 @@ def _parse(argv):
     argv, else None (a usage error); source_class, who and note are None except for approve, edit and reject, and for
     run, whose --class is source_class, whose --by is who and whose intent is in the note's place; write is run's
     --write paths, a tuple, () for every other command; owner_kept_act is None, or the text false when run was given
-    --owner-kept-act false (once, with --class decision_agent only; it is kept out of the required flags)."""
+    --owner-kept-act false (once, with --class decision_agent only; it is kept out of the required flags); for
+    evaluate, --repo is in the note's place."""
     if type(argv) is not list or not argv or any(type(a) is not str for a in argv):
         return None
     if argv[0] not in COMMANDS:
@@ -229,7 +255,7 @@ def _parse(argv):
         if not rest or not _session_in_form(rest[0]):
             return None
         session, rest = rest[0], rest[1:]
-    elif command in ('launch', 'import', 'run') or command in APPROVAL_COMMANDS:
+    elif command in ('launch', 'import', 'run', 'evaluate') or command in APPROVAL_COMMANDS:
         if not rest or re.fullmatch(TASK, rest[0]) is None:
             return None
         session, rest = rest[0], rest[1:]
@@ -242,6 +268,8 @@ def _parse(argv):
         allowed = _APPROVAL_FLAGS if command == 'edit' else _APPROVAL_FLAGS[:2]
     elif command == 'run':
         allowed = _APPROVAL_FLAGS[:2]
+    elif command == 'evaluate':
+        allowed = ('--repo',)
     root, as_json, values, write, kept, i = None, False, {}, [], None, 0
     while i < len(rest):
         flag = rest[i]
@@ -275,7 +303,12 @@ def _parse(argv):
         return None
     if kept is not None and values['--class'] != 'decision_agent':
         return None
-    note = intent if command == 'run' else values.get('--note')
+    if command == 'run':
+        note = intent
+    elif command == 'evaluate':
+        note = values.get('--repo')
+    else:
+        note = values.get('--note')
     return (command, session, root, as_json, values.get('--class'), values.get('--by'), note, tuple(write), kept)
 
 
@@ -676,7 +709,63 @@ def _intent_run(task, intent, root, source_class, who, write, as_json, environ, 
     return 0, _render_intent_run(answer, as_json)
 
 
-def _run(argv, environ, clock, starter=None, capture=None, restore=None):
+def _evaluate_in_form(answer):
+    optional = ('event_id', 'decision', 'next_task_state', 'manifest_sha256', 'manifest')
+    return (type(answer) is dict and len(answer) == len(evaluate_command.RESULT_KEYS)
+            and all(k in answer for k in evaluate_command.RESULT_KEYS)
+            and answer['result'] in ('evaluated', 'duplicate', 'refused')
+            and (answer['reason'] is None) == (answer['result'] != 'refused')
+            and (answer['reason'] is None or type(answer['reason']) is str)
+            and all(answer[k] is None or type(answer[k]) is str for k in optional)
+            and _str_list(answer['findings']) and _str_list(answer['appended'])
+            and (answer['uncovered'] is None or type(answer['uncovered']) is list))
+
+
+def _render_evaluate(answer, as_json):
+    """The output of evaluate's answer: the result line, the manifest, the appended record ids, the uncovered
+    entries and the findings, or one JSON line."""
+    if as_json:
+        return json.dumps(answer, sort_keys=True) + '\n'
+    if answer['result'] == 'refused':
+        lines = ['evaluate: refused %s' % answer['reason']]
+    else:
+        lines = ['evaluate: %s %s %s %s' % (answer['result'], answer['decision'] or 'none',
+                                            answer['next_task_state'] or 'none', answer['event_id'])]
+    if answer['manifest'] is not None:
+        lines += ['manifest-sha256: %s' % answer['manifest_sha256'], 'manifest: %s' % answer['manifest']]
+    lines += ['appended: %s' % r for r in answer['appended']]
+    lines += ['uncovered: %s' % json.dumps(e, sort_keys=True) for e in answer['uncovered'] or []]
+    lines += ['finding: %s' % f for f in answer['findings']]
+    return ''.join(line + '\n' for line in lines)
+
+
+def _evaluate(task, root, repo, as_json, environ, clock, stdin):
+    """(the exit code, the whole output) of evaluate."""
+    if in_runtime(environ):
+        return 1, _findings([EVALUATE_RUNTIME_REFUSAL], as_json)
+    try:
+        data = stdin.buffer.read(STDIN_CAP + 1)
+        text = bytes.decode(data, 'utf-8') if type(data) is bytes and len(data) <= STDIN_CAP else None
+    except Exception:
+        text = None
+    if text is None:
+        return 1, _findings([STDIN_REFUSAL], as_json)
+    try:
+        now = clock()
+        answer = evaluate_command.evaluate(root, repo, task, text, EVALUATE_RECORDER, now)
+    except Exception as exc:
+        return 1, _findings(['evaluate: a step raised %s' % type(exc).__name__], as_json)
+    try:
+        in_form = _evaluate_in_form(answer)
+    except Exception:
+        in_form = False
+    if not in_form:
+        return 1, _findings([EVALUATE_OUT_OF_FORM], as_json)
+    code = 0 if answer['result'] != 'refused' and answer['decision'] is not None else 1
+    return code, _render_evaluate(answer, as_json)
+
+
+def _run(argv, environ, clock, starter=None, capture=None, restore=None, stdin=None):
     """(the exit code, the whole output)."""
     try:
         parsed = _parse(argv)
@@ -721,6 +810,11 @@ def _run(argv, environ, clock, starter=None, capture=None, restore=None):
                                owner_kept_act)
         except Exception as exc:
             return 1, _findings(['cli: a step raised %s' % type(exc).__name__], as_json)
+    if command == 'evaluate':
+        try:
+            return _evaluate(session, root, note, as_json, environ, clock, stdin)
+        except Exception as exc:
+            return 1, _findings(['cli: a step raised %s' % type(exc).__name__], as_json)
     code, kind, payload = _tasks(root, clock)
     if kind == 'findings':
         return code, _findings(payload, as_json)
@@ -730,14 +824,15 @@ def _run(argv, environ, clock, starter=None, capture=None, restore=None):
         return 1, _findings(['cli: a step raised %s' % type(exc).__name__], as_json)
 
 
-def main(argv, stdout, environ, clock, starter=None, capture=None, restore=None):
+def main(argv, stdout, environ, clock, starter=None, capture=None, restore=None, stdin=None):
     """Run one command; return 0, 1 or 2; never raise an Exception. environ is read by end, init, launch, approve,
-    edit, reject, import and run, after the parse, through in_runtime; tasks and status do not read it. starter is
+    edit, reject, import, run and evaluate, after the parse, through in_runtime; tasks and status do not read it.
+    stdin is None unless a caller passes one, and only evaluate reads it; the entry line passes sys.stdin. starter is
     None unless a caller passes one; the entry line passes the starter of src/aieos_runtime. capture and restore (task
     TASK-148) are None unless a caller passes them; the entry line passes the two functions of
     src/aieos_runtime.task_capture, and launch hands them to launcher.launch_outside only when both are given."""
     try:
-        code, text = _run(argv, environ, clock, starter, capture, restore)
+        code, text = _run(argv, environ, clock, starter, capture, restore, stdin)
     except Exception:
         return 1
     try:
@@ -757,4 +852,4 @@ def _clock():
 if __name__ == '__main__':
     from aieos_runtime import claude_starter, task_capture
     sys.exit(main(sys.argv[1:], sys.stdout, os.environ, _clock, starter=claude_starter.starter,
-                  capture=task_capture.capture, restore=task_capture.restore))
+                  capture=task_capture.capture, restore=task_capture.restore, stdin=sys.stdin))

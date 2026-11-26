@@ -3,6 +3,7 @@ store, a session, a grant, appends under the lease, a refused submission recorde
 bytes and the store's held leases, and expiry."""
 
 import datetime
+import hashlib
 import json
 import os
 import re
@@ -11,7 +12,8 @@ import tempfile
 import unittest
 from unittest import mock
 
-from aieos_bootstrap import handoff_file, launcher, read_set_record, records, recovery, submit, writer
+from aieos_bootstrap import (base_files, base_inputs, evaluate_command, evaluation_sources, handoff_file, launcher,
+                             read_set_record, records, recovery, submit, writer)
 
 UTC = datetime.timezone.utc
 T0 = datetime.datetime(2026, 10, 11, 12, 0, 0, tzinfo=UTC)
@@ -1045,6 +1047,129 @@ class GuardedAppendFiles(unittest.TestCase):
                 con.execute('ROLLBACK')
             finally:
                 con.close()
+
+
+class EvaluateCommandChainFiles(unittest.TestCase):
+    """TASK-162 AC14: the real chain of evaluate_command over a temporary root with a store: real read_ci_data,
+    eval_inputs, manifest, writer.append_event and evaluate_task. Stood in: the Git reads, the contract reader, the
+    file reader and the source loader. The sources below are stand-in values, not policy: each of the twelve has a
+    fixture value, intent_versions included, where the real loader leaves an open gap (DEF-0156)."""
+
+    TASK = 'TASK-162'
+    BASE = 'a' * 40
+    COMMIT = '3' * 40
+    CONTRACT_COMMIT = '4' * 40
+    TEXT = 'task: TASK-162\nowner_kept_act: false\n'
+    SHA = hashlib.sha256(TEXT.encode('utf-8')).hexdigest()
+    CHECKOUT = 'Fetch the pushed commit, its history and main (no third-party action, no token)'
+    DETECT = 'G0 task detection (the contract commit on main)'
+    MAPPED = [DETECT, 'G0 scope (V0)', 'G1 build', 'lint (pyflakes 4.0.3, pinned by version and hash)']
+
+    def ci_text(self):
+        stamp = '2026-11-26T00:00:00.0000000Z'
+        log = ''.join('checks\t%s\t%s %s\n' % (step, stamp, message) for step, message in (
+            (self.CHECKOUT, '  SHA: ' + self.COMMIT),
+            (self.DETECT, '##[endgroup]'),
+            (self.DETECT, 'G0 detect: task TASK-162 contract commit %s base %s' % (self.CONTRACT_COMMIT, self.BASE)),
+            (self.DETECT, 'G0 contract sha256 ' + self.SHA)))
+        api = {'id': 100, 'run_attempt': 1, 'head_sha': self.COMMIT, 'event': 'push',
+               'head_branch': 'task/' + self.TASK, 'status': 'completed', 'conclusion': 'success',
+               'path': '.github/workflows/aieos-checks.yml'}
+        steps = [{'name': name, 'conclusion': 'success'} for name in [self.CHECKOUT] + self.MAPPED]
+        view = {'databaseId': 100, 'attempt': 1, 'headSha': self.COMMIT, 'event': 'push',
+                'headBranch': 'task/' + self.TASK, 'status': 'completed', 'conclusion': 'success',
+                'jobs': [{'steps': steps}]}
+        return json.dumps({'run-100-1.api.json': json.dumps(api), 'run-100-1.view.json': json.dumps(view),
+                           'run-100-1.log': log})
+
+    def contract(self):
+        return {'task': self.TASK, 'traces_to': ['SPEC-001'], 'risk': 'low', 'owner_kept_act': 'false',
+                'input_state': {'base_commit': self.BASE},
+                'verification_plan': [{'gate': 'G0', 'check': 'scope'}, {'gate': 'G1', 'check': 'build'},
+                                      {'gate': 'G2', 'check': 'lint'}],
+                'autonomy': {'max_level': 'L1', 'budgets': {'retries': '1'}}}
+
+    def loaded(self):
+        sources = {
+            'intent_versions': {'SPEC-001': 'v2'},
+            'owner_kept_rules': [{'id': 'OPS-002', 'match': ['docs/pre-genesis/measurement-protocol.md']}],
+            'articles': [{'id': 'INV-002', 'scope': ['src/**'], 'evidence_required': ['ai_review']}],
+            'default_profiles': {'medium': [{'dimension': 'functional', 'evidence_types': ['unit_test']}]},
+            'requirement_profiles': [], 'evidence_comparison': {'weakens': False}, 'delegation': True,
+            'auto_accept': {}, 'level_version': 'v1', 'ruleset_version': 'v1', 'policy_version': 'v2',
+            'risk_rules': [{'match': ['src/**', 'tests/**'], 'class': 'medium'}]}
+        return {'result': 'present', 'sources': sources, 'changed_paths': ['src/x.py'],
+                'provenance': [{'path': 'stand-in', 'commit': self.BASE}], 'findings': []}
+
+    def git(self, fail_diff):
+        message = 'Work\n\nThe body.\n\nAIEOS-Task: TASK-162\n'
+        commits = {self.BASE: ([], 'Records\n\nThe body.\n', ['docs/a.md']),
+                   self.COMMIT: ([self.BASE], message, ['src/x.py'])}
+
+        def read(repo, args, *rest):
+            parents, text, paths = commits[args[-1]]
+            if args[0] == 'cat-file':
+                head = 'tree %s\n' % ('b' * 40) + ''.join('parent %s\n' % p for p in parents)
+                head += 'author T <t> 1700000000 +0000\ncommitter T <t> 1700000000 +0000\n\n'
+                return {'exit': 0, 'out': (head + text).encode('utf-8'), 'err': b'', 'error': None}
+            if fail_diff:
+                return {'exit': 1, 'out': b'', 'err': b'', 'error': None}
+            return {'exit': 0, 'out': b''.join(p.encode('utf-8') + b'\0' for p in paths), 'err': b'', 'error': None}
+        return read
+
+    def prepare(self, root):
+        writer.open_store(root)
+        self.assertEqual(writer.start_session(root, 's-1', 'agent-1', T0).result, 'done')
+        for event_type, payload, event_id in (
+                ('task.drafted', {'contract_version': 'v1', 'contract_hash': self.SHA}, 'ev-1'),
+                ('task.approved', {'contract_version': 'v1', 'contract_hash': self.SHA, 'approval_record': 'rec-a'},
+                 'ev-2')):
+            self.assertEqual(writer.append_event(root, event_type, payload, event_id, T0, REC,
+                                                 task_id=self.TASK).result, 'appended')
+        lease = writer.grant_lease(root, self.TASK, 'READY', 'agent-1', 's-1', T0,
+                                   T0 + datetime.timedelta(hours=1)).value
+        self.assertEqual(writer.append_event(root, 'task.submitted', {'commit': self.COMMIT, 'compensating': False},
+                                             'ev-3', T0, REC, task_id=self.TASK,
+                                             fencing_token=lease['fencing_token']).result, 'appended')
+
+    def run_command(self, root, fail_diff):
+        def read_file(repo, commit, path, seam=None):
+            if path.startswith('docs/'):
+                return {'blob': 'c' * 40, 'text': self.TEXT}, None
+            return None, ['%s is missing' % path]
+
+        with mock.patch.object(base_inputs, 'contract_at', lambda *a: ((self.contract(), self.SHA), None)), \
+                mock.patch.object(base_files, 'read_file', read_file), \
+                mock.patch.object(evaluation_sources, 'load_sources', lambda *a: self.loaded()):
+            return evaluate_command.evaluate(root, root, self.TASK, self.ci_text(), REC,
+                                             T0 + datetime.timedelta(minutes=5), read=self.git(fail_diff))
+
+    def test_a_refused_decision_leaves_the_records_and_a_rerun_adds_none_again(self):
+        """TASK-162 AC14: a first run refused at step 8 by a failing Git read leaves the CI records and the manifest
+        record; a second run appends none of them again and records the decision."""
+        with tempfile.TemporaryDirectory() as root:
+            self.prepare(root)
+            first = self.run_command(root, True)
+            self.assertEqual((first['result'], first['reason']), ('refused', 'evaluate'), first['findings'])
+            self.assertTrue(first['findings'][0].startswith('evaluate: refused git'), first['findings'])
+            after_first = records.check_log(read(writer.log_path(root)))
+            self.assertEqual(after_first.findings(), [])
+            added = [x.event for x in after_first.lines if x.event['type'] == 'record.added']
+            self.assertEqual([e['payload']['record_id'] for e in added], first['appended'])
+            self.assertGreater(len(added), 1)
+            self.assertEqual(added[-1]['payload']['evidence_type'], 'evaluation_manifest')
+            self.assertEqual(added[-1]['payload']['refers_to'], first['manifest_sha256'])
+            self.assertEqual(hashlib.sha256(first['manifest'].encode('utf-8')).hexdigest(), first['manifest_sha256'])
+
+            second = self.run_command(root, False)
+            self.assertEqual((second['result'], second['reason'], second['appended']), ('evaluated', None, []),
+                             second['findings'])
+            self.assertIsNotNone(second['decision'])
+            self.assertEqual(second['manifest_sha256'], first['manifest_sha256'])
+            lines = records.check_log(read(writer.log_path(root))).lines
+            self.assertEqual(len(lines), len(after_first.lines) + 1)
+            self.assertEqual((lines[-1].event['type'], lines[-1].event['event_id']),
+                             ('decision.acceptance', second['event_id']))
 
 
 if __name__ == '__main__':

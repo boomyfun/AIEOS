@@ -34,9 +34,8 @@ profile or a delegation that it cannot derive is a refusal, so the values return
 owner_kept_act reaches the module as the text true or false (the subset reader gives scalars as texts) and is converted
 to the bool; evaluation.evaluate_task binds the field to the contract bytes again.
 
-Limits: the module cannot check that the sources are the real policy; until the policy file of BT3c exists ten of the
-twelve sources (all but policy_version and risk_rules, which have readers) have no producer, so no real evaluation can
-pass the gap check. policy_ref is checked for its form and for being another commit than evaluated_commit; that the
+Limits: the module cannot check that the sources are the real policy; the producer of the sources is evaluation_sources.load_sources, and a
+source it gives as None is an open gap (DEF-0156 for intent_versions). policy_ref is checked for its form and for being another commit than evaluated_commit; that the
 files were read at that ref is the caller's. The policy-path rule is the exact text of five files. The module cannot
 check that contract is the contract whose bytes hash to contract_sha256; the caller takes both from one
 base_inputs.contract_at call. That reader refuses the self-build contracts of docs/tasks whose intent_versions keys

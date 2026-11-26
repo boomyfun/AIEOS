@@ -712,7 +712,7 @@ class TASK096AC6Docs(unittest.TestCase):
         text = doc('cli.py')
         for phrase in ('aieos approve', 'aieos edit', 'aieos reject', 'TASK-096',
                        'writes nothing the governor counts at acceptance', 'not checked',
-                       'COMMANDS, tasks, end, status, init, launch, approve, edit, reject, import or run',
+                       'COMMANDS, tasks, end, status, init, launch, approve, edit, reject, import, run or evaluate',
                        'end and init call it after the parse'):
             self.assertIn(phrase, text)
         for phrase in ('COMMANDS, tasks, end, status, init or launch',

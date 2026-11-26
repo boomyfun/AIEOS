@@ -317,11 +317,12 @@ class Base(unittest.TestCase):
 class AC1TheEntries(unittest.TestCase):
     def test_the_six_entries_follow_the_derive_entry_in_this_order(self):
         paths = evaluation_policy.EVIDENCE_DEFINING_PATHS
-        self.assertEqual(len(paths), 18)
-        self.assertEqual(len(set(paths)), 18)
+        self.assertEqual(len(paths), 19)
+        self.assertEqual(len(set(paths)), 19)
         self.assertEqual(paths[9], 'src/aieos_bootstrap/evaluation_derive.py')
         self.assertEqual(paths[10:], NEW6 + ('src/aieos_bootstrap/evaluation_intake.py',
-                                             'src/aieos_bootstrap/intent_map.py'))
+                                             'src/aieos_bootstrap/intent_map.py',
+                                             'src/aieos_bootstrap/evaluate_command.py'))
 
     def test_each_entry_weakens_the_comparison_and_an_other_source_file_does_not(self):
         for path in NEW6:

@@ -577,13 +577,13 @@ class TASK094AC6Docs(unittest.TestCase):
     def test_the_cli_docstring_and_usage(self):
         """TASK-094 AC6, as TASK-096 AC6, TASK-097 AC6 and TASK-098 AC6 widen it: cli.py's docstring holds "aieos
         launch", "TASK-094", "no runtime starter", "COMMANDS, tasks, end, status, init, launch, approve, edit, reject,
-        import or run" and "end and init call it after the parse", and not "COMMANDS, tasks, end, status or init",
+        import, run or evaluate" (as TASK-162 AC11 changes it) and "end and init call it after the parse", and not "COMMANDS, tasks, end, status or init",
         "COMMANDS, tasks, end, status, init or launch", "COMMANDS, tasks, end, status, init, launch, approve, edit or
         reject", "COMMANDS, tasks, end, status, init, launch, approve, edit, reject or import" nor "comes with a later
         task"; USAGE names launch."""
         text = doc('cli.py')
         for phrase in ('aieos launch', 'TASK-094', 'no runtime starter',
-                       'COMMANDS, tasks, end, status, init, launch, approve, edit, reject, import or run',
+                       'COMMANDS, tasks, end, status, init, launch, approve, edit, reject, import, run or evaluate',
                        'end and init call it after the parse'):
             self.assertIn(phrase, text)
         for phrase in ('COMMANDS, tasks, end, status or init', 'COMMANDS, tasks, end, status, init or launch',
@@ -1066,13 +1066,15 @@ class TASK148Cli(unittest.TestCase):
 
     def test_the_keywords_go_through_only_when_both_are_given(self):
         """TASK-094 AC4, as TASK-148 AC6 changes it: main, _run and _launch have the keywords capture and restore after
-        starter, default None; launch_outside is called with them as keywords only when both are not None, and the
+        starter, default None (main and _run also stdin after restore, default None, as TASK-162 AC11 adds it); launch_outside is called with them as keywords only when both are not None, and the
         four-argument call stays as it was otherwise (a lone one is not passed on: launch_outside's own argument check
         is for a caller that passes a lone one)."""
-        for name in ('main', '_run', '_launch'):
+        for name, tail in (('main', ['starter', 'capture', 'restore', 'stdin']),
+                           ('_run', ['starter', 'capture', 'restore', 'stdin']),
+                           ('_launch', ['starter', 'capture', 'restore'])):
             params = list(inspect.signature(getattr(cli, name)).parameters.values())
-            self.assertEqual([p.name for p in params][-3:], ['starter', 'capture', 'restore'], name)
-            self.assertEqual([p.default for p in params][-2:], [None, None], name)
+            self.assertEqual([p.name for p in params][-len(tail):], tail, name)
+            self.assertEqual([p.default for p in params][1 - len(tail):], [None] * (len(tail) - 1), name)
 
         def one(*args):
             return None
