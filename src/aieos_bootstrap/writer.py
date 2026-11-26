@@ -20,7 +20,9 @@ times are ISO 8601 text with "Z" as specification 2 section 6.1 writes them.
 Limits (AC10):
 - A damaged or cut last line of the log is refused by ``eventlog.append`` and never extended or repaired; a failed
   read-back after an append raises and repairs nothing.
-- No lock beyond SQLite's own transaction (v0.1 runs one task at a time, concept line 951).
+- No lock beyond SQLite's own transaction (v0.1 runs one task at a time, concept line 951). From task TASK-161,
+  ``append_event`` holds a present store's write lock, such a transaction, from before it reads the log until after its
+  last append; a root without a store takes no lock, and writers outside ``append_event`` are not excluded.
 - The caller runs the Resume Check before a grant and gives the task's state; the store projects no state from the log.
 - Its callers are the core's modules (every write of the project-state directory goes through it); ``.gitignore``
   is not changed here.
@@ -267,41 +269,122 @@ def _append_line(path, log, line):
                            '(INV-009); nothing more is written and nothing is repaired')
 
 
+# The seconds append_event waits for the store's write lock (task TASK-161). A hold is one read, one decision and one
+# fsynced write, so a 30 s wait means a stopped or stuck holder, not ordinary concurrency.
+APPEND_LOCK_TIMEOUT = 30.0
+
+
+def _guard_refusal(reason, finding):
+    """The WriteResult of a refused guard of ``append_event`` (task TASK-161): "refused" with ``reason``, no seq, no
+    line, no refusal record and exactly one finding. ``eventlog.append`` is not asked."""
+    class Refused:
+        result = 'refused'
+        seq = None
+        line = None
+
+        def __init__(self):
+            self.reason = reason
+            self.findings = (finding,)
+
+    return WriteResult(Refused())
+
+
 def append_event(root, event_type, payload, event_id, appended_at, recorder, task_id=None, fencing_token=None,
-                 corrects=None):
+                 corrects=None, expected_log_sha256=None):
     """Append one event to the root's event log through ``eventlog.append``. Returns a WriteResult (AC2, AC3).
 
     The lease ``eventlog.append`` needs is the store's held lease on ``task_id`` (None when the store or the lease is
     absent). ``recorder`` is required, so that a fence refusal's record can always be built for an event that names a
     task (DEF-0030; decision D-405, disposition (h)).
 
+    The store's write lock (task TASK-161). A store is present when ``os.path.lexists`` finds its path, a folder or a
+    broken link there included. A call that finds one opens it in SQLite's "rw" mode (which creates no store) and
+    holds BEGIN IMMEDIATE from before the log is read until after its last append, so no other such call of this
+    function writes between the read, the comparison and the line. Under the lock, in this order: for an event that
+    names a task in the writer's form, the table check; a statement that changes no row, which a store that cannot be
+    written refuses; the log read; the guard; for such an event the lease read on the same connection; the append and
+    a fence refusal's record. The transaction changes no store row and ends in ROLLBACK. The call waits up to
+    APPEND_LOCK_TIMEOUT seconds for the lock and then raises sqlite3.OperationalError ("database is locked"); a call
+    made inside a held write transaction of the same process on the same store waits and raises too.
+
+    What is new in a call without ``expected_log_sha256``; a raise among these writes nothing. An event that names no
+    task in the writer's form (no task_id, or one out of that form) now opens a present store and takes its write lock;
+    SQLite may then roll back a hot journal left by a stopped process, which changes the store's bytes. A folder at the
+    store path raises sqlite3.OperationalError; a broken link there, which before counted as no store, now raises; a
+    file that is not a database raises sqlite3.DatabaseError; a store that cannot be written raises
+    sqlite3.OperationalError; for an event that names no task in the writer's form, a present store without the table
+    store (an empty file among them) raises sqlite3.OperationalError (an event that names a task in that form raises
+    ValueError, as before); a store path that ``_store_uri`` refuses raises ValueError. No
+    realpath or link check is made on the store path. A root without a store takes no lock, and a call that started
+    before a store existed writes without one.
+
+    ``expected_log_sha256`` (task TASK-161) is None or 64 lowercase hex digits, else ValueError before anything is
+    created or read: the SHA-256 of the log bytes the caller read (of b"" for no log). With it given, a root without a
+    store is refused ("nostore") before anything is created, and a log whose SHA-256 under the lock differs is refused
+    ("changed") before ``eventlog.append`` is asked, so a duplicate over a changed log is "changed". A writer outside
+    this function (Git, an editor, another program, an older writer) is not excluded: its change is seen by the guard
+    only when it comes before the comparison; a later one is found only by the read-back, after the line is written.
+
     The project-state directory is created before ``eventlog.append`` decides, so a first append that is refused, or
     that raises, can leave that directory created without an event log (a fence refusal's record, when built, is
-    still appended); a store that does not hold exactly the writer's tables and one store row raises ValueError,
-    through ``held_lease``, for an event that names a task in the writer's form.
+    still appended); a present store that does not hold exactly the writer's tables and one store row raises
+    ValueError for an event that names a task in the writer's form.
     """
     _check_root(root)
     if not _is_str(recorder):
         raise ValueError('the recorder is not a non-empty string')
-    os.makedirs(os.path.join(root, STATE_DIR), exist_ok=True)
-    path = log_path(root)
-    log = _read_log(path)
-    lease = held_lease(root, task_id) if isinstance(task_id, str) and _TASK.fullmatch(task_id) else None
-    record_id = _digest('refusal-record', event_id) if isinstance(event_id, str) else None
-    r = eventlog.append(log, event_type, payload, event_id, appended_at, task_id=task_id, fencing_token=fencing_token,
-                        corrects=corrects, lease=lease, recorder=recorder, record_id=record_id)
-    if r.result == 'appended':
-        _append_line(path, log, r.line)
+    if expected_log_sha256 is not None and not (isinstance(expected_log_sha256, str)
+                                                and re.fullmatch('[0-9a-f]{64}', expected_log_sha256)):
+        raise ValueError('expected_log_sha256 is not 64 lowercase hex digits')
+    store = store_path(root)
+    present = os.path.lexists(store)
+    if expected_log_sha256 is not None and not present:
+        return _guard_refusal('nostore', 'nostore: no store under the root, so no lock guards the log')
+    task = isinstance(task_id, str) and _TASK.fullmatch(task_id) is not None
+    con = None
+    try:
+        if present:
+            uri = _store_uri(os.path.abspath(store), os.sep, os.altsep)
+            if not uri.endswith(_RO_SUFFIX):
+                raise ValueError('the store URI does not end in the read-only mode')
+            con = sqlite3.connect(uri[:-len(_RO_SUFFIX)] + _RW_SUFFIX, uri=True, timeout=APPEND_LOCK_TIMEOUT,
+                                  isolation_level=None)
+            con.execute('BEGIN IMMEDIATE')
+            if task:
+                _check_schema(con)
+            # It changes no row; SQLite refuses it on a store that cannot be written, where BEGIN IMMEDIATE passes.
+            con.execute('UPDATE store SET counter = counter WHERE 0')
+        os.makedirs(os.path.join(root, STATE_DIR), exist_ok=True)
+        path = log_path(root)
+        log = _read_log(path)
+        if expected_log_sha256 is not None and hashlib.sha256(log).hexdigest() != expected_log_sha256:
+            return _guard_refusal('changed', 'changed: the log is not the one the expected SHA-256 names')
+        lease = None
+        if task and con is not None:
+            lease = next((_lease(r) for r in con.execute(_LEASE_OF_TASK, (task_id,))), None)
+        record_id = _digest('refusal-record', event_id) if isinstance(event_id, str) else None
+        r = eventlog.append(log, event_type, payload, event_id, appended_at, task_id=task_id,
+                            fencing_token=fencing_token, corrects=corrects, lease=lease, recorder=recorder,
+                            record_id=record_id)
+        if r.result == 'appended':
+            _append_line(path, log, r.line)
+            return WriteResult(r)
+        if r.result == 'refused' and r.reason == 'fence' and r.record is not None:
+            # AC3: the refusal recorded as its own record.added event; it carries no fencing_token, so it needs no
+            # lease, and a retry gives "duplicate" by its derived event_id (idempotency, concept line 856).
+            rec = eventlog.append(log, 'record.added', r.record, _digest('refusal', event_id), appended_at,
+                                  task_id=task_id, recorder=recorder)
+            if rec.result == 'appended':
+                _append_line(path, log, rec.line)
+            return WriteResult(r, refusal=rec)
         return WriteResult(r)
-    if r.result == 'refused' and r.reason == 'fence' and r.record is not None:
-        # AC3: the refusal recorded as its own record.added event; it carries no fencing_token, so it needs no lease,
-        # and a retry gives "duplicate" by its derived event_id (idempotency, concept line 856).
-        rec = eventlog.append(log, 'record.added', r.record, _digest('refusal', event_id), appended_at,
-                              task_id=task_id, recorder=recorder)
-        if rec.result == 'appended':
-            _append_line(path, log, rec.line)
-        return WriteResult(r, refusal=rec)
-    return WriteResult(r)
+    finally:
+        if con is not None:
+            try:
+                if con.in_transaction:
+                    con.execute('ROLLBACK')
+            finally:
+                con.close()
 
 
 # ---- the store (AC4 to AC7) ----

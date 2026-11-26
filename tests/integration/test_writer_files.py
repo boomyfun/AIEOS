@@ -6,6 +6,7 @@ import datetime
 import json
 import os
 import re
+import sqlite3
 import tempfile
 import unittest
 from unittest import mock
@@ -954,6 +955,96 @@ class SubmissionThenHandoffFiles(unittest.TestCase):
                 text = f.read().decode('utf-8')
             self.assertIn('commit: "%s"\n' % sub, text)
             self.assertIn('  - "did it"\n', text)
+
+
+class GuardedAppendFiles(unittest.TestCase):
+    """TASK-161 on real files and two connections."""
+
+    def draft(self, root, event_id, expected=None):
+        return writer.append_event(root, 'task.drafted', {'contract_version': 'v1', 'contract_hash': H64}, event_id, T0,
+                                   REC, task_id='TASK-161', expected_log_sha256=expected)
+
+    def assert_locked_out(self, root):
+        """A submission with a wrong token, which would write a fence record, raises and writes nothing."""
+        before = writer.read_log(root)
+        with mock.patch.object(writer, 'APPEND_LOCK_TIMEOUT', 0.2):
+            with self.assertRaises(sqlite3.OperationalError) as caught:
+                writer.append_event(root, 'task.submitted', {'commit': C40, 'compensating': False}, 'ev-bad', T0, REC,
+                                    task_id='TASK-161', fencing_token={'epoch': 'made-up', 'counter': 9})
+        self.assertIs(type(caught.exception), sqlite3.OperationalError)
+        self.assertIn('database is locked', str(caught.exception))
+        self.assertEqual(writer.read_log(root), before)
+
+    def test_a_reserved_a_pending_and_an_exclusive_lock(self):
+        """TASK-161 AC6 and TASK-161 AC7: while another connection holds a RESERVED, a PENDING (a commit that waits for
+        a reader) or an EXCLUSIVE lock the append raises "database is locked" and writes nothing; afterwards it
+        appends."""
+        with tempfile.TemporaryDirectory() as root:
+            writer.open_store(root, 'epoch-1')
+            self.draft(root, 'ev-1')
+            path = writer.store_path(root)
+            holder = sqlite3.connect(path, isolation_level=None, timeout=0)
+            reader = sqlite3.connect(path, isolation_level=None, timeout=0)
+            try:
+                holder.execute('BEGIN IMMEDIATE')
+                self.assert_locked_out(root)
+                holder.execute('ROLLBACK')
+                reader.execute('BEGIN')
+                reader.execute('SELECT epoch FROM store').fetchall()
+                holder.execute('BEGIN IMMEDIATE')
+                holder.execute('UPDATE store SET counter = counter')
+                with self.assertRaises(sqlite3.OperationalError):
+                    holder.execute('COMMIT')
+                reader.execute('ROLLBACK')
+                self.assert_locked_out(root)
+                holder.execute('ROLLBACK')
+                holder.execute('BEGIN EXCLUSIVE')
+                with mock.patch.object(writer, 'APPEND_LOCK_TIMEOUT', 0.2):
+                    with self.assertRaises(sqlite3.OperationalError):
+                        self.draft(root, 'ev-2')
+                holder.execute('ROLLBACK')
+            finally:
+                reader.close()
+                holder.close()
+            self.assertEqual(self.draft(root, 'ev-2').result, 'appended')
+            self.assertEqual(sorted(os.listdir(os.path.dirname(path))), ['state.sqlite'])
+
+    def test_a_log_changed_between_the_read_and_the_append(self):
+        """TASK-161 AC4 and TASK-161 AC7: a caller reads the log; another append lands; the guarded append is "changed"
+        and writes nothing; a new read gives an append, and a second guarded append follows it."""
+        import hashlib
+        with tempfile.TemporaryDirectory() as root:
+            writer.open_store(root, 'epoch-1')
+            self.draft(root, 'ev-1')
+            seen = hashlib.sha256(writer.read_log(root)).hexdigest()
+            self.draft(root, 'ev-other')
+            before = writer.read_log(root)
+            self.assertEqual(self.draft(root, 'ev-mine', expected=seen).reason, 'changed')
+            self.assertEqual(writer.read_log(root), before)
+            one = self.draft(root, 'ev-mine', expected=hashlib.sha256(before).hexdigest())
+            two = self.draft(root, 'ev-next', expected=hashlib.sha256(before + one.line).hexdigest())
+            self.assertEqual((one.result, two.result), ('appended', 'appended'))
+            self.assertEqual(writer.read_log(root), before + one.line + two.line)
+            self.assertEqual(records.check_log(writer.read_log(root)).findings(), [])
+
+    def test_a_relative_root(self):
+        """TASK-161 AC3 and TASK-161 AC7: with a relative root and a present store the guarded append appends, and it
+        takes the lock of that store (a held lock on the absolute path stops it)."""
+        import hashlib
+        with tempfile.TemporaryDirectory(dir=os.curdir) as folder:
+            root = os.path.relpath(folder)
+            self.assertFalse(os.path.isabs(root))
+            writer.open_store(root, 'epoch-1')
+            r = self.draft(root, 'ev-1', expected=hashlib.sha256(b'').hexdigest())
+            self.assertEqual(r.result, 'appended')
+            self.assertEqual(writer.read_log(root), r.line)
+            con = sqlite3.connect(os.path.abspath(writer.store_path(root)), isolation_level=None)
+            try:
+                con.execute('BEGIN IMMEDIATE')
+                self.assert_locked_out(root)
+                con.execute('ROLLBACK')
+            finally:
+                con.close()
 
 
 if __name__ == '__main__':

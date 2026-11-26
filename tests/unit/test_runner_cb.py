@@ -367,6 +367,30 @@ def stand_in(**changes):
     return cb
 
 
+class R4TheStandInsGuard(unittest.TestCase):
+    def test_the_expected_hash_of_the_stand_in(self):
+        """TASK-161 AC10: with well-formed 64-character values only (the stand-in checks no argument form), a value that
+        differs from the SHA-256 of the stand-in's log gives the writer's result "refused", reason "changed", with no
+        seq, line or refusal and one finding, and adds nothing to the log; the fresh hash appends."""
+        cb = core()
+        log = conformance._CbLog(cb, conformance._CbStore(cb))
+        payload = {'contract_version': 'v1', 'contract_hash': H}
+        at = conformance._utc('2026-10-16T09:00:00Z')
+        first = log.append_event('/r', 'task.drafted', payload, 'd-1', at, REC, task_id=TASK)
+        self.assertEqual(first.result, 'appended')
+        before = log.log
+        r = log.append_event('/r', 'task.drafted', payload, 'd-2', at, REC, task_id=TASK,
+                             expected_log_sha256=hashlib.sha256(b'').hexdigest())
+        self.assertIsInstance(r, writer.WriteResult)
+        self.assertEqual((r.result, r.reason, r.seq, r.line, r.refusal), ('refused', 'changed', None, None, None))
+        self.assertEqual(len(r.findings), 1)
+        self.assertEqual(log.log, before)
+        r = log.append_event('/r', 'task.drafted', payload, 'd-2', at, REC, task_id=TASK,
+                             expected_log_sha256=hashlib.sha256(before).hexdigest())
+        self.assertEqual((r.result, r.seq), ('appended', 2))
+        self.assertEqual(log.log, before + r.line)
+
+
 class R5Replay(unittest.TestCase):
     def test_the_stop_is_observed(self):
         """TASK-056 AC6: the root's core stops the session and the case goes on to PASS."""

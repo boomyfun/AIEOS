@@ -1345,7 +1345,11 @@ class _CbLog:
         return self.log
 
     def append_event(self, root, event_type, payload, event_id, appended_at, recorder, task_id=None,
-                     fencing_token=None, corrects=None):
+                     fencing_token=None, corrects=None, expected_log_sha256=None):
+        if expected_log_sha256 is not None and hashlib.sha256(self.log).hexdigest() != expected_log_sha256:
+            class changed:
+                result, reason, seq, line, findings = 'refused', 'changed', None, None, ('changed',)
+            return self.entry['WriteResult'](changed)
         append, result = self.entry['append'], self.entry['WriteResult']
         lease = self.store.leases.get(task_id) if task_id else None
         r = append(self.log, event_type, payload, event_id, appended_at, task_id=task_id, fencing_token=fencing_token,

@@ -3,6 +3,7 @@ one failing case, and each test works in its own temporary folder, removed by te
 
 import ast
 import datetime
+import hashlib
 import io
 import os
 import sqlite3
@@ -2115,7 +2116,8 @@ class R23TheNamesAtTheBase(unittest.TestCase):
         widens it: writer.py's top-level names are exactly the base's 94 plus session_leases, read_sessions,
         write_handoff, init_layout, write_contract, write_policy and names that begin "_session_leases",
         "_SESSION_LEASES", "_read_sessions", "_READ_SESSIONS", "_write_handoff", "_HANDOFF", "_init_layout",
-        "_INIT_LAYOUT", "_write_contract", "_CONTRACT", "_write_policy" or "_POLICY", all above the TASK-066 marker."""
+        "_INIT_LAYOUT", "_write_contract", "_CONTRACT", "_write_policy" or "_POLICY", all above the TASK-066 marker. As
+        TASK-161 AC1 widens it, the names APPEND_LOCK_TIMEOUT and _guard_refusal join, and no other."""
         text = read(os.path.join(SRC, 'writer.py')).decode('utf-8')
         names = self.names(ast.parse(text))
         self.assertEqual(len(self.BASE), 94)
@@ -2128,7 +2130,7 @@ class R23TheNamesAtTheBase(unittest.TestCase):
         self.assertIn('write_contract', added)
         self.assertIn('write_policy', added)
         for name in added - {'session_leases', 'read_sessions', 'write_handoff', 'init_layout', 'write_contract',
-                             'write_policy'}:
+                             'write_policy', 'APPEND_LOCK_TIMEOUT', '_guard_refusal'}:
             self.assertTrue(name.startswith(('_session_leases', '_SESSION_LEASES', '_read_sessions', '_READ_SESSIONS',
                                              '_write_handoff', '_HANDOFF', '_init_layout', '_INIT_LAYOUT',
                                              '_write_contract', '_CONTRACT', '_write_policy', '_POLICY')), name)
@@ -3113,6 +3115,448 @@ class TASK117WritePolicy(unittest.TestCase):
         self.assertGreater(len(names), 10)
         for name in names:
             self.assertIn('TASK-117 AC4', getattr(type(self), name).__doc__ or '', name)
+
+
+# ---- task TASK-161: the guarded append ----
+
+NOTE = {'record_id': 'note-1', 'fact_kind': 'claim', 'source_class': 'decision_agent', 'recorder': REC,
+        'subject': 'INT-001', 'evidence_type': 'intent', 'text': 'a made-up intent', 'decision_ref': 'D-1'}
+
+
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+class TASK161GuardedAppend(Case):
+
+    def append(self, event_id='ev-d', expected=None, task=TASK):
+        return writer.append_event(self.root, 'task.drafted', DRAFTED, event_id, T0, REC, task_id=task,
+                                   expected_log_sha256=expected)
+
+    def note(self, event_id='ev-n', expected=None):
+        return writer.append_event(self.root, 'record.added', NOTE, event_id, T0, REC, expected_log_sha256=expected)
+
+    def log(self):
+        return writer.read_log(self.root)
+
+    def lock_is_held(self):
+        con = sqlite3.connect(writer.store_path(self.root), timeout=0, isolation_level=None)
+        try:
+            try:
+                con.execute('BEGIN IMMEDIATE')
+            except sqlite3.OperationalError:
+                return True
+            con.execute('ROLLBACK')
+            return False
+        finally:
+            con.close()
+
+    def assert_raises_exactly(self, kind, words, call):
+        with self.assertRaises(kind) as caught:
+            call()
+        self.assertIs(type(caught.exception), kind)
+        self.assertIn(words, str(caught.exception))
+
+    def pinned_run(self):
+        """The calls of the pinned run over a store; returns each result as a tuple."""
+        out = []
+
+        def call(*args, **kwargs):
+            r = writer.append_event(self.root, *args, **kwargs)
+            refusal = None if r.refusal is None else (r.refusal.result, r.refusal.seq)
+            out.append((r.result, r.reason, r.seq, refusal))
+        self.store()
+        self.session()
+        call('record.added', NOTE, 'ev-n', T0, REC)
+        call('task.drafted', DRAFTED, 'ev-d', T0, REC, task_id=TASK)
+        token = self.grant().value['fencing_token']
+        wrong = dict(token, counter=token['counter'] + 1)
+        call('task.submitted', SUBMITTED, 'ev-bad', T0, REC, task_id=TASK, fencing_token=wrong)
+        call('task.drafted', DRAFTED, 'ev-d', T0, REC, task_id=TASK)
+        call('task.submitted', SUBMITTED, 'ev-s', T0, REC, task_id=TASK, fencing_token=token)
+        call('task.drafted', {'contract_version': 'x'}, 'ev-x', T0, REC, task_id=TASK)
+        return out
+
+    def pinned_run_without_a_store(self):
+        """The calls of the pinned run without a store; returns each result as a tuple."""
+        first = writer.append_event(self.root, 'record.added', NOTE, 'ev-n', T0, REC)
+        second = writer.append_event(self.root, 'task.drafted', DRAFTED, 'ev-d', T0, REC, task_id=TASK)
+        return [(first.result, first.seq), (second.result, second.seq)]
+
+    def test_unguarded_results_and_bytes_over_a_store_are_the_base_ones(self):
+        """TASK-161 AC5: over a present store that no one else holds, an event that names no task, a task event, a fence
+        refusal, a duplicate, a submission under the lease and a refused event give the results and the log bytes that
+        the base commit's writer gave (literals computed from the base, not from this code)."""
+        self.assertEqual(self.pinned_run(), [('appended', None, 1, None), ('appended', None, 2, None), ('refused', 'fence', None, ('appended', 3)), ('duplicate', None, 2, None), ('appended', None, 4, None), ('refused', 'event', None, None)])
+        self.assertEqual(self.log(), b'{"appended_at":"2026-10-11T12:00:00Z","event_id":"ev-n","payload":{"decision_ref":"D-1","evidence_type":"intent","fact_kind":"claim","record_id":"note-1","recorder":"aieos-core","source_class":"decision_agent","subject":"INT-001","text":"a made-up intent"},"seq":1,"type":"record.added"}\n{"appended_at":"2026-10-11T12:00:00Z","event_id":"ev-d","payload":{"contract_hash":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","contract_version":"v1"},"seq":2,"task_id":"TASK-016","type":"task.drafted"}\n{"appended_at":"2026-10-11T12:00:00Z","event_id":"91f4a3b42be93de26143da6f5e596c742452774716db8d71d790500faa336bc1","payload":{"evidence_type":"refused_submission","fact_kind":"observation","outcome":"fail","record_id":"2b984a6baa48ff889a70758e58f8319412ed16914e855fec2150b5846ee10ec3","recorder":"aieos-core","refers_to":"ev-bad","source_class":"deterministic_tool_local","subject":"TASK-016"},"seq":3,"task_id":"TASK-016","type":"record.added"}\n{"appended_at":"2026-10-11T12:00:00Z","event_id":"ev-s","fencing_token":{"counter":1,"epoch":"epoch-1"},"payload":{"commit":"fedcba9876543210fedcba9876543210fedcba98","compensating":false},"seq":4,"task_id":"TASK-016","type":"task.submitted"}\n')
+
+    def test_unguarded_results_and_bytes_without_a_store_are_the_base_ones(self):
+        """TASK-161 AC5: without a store, an event that names no task and a task event give the base's results and log
+        bytes, and no store is made."""
+        self.assertEqual(self.pinned_run_without_a_store(), [('appended', 1), ('appended', 2)])
+        self.assertEqual(self.log(), b'{"appended_at":"2026-10-11T12:00:00Z","event_id":"ev-n","payload":{"decision_ref":"D-1","evidence_type":"intent","fact_kind":"claim","record_id":"note-1","recorder":"aieos-core","source_class":"decision_agent","subject":"INT-001","text":"a made-up intent"},"seq":1,"type":"record.added"}\n{"appended_at":"2026-10-11T12:00:00Z","event_id":"ev-d","payload":{"contract_hash":"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","contract_version":"v1"},"seq":2,"task_id":"TASK-016","type":"task.drafted"}\n')
+        self.assertEqual(files_under(self.root), ['.aieos/events.jsonl'])
+
+    def test_an_expected_hash_out_of_form_raises_before_anything(self):
+        """TASK-161 AC2: an int, bytes, a short text, upper case, a non-hex letter, an empty text and a hash with a line
+        feed raise ValueError before anything is created; a root or recorder out of form is refused first."""
+        for bad in (7, b'a' * 64, 'a' * 63, 'A' * 64, 'g' * 64, '', 'a' * 64 + '\n'):
+            with self.subTest(bad=bad):
+                with self.assertRaisesRegex(ValueError, 'expected_log_sha256'):
+                    self.append(expected=bad)
+        with self.assertRaisesRegex(ValueError, 'recorder'):
+            writer.append_event(self.root, 'task.drafted', DRAFTED, 'ev-1', T0, '', expected_log_sha256=7)
+        with self.assertRaisesRegex(ValueError, 'root'):
+            writer.append_event(os.path.join(self.root, 'absent'), 'task.drafted', DRAFTED, 'ev-1', T0, REC,
+                                expected_log_sha256=7)
+        self.assertEqual(os.listdir(self.root), [])
+
+    def test_the_expected_hash_is_not_passed_to_eventlog(self):
+        """TASK-161 AC2: eventlog.append is given no argument for the expected hash."""
+        self.store()
+        real = eventlog.append
+        seen = []
+
+        def recording(*args, **kwargs):
+            seen.append((args, kwargs))
+            return real(*args, **kwargs)
+        with mock.patch.object(writer.eventlog, 'append', recording):
+            self.assertEqual(self.append(expected=digest(b'')).result, 'appended')
+        self.assertEqual(len(seen), 1)
+        self.assertNotIn('expected_log_sha256', seen[0][1])
+        self.assertNotIn(digest(b''), seen[0][0])
+
+    def test_a_guard_without_a_store_is_refused_and_creates_nothing(self):
+        """TASK-161 AC4: with no store, a guarded call is "nostore" with no seq, line or refusal and one finding, and no
+        project-state directory is made."""
+        r = self.append(expected=digest(b''))
+        self.assertIs(type(r), writer.WriteResult)
+        self.assertEqual((r.result, r.reason, r.seq, r.line, r.refusal), ('refused', 'nostore', None, None, None))
+        self.assertEqual(len(r.findings), 1)
+        self.assertIs(type(r.findings[0]), str)
+        self.assertEqual(os.listdir(self.root), [])
+
+    def test_a_changed_log_is_refused_before_eventlog_is_asked(self):
+        """TASK-161 AC4 and TASK-161 AC7: a log changed between the caller's read and the append gives "changed", with
+        no seq, line or refusal and one finding; eventlog.append is not called and nothing is written."""
+        self.store()
+        self.append('ev-1')
+        stale = digest(self.log())
+        self.append('ev-2')
+        before = self.log()
+        with mock.patch.object(writer.eventlog, 'append', side_effect=AssertionError('asked')):
+            r = self.append('ev-3', expected=stale)
+        self.assertEqual((r.result, r.reason, r.seq, r.line, r.refusal), ('refused', 'changed', None, None, None))
+        self.assertEqual(len(r.findings), 1)
+        self.assertIs(type(r.findings[0]), str)
+        self.assertEqual(self.log(), before)
+        self.assertFalse(self.lock_is_held())
+
+    def test_an_absent_log_has_the_hash_of_empty_bytes(self):
+        """TASK-161 AC4: with a store and no log, another hash is "changed" and makes no log; the hash of b"" appends."""
+        self.store()
+        r = self.append(expected=H64)
+        self.assertEqual(r.reason, 'changed')
+        self.assertFalse(os.path.exists(writer.log_path(self.root)))
+        r = self.append(expected=digest(b''))
+        self.assertEqual((r.result, r.seq), ('appended', 1))
+
+    def test_a_duplicate_over_a_changed_log_is_changed(self):
+        """TASK-161 AC4: a repeated event with a stale hash is "changed"; with the fresh hash it is "duplicate"."""
+        self.store()
+        self.append('ev-1')
+        stale = digest(b'')
+        r = self.append('ev-1', expected=stale)
+        self.assertEqual((r.result, r.reason, r.seq), ('refused', 'changed', None))
+        r = self.append('ev-1', expected=digest(self.log()))
+        self.assertEqual((r.result, r.seq), ('duplicate', 1))
+
+    def test_a_changed_log_gets_no_fence_record(self):
+        """TASK-161 AC4 and TASK-161 AC7: a submission with a wrong token and a stale hash is "changed" and no fence
+        record is written; with the fresh hash it is refused by the fence and recorded, as unguarded."""
+        self.store()
+        self.session()
+        token = self.grant().value['fencing_token']
+        wrong = dict(token, counter=token['counter'] + 1)
+
+        def submit(expected):
+            return writer.append_event(self.root, 'task.submitted', SUBMITTED, 'ev-s', T0, REC, task_id=TASK,
+                                       fencing_token=wrong, expected_log_sha256=expected)
+        r = submit(H64)
+        self.assertEqual((r.reason, r.refusal), ('changed', None))
+        self.assertEqual(self.log(), b'')
+        r = submit(digest(b''))
+        self.assertEqual((r.reason, r.refusal.result), ('fence', 'appended'))
+
+    def test_two_guarded_appends_in_sequence(self):
+        """TASK-161 AC7: the second expected hash is the SHA-256 of the first log bytes followed by the first line."""
+        self.store()
+        self.append('ev-1')
+        first_log = self.log()
+        one = self.append('ev-2', expected=digest(first_log))
+        self.assertEqual((one.result, one.seq), ('appended', 2))
+        two = self.append('ev-3', expected=digest(first_log + one.line))
+        self.assertEqual((two.result, two.seq), ('appended', 3))
+        self.assertEqual(self.log(), first_log + one.line + two.line)
+
+    def test_a_guarded_task_append_under_a_live_lease(self):
+        """TASK-161 AC7: a guarded submission under the live lease is appended."""
+        self.store()
+        self.session()
+        token = self.grant().value['fencing_token']
+        r = writer.append_event(self.root, 'task.submitted', SUBMITTED, 'ev-s', T0, REC, task_id=TASK,
+                                fencing_token=token, expected_log_sha256=digest(b''))
+        self.assertEqual((r.result, r.refusal), ('appended', None))
+
+    def test_one_connection_with_the_stated_arguments(self):
+        """TASK-161 AC3: a call over a present store opens one connection, on the store's URI in "rw" mode, with uri
+        True, APPEND_LOCK_TIMEOUT read at call time and isolation_level None; the constant is 30.0."""
+        self.assertEqual(writer.APPEND_LOCK_TIMEOUT, 30.0)
+        self.store()
+        real = sqlite3.connect
+        seen = []
+
+        def recording(*args, **kwargs):
+            seen.append((args, kwargs))
+            return real(*args, **kwargs)
+        uri = writer._store_uri(os.path.abspath(writer.store_path(self.root)), os.sep, os.altsep)
+        self.assertTrue(uri.endswith('?mode=ro'))
+        with mock.patch.object(writer.sqlite3, 'connect', recording):
+            self.append('ev-1')
+            with mock.patch.object(writer, 'APPEND_LOCK_TIMEOUT', 0.25):
+                self.note()
+        self.assertEqual([a for a, _ in seen], [(uri[:-len('?mode=ro')] + '?mode=rw',)] * 2)
+        self.assertEqual([k for _, k in seen], [{'uri': True, 'timeout': 30.0, 'isolation_level': None},
+                                                {'uri': True, 'timeout': 0.25, 'isolation_level': None}])
+
+    def test_the_lock_is_held_from_before_the_read_until_after_the_last_append(self):
+        """TASK-161 AC3 and TASK-161 AC7: in a call refused by the fence (two decisions of eventlog.append and the
+        record's line), before and after every log read, decision and line append another connection cannot take the
+        write lock; after the call it can."""
+        self.store()
+        held = []
+
+        def probed(name, real):
+            def call(*args, **kwargs):
+                held.append((name, self.lock_is_held()))
+                out = real(*args, **kwargs)
+                held.append((name, self.lock_is_held()))
+                return out
+            return call
+        with mock.patch.object(writer, '_read_log', probed('read', writer._read_log)), \
+                mock.patch.object(writer, '_append_line', probed('line', writer._append_line)), \
+                mock.patch.object(writer.eventlog, 'append', probed('decide', eventlog.append)):
+            r = writer.append_event(self.root, 'task.submitted', SUBMITTED, 'ev-s', T0, REC, task_id=TASK,
+                                    fencing_token={'epoch': 'epoch-1', 'counter': 9})
+        self.assertEqual((r.reason, r.refusal.result), ('fence', 'appended'))
+        self.assertEqual({name for name, _ in held}, {'read', 'line', 'decide'})
+        self.assertEqual({h for _, h in held}, {True})
+        self.assertFalse(self.lock_is_held())
+
+    def test_a_raise_under_the_lock_releases_it(self):
+        """TASK-161 AC3: when eventlog.append raises, the lock is released and nothing is written."""
+        self.store()
+        with mock.patch.object(writer.eventlog, 'append', side_effect=KeyError('made up')):
+            with self.assertRaises(KeyError):
+                self.append()
+        self.assertFalse(self.lock_is_held())
+        self.assertFalse(os.path.exists(writer.log_path(self.root)))
+
+    def test_a_store_of_another_form(self):
+        """TASK-161 AC3: on a store without the reads table a task event raises ValueError, also when the log has
+        changed, and writes nothing; an event that names no task is appended."""
+        self.store()
+        con = sqlite3.connect(writer.store_path(self.root), isolation_level=None)
+        try:
+            con.execute('DROP TABLE reads')
+        finally:
+            con.close()
+        for expected in (None, H64):
+            with self.subTest(expected=expected):
+                with self.assertRaises(ValueError):
+                    self.append(expected=expected)
+        self.assertFalse(os.path.exists(writer.log_path(self.root)))
+        self.assertFalse(self.lock_is_held())
+        self.assertEqual(self.note().result, 'appended')
+
+    def test_a_held_write_lock_raises_and_writes_nothing(self):
+        """TASK-161 AC6: while another connection of this process holds BEGIN IMMEDIATE, a task event, an event that
+        names no task and a guarded call wait and raise sqlite3.OperationalError "database is locked" and write
+        nothing; session_lease answers as before; afterwards the call appends."""
+        self.store()
+        self.session()
+        lease = self.grant().value
+        con = sqlite3.connect(writer.store_path(self.root), isolation_level=None)
+        try:
+            con.execute('BEGIN IMMEDIATE')
+            with mock.patch.object(writer, 'APPEND_LOCK_TIMEOUT', 0.2):
+                for call in (self.append, self.note, lambda: self.append(expected=digest(b''))):
+                    self.assert_raises_exactly(sqlite3.OperationalError, 'database is locked', call)
+            answer = writer.session_lease(self.root, 's-1', T0)
+            self.assertEqual((answer.reason, answer.value), ('tied', lease))
+            con.execute('ROLLBACK')
+        finally:
+            con.close()
+        self.assertFalse(os.path.exists(writer.log_path(self.root)))
+        self.assertEqual(self.append().result, 'appended')
+
+    def test_a_call_inside_a_call_waits_and_raises(self):
+        """TASK-161 AC6: a second append made while the first holds the lock raises "database is locked"; the first
+        writes nothing here, since the raise passes through it."""
+        self.store()
+
+        def nested(*args, **kwargs):
+            return self.note()
+        with mock.patch.object(writer, 'APPEND_LOCK_TIMEOUT', 0.2), \
+                mock.patch.object(writer.eventlog, 'append', nested):
+            self.assert_raises_exactly(sqlite3.OperationalError, 'database is locked', self.append)
+        self.assertFalse(os.path.exists(writer.log_path(self.root)))
+        self.assertFalse(self.lock_is_held())
+
+    def test_a_folder_at_the_store_path(self):
+        """TASK-161 AC6: a folder at the store path raises sqlite3.OperationalError "unable to open database file", and
+        no project-state directory is made."""
+        with tempfile.TemporaryDirectory() as folder:
+            with mock.patch.object(writer, 'store_path', lambda root: folder):
+                for call in (self.append, self.note, lambda: self.append(expected=digest(b''))):
+                    self.assert_raises_exactly(sqlite3.OperationalError, 'unable to open database file', call)
+        self.assertEqual(os.listdir(self.root), [])
+
+    def test_a_file_that_is_not_a_database(self):
+        """TASK-161 AC6: a store file that is not a database raises sqlite3.DatabaseError "file is not a database" and
+        writes nothing."""
+        self.assertEqual(writer.init_layout(self.root).result, 'done')
+        with open(writer.store_path(self.root), 'ab') as f:
+            f.write(b'this is not a database\n' * 100)
+        for call in (self.append, self.note):
+            self.assert_raises_exactly(sqlite3.DatabaseError, 'file is not a database', call)
+        self.assertFalse(os.path.exists(writer.log_path(self.root)))
+
+    def test_a_store_that_cannot_be_written(self):
+        """TASK-161 AC6: over a store opened read-only, on which BEGIN IMMEDIATE passes, the statement that changes no
+        row raises sqlite3.OperationalError "attempt to write a readonly database" and nothing is written."""
+        self.store()
+        real = sqlite3.connect
+
+        def read_only(database, *args, **kwargs):
+            self.assertTrue(database.endswith('?mode=rw'), database)
+            return real(database[:-len('?mode=rw')] + '?mode=ro', *args, **kwargs)
+        with mock.patch.object(writer.sqlite3, 'connect', read_only):
+            for call in (self.append, self.note):
+                self.assert_raises_exactly(sqlite3.OperationalError, 'attempt to write a readonly database', call)
+        self.assertFalse(os.path.exists(writer.log_path(self.root)))
+
+    def test_an_empty_store_file(self):
+        """TASK-161 AC6: on an empty store file an event that names no task raises sqlite3.OperationalError "no such
+        table: store" and a task event raises ValueError, as before; nothing is written."""
+        self.assertEqual(writer.init_layout(self.root).result, 'done')
+        with open(writer.store_path(self.root), 'ab'):
+            pass
+        self.assert_raises_exactly(sqlite3.OperationalError, 'no such table: store', self.note)
+        with self.assertRaises(ValueError):
+            self.append()
+        self.assertEqual(read(writer.store_path(self.root)), b'')
+        self.assertFalse(os.path.exists(writer.log_path(self.root)))
+
+    def test_a_task_id_out_of_form_counts_as_no_task(self):
+        """TASK-161 AC3 and TASK-161 AC6: a task_id out of the writer's form gets no table check; on an empty store
+        file the call raises sqlite3.OperationalError "no such table: store" at the statement that changes no row, and
+        writes nothing."""
+        self.assertEqual(writer.init_layout(self.root).result, 'done')
+        with open(writer.store_path(self.root), 'ab'):
+            pass
+        self.assert_raises_exactly(sqlite3.OperationalError, 'no such table: store',
+                                   lambda: self.append(task='task-1'))
+        self.assertFalse(os.path.exists(writer.log_path(self.root)))
+
+    def test_the_transaction_ends_in_rollback_and_the_connection_is_closed(self):
+        """TASK-161 AC3: after an append and after a raise of eventlog.append the transaction ends in ROLLBACK, never
+        COMMIT, and the connection is closed; when BEGIN IMMEDIATE fails the connection is closed too."""
+        self.store()
+        real = sqlite3.connect
+        seen = []
+
+        class Recorded:
+            def __init__(self, con):
+                self.con = con
+
+            def execute(self, sql, *args):
+                seen.append(sql.split()[0])
+                return self.con.execute(sql, *args)
+
+            @property
+            def in_transaction(self):
+                return self.con.in_transaction
+
+            def close(self):
+                seen.append('close')
+                self.con.close()
+
+        def recorded(*args, **kwargs):
+            return Recorded(real(*args, **kwargs))
+        with mock.patch.object(writer.sqlite3, 'connect', recorded):
+            self.assertEqual(self.append('ev-1').result, 'appended')
+        self.assertEqual((seen[0], seen[-2:]), ('BEGIN', ['ROLLBACK', 'close']))
+        self.assertNotIn('COMMIT', seen)
+        del seen[:]
+        with mock.patch.object(writer.sqlite3, 'connect', recorded), \
+                mock.patch.object(writer.eventlog, 'append', side_effect=KeyError('made up')):
+            with self.assertRaises(KeyError):
+                self.append('ev-2')
+        self.assertEqual(seen[-2:], ['ROLLBACK', 'close'])
+        self.assertNotIn('COMMIT', seen)
+        holder = real(writer.store_path(self.root), isolation_level=None)
+        try:
+            holder.execute('BEGIN IMMEDIATE')
+            del seen[:]
+            with mock.patch.object(writer.sqlite3, 'connect', recorded), \
+                    mock.patch.object(writer, 'APPEND_LOCK_TIMEOUT', 0.2):
+                self.assert_raises_exactly(sqlite3.OperationalError, 'database is locked', self.append)
+            self.assertEqual(seen, ['BEGIN', 'close'])
+            holder.execute('ROLLBACK')
+        finally:
+            holder.close()
+
+    def test_a_path_the_uri_refuses(self):
+        """TASK-161 AC6: a ValueError of _store_uri passes unchanged and nothing is written."""
+        self.store()
+        with mock.patch.object(writer, '_store_uri', side_effect=ValueError('made up refusal')):
+            for call in (self.append, self.note):
+                self.assert_raises_exactly(ValueError, 'made up refusal', call)
+        self.assertFalse(os.path.exists(writer.log_path(self.root)))
+
+    def test_the_store_and_its_folder_are_unchanged(self):
+        """TASK-161 AC7: after an unguarded and after a guarded append on a store with no hot journal, the store's bytes
+        are the same and no journal or WAL file is beside it."""
+        self.store()
+        path = writer.store_path(self.root)
+        before = read(path)
+        for expected in (None, 'fresh'):
+            with self.subTest(expected=expected):
+                value = None if expected is None else digest(self.log())
+                r = self.append('ev-%s' % expected, expected=value)
+                self.assertEqual(r.result, 'appended')
+                self.assertEqual(read(path), before)
+                self.assertEqual(os.listdir(os.path.dirname(path)), ['state.sqlite'])
+
+    def test_the_docstrings_say_what_is_true(self):
+        """TASK-161 AC1: the docstrings of append_event and of the module name the lock, the new waits and raises, the
+        guard's two refusals and what is not excluded."""
+        doc = ' '.join(writer.append_event.__doc__.split())
+        for words in ('TASK-161', 'os.path.lexists', 'BEGIN IMMEDIATE', 'APPEND_LOCK_TIMEOUT', 'database is locked',
+                      'hot journal', 'sqlite3.DatabaseError', '"nostore"', '"changed"', 'is not excluded',
+                      'A root without a store takes no lock'):
+            with self.subTest(words=words):
+                self.assertIn(words, doc)
+        module = ' '.join(writer.__doc__.split())
+        self.assertIn('From task TASK-161, ``append_event`` holds a present store\'s write lock', module)
+
+    def test_every_test_of_this_class_names_its_criteria(self):
+        """TASK-161 AC7: every test of this class names a criterion of TASK-161 in its own docstring."""
+        names = unittest.TestLoader().getTestCaseNames(type(self))
+        self.assertGreater(len(names), 20)
+        for name in names:
+            self.assertIn('TASK-161 AC', getattr(type(self), name).__doc__ or '', name)
 
 
 if __name__ == '__main__':

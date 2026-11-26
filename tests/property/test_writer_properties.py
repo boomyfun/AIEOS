@@ -4,6 +4,7 @@ records.check_log finds nothing, and no two grants ever carry the same token, al
 in another folder."""
 
 import datetime
+import hashlib
 import os
 import random
 import tempfile
@@ -163,6 +164,34 @@ class ReadsProperties(unittest.TestCase):
                     self.assertEqual((a.reason, a.findings), (b.reason, b.findings), case)
         self.assertIn('tied', seen)
         self.assertTrue(seen - {'tied'})
+
+
+class GuardProperties(unittest.TestCase):
+
+    def test_a_guarded_append_writes_only_over_the_log_it_named(self):
+        """TASK-161 AC4 and TASK-161 AC7 (property): over generated sequences (fixed seed) of guarded appends whose
+        expected hash is that of the log now or of an earlier log, the call is "changed" and writes nothing exactly when
+        the hash is not the log's; otherwise the log gains exactly the appended line, or nothing for a duplicate."""
+        rng = random.Random(161)
+        seen = set()
+        for case in range(10):
+            with tempfile.TemporaryDirectory() as root:
+                writer.open_store(root)
+                logs = [b'']
+                for step in range(15):
+                    now = writer.read_log(root)
+                    named = now if rng.random() < 0.5 else rng.choice(logs)
+                    r = writer.append_event(root, 'task.drafted', {'contract_version': 'v1', 'contract_hash': H64},
+                                            'ev-%d' % rng.randrange(step + 1), T0, REC, task_id=rng.choice(TASKS),
+                                            expected_log_sha256=hashlib.sha256(named).hexdigest())
+                    after = writer.read_log(root)
+                    seen.add((r.result, r.reason))
+                    self.assertEqual(r.reason == 'changed', named != now, (case, step, r))
+                    self.assertEqual(after, now + (r.line or b''), (case, step, r))
+                    self.assertEqual(r.line is not None, r.result == 'appended', (case, step, r))
+                    logs.append(after)
+                self.assertEqual(records.check_log(writer.read_log(root)).findings(), [], case)
+        self.assertLessEqual({('appended', None), ('refused', 'changed'), ('duplicate', None)}, seen)
 
 
 if __name__ == '__main__':
