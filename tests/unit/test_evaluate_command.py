@@ -517,15 +517,43 @@ class TASK162AC8Appends(unittest.TestCase):
     def test_a_refused_or_raising_append_stops(self):
         """TASK-162 AC8: a refused or raising append gives "append", stops, and appended names what was written; the
         writer's "nostore" refuses so."""
-        for answers, written, call_count in (({2: 'changed'}, ['ci-1'], 2), ({2: OSError('x')}, ['ci-1'], 2),
-                                             ({1: 'nostore'}, [], 1)):
+        refused = ['append: record ci-2 was not appended (refused, changed)', 'changed: stand-in']
+        raised = ['append: record ci-2 raised OSError; whether it was written is not known']
+        nostore = ['append: record ci-1 was not appended (refused, nostore)', 'nostore: stand-in']
+        for answers, written, call_count, findings in (({2: 'changed'}, ['ci-1'], 2, refused),
+                                                       ({2: OSError('x')}, ['ci-1'], 2, raised),
+                                                       ({1: 'nostore'}, [], 1, nostore)):
             w = World()
             w.log.answers = answers
             out = w.run()
             self.assertEqual((out['result'], out['reason'], out['appended'], len(w.log.calls)),
                              ('refused', 'append', written, call_count), out['findings'])
+            self.assertEqual(out['findings'], findings)
             self.assertEqual(text_sha(out['manifest']), out['manifest_sha256'])
             self.assertEqual(out['uncovered'], [{'gate': 'G3'}])
+            self.assertNotIn('evaluate_task', w.calls)
+
+
+    def test_a_raise_after_the_line_is_written(self):
+        """TASK-162 AC8 (D-7331): an append that raises after it wrote the line gives "append", names that record as not
+        known whether it was written, keeps appended to the confirmed writes and calls nothing after."""
+        for failing, written in ((1, []), (2, ['ci-1'])):
+            w = World()
+            start = w.log.log
+
+            def writes_then_raises(*args, real=w.log.append, w=w, failing=failing, **kwargs):
+                result = real(*args, **kwargs)
+                if len(w.log.calls) == failing:
+                    raise OSError('x')
+                return result
+
+            w.log.append = writes_then_raises
+            out = w.run()
+            finding = 'append: record ci-%d raised OSError; whether it was written is not known' % failing
+            self.assertEqual((out['result'], out['reason'], out['appended'], out['findings'], len(w.log.calls)),
+                             ('refused', 'append', written, [finding], failing))
+            self.assertEqual(len(w.log.log[len(start):].splitlines()), failing)
+            self.assertEqual(text_sha(out['manifest']), out['manifest_sha256'])
             self.assertNotIn('evaluate_task', w.calls)
 
 

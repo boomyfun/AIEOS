@@ -8,9 +8,10 @@ exactly the keys result, reason, findings, event_id, decision, next_task_state, 
 uncovered. result is "evaluated", "duplicate" or "refused". reason is None unless refused, and then one of argument,
 log, state, contract, ci, policy_ref, sources, inputs, manifest, append and evaluate. findings is a list of str: a
 refusal of a called module is given as "<its reason>: <its detail>" or as its own finding texts; the first refusal ends
-the call. appended is the list of the record ids this call appended, in order. uncovered is the uncovered list of
-eval_inputs' evidence, or None before that step succeeded. manifest_sha256 and manifest are the manifest's SHA-256 and
-text once the manifest step succeeded, and None before. No Exception leaves the function (an unexpected one is a refusal
+the call. appended is the list of the record ids whose appends the writer confirmed, in order.
+uncovered is the uncovered list of eval_inputs' evidence, or None before that step succeeded. manifest_sha256 and
+manifest are the manifest's SHA-256 and text once the manifest step succeeded, and None before. No Exception
+leaves the function (an unexpected one is a refusal
 with the reason of the step it happened in, naming its type); a BaseException that is not an Exception passes through.
 read_log (default writer.read_log) and append (default writer.append_event) are looked up at each call; read is passed
 to every Git reader.
@@ -29,7 +30,9 @@ fresh copies of what it is given. (7) The records to append are eval_inputs' CI 
 left out when the log holds an equal payload under its record_id (a different one is a refusal with nothing written);
 the event id of a record is the SHA-256 of "evaluation-record", the task id and the record id joined by line feeds. Each
 is first decided with eventlog.append over the log and the lines decided so far; only then is each written through append
-with expected_log_sha256, the SHA-256 of the log read followed by the lines this call has appended. (8)
+with expected_log_sha256, the SHA-256 of the log read followed by the lines this call has appended. An exception of
+append refuses with a finding that names the record and says that whether it was written is not known: the writer can
+raise after the line is on disk, and the log is read once. (8)
 evaluation.evaluate_task evaluates and appends the decision; it reads the log again and its append is not guarded.
 
 The module opens no file, starts no process, reads no clock, no environment and no network, and writes only through
@@ -176,8 +179,12 @@ def _append_all(root, task_id, records, log, recorder, now, append, appended):
         pending = pending + decided.line
     current = log
     for record, event_id in events:
-        written = append(root, _RECORD_EVENT, record, event_id, now, recorder, task_id=task_id,
-                         expected_log_sha256=hashlib.sha256(current).hexdigest())
+        try:
+            written = append(root, _RECORD_EVENT, record, event_id, now, recorder, task_id=task_id,
+                             expected_log_sha256=hashlib.sha256(current).hexdigest())
+        except Exception as exc:
+            raise _Refuse('append', ['append: record %s raised %s; whether it was written is not known'
+                                     % (record['record_id'], type(exc).__name__)])
         if written.result != 'appended':
             raise _Refuse('append', ['append: record %s was not appended (%s, %s)'
                                      % (record['record_id'], written.result, written.reason)]
