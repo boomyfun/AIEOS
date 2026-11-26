@@ -14,8 +14,8 @@ import sys
 import unittest
 from unittest import mock
 
-from aieos_bootstrap import (base_files, eval_inputs, evaluation, evaluation_derive, evaluation_policy,
-                             evaluation_sources, gitread, scope_reconcile)
+from aieos_bootstrap import (base_files, base_inputs, eval_inputs, evaluation, evaluation_derive, evaluation_policy,
+                             evaluation_sources, gitread, intent_map, scope_reconcile)
 
 HERE = pathlib.Path(__file__).resolve()
 ROOT = str(HERE.parents[2])
@@ -120,14 +120,26 @@ def message_of(task=TASK, body='work'):
     return '%s\n\nAIEOS-Task: %s\n' % (body, task)
 
 
-def scenario(files=None, changed=('src/x.py', 'tests/y.py'), parents=1):
-    """A stand-in with a policy commit (the three files) and a task commit on it; returns (git, policy_ref, evaluated)."""
+CONTRACT_PATH = 'docs/tasks/%s.yaml' % TASK
+
+
+def contract_text(state=''):
+    """A contract of TASK in the fixed YAML subset; state is the text of its input_state block, or '' for none."""
+    return ('task: %s\ncontract_version: v1\ntraces_to:\n  - docs/a.md\nwrite_set:\n  paths:\n    - src/x.py\n'
+            'read_set:\n  paths:\n    - src/x.py\nacceptance_criteria:\n  - AC1: x\n%s' % (TASK, state))
+
+
+def scenario(files=None, changed=('src/x.py', 'tests/y.py'), parents=1, contract=contract_text()):
+    """A stand-in with a policy commit (the three files) and a task commit on it that holds the contract file (none when
+    contract is None); returns (git, policy_ref, evaluated)."""
     g = Git()
     base = dict(REAL) if files is None else files
     p = g.commit(g.tree_of(base), message='policy\n')
     tip = p
+    extra = {} if contract is None else {CONTRACT_PATH: contract}
     for n in range(parents):
-        c = g.commit(g.tree_of(dict(base, **{'f%d.txt' % n: 'x'})), parents=(tip,), message=message_of(body='work %d' % n))
+        c = g.commit(g.tree_of(dict(base, **dict(extra, **{'f%d.txt' % n: 'x'}))), parents=(tip,),
+                     message=message_of(body='work %d' % n))
         g.diffs[c] = b''.join(name.encode('utf-8') + b'\x00' for name in changed)
         tip = c
     return g, p, tip
@@ -305,16 +317,22 @@ class Base(unittest.TestCase):
 class AC1TheEntries(unittest.TestCase):
     def test_the_six_entries_follow_the_derive_entry_in_this_order(self):
         paths = evaluation_policy.EVIDENCE_DEFINING_PATHS
-        self.assertEqual(len(paths), 17)
-        self.assertEqual(len(set(paths)), 17)
+        self.assertEqual(len(paths), 18)
+        self.assertEqual(len(set(paths)), 18)
         self.assertEqual(paths[9], 'src/aieos_bootstrap/evaluation_derive.py')
-        self.assertEqual(paths[10:], NEW6 + ('src/aieos_bootstrap/evaluation_intake.py',))
+        self.assertEqual(paths[10:], NEW6 + ('src/aieos_bootstrap/evaluation_intake.py',
+                                             'src/aieos_bootstrap/intent_map.py'))
 
     def test_each_entry_weakens_the_comparison_and_an_other_source_file_does_not(self):
         for path in NEW6:
             self.assertEqual(evaluation_derive.evidence_comparison([path]), {'weakens': True}, path)
             self.assertEqual(evaluation_derive.evidence_comparison([path.upper()]), {'weakens': True}, path)
         self.assertEqual(evaluation_derive.evidence_comparison(['src/aieos_bootstrap/other_module.py']), {'weakens': False})
+
+    def test_the_mapper_entry_weakens_the_comparison_in_either_letter_case(self):
+        path = 'src/aieos_bootstrap/intent_map.py'
+        for text in (path, path.upper()):
+            self.assertEqual(evaluation_derive.evidence_comparison([text]), {'weakens': True}, text)
 
     def test_the_public_names_exist(self):
         for name in ('load_sources', 'pinned_governor', 'parse_json'):
@@ -372,7 +390,7 @@ class AC2TheTwelveSources(Base):
         g, p, e = scenario()
         a = load(g, p, e)
         prov = a['provenance']
-        self.assertEqual(len(prov), 5)
+        self.assertEqual(len(prov), 6)
         for entry, path in zip(prov[:3], (POLICY, RISK, GOVERNOR)):
             self.assertEqual(set(entry), {'path', 'commit', 'blob', 'sha256'})
             self.assertEqual(entry['path'], path)
@@ -383,7 +401,8 @@ class AC2TheTwelveSources(Base):
             self.assertEqual(data, REAL[path].encode('utf-8'))
             self.assertEqual(hashlib.sha256(data).hexdigest(), entry['sha256'])
         self.assertEqual(prov[3], {'pin': 'ci_log', 'value': PIN, 'logs': 1})
-        self.assertEqual(prov[4], {'source': 'intent_versions', 'state': 'open gap: no producer'})
+        self.assertEqual(prov[4], {'contract': hashlib.sha256(contract_text().encode('utf-8')).hexdigest(), 'commit': e})
+        self.assertEqual(prov[5], {'source': 'intent_versions', 'state': 'open gap: the contract names no entity'})
 
     def test_every_read_is_at_the_policy_ref_and_the_walk_at_the_evaluated_commit(self):
         g, p, e = scenario()
@@ -408,7 +427,10 @@ class AC2TheTwelveSources(Base):
         self.assertEqual(a['result'], 'present')
         timed = [c for c in g.calls if c[2] == base_files.TIMEOUT]
         self.assertTrue(timed)
-        self.assertEqual([c[1][-1] for c in g.commands('rev-parse')], [p, p, p])
+        revs = [c[1][-1] for c in g.commands('rev-parse')]
+        self.assertEqual(revs[:3], [p, p, p])
+        self.assertTrue(revs[3:])
+        self.assertEqual(set(revs[3:]), {e})
         self.assertTrue(all(c[2] == base_files.TIMEOUT for c in g.commands('rev-parse')))
         walk = [c for c in g.calls if c[2] is None]
         self.assertTrue(walk)
@@ -417,10 +439,13 @@ class AC2TheTwelveSources(Base):
         self.assertEqual(len(timed) + len(walk), len(g.calls))
 
     def test_every_rev_parse_of_a_load_with_a_read_names_the_policy_ref(self):
+        """The rev-parse calls name the policy ref, then the evaluated commit for the contract."""
         g, p, e = scenario()
         load(g, p, e)
-        for call in g.commands('rev-parse'):
-            self.assertEqual(call[1], ['rev-parse', '--verify', '--end-of-options', p])
+        calls = [call[1] for call in g.commands('rev-parse')]
+        self.assertEqual(calls[:3], [['rev-parse', '--verify', '--end-of-options', p]] * 3)
+        for call in calls[3:]:
+            self.assertEqual(call, ['rev-parse', '--verify', '--end-of-options', e])
 
     def test_the_task_change_is_the_union_of_the_commits_sorted_without_duplicate(self):
         g = Git()
@@ -428,7 +453,7 @@ class AC2TheTwelveSources(Base):
         p = g.commit(g.tree_of(base), message='policy\n')
         c1 = g.commit(g.tree_of(dict(base, a='1')), (p,), message_of(body='one'))
         c2 = g.commit(g.tree_of(dict(base, a='2')), (c1,), message_of(body='two'))
-        c3 = g.commit(g.tree_of(dict(base, a='3')), (c2,), message_of(body='three'))
+        c3 = g.commit(g.tree_of(dict(base, a='3', **{CONTRACT_PATH: contract_text()})), (c2,), message_of(body='three'))
         g.diffs[c1] = b'tests/b.py\x00src/a.py\x00'
         g.diffs[c2] = b'src/a.py\x00tests/c.py\x00'
         g.diffs[c3] = b'tests/b.py\x00'
@@ -449,7 +474,8 @@ class AC2TheTwelveSources(Base):
 class AC2TheNextStep(Base):
     def test_eval_inputs_refuses_the_open_gap_and_names_only_it(self):
         """The contract values here are fixture contract values, labelled as not policy (D-7063 N8): the test checks
-        that the one refusal of the next step is the open gap of intent_versions, whatever the contract says."""
+        that, for the contract of scenario(), which names no entity, the one refusal of the next step is the open gap of
+        intent_versions, whatever the values given to eval_inputs say."""
         a = load()
         contract = {'traces_to': ['G1'], 'risk': 'low', 'owner_kept_act': 'false', 'verification_plan': [{'gate': 'G1'}],
                     'autonomy': {}}
@@ -917,13 +943,16 @@ class AC6TheRefusals(Base):
         self.assertEqual(a['provenance'], [])
 
     def test_the_reasons_are_the_closed_set(self):
-        allowed = {'argument', 'read', 'policy', 'rules', 'pin', 'governor', 'git', 'plain'}
+        allowed = {'argument', 'read', 'policy', 'rules', 'pin', 'governor', 'git', 'contract', 'intent', 'plain'}
         g, p, e = scenario()
         seen = set()
         for kw in ({'task_id': 'x'}, {'ci_logs': [log_of(pin_line('1' * 64))]}, {'ci_logs': ['']}, {'max_commits': 1}):
             r = load(g, p, e, **kw)
             if r['result'] == 'refused':
                 seen.add(reason_of(r))
+        for case in (scenario(contract=None), scenario(contract=contract_text('input_state: null\n'))):
+            seen.add(reason_of(load(*case)))
+        self.assertLessEqual({'contract', 'intent'}, seen)
         self.assertLessEqual(seen, allowed)
         self.assertEqual(ES.pinned_governor([])['findings'][0]['reason'], 'pin')
 
@@ -1108,6 +1137,191 @@ class AC6F1NoSharedContainer(Base):
         self.assertEqual(json.loads(json.dumps(load())), load())
 
 
+def sha(text):
+    return hashlib.sha256(text.encode('utf-8')).hexdigest()
+
+
+def dm_row(path, text, revision=3):
+    return '| A1 | `%s` revision %d (%s), a row |' % (path, revision, sha(text))
+
+
+def entities_state(entities):
+    lines = ''.join('    %s: %s\n' % (k, v) for k, v in entities.items())
+    return 'input_state:\n  intent_versions:\n' + lines
+
+
+def intent_scenario(traced=None, dm=None, state=None, changed=('src/x.py',), evaluated=None):
+    """A policy commit holding the three files, the decision matrix and the traced files, and a task commit whose contract
+    names them; traced is path -> text, dm the matrix text (rows of all traced files when None), state the input_state
+    block (the traced entities when None), evaluated extra files of the task commit."""
+    traced = {'docs/a.md': 'alpha\n', 'docs/b.md': 'beta\n'} if traced is None else traced
+    if dm is None:
+        dm = '# DM\n\n' + ''.join(dm_row(k, v) + '\n' for k, v in traced.items())
+    if state is None:
+        state = entities_state({k: sha(v) for k, v in traced.items()})
+    g = Git()
+    base = dict(REAL, **traced)
+    base[ES.DM_PATH] = dm
+    p = g.commit(g.tree_of(base), message='policy\n')
+    files = dict(base, **{CONTRACT_PATH: contract_text(state)})
+    files.update(evaluated or {})
+    e = g.commit(g.tree_of(files), parents=(p,), message=message_of())
+    g.diffs[e] = b''.join(name.encode('utf-8') + b'\x00' for name in changed)
+    return g, p, e
+
+
+class AC3TheIntentStep(Base):
+    """TASK-160 AC3: the contract at the evaluated commit, the decision matrix and the traced files at the policy ref."""
+
+    def test_the_mapped_answer_with_its_provenance_and_reads(self):
+        g, p, e = intent_scenario()
+        a = load(g, p, e)
+        self.assertEqual(a['result'], 'present', a['findings'])
+        self.assertEqual(a['sources']['intent_versions'], {'docs/a.md': 'v3', 'docs/b.md': 'v3'})
+        self.assertEqual(list(a['sources']), list(KEYS))
+        prov = a['provenance']
+        self.assertEqual(len(prov), 9)
+        self.assertEqual(prov[3]['pin'], 'ci_log')
+        state = entities_state({'docs/a.md': sha('alpha\n'), 'docs/b.md': sha('beta\n')})
+        self.assertEqual(prov[4], {'contract': sha(contract_text(state)), 'commit': e})
+        for entry, path in zip(prov[5:8], (ES.DM_PATH, 'docs/a.md', 'docs/b.md')):
+            self.assertEqual(set(entry), {'path', 'commit', 'blob', 'sha256'})
+            self.assertEqual((entry['path'], entry['commit']), (path, p))
+            self.assertEqual(hashlib.sha256(g.objects[entry['blob']][1]).hexdigest(), entry['sha256'])
+            self.assertIn(['cat-file', '-p', entry['blob']], [c[1] for c in g.calls])
+        self.assertEqual(prov[8], {'source': 'intent_versions', 'state': 'mapped',
+                                   'versions': {'docs/a.md': 'v3', 'docs/b.md': 'v3'}})
+        self.assertIsNot(prov[8]['versions'], a['sources']['intent_versions'])
+        seen, stack = set(), [a]
+        while stack:
+            item = stack.pop()
+            if type(item) in (dict, list):
+                self.assertNotIn(id(item), seen)
+                seen.add(id(item))
+                stack.extend(item.values() if type(item) is dict else item)
+        revs = [c[1][-1] for c in g.commands('rev-parse')]
+        self.assertEqual(set(revs), {p, e})
+        self.assertEqual(revs[-3:], [p, p, p])
+
+    def test_a_contract_that_names_no_entity_leaves_the_open_gap(self):
+        for state in ('', 'input_state:\n  base: x\n', 'input_state:\n  intent_versions: {}\n'):
+            a = load(*scenario(contract=contract_text(state)))
+            self.assertEqual(a['result'], 'present', state)
+            self.assertIsNone(a['sources']['intent_versions'])
+            self.assertEqual(a['provenance'][-1],
+                             {'source': 'intent_versions', 'state': 'open gap: the contract names no entity'})
+
+    def test_a_contract_refused_by_contract_at(self):
+        for contract in (None, 'task: TASK-158\n', contract_text(entities_state({'.github/x.md': 'a' * 64}))):
+            self.refused(load(*scenario(contract=contract)), 'contract')
+        g, p, e = scenario(contract=None)
+        expected = base_inputs.contract_at(ROOT, e, TASK, g)[1][0]
+        self.assertEqual(self.refused(load(g, p, e), 'contract'), expected[:200])
+
+    def test_an_input_state_or_intent_versions_of_another_type(self):
+        for state in ('input_state: null\n', 'input_state:\n  - a\n', 'input_state:\n  intent_versions: x\n',
+                      'input_state:\n  intent_versions: []\n', 'input_state:\n  intent_versions:\n    - a\n'):
+            self.refused(load(*scenario(contract=contract_text(state))), 'intent')
+
+    def test_a_hundred_entities_are_taken_and_a_hundred_and_one_refused_before_a_read(self):
+        traced = {'docs/e%03d.md' % n: 'entity %d\n' % n for n in range(100)}
+        a = load(*intent_scenario(traced=traced))
+        self.assertEqual(len(a['sources']['intent_versions']), 100)
+        traced['docs/e100.md'] = 'entity 100\n'
+        g, p, e = intent_scenario(traced=traced)
+        detail = self.refused(load(g, p, e), 'intent')
+        self.assertIn('100', detail)
+        self.assertEqual([c[1][-1] for c in g.commands('rev-parse')].count(p), 3)
+
+    def test_a_decision_matrix_that_is_not_read(self):
+        g, p, e = intent_scenario()
+        files = dict(REAL, **{'docs/a.md': 'alpha\n'})
+        g2 = Git()
+        p2 = g2.commit(g2.tree_of(files), message='policy\n')
+        e2 = g2.commit(g2.tree_of(dict(files, **{CONTRACT_PATH: contract_text(entities_state({'docs/a.md': sha('alpha\n')}))})),
+                       parents=(p2,), message=message_of())
+        g2.diffs[e2] = b'src/x.py\x00'
+        detail = self.refused(load(g2, p2, e2), 'intent')
+        self.assertTrue(detail.endswith(' is missing'), detail)
+
+    def test_a_refusal_of_the_mapper_begins_with_its_reason(self):
+        detail = self.refused(load(*intent_scenario(dm='# DM\n')), 'intent')
+        self.assertTrue(detail.startswith('no_row: '), detail)
+        two = '%s\n%s\n' % (dm_row('docs/a.md', 'alpha\n', 3), dm_row('docs/a.md', 'alpha\n', 4))
+        detail = self.refused(load(*intent_scenario(traced={'docs/a.md': 'alpha\n'}, dm=two)), 'intent')
+        self.assertTrue(detail.startswith('revisions: '), detail)
+        state = entities_state({'docs/a.md': 'a' * 63})
+        detail = self.refused(load(*intent_scenario(state=state)), 'intent')
+        self.assertTrue(detail.startswith('entity: '), detail)
+
+    def test_a_traced_file_that_is_not_read_or_not_utf8_or_too_big(self):
+        state = entities_state({'docs/a.md': sha('alpha\n'), 'docs/c.md': sha('gone\n')})
+        dm = '%s\n%s\n' % (dm_row('docs/a.md', 'alpha\n'), dm_row('docs/c.md', 'gone\n'))
+        detail = self.refused(load(*intent_scenario(traced={'docs/a.md': 'alpha\n'}, dm=dm, state=state)), 'intent')
+        self.assertTrue(detail.endswith(' is missing'), detail)
+        data = b'\xff\xfe'
+        digest = hashlib.sha256(data).hexdigest()
+        row = '| A1 | `docs/a.md` revision 3 (%s) |\n' % digest
+        a = load(*intent_scenario(traced={'docs/a.md': data}, dm=row, state=entities_state({'docs/a.md': digest})))
+        self.assertIn('UTF-8', self.refused(a, 'intent'))
+        folder = entities_state({'docs': sha('alpha\n')})
+        a = load(*intent_scenario(traced={'docs/a.md': 'alpha\n'}, dm=dm_row('docs', 'alpha\n') + '\n', state=folder))
+        self.assertIn('not a blob', self.refused(a, 'intent'))
+        big = 'x' * (base_files.MAX_BYTES + 1)
+        a = load(*intent_scenario(traced={'docs/a.md': big}))
+        self.assertIn('MAX_BYTES', self.refused(a, 'intent'))
+
+    def test_a_traced_file_whose_bytes_differ_is_stale(self):
+        state = entities_state({'docs/a.md': sha('old\n')})
+        a = load(*intent_scenario(traced={'docs/a.md': 'new\n'}, dm=dm_row('docs/a.md', 'old\n') + '\n', state=state))
+        self.assertTrue(self.refused(a, 'intent').startswith('stale'))
+
+    def test_a_task_that_changes_a_file_it_traces(self):
+        """D-7119 C3: the policy ref that holds the base bytes gives the version; one that holds the changed bytes is stale."""
+        state = entities_state({'docs/a.md': sha('base\n')})
+        dm = dm_row('docs/a.md', 'base\n') + '\n'
+        g, p, e = intent_scenario(traced={'docs/a.md': 'base\n'}, dm=dm, state=state, changed=('docs/a.md',),
+                                  evaluated={'docs/a.md': 'changed\n'})
+        a = load(g, p, e)
+        self.assertEqual(a['sources']['intent_versions'], {'docs/a.md': 'v3'})
+        g, p, e = intent_scenario(traced={'docs/a.md': 'changed\n'}, dm=dm, state=state, changed=('docs/a.md',))
+        self.assertTrue(self.refused(load(g, p, e), 'intent').startswith('stale'))
+
+    def test_contract_at_is_given_the_read_of_the_call(self):
+        real = base_inputs.contract_at
+        g, p, e = scenario()
+        with mock.patch.object(base_inputs, 'contract_at', wraps=real) as spy:
+            self.assertEqual(load(g, p, e)['result'], 'present')
+        self.assertEqual(spy.call_args.args, (ROOT, e, TASK, g))
+        g, p, e = scenario()
+        with mock.patch.object(gitread, 'run', g), mock.patch.object(base_inputs, 'contract_at', wraps=real) as spy:
+            self.assertEqual(ES.load_sources(ROOT, p, e, TASK, [GOOD_LOG])['result'], 'present')
+        self.assertEqual(spy.call_args.args, (ROOT, e, TASK, None))
+
+    def test_the_order_of_the_new_steps(self):
+        a = load(*scenario(contract=None), ci_logs=[log_of('checks\tRun\t' + STAMP + ' none')])
+        self.assertEqual(reason_of(a), 'pin')
+        self.assertEqual(reason_of(load(*scenario(contract=None), task_id='TASK-999')), 'git')
+        g, p, e = scenario(contract='task: TASK-158\n')
+        self.assertEqual(reason_of(load(g, p, e)), 'contract')
+        both = 'task: TASK-158\ninput_state:\n  intent_versions: x\n'
+        self.assertEqual(reason_of(load(*scenario(contract=both))), 'contract')
+
+    def test_an_unexpected_error_in_the_new_steps_is_argument(self):
+        with mock.patch.object(intent_map, 'map_intent_versions', side_effect=LookupError('x')):
+            a = load(*intent_scenario())
+        self.assertEqual(self.refused(a, 'argument'), 'an unexpected error: LookupError')
+
+    def test_the_mapped_answer_is_checked_and_passes_the_gap_check_of_the_next_step(self):
+        a = load(*intent_scenario())
+        self.assertIsNone(evaluation_derive.plain_data_problem(a))
+        contract = {'traces_to': ['G1'], 'risk': 'low', 'owner_kept_act': 'false', 'verification_plan': [{'gate': 'G1'}],
+                    'autonomy': {}}
+        made = eval_inputs.eval_inputs(TASK, 'b' * 40, 'a' * 40, contract, 'c' * 64, a['changed_paths'], [], a['sources'],
+                                       [], 'recorder')
+        self.assertNotEqual(made['refusal']['reason'], 'gap', made['refusal'])
+
+
 class AC7TheModule(unittest.TestCase):
     def tree(self):
         return ast.parse(SRC.read_bytes().decode('utf-8'))
@@ -1120,8 +1334,8 @@ class AC7TheModule(unittest.TestCase):
             elif isinstance(node, ast.ImportFrom):
                 self.assertEqual(node.module, 'aieos_bootstrap')
                 names.update(a.name for a in node.names)
-        self.assertLessEqual(names, {'hashlib', 'json', 're', 'base_files', 'evaluation', 'evaluation_derive',
-                                     'evaluation_policy', 'gitread', 'scope_reconcile'})
+        self.assertLessEqual(names, {'hashlib', 'json', 're', 'base_files', 'base_inputs', 'evaluation',
+                                     'evaluation_derive', 'evaluation_policy', 'gitread', 'intent_map', 'scope_reconcile'})
 
     def test_no_name_of_a_process_a_file_or_a_dynamic_call(self):
         banned = {'open', 'eval', 'exec', 'compile', 'input', 'breakpoint', '__builtins__', '__import__'}

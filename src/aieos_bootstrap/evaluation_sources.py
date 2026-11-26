@@ -1,30 +1,42 @@
 """The loader of the evaluation sources (task TASK-158; BT3b-2c-1 of DEF-0136 and DEF-0152; decisions D-7059 to D-7078).
 
 Three public functions. The module starts no process of its own, opens no file, reads no clock, no environment and no
-network, and writes nothing. It reads the repository only through base_files.read_file and through the two helpers of
-evaluation that evaluate_task uses for the task's change (evaluation._task_commits and evaluation._changed_paths, and
-evaluation._Stop which they raise); the seam read (default gitread.run) is passed to all of them.
+network, and writes nothing. It reads the repository only through base_files.read_file, through base_inputs.contract_at
+and through the two helpers of evaluation that evaluate_task uses for the task's change (evaluation._task_commits and
+evaluation._changed_paths, and evaluation._Stop which they raise); the seam read (default gitread.run) is passed to all
+of them.
 
 load_sources(repo, policy_ref, evaluated_commit, task_id, ci_logs, read=None, max_commits=1000) returns a mapping with
 exactly the keys result, sources, changed_paths, provenance and findings. result is present or refused. On present:
 sources holds exactly the twelve keys of eval_inputs, in the order of eval_inputs._GAPS; changed_paths is the sorted list
 without duplicate of the task's change at evaluated_commit; provenance lists the facts that only the loader knows (the
 path, the commit, the blob id and the sha256 of the UTF-8 bytes of each of the three files read at policy_ref, then the
-pin, then the note on intent_versions); findings is []. The source intent_versions has no producer here: it is None, an
-open gap that eval_inputs refuses, and a result present does not close it (DEF-0156). On refused: sources and
-changed_paths are None, provenance is [] and findings is exactly ONE {reason, detail}; the answer is never partial.
-The reasons are a closed set: argument, read, policy, rules, pin, governor, git, plain. The order of the checks is: the
-arguments; the three reads (the policy file, the risk-rules file, governor.py); the parse of the policy; policy_version
-and risk_rules; level_version; the pin; ruleset_version; the task's change; evidence_comparison. The first refusal ends
-these steps. Every answer, present or refused, is then checked once with evaluation_derive.plain_data_problem; a finding
-there gives a refusal with the reason plain (that refusal is not checked again).
+pin, then the SHA-256 of the contract with the evaluated commit, then, when the versions are mapped, the same four facts
+of the decision matrix and of each traced file in sorted path order, and last the note on intent_versions); findings is
+[]. The source intent_versions is the map that intent_map.map_intent_versions gives for the entities of the contract, or
+None when the contract names no entity: an open gap that eval_inputs refuses, which a result present does not close
+(DEF-0156). On refused: sources and changed_paths are None, provenance is [] and findings is exactly ONE {reason,
+detail}; the answer is never partial. The reasons are a closed set: argument, read, policy, rules, pin, governor, git,
+contract, intent, plain. The order of the checks is: the arguments; the three reads (the policy file, the risk-rules
+file, governor.py); the parse of the policy; policy_version and risk_rules; level_version; the pin; ruleset_version; the
+task's change; evidence_comparison; the contract; its intent entities. The first refusal ends these steps. Every answer,
+present or refused, is then checked once with evaluation_derive.plain_data_problem; a finding there gives a refusal with
+the reason plain (that refusal is not checked again).
+
+The contract is read at evaluated_commit by base_inputs.contract_at (a refusal there: reason contract). Its
+input_state.intent_versions names each entity by its file's path with the SHA-256 of its bytes. An absent input_state, or
+one without intent_versions, or an empty one, leaves the source None; an input_state or an intent_versions of another
+type than a mapping, and more than 100 entities, are refused. Otherwise docs/pre-genesis/decision-matrix.md is read at
+policy_ref, intent_map.map_intent_versions gives the versions from its text, and each traced file is then read at
+policy_ref and must hash to the value of the contract, else it is stale. Every failure of these steps is a refusal with
+the reason intent. The contract's SHA-256 is not compared here with the one that its task approval records.
 
 The three files are read at policy_ref: docs/specs/evaluation-policy-gov-aieos.md gives owner_kept_rules, articles,
 default_profiles, requirement_profiles, delegation and auto_accept (requirement_profiles comes from this file only);
 the risk-rules file gives policy_version (the one line of the section 3 block) and risk_rules, passed on in the form
 scope_reconcile.rules_from_policy gives them, {match, class}; a rule out of form (a refused rule), and an empty list,
 refuse the whole read. governor.py gives ruleset_version by evaluation_derive.ruleset_version, checked against the pin.
-A missing file and a refused read are ONE refusal, reason read.
+For these three files a missing file and a refused read are ONE refusal, reason read.
 
 F1, by name: evaluation_derive.plain_data_problem assumes tree-shaped input; it keeps no identity of the containers it
 walks. This module meets that by construction: every value it passes on is a fresh result of a text parser, never a
@@ -49,16 +61,20 @@ import json
 import re
 
 from aieos_bootstrap import base_files
+from aieos_bootstrap import base_inputs
 from aieos_bootstrap import evaluation
 from aieos_bootstrap import evaluation_derive
 from aieos_bootstrap import evaluation_policy
 from aieos_bootstrap import gitread
+from aieos_bootstrap import intent_map
 from aieos_bootstrap import scope_reconcile
 
 POLICY_PATH = 'docs/specs/evaluation-policy-gov-aieos.md'
 RISK_PATH = scope_reconcile.POLICY_PATH
 GOVERNOR_PATH = 'src/aieos_bootstrap/governor.py'
+DM_PATH = 'docs/pre-genesis/decision-matrix.md'
 JOB = 'checks'
+_MAX_ENTITIES = 100
 _COMMIT = re.compile(r'[0-9a-f]{40}')
 _TASK = re.compile(r'TASK-[0-9]+')
 _STAMP = re.compile('\ufeff?[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:[.][0-9]+)?Z(?: (.*))?', re.S)
@@ -161,6 +177,48 @@ def _walk(repo, task_id, evaluated_commit, read, max_commits):
         raise _Refuse('git', 'git: ' + type(exc).__name__)
 
 
+def _intent_read(repo, policy_ref, path, read, provenance):
+    """_read, its refusal given the reason intent."""
+    try:
+        return _read(repo, policy_ref, path, read, provenance)
+    except _Refuse as refusal:
+        raise _Refuse('intent', refusal.detail)
+
+
+def _intent(repo, policy_ref, evaluated_commit, task_id, read, provenance):
+    """The source intent_versions and its note: the mapped versions of the contract's entities, or None for a contract that
+    names none; the provenance entries of the contract and of every file read are added."""
+    value, findings = base_inputs.contract_at(repo, evaluated_commit, task_id, read)
+    if value is None:
+        raise _Refuse('contract', findings[0])
+    contract, digest = value
+    provenance.append({'contract': digest, 'commit': evaluated_commit})
+    gap = {'source': 'intent_versions', 'state': 'open gap: the contract names no entity'}
+    if 'input_state' not in contract:
+        return None, gap
+    state = contract['input_state']
+    if type(state) is not dict:
+        raise _Refuse('intent', 'input_state is not a mapping')
+    if 'intent_versions' not in state or state['intent_versions'] == {}:
+        return None, gap
+    entities = state['intent_versions']
+    if type(entities) is not dict:
+        raise _Refuse('intent', 'intent_versions is not a mapping')
+    if len(entities) > _MAX_ENTITIES:
+        raise _Refuse('intent', 'intent_versions names over %d entities' % _MAX_ENTITIES)
+    dm_text = _intent_read(repo, policy_ref, DM_PATH, read, provenance)
+    answer = intent_map.map_intent_versions(entities, dm_text)
+    if answer['value'] is None:
+        finding = answer['findings'][0]
+        raise _Refuse('intent', '%s: %s' % (finding['reason'], finding['detail']))
+    for path in sorted(entities):
+        text = _intent_read(repo, policy_ref, path, read, provenance)
+        if hashlib.sha256(text.encode('utf-8')).hexdigest() != entities[path]:
+            raise _Refuse('intent', 'stale: the bytes at policy_ref differ from the contract: ' + path)
+    note = {'source': 'intent_versions', 'state': 'mapped', 'versions': dict(answer['value'])}
+    return dict(answer['value']), note
+
+
 def _load(repo, policy_ref, evaluated_commit, task_id, ci_logs, read, max_commits):
     why = _argument_error(repo, policy_ref, evaluated_commit, task_id, ci_logs, read, max_commits)
     if why is not None:
@@ -194,9 +252,10 @@ def _load(repo, policy_ref, evaluated_commit, task_id, ci_logs, read, max_commit
     sources['ruleset_version'] = ruleset['value']
     sources['policy_version'] = policy_version
     sources['risk_rules'] = risk_rules
-    ordered = {key: sources[key] for key in _SOURCES}
     provenance.append({'pin': 'ci_log', 'value': pin['value'], 'logs': len(ci_logs)})
-    provenance.append({'source': 'intent_versions', 'state': 'open gap: no producer'})
+    sources['intent_versions'], note = _intent(repo, policy_ref, evaluated_commit, task_id, read, provenance)
+    provenance.append(note)
+    ordered = {key: sources[key] for key in _SOURCES}
     return {'result': 'present', 'sources': ordered, 'changed_paths': paths, 'provenance': provenance, 'findings': []}
 
 
