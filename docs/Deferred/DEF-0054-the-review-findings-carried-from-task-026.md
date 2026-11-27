@@ -1,6 +1,6 @@
 # DEF-0054: the review findings carried from TASK-026, recovery at start
 
-- Status: open
+- Status: done
 - Opened: 2026-10-12 (decision D-626)
 - Deferred by: decision agent (A41), D-626 (the dispositions M1 to M7 of the five round-2 way-2 reviews; M1, M3 and M7 carried) and D-627 (C5).
 - Decision group: A (robustness against hostile stand-ins and a documentation point within the self-build).
@@ -26,3 +26,4 @@ DEF-0030 (the core's caller); TASK-026.
 - 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled M3 (src/aieos_bootstrap/startup.py:48-49); open M1 and M7 (both leave: the contract keeps them out, TASK-102.yaml :24). Status stays open.
 - 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 2, decision D-5265): read in full; git log f25b4576..HEAD (TASK-102's task commit) over the paths named in the Resume-when text printed no commit, so the event is not met (startup.py unchanged); open per the Log of 2026-10-30: M1 and M7. State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the state-module fix task (eventlog, recovery, writer, gitread, startup), before the M8 exit review.
 - 2026-11-27 (session 228f426b; closure pass 2 of the deferred items, D-7443, D-7485; decided by: decision agent (A41, A51), D-7485, D-7486): stays in M8 under point (6) (f): M1, recover reads the leases inside a try (src/aieos_bootstrap/startup.py :280-:284) and iterates them again at :330 outside one, so a second-pass raise leaves recover, against TASK-026's AC10. Schedule unchanged.
+- 2026-11-27 (session 228f426b; TASK-170, accepted at D-7691, commit 774dfe2131cf4d8e782a2f96e47ff32de5376c86, docs/runs/TASK-170-acceptance.md; main CI runs 46035776931 and 46035777090 success): closed, done. M3: TASK-102. M1: src/aieos_bootstrap/startup.py:291-292, tests/unit/test_startup.py:710 and :716. M7: startup.py:242-247, :356 and :361, test_startup.py:729.

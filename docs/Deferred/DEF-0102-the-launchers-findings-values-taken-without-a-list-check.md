@@ -1,6 +1,6 @@
 # DEF-0102: the launcher's findings values taken without a list check
 
-- Status: open
+- Status: done
 - Opened: 2026-10-25 (session 3797498a; TASK-089's records, decisions D-2858, D-2871, D-2872)
 - Deferred by: decision agent (A41, A51), D-2871 C1 and D-2872 C2 (found during TASK-089's acceptance review; the
   places lie outside TASK-089's own fix and are carried here).
@@ -42,3 +42,4 @@ TASK-086 (start), TASK-089 (end and _store_findings), TASK-064 (read_set_record'
   read_set_record.py's _core stays open (session ea6ea0a3; decisions D-2910, D-2956).
 - 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass C decisions D-5257 and D-5258): read in full; git log -L of read_set_record.py's _core shows only 011f63c (TASK-064), so the Resume-when event (the next task changing _core) is not met; the three launcher.py places were closed by TASK-090 (Log); the text at read_set_record.py:173 is `found = getattr(w, 'findings', ()) or ()`. State: open; Blocks v0.1: no (the real callees always give a list or a tuple); Scheduled in: M8, the Resume Check and records fix task (with the component-path reading of context_compiler and specification 6 section 11), before the M8 exit review.
 - 2026-11-27 (session 228f426b; closure pass 2 of the deferred items, D-7443, D-7485; decided by: decision agent (A41, A51), D-7485): moved to "v0.2 or later (concept section 16)" under master plan section 6 point (6) (f): the item names no concrete wrong result of the kind of point (6) (a). Status and Resume when unchanged.
+- 2026-11-27 (session 228f426b; TASK-170, accepted at D-7691, commit 774dfe2131cf4d8e782a2f96e47ff32de5376c86, docs/runs/TASK-170-acceptance.md; main CI runs 46035776931 and 46035777090 success): closed, done. src/aieos_bootstrap/read_set_record.py:172-177 keeps only a list's or a tuple's str items, with the test at tests/unit/test_read_set_record.py:148; the three launcher.py places were closed by TASK-090.
