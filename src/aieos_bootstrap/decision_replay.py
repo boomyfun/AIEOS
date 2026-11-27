@@ -40,11 +40,11 @@ and base_files.read_file; a refused listing or read is a failure, never a skip. 
 decision.acceptance line is replayed as the next paragraph says, or fails; no record is
 skipped or counted as passing without a replay, with ONE exception (task TASK-141): a record of the violation path, recognised by violation_path_record
 (the form that violation.py writes and the earlier violation.detected line that it names), is reported "NOT REPLAYED: violation-path record (no Resume Check ran)"
-and counted apart; it is neither replayed nor counted as passed or as failed, because no Resume Check ran for it (violation.py UNCOVERED). The engine gate comes first: when the engine is not an accepted one, every decision.execution line fails, a recognised record included.
+and counted apart; it is neither replayed nor counted as passed or as failed, because no Resume Check ran for it (violation.py UNCOVERED). In a file with no finding of form (the last sentence of the next paragraph) the engine gate comes first: when the engine is not an accepted one, every decision.execution line fails, a recognised record included.
 
 The replay of a decision.acceptance line (task TASK-167; DEF-0137 task B; decisions D-7557 and D-7558). The entry takes
 --governor-pin <sha256> after the repository, at most once; it is never an accepted engine, and an engine pin is never read as
-it. Without it every such line is counted failed and printed "NOT REPLAYED: decision.acceptance" with its place. With it, the
+it. Without it every such line of a file with no finding of form is counted failed and printed "NOT REPLAYED: decision.acceptance" with its place. With it, the
 replay of an acceptance line imports no module that imports the governor, directly or through its own imports
 (evaluation_sources through evaluation and scope_reconcile, eval_inputs, evaluate_command, evaluation, evaluation_intake),
 unless the engine gate passes (the reader of contracts imports the Resume Check), the governor file that a plain import
@@ -67,8 +67,10 @@ Before the evaluation, the manifest (task TASK-168): among the task's record.add
 least one evaluation_manifest of the evaluated commit must be remade equal by evaluation_intake.manifest from its one basis
 text, name the task, commit, policy_ref and contract SHA-256 of the replay, hold the replay's provenance with the pin
 mapping as the command writes it from the CI logs (logs equal to the number of its runs), hold a ci mapping of the form
-ci_evidence gives, and stand on a line with the event id that evaluate_command gives it; and no other earlier payload of
-the task may share its record_id with different content. Nothing of the manifest is an input of the recomputation.
+ci_evidence gives, and stand on a line with the event id that
+evaluate_command gives it; and every other earlier payload of the task under its record_id must equal it and stand on a
+line with that event id. No value of the manifest is passed to the recomputation; its line stays in the cut log that the
+evaluation reads.
 Then evaluation.evaluate_task is called over the cut log with no extra record, with the recorder of the payload and the
 append time of the line, and with an append that writes nothing; the captured event type, event_id and task_id must equal
 the line's, and every key of the record the payload's, by canonical JSON text. An evaluated commit that the checkout cannot
@@ -77,9 +79,10 @@ canonical bytes, a final LF): in the entry a file with such a finding fails and 
 passed, and replay_execution refuses such a log.
 Accepted limits: the CI and review records in the log are trusted as logged and nothing reads GitHub or a reviews file
 again; a manifest record is trusted as logged beyond what is compared above (the runs and their log hashes, the contract
-commit and base of the detect line, files and reviews_sha256), so whoever writes the log can write a matching manifest;
+commit and base of the detect line, files, reviews_sha256 and its recorder), so whoever writes the log can write a matching manifest,
+as the command trusts whoever writes the log;
 appended_at is taken from the line and not otherwise checked; the readers, the evaluation modules and the governor run
-from the tree under check (GOV-003 is not met by them); a line appended between an evaluation's read and its own append can
+from the tree under check (GOV-003 is not met by them; DEF-0110); a line appended between an evaluation's read and its own append can
 make its replay differ (when it changes the recomputed record); no logged acceptance record of the self-build exists, so
 no real record has been replayed. Open items, not accepted limits (DEF-0137): the refusals of aieos evaluate that need the
 saved CI data or the reviews text are not repeated (read_ci_data, ci_evidence, the record-id guard over the CI records,
@@ -184,8 +187,8 @@ LIMITS = (
     'after a pinned engine upgrade, records written under the old engine fail closed until a historical-engine loader exists (erratum E1)',
     'runtime.max_risk is taken from the record; the held lease is None and the clock is a fixed constant',
     'a decision.acceptance record is replayed only with --governor-pin and fails without it; the python value of engine_identity is reported, not compared',
-    'a decision.acceptance replay trusts the CI and review records as logged and reads nothing from GitHub or a reviews file; it uses the readers, the evaluation modules and the governor of the tree under check (GOV-003 is not met by them); a record whose evaluated commit this checkout does not hold fails, and the course for such a record is the decision of the later workflow step',
-    'a decision.acceptance replay trusts a manifest record as logged beyond what it compares (its runs and log hashes, the contract commit and base of its detect line, files and reviews_sha256); appended_at is not otherwise checked; no logged acceptance record of the self-build exists, so no real record has been replayed',
+    'a decision.acceptance replay trusts the CI and review records as logged and reads nothing from GitHub or a reviews file; it uses the readers, the evaluation modules and the governor of the tree under check (GOV-003 is not met by them; DEF-0110); a record whose evaluated commit this checkout does not hold fails, and the course for such a record is the decision of the later workflow step',
+    'a decision.acceptance replay trusts a manifest record as logged beyond what it compares (its runs and log hashes, the contract commit and base of its detect line, files, reviews_sha256 and its recorder), so whoever writes the log can write a matching manifest, as the command trusts whoever writes the log; appended_at is not otherwise checked; no logged acceptance record of the self-build exists, so no real record has been replayed',
     'open (DEF-0137), not accepted limits: the refusals of aieos evaluate that need the saved CI data or the reviews text are not repeated; after a change of the governor or of its pin older acceptance records fail closed',
     'a record of the violation path is recognised by its form and by the violation.detected line that it names, and nothing recomputes it (task TASK-141): a forged pair of such lines is reported NOT REPLAYED: violation-path record and does not fail this entry; the module violation, read from the tree under check, decides what is recognised',
     'the status read does not see assume-unchanged or skip-worktree flags and counts untracked files that are not ignored: run in a clean checkout where no file shadows a library module',
@@ -528,7 +531,9 @@ def _manifest_finding(lines, index, task_id, commit, policy_ref, sha, provenance
         return 'manifest: no manifest record of the log before the line matches'
     for record in matched:
         ident = record['record_id']
-        if any(other.get('record_id') == ident and _canon(other) != _canon(record) for _, other in added):
+        wanted_id = event_id_of(task_id, ident)
+        if any(other.get('record_id') == ident
+               and (_canon(other) != _canon(record) or event.get('event_id') != wanted_id) for event, other in added):
             return 'manifest: the log holds another record under the record_id %s' % ident
     return None
 

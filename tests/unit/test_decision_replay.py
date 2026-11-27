@@ -789,10 +789,10 @@ class FormOfTheLogTests(unittest.TestCase):
         for what, log, findings in self.forms():
             with self.subTest(what):
                 rc, lines = MainTests.run_main(self, [str(ROOT), PIN], files=log.decode('utf-8'),
-                                               detail=lambda *a, **k: ([], []))
+                                               paths=['a/b.py', 'x/events.jsonl'], detail=lambda *a, **k: ([], []))
                 self.assertEqual(rc, 1, lines)
                 for finding in findings:
-                    self.assertIn('FAIL: .aieos/events.jsonl: ' + finding, lines)
+                    self.assertIn('FAIL: x/events.jsonl: ' + finding, lines)
                 self.assertTrue(any(l.startswith('FAIL ') and l.endswith(': ' + NOT_WRITTEN) for l in lines), lines)
                 self.assertFalse(any(l.startswith('REPLAYED ') for l in lines), lines)
                 self.assertIn('replayed and passed: 0,', lines[-1])
@@ -815,13 +815,13 @@ class FormOfTheLogTests(unittest.TestCase):
                     return ({'blob': 'b', 'text': ENGINE_TEXT if path == decision_replay.ENGINE_PATH
                              else log.decode('utf-8')}, None)
                 with mock.patch.object(decision_replay.base_files, 'list_paths',
-                                       return_value=(['.aieos/events.jsonl'], None)), \
+                                       return_value=(['x/events.jsonl'], None)), \
                         mock.patch.object(decision_replay.base_files, 'read_file', side_effect=read_file), \
                         mock.patch.object(decision_replay.records, 'check_log', return_value=report), \
                         mock.patch.object(decision_replay, 'replay_detail', lambda *a, **k: ([], [])):
                     rc = decision_replay.main([str(ROOT), PIN], read=clean_read, out=out.append, engine=Engine())
                 self.assertEqual(rc, 1, out)
-                self.assertIn('FAIL: .aieos/events.jsonl: ' + finding, out)
+                self.assertIn('FAIL: x/events.jsonl: ' + finding, out)
                 self.assertFalse(any(l.startswith('NOT REPLAYED: violation-path record') for l in out), out)
                 self.assertIn('replayed and passed: 0,', out[-1])
                 self.assertIn('not replayed (violation path): 0', out[-1])

@@ -482,6 +482,14 @@ class TheManifest(unittest.TestCase):
             with self.subTest(what):
                 self.assertEqual(self.finding([manifest_of(values)]), [NO_MANIFEST])
 
+    def test_a_copy_of_the_manifest_on_a_line_with_another_event_id_fails(self):
+        payload, event_id = manifest_of(held())
+        for what, manifests in (('after', [(payload, event_id), (payload, 'x2')]),
+                                ('before', [(payload, 'x2'), (payload, event_id)])):
+            with self.subTest(what):
+                self.assertEqual(self.finding(manifests),
+                                 ['manifest: the log holds another record under the record_id ' + MANIFEST_ID])
+
     def test_a_changed_basis_text_and_two_basis_texts_fail(self):
         payload, _ = manifest_of(held())
         text = payload['basis'][0]
