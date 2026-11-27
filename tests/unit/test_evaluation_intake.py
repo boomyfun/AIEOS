@@ -13,6 +13,7 @@ import unittest
 from unittest import mock
 
 from aieos_bootstrap import ci_evidence
+from aieos_bootstrap import eval_inputs
 from aieos_bootstrap import evaluation_intake
 from aieos_bootstrap import evaluation_sources
 from aieos_bootstrap import gate_records
@@ -442,16 +443,16 @@ class AC6TheModule(unittest.TestCase):
         self.assertTrue(names <= {'hashlib', 'json', 're', 'aieos_bootstrap.ci_evidence',
                                   'aieos_bootstrap.evaluation_derive', 'aieos_bootstrap.evaluation_sources'}, names)
 
-    def test_the_public_names_are_exactly_two(self):
+    def test_the_public_names_are_exactly_three(self):
         public = set()
         for node in self.tree().body:
             if isinstance(node, (ast.FunctionDef, ast.ClassDef)) and not node.name.startswith('_'):
                 public.add(node.name)
             elif isinstance(node, ast.Assign):
                 public.update(t.id for t in node.targets if isinstance(t, ast.Name) and not t.id.startswith('_'))
-        self.assertEqual(public, {'read_ci_data', 'manifest'})
+        self.assertEqual(public, {'read_ci_data', 'manifest', 'read_reviews'})
         attrs = {n for n in dir(evaluation_intake) if not n.startswith('_')}
-        self.assertEqual(attrs, {'read_ci_data', 'manifest', 'hashlib', 'json', 're', 'ci_evidence',
+        self.assertEqual(attrs, {'read_ci_data', 'manifest', 'read_reviews', 'hashlib', 'json', 're', 'ci_evidence',
                                  'evaluation_derive', 'evaluation_sources'})
 
     def test_no_name_of_a_process_a_file_a_clock_or_a_dynamic_call(self):
@@ -473,6 +474,255 @@ class AC6TheModule(unittest.TestCase):
         for word in ('MEAS' + 'URED', 'ENFOR' + 'CED', 'GUARAN' + 'TEED', 'va' + 'lid', 'acc' + 'epted', 'appr' + 'oved',
                      'native' + '/', 'bench' + '/', 'fixtures' + '_rc'):
             self.assertNotIn(word, text)
+
+
+# TASK-166: the maker of the review records.
+PROFILE = [{'dimension': 'SEC-002', 'evidence_types': ['ai_review']},
+           {'dimension': 'GOV-004', 'evidence_types': ['human_review']},
+           {'dimension': 'GOV-006', 'evidence_types': ['human_security_review']},
+           {'dimension': 'crossed', 'evidence_types': ['ai_review (cross-model)']},
+           {'dimension': 'functional', 'evidence_types': ['build', 'lint']}]
+IV = {'SPEC-001': 'v2'}
+OTHER_ID = '453dc3a92daaf8842badc7e33fc37873c68896f4f942342feb09564a9bd5da82'
+AGENT_ID = '9aa6c597a1e8e9cbc2ac270b4e3e6893e7999fdc7b5eed647e0881c079cfa946'
+
+
+def other_model(**changes):
+    e = {'dimension': 'SEC-002', 'evidence_type': 'other_model_review', 'commit': COMMIT, 'outcome': 'pass',
+         'decision_ref': 'D-1', 'models': {'reviewer': 'm-a', 'implementer': 'm-b'}}
+    e.update(changes)
+    return e
+
+
+def agent_review(**changes):
+    e = {'dimension': 'GOV-004', 'evidence_type': 'decision_agent_review', 'commit': COMMIT, 'outcome': 'fail',
+         'decision_ref': 'D-2', 'basis': 'b-\u00e9', 'stands_for': 'human_review'}
+    e.update(changes)
+    return e
+
+
+def reviews(value, task_id=TASK, commit=COMMIT, profile=None, intent_versions=None, recorder='external CI'):
+    text = value if type(value) is str else json.dumps(value)
+    return EI.read_reviews(text, task_id, commit, copy.deepcopy(PROFILE) if profile is None else profile,
+                           dict(IV) if intent_versions is None else intent_versions, recorder)
+
+
+def common(ident, source, kind, dimension, outcome, decision):
+    return {'record_id': ident, 'fact_kind': 'observation', 'source_class': source, 'recorder': 'external CI',
+            'subject': TASK, 'commit': COMMIT, 'intent_versions': {'SPEC-001': 'v2'}, 'evidence_type': kind,
+            'dimension': dimension, 'outcome': outcome, 'decision_ref': decision}
+
+
+class ReviewsBase(unittest.TestCase):
+    def refused(self, answer, reason):
+        self.assertEqual(set(answer), {'result', 'records', 'sha256', 'findings'})
+        self.assertEqual((answer['result'], answer['records'], answer['sha256']), ('refused', None, None), answer)
+        self.assertEqual(len(answer['findings']), 1)
+        self.assertEqual(set(answer['findings'][0]), {'reason', 'detail'})
+        self.assertEqual(answer['findings'][0]['reason'], reason, answer['findings'][0]['detail'])
+        self.assertLessEqual(len(answer['findings'][0]['detail']), 200)
+
+
+class TASK166Records(ReviewsBase):
+    def test_each_type_gives_its_exact_record(self):
+        """TASK-166 AC2: the two records, their classes and literal ids; each passes check_record; the SHA-256 is of
+        the text."""
+        iv = dict(IV)
+        text = json.dumps([other_model(), agent_review()])
+        answer = reviews(text, intent_versions=iv)
+        first = common(OTHER_ID, 'same_lineage_review', 'other_model_review', 'SEC-002', 'pass', 'D-1')
+        first['models'] = {'reviewer': 'm-a', 'implementer': 'm-b'}
+        second = common(AGENT_ID, 'decision_agent', 'decision_agent_review', 'GOV-004', 'fail', 'D-2')
+        second.update(basis='b-\u00e9', stands_for='human_review')
+        self.assertEqual(answer, {'result': 'present', 'records': [first, second],
+                                  'sha256': hashlib.sha256(text.encode('utf-8')).hexdigest(), 'findings': []})
+        for record in answer['records']:
+            self.assertEqual(records.check_record(record), [])
+            self.assertIsNot(record['intent_versions'], iv)
+
+    def test_the_types_each_review_can_stand_under(self):
+        """TASK-166 AC2: an other_model_review under ai_review or the cross-model pair, a decision_agent_review under
+        the type it stands for."""
+        for entry in (other_model(dimension='crossed'),
+                      agent_review(dimension='crossed', stands_for='ai_review (cross-model)'),
+                      agent_review(dimension='GOV-006', stands_for='human_security_review')):
+            answer = reviews([entry])
+            self.assertEqual(answer['result'], 'present', answer)
+            self.assertEqual(records.check_record(answer['records'][0]), [])
+
+    def test_equal_entries_make_one_record(self):
+        """TASK-166 AC2: entries equal in canonical text give one record, in the order of their first place."""
+        reordered = dict(reversed(list(other_model().items())))
+        answer = reviews([other_model(), agent_review(), reordered])
+        self.assertEqual([r['record_id'] for r in answer['records']], [OTHER_ID, AGENT_ID])
+
+    def test_a_hundred_entries_are_the_most(self):
+        """TASK-166 AC2: 100 entries are read and 101 refuse."""
+        many_entries = [other_model(decision_ref='D-%d' % n) for n in range(100)]
+        self.assertEqual(len(reviews(many_entries)['records']), 100)
+        self.refused(reviews(many_entries + [other_model()]), 'entry')
+
+    def test_each_wrong_entry_refuses_the_whole_file(self):
+        """TASK-166 AC2: a missing or extra key, source_class, a human type, another type, a wrong outcome, commit,
+        models, basis or stands_for, and a dimension the profile does not ask for."""
+        missing = other_model()
+        del missing['decision_ref']
+        bad = (missing, dict(other_model(), note='x'), dict(agent_review(), source_class='human_authority'),
+               agent_review(evidence_type='human_review'), agent_review(evidence_type='human_security_review'),
+               other_model(evidence_type='ai_review'), other_model(evidence_type=['other_model_review']), 'x', [],
+               other_model(outcome='blocking'), other_model(outcome=True), other_model(commit=OTHER),
+               other_model(models={'reviewer': 'm', 'implementer': 'm'}), other_model(models={'reviewer': 'm-a'}),
+               other_model(models={'reviewer': '', 'implementer': 'm'}), other_model(models=['m-a', 'm-b']),
+               other_model(decision_ref=''), other_model(dimension=''), other_model(dimension=7),
+               agent_review(basis=''), agent_review(basis=['b']), agent_review(stands_for='ai_review'),
+               agent_review(stands_for=['human_review']), agent_review(stands_for='human_security_review'),
+               other_model(dimension='GOV-004'), other_model(dimension='absent'), agent_review(dimension='SEC-002'),
+               agent_review(dimension='functional'))
+        for entry in bad:
+            self.refused(reviews([other_model(), entry]), 'entry')
+
+    def test_a_text_that_is_no_list_of_entries_refuses(self):
+        """TASK-166 AC2: no list and an empty list refuse with entry; a text parse_json refuses gives json."""
+        for text in ('{}', '"x"', '[]', '1'):
+            self.refused(reviews(text), 'entry')
+        for text in ('', '[', '\ufeff[]', '[{"a": 1, "a": 2}]', '[NaN]'):
+            self.refused(reviews(text), 'json')
+
+    def test_arguments_out_of_form_refuse(self):
+        """TASK-166 AC2: each argument out of form gives argument, and no raise leaves the function."""
+        good = [other_model()]
+        for answer in (EI.read_reviews(b'[]', TASK, COMMIT, PROFILE, IV, 'r'), reviews('\ud800'),
+                       reviews(good, task_id='x'), reviews(good, commit='a'), reviews(good, profile={}),
+                       reviews(good, profile=[{'dimension': 'SEC-002'}]),
+                       reviews(good, profile=[{'dimension': 'SEC-002', 'evidence_types': 'ai_review'}]),
+                       reviews(good, intent_versions={'SPEC-001': '2'}), reviews(good, intent_versions=[]),
+                       reviews(good, recorder=''), reviews(good, recorder=None)):
+            self.refused(answer, 'argument')
+        with mock.patch.object(EI.evaluation_sources, 'parse_json', mock.Mock(side_effect=RuntimeError('hidden'))):
+            answer = reviews(good)
+        self.refused(answer, 'argument')
+        self.assertEqual(answer['findings'][0]['detail'], 'an unexpected error: RuntimeError')
+
+    def test_no_argument_is_mutated(self):
+        """TASK-166 AC2: the profile and the intent versions are unchanged."""
+        profile, iv = copy.deepcopy(PROFILE), dict(IV)
+        reviews([other_model(), agent_review()], profile=profile, intent_versions=iv)
+        self.assertEqual((profile, iv), (PROFILE, IV))
+
+
+class TASK166Manifest(unittest.TestCase):
+    def test_without_a_reviews_hash_the_answer_is_the_one_of_before(self):
+        """TASK-166 AC3: None gives the same text and record as no argument."""
+        self.assertEqual(make(reviews_sha256=None), make())
+        self.assertNotIn('reviews_sha256', make()['text'])
+
+    def test_with_a_reviews_hash_the_text_holds_it(self):
+        """TASK-166 AC3: the text holds the key and the record's id follows the text."""
+        answer = make(reviews_sha256='d' * 64)
+        value = {'task_id': TASK, 'evaluated_commit': COMMIT, 'policy_ref': POLICY_REF, 'contract_sha256': SHA,
+                 'provenance': PROVENANCE, 'ci': CI, 'files': FILES, 'reviews_sha256': 'd' * 64}
+        self.assertEqual(answer['text'], json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False))
+        self.assertEqual(answer['record']['refers_to'], hashlib.sha256(answer['text'].encode('utf-8')).hexdigest())
+        self.assertNotEqual(answer['record']['record_id'], make()['record']['record_id'])
+
+    def test_a_reviews_hash_out_of_form_is_refused(self):
+        """TASK-166 AC3: anything but 64 lowercase hexadecimal characters refuses with argument."""
+        for value in ('d' * 63, 'D' * 64, '', 5):
+            answer = make(reviews_sha256=value)
+            self.assertEqual((answer['result'], answer['findings'][0]['reason']), ('refused', 'argument'), value)
+
+
+# AC6: a run-made low task, from the real input assembler to the governor. The log lines are cuts of aieos-checks
+# 44780942904, as the tests of eval_inputs hold them; the values of the sources are fixtures, not policy.
+LOW_TASK = 'TASK-150'
+LOW_COMMIT = '06880dd8d00b69fa2a9f25fc4036a635bdd31fc0'
+LOW_SHA = '7c45fd60c17666c085b2c5d6583a01e70988e2fcf3c0fad1117a8f673eb504ff'
+G0_STEP = 'checks\tG0 task detection (the contract commit on main)\t'
+LOW_LOG = ('checks\tSet up job\t2026-11-20T17:11:58.6217825Z Complete job name: checks\n'
+           + G0_STEP + '2026-11-20T17:12:03.3557860Z   AIEOS_ARGS: detect\n'
+           + G0_STEP + '2026-11-20T17:12:03.3558218Z ##[endgroup]\n'
+           + G0_STEP + '2026-11-20T17:12:03.4046970Z G0 detect: task TASK-150 contract commit '
+           '3572f9585da94f9ec2fb749a25e46a9e040f0033 base f48804f6e3001a3c9dd070437e7ce339d7881150\n'
+           + G0_STEP + '2026-11-20T17:12:03.4068619Z G0 contract sha256 ' + LOW_SHA + '\n'
+           'checks\tCollect the pushed commits and their changed paths\t\ufeff2026-11-20T17:12:03.4097193Z '
+           '##[group]Run set -euo pipefail\n')
+LOW_STEPS = ['G0 task detection (the contract commit on main)', 'G0 scope (V0)', 'G1 build',
+             'lint (pyflakes 4.0.3, pinned by version and hash)',
+             "SEC-001 secret scan (tip tree; every commit's message, file names and added lines)",
+             "SEC-002 pattern rules (every commit's added lines)", 'OPS-002 owner-kept paths', 'INV-010 replay',
+             'deterministic_rule (INV-001, INV-002, INV-004)', 'OPS-003 pattern rules',
+             'static_security_analysis (bandit, every package pinned by version and hash)']
+LOW_PLAN = [{'gate': 'G0', 'check': 'scope'}, {'gate': 'G1', 'check': 'build'}, {'gate': 'G2', 'check': 'lint'},
+            {'gate': 'G3', 'check': 'constitution', 'args': ['AC1', 'AC2']}]
+HUMAN = ('GOV-004', 'GOV-005', 'OPS-002')
+AI = ('SEC-002', 'OPS-003')
+
+
+def low_inputs():
+    run = {'run_id': 100, 'attempt': 1, 'head_sha': LOW_COMMIT, 'event': 'push', 'head_branch': 'task/' + LOW_TASK,
+           'workflow_path': CHECKS, 'status': 'completed', 'conclusion': 'success',
+           'steps': [{'name': n, 'conclusion': 'success'} for n in LOW_STEPS], 'log': LOW_LOG}
+    contract = {'task': LOW_TASK, 'traces_to': ['SPEC-001'], 'risk': 'low', 'owner_kept_act': 'false',
+                'verification_plan': copy.deepcopy(LOW_PLAN),
+                'autonomy': {'max_level': 'L1', 'budgets': {'tokens': '400k', 'wall_time': '2h', 'retries': '1',
+                                                            'human_attention': '0m'}}}
+    articles = ([{'id': i, 'scope': ['**'], 'evidence_required': ['human_review']} for i in HUMAN]
+                + [{'id': i, 'scope': ['**'], 'evidence_required': ['ai_review']} for i in AI])
+    sources = {'intent_versions': {'SPEC-001': 'v2'},
+               'owner_kept_rules': [{'id': 'OPS-002', 'match': ['docs/pre-genesis/measurement-protocol.md']}],
+               'articles': articles,
+               'default_profiles': {'low': [{'dimension': 'functional', 'evidence_types': ['build', 'lint']}]},
+               'requirement_profiles': [], 'evidence_comparison': {'weakens': False}, 'delegation': True,
+               'auto_accept': {}, 'level_version': 'v1', 'ruleset_version': 'v1', 'policy_version': 'v2',
+               'risk_rules': [{'match': ['docs/**'], 'class': 'low'}]}
+    out = eval_inputs.eval_inputs(LOW_TASK, LOW_COMMIT, 'b' * 40, contract, LOW_SHA, ['docs/Deferred/a.md'], [run],
+                                  sources, [], 'external CI')
+    assert out['refusal'] is None, out['refusal']
+    return out
+
+
+def low_reviews(failed=None):
+    base = {'commit': LOW_COMMIT, 'outcome': 'pass', 'decision_ref': 'D-9'}
+    entries = [dict(base, dimension=d, evidence_type='decision_agent_review', basis='read', stands_for='human_review')
+               for d in HUMAN]
+    entries += [dict(base, dimension=d, evidence_type='other_model_review',
+                     models={'reviewer': 'm-a', 'implementer': 'm-b'}) for d in AI]
+    for entry in entries:
+        if entry['dimension'] == failed:
+            entry['outcome'] = 'fail'
+    return json.dumps(entries)
+
+
+def low_decision(text):
+    out = low_inputs()
+    derived = governor.derive_inputs(copy.deepcopy(out['values']))
+    given = []
+    if text is not None:
+        answer = EI.read_reviews(text, LOW_TASK, LOW_COMMIT, derived['evidence_profile'],
+                                 out['declared']['intent_versions'], 'external CI')
+        assert answer['result'] == 'present', answer
+        given = answer['records']
+    request = {'task_id': LOW_TASK, 'task_content_hash': 'c' * 64, 'evaluated_commit': LOW_COMMIT,
+               'intent_versions': {'SPEC-001': 'v2'}, 'task_state': 'VERIFYING',
+               'changed_paths': ['docs/Deferred/a.md'], 'retry_count': {'used': 0, 'limit': 1}}
+    decision = governor.evaluate(request, derived, out['ci_records'] + given)
+    return decision['decision'], decision['table_row'], decision['next_task_state']
+
+
+class TASK166TheOutcome(unittest.TestCase):
+    def test_every_review_passed_gives_row_five(self):
+        """TASK-166 AC6: with the gate, build and lint records and a passing review per article dimension, the decision
+        is NEEDS_REVIEW, row 5, next state IN_REVIEW."""
+        self.assertEqual(low_decision(low_reviews()), ('NEEDS_REVIEW', 5, 'IN_REVIEW'))
+
+    def test_one_failed_review_gives_row_two(self):
+        """TASK-166 AC6: a failed review entry gives rework."""
+        for failed in ('GOV-004', 'SEC-002'):
+            self.assertEqual(low_decision(low_reviews(failed))[:2], ('NEEDS_REWORK', 2), failed)
+
+    def test_without_the_reviews_row_three_as_before(self):
+        """TASK-166 AC6: without the reviews the evidence is insufficient."""
+        self.assertEqual(low_decision(None)[:2], ('INSUFFICIENT_EVIDENCE', 3))
 
 
 if __name__ == '__main__':

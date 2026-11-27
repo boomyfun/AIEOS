@@ -1,5 +1,6 @@
-"""The CI intake and the manifest of an evaluation (task TASK-159; BT3b-2d-1 of DEF-0136 and DEF-0152; decisions D-7117
-to D-7127): two pure functions. read_ci_data turns the saved texts of the CI runs of a task commit, given by the caller
+"""The CI intake, the review records and the manifest of an evaluation (task TASK-159; BT3b-2d-1 of DEF-0136 and
+DEF-0152; decisions D-7117 to D-7127; the review records task TASK-166, DEF-0159 part B): three pure functions.
+read_ci_data turns the saved texts of the CI runs of a task commit, given by the caller
 as a mapping from file name to text, into the run mappings that ci_evidence takes, after binding each run attempt to its
 own files. manifest turns what an evaluation read into one canonical JSON text, its SHA-256 and the record.added payload
 that carries them. Nothing here fetches, reads or writes a file, starts a process, reads a clock, an environment or a
@@ -18,14 +19,36 @@ by run id and attempt, and files holds {name, sha256} of every text given, sorte
 are None and findings holds exactly one {reason, detail}. An unexpected Exception is a refusal with reason argument and a
 detail that names its type.
 
-manifest(task_id, evaluated_commit, policy_ref, contract_sha256, provenance, ci, files, recorder) returns exactly the
-keys result, text, sha256, record and findings. The arguments are checked first (argument), then that provenance, ci and
+manifest(task_id, evaluated_commit, policy_ref, contract_sha256, provenance, ci, files, recorder,
+reviews_sha256=None) returns exactly the keys result, text, sha256, record and findings. With a reviews_sha256, 64
+lowercase hexadecimal characters (else argument), the text also holds the key reviews_sha256; with None the answer
+is the one without that parameter. The arguments are checked first (argument), then that provenance, ci and
 files are plain data and that the text can be written (plain). The record has no outcome, gate, dimension or intent
 versions, so it satisfies no evidence entry.
+
+read_reviews(text, task_id, evaluated_commit, profile, intent_versions, recorder) returns exactly the keys result,
+records, sha256 and findings, and opens no file. text is a JSON list of 1 to 100 entries. An entry has exactly the
+keys dimension, evidence_type, commit, outcome (pass or fail), decision_ref and, for other_model_review, models
+(reviewer and implementer, which differ), or, for decision_agent_review, basis and stands_for (human_review,
+human_security_review or ai_review (cross-model)). commit is the evaluated commit, and the profile asks, under the
+entry's dimension, for ai_review or ai_review (cross-model) (other_model_review) or for the stands_for type. Each
+record is an observation of the source class same_lineage_review or decision_agent, never a CI class and never
+human_authority; its record_id is the SHA-256 of "review-record", the task, the commit and the entry's canonical
+JSON text, joined by line feeds; equal entries make one record. result is "present" or "refused"; on "refused"
+records and sha256 are None and findings holds exactly one {reason, detail}, the reason argument (an argument out
+of form or an unexpected Exception), json (parse_json refuses the text) or entry (the list or an entry is out of
+form, or the profile asks for no such review under the entry's dimension).
 
 Limits: a log cannot be shown to be that run's from its bytes (the saved log holds no run id), so the line of the commit
 and ci_evidence's detect line are content checks only; the highest attempt that exists is not knowable from the texts
 given, so an omitted later attempt is not seen; the texts are the caller's fetch, trusted unedited.
+Limits of the review records: they record what the caller states about who reviewed what; nothing here checks that
+a review happened, who wrote the text, the models or the decision reference (the same limit as approve --class); no
+record of the class human_authority is made, so a task whose owner-kept act is set cannot have its human types met
+by them; a review under a dimension the profile does not ask for refuses the whole text; an other_model_review
+alone, under an entry whose only type is ai_review (cross-model), does not meet that entry; a review binds the
+commit and the intent versions, so a later commit needs new reviews; the record_id does not hold the intent
+versions; a failed review stays in the log and the governor counts it; whoever writes the log is trusted.
 """
 import hashlib
 import json
@@ -48,6 +71,13 @@ _VIEW_KEYS = ('databaseId', 'attempt', 'headSha', 'event', 'headBranch', 'status
 _PAIRS = (('head_sha', 'headSha'), ('event', 'event'), ('head_branch', 'headBranch'), ('status', 'status'),
           ('conclusion', 'conclusion'))
 _MAX_DETAIL = 200
+_VERSION = re.compile(r'v[0-9]+')
+_REVIEW_KEYS = frozenset({'dimension', 'evidence_type', 'commit', 'outcome', 'decision_ref'})
+_REVIEW_OWN = {'other_model_review': ('models',), 'decision_agent_review': ('basis', 'stands_for')}
+_REVIEW_CLASSES = {'other_model_review': 'same_lineage_review', 'decision_agent_review': 'decision_agent'}
+_AI_TYPES = ('ai_review', 'ai_review (cross-model)')
+_STANDS_FOR = ('human_review', 'human_security_review', 'ai_review (cross-model)')
+_MAX_REVIEWS = 100
 
 
 class _Refuse(Exception):
@@ -212,6 +242,106 @@ def read_ci_data(files, task_id, evaluated_commit):
         return _intake_refused('argument', 'an unexpected error: ' + type(exc).__name__)
 
 
+def _reviews_refused(reason, detail):
+    return {'result': 'refused', 'records': None, 'sha256': None, 'findings': _finding(reason, detail)}
+
+
+def _filled(value):
+    return type(value) is str and value != ''
+
+
+def _profile_entry(item):
+    return (type(item) is dict and set(item) == {'dimension', 'evidence_types'} and _filled(item['dimension'])
+            and type(item['evidence_types']) is list and all(type(kind) is str for kind in item['evidence_types']))
+
+
+def _reviews_argument_error(text, task_id, evaluated_commit, profile, intent_versions, recorder):
+    if type(text) is not str or not _can_encode(text):
+        return 'text is not a str that UTF-8 can write'
+    if not _matches(_TASK, task_id):
+        return 'task_id is not TASK- and digits'
+    if not _matches(_COMMIT, evaluated_commit):
+        return 'evaluated_commit is not 40 lowercase hexadecimal characters'
+    if type(profile) is not list or not all(_profile_entry(item) for item in profile):
+        return 'profile is not a list of mappings of a dimension and its evidence types'
+    if type(intent_versions) is not dict or not all(
+            _filled(k) and _can_encode(k) and _matches(_VERSION, v) for k, v in intent_versions.items()):
+        return 'intent_versions does not map ids to versions v and digits'
+    if not _filled(recorder) or not _can_encode(recorder):
+        return 'recorder is not a non-empty text that UTF-8 can write'
+    return None
+
+
+def _entry_error(entry, evaluated_commit, profile):
+    """The first thing wrong with one review entry as a short text, or None."""
+    if type(entry) is not dict:
+        return 'it is not a JSON object'
+    kind = entry.get('evidence_type')
+    if type(kind) is not str or kind not in _REVIEW_OWN:
+        return 'its evidence_type is not other_model_review or decision_agent_review'
+    if set(entry) != _REVIEW_KEYS.union(_REVIEW_OWN[kind]):
+        return 'its keys are not exactly those of ' + kind
+    for name in ('dimension', 'decision_ref'):
+        if not _filled(entry[name]):
+            return 'its ' + name + ' is not a non-empty text'
+    if entry['outcome'] not in ('pass', 'fail'):
+        return 'its outcome is not pass or fail'
+    if entry['commit'] != evaluated_commit:
+        return 'its commit is not the evaluated commit'
+    if kind == 'other_model_review':
+        models = entry['models']
+        if not (type(models) is dict and set(models) == {'reviewer', 'implementer'} and _filled(models['reviewer'])
+                and _filled(models['implementer']) and models['reviewer'] != models['implementer']):
+            return 'its models are not a reviewer and an implementer, non-empty texts that differ'
+        wanted = _AI_TYPES
+    else:
+        if not _filled(entry['basis']):
+            return 'its basis is not a non-empty text'
+        if type(entry['stands_for']) is not str or entry['stands_for'] not in _STANDS_FOR:
+            return 'its stands_for is not a type this review can stand for'
+        wanted = (entry['stands_for'],)
+    if not any(item['dimension'] == entry['dimension'] and any(k in item['evidence_types'] for k in wanted)
+               for item in profile):
+        return 'the profile asks for no such review under its dimension'
+    return None
+
+
+def read_reviews(text, task_id, evaluated_commit, profile, intent_versions, recorder):
+    """The review records of a reviews text and its SHA-256, or the refusal."""
+    try:
+        error = _reviews_argument_error(text, task_id, evaluated_commit, profile, intent_versions, recorder)
+        if error is not None:
+            return _reviews_refused('argument', error)
+        answer = evaluation_sources.parse_json(text)
+        if answer['findings']:
+            return _reviews_refused('json', answer['findings'][0]['detail'])
+        entries = answer['value']
+        if type(entries) is not list or not 1 <= len(entries) <= _MAX_REVIEWS:
+            return _reviews_refused('entry', 'the text is not a list of 1 to %d entries' % _MAX_REVIEWS)
+        records, seen = [], set()
+        for number, entry in enumerate(entries, 1):
+            error = _entry_error(entry, evaluated_commit, profile)
+            if error is not None:
+                return _reviews_refused('entry', 'entry %d: %s' % (number, error))
+            canon = json.dumps(entry, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+            if canon in seen:
+                continue
+            seen.add(canon)
+            kind = entry['evidence_type']
+            ident = hashlib.sha256('\n'.join(('review-record', task_id, evaluated_commit, canon))
+                                   .encode('utf-8')).hexdigest()
+            record = {'record_id': ident, 'fact_kind': 'observation', 'source_class': _REVIEW_CLASSES[kind],
+                      'recorder': recorder, 'subject': task_id, 'commit': evaluated_commit,
+                      'intent_versions': dict(intent_versions)}
+            for name in ('evidence_type', 'dimension', 'outcome', 'decision_ref') + _REVIEW_OWN[kind]:
+                record[name] = entry[name]
+            records.append(record)
+        return {'result': 'present', 'records': records,
+                'sha256': hashlib.sha256(text.encode('utf-8')).hexdigest(), 'findings': []}
+    except Exception as exc:
+        return _reviews_refused('argument', 'an unexpected error: ' + type(exc).__name__)
+
+
 def _manifest_refused(reason, detail):
     return {'result': 'refused', 'text': None, 'sha256': None, 'record': None, 'findings': _finding(reason, detail)}
 
@@ -236,21 +366,26 @@ def _manifest_argument_error(task_id, evaluated_commit, policy_ref, contract_sha
     return None
 
 
-def manifest(task_id, evaluated_commit, policy_ref, contract_sha256, provenance, ci, files, recorder):
+def manifest(task_id, evaluated_commit, policy_ref, contract_sha256, provenance, ci, files, recorder,
+             reviews_sha256=None):
     """The manifest text, its SHA-256 and its record, or the refusal."""
     try:
         error = _manifest_argument_error(task_id, evaluated_commit, policy_ref, contract_sha256, provenance, ci, files,
                                          recorder)
+        if error is None and reviews_sha256 is not None and not _matches(_SHA256, reviews_sha256):
+            error = 'reviews_sha256 is not 64 lowercase hexadecimal characters'
         if error is not None:
             return _manifest_refused('argument', error)
         for name, value in (('provenance', provenance), ('ci', ci), ('files', files)):
             problem = evaluation_derive.plain_data_problem(value)
             if problem is not None:
                 return _manifest_refused('plain', name + ': ' + problem['detail'])
+        held = {'task_id': task_id, 'evaluated_commit': evaluated_commit, 'policy_ref': policy_ref,
+                'contract_sha256': contract_sha256, 'provenance': provenance, 'ci': ci, 'files': files}
+        if reviews_sha256 is not None:
+            held['reviews_sha256'] = reviews_sha256
         try:
-            text = json.dumps({'task_id': task_id, 'evaluated_commit': evaluated_commit, 'policy_ref': policy_ref,
-                               'contract_sha256': contract_sha256, 'provenance': provenance, 'ci': ci, 'files': files},
-                              sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False)
+            text = json.dumps(held, sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False)
         except ValueError as exc:
             return _manifest_refused('plain', 'the text cannot be made: ' + type(exc).__name__)
         if not _can_encode(text):

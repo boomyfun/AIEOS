@@ -220,13 +220,135 @@ class TASK162AC11Docs(unittest.TestCase):
     def test_the_usage_docstring_and_commands(self):
         """TASK-162 AC11: USAGE names evaluate with its flags; the docstring names the command and its stdin; COMMANDS
         ends with import, run, evaluate; the recorder of end is unchanged."""
-        self.assertIn('python -m aieos_bootstrap.cli evaluate <task> --root <path> --repo <path> [--json]', cli.USAGE)
+        self.assertIn('python -m aieos_bootstrap.cli evaluate <task> --root <path> --repo <path> [--reviews <path>] '
+                      '[--json]', cli.USAGE)
         text = ' '.join(ast.get_docstring(ast.parse((SRC / 'cli.py').read_bytes().decode('utf-8'))).split())
         for phrase in ('aieos evaluate', 'TASK-162', 'stdin.buffer.read(STDIN_CAP + 1)',
                        'evaluate also calls it after the parse'):
             self.assertIn(phrase, text)
         self.assertEqual(cli.COMMANDS[-3:], ('import', 'run', 'evaluate'))
         self.assertEqual((cli.RECORDER, cli.EVALUATE_RECORDER), ('aieos cli end', 'aieos cli evaluate'))
+
+
+# TASK-166: the flag --reviews of evaluate.
+REVIEWS = 'C:/cli-reviews-166.json'
+REVIEWS_BODY = '[{"é": 1}]'
+
+
+class KeywordStand(Stand):
+    def __init__(self):
+        Stand.__init__(self)
+        self.keywords = []
+
+    def __call__(self, *args, **keywords):
+        self.keywords.append(keywords)
+        return Stand.__call__(self, *args)
+
+
+class Reads:
+    """A stand-in for pathlib's read_bytes: it keeps each path asked for and gives the data or raises."""
+
+    def __init__(self, data=REVIEWS_BODY.encode('utf-8'), raises=None):
+        self.data = data
+        self.raises = raises
+        self.paths = []
+
+    def go(self, argv, environ=None):
+        def read_bytes(path):
+            self.paths.append(path.as_posix())
+            if self.raises is not None:
+                raise self.raises
+            return self.data
+
+        stand = KeywordStand()
+        with mock.patch.object(pathlib.Path, 'read_bytes', read_bytes):
+            rc, out, _, clock, stdin = run(argv, stand=stand, environ=environ)
+        return rc, out, stand, clock, stdin
+
+
+WITH = ARGV + ['--reviews', REVIEWS]
+
+
+class TASK166Parser(unittest.TestCase):
+    def test_the_flag_in_any_place_once(self):
+        """TASK-166 AC5: --reviews is accepted once, wherever it stands among the flags."""
+        for argv in (WITH, ['evaluate', TASK, '--reviews', REVIEWS, '--json', '--repo', REPO, '--root', ROOT]):
+            reads = Reads()
+            rc, _, stand, clock, stdin = reads.go(argv)
+            self.assertEqual((rc, reads.paths, len(stand.calls), clock.calls), (0, [REVIEWS], 1, 1), argv)
+
+    def test_usage_errors(self):
+        """TASK-166 AC5: a second --reviews, one without a value, one without --repo and one on another command give the
+        usage, with nothing read or called."""
+        bad = (WITH + ['--reviews', REVIEWS], ARGV + ['--reviews'], ARGV + ['--reviews', '--json'],
+               ARGV + ['--reviews', ''], ['evaluate', TASK, '--root', ROOT, '--reviews', REVIEWS],
+               ['status', '--root', ROOT, '--reviews', REVIEWS],
+               ['import', TASK, '--root', ROOT, '--reviews', REVIEWS])
+        for argv in bad:
+            reads = Reads()
+            rc, out, stand, clock, stdin = reads.go(argv)
+            self.assertEqual((rc, out, reads.paths, stand.calls, clock.calls, stdin.buffer.calls),
+                             (2, cli.USAGE, [], [], 0, []), argv)
+
+    def test_the_usage_names_the_flag(self):
+        """TASK-166 AC5: the flag has its own help line."""
+        self.assertIn('  --reviews <path> the reviews file (evaluate only; at most once)\n', cli.USAGE)
+
+
+class TASK166Reading(unittest.TestCase):
+    def test_the_text_reaches_evaluate_as_reviews_text(self):
+        """TASK-166 AC5: the decoded text is passed as the one keyword reviews_text, a byte-order mark kept."""
+        for body in (REVIEWS_BODY, '\ufeff[]'):
+            reads = Reads(body.encode('utf-8'))
+            rc, _, stand, _, _ = reads.go(WITH)
+            self.assertEqual((rc, stand.keywords), (0, [{'reviews_text': body}]))
+            self.assertEqual(stand.calls, [(ROOT, REPO, TASK, BODY, 'aieos cli evaluate', NOW)])
+
+    def test_without_the_flag_nothing_is_read_and_no_keyword_is_given(self):
+        """TASK-166 AC5: without the flag the call is the one of before."""
+        reads = Reads()
+        rc, _, stand, _, _ = reads.go(ARGV)
+        self.assertEqual((rc, reads.paths, stand.keywords), (0, [], [{}]))
+
+    def test_the_cap(self):
+        """TASK-166 AC5: 1048576 bytes pass and one byte more refuses."""
+        self.assertEqual(cli.REVIEWS_CAP, 1048576)
+        rc, _, stand, _, _ = Reads(b' ' * 1048576).go(WITH)
+        self.assertEqual((rc, len(stand.keywords[0]['reviews_text'])), (0, 1048576))
+        rc, out, stand, clock, _ = Reads(b' ' * 1048577).go(WITH)
+        self.assertEqual((rc, out, stand.calls, clock.calls), (1, 'finding: %s\n' % cli.REVIEWS_REFUSAL, [], 0))
+
+    def test_a_file_that_gives_no_text_refuses(self):
+        """TASK-166 AC5: a raising read, a value that is not bytes and bytes that are not UTF-8 give the one finding,
+        with neither the clock nor evaluate called; standard input was read before."""
+        self.assertEqual(cli.REVIEWS_REFUSAL, 'evaluate: the reviews file gave no UTF-8 bytes within the cap')
+        for reads in (Reads(raises=OSError('x')), Reads(raises=ValueError('v')), Reads(raises=MemoryError()),
+                      Reads('text'), Reads(bytearray(b'[]')), Reads(b'\xff')):
+            rc, out, stand, clock, stdin = reads.go(WITH)
+            self.assertEqual((rc, out, stand.calls, clock.calls, stdin.buffer.calls),
+                             (1, 'finding: evaluate: the reviews file gave no UTF-8 bytes within the cap\n', [], 0,
+                              [(cli.STDIN_CAP + 1,)]), reads.data)
+
+    def test_inside_a_runtime_the_file_is_not_read(self):
+        """TASK-166 AC5: the refusal inside a runtime comes before the file is read."""
+        for name in cli.RUNTIME_VARS:
+            reads = Reads()
+            rc, out, stand, clock, stdin = reads.go(WITH, environ={name: ''})
+            self.assertEqual((rc, out, reads.paths, stand.calls, clock.calls, stdin.buffer.calls),
+                             (1, 'finding: %s\n' % cli.EVALUATE_RUNTIME_REFUSAL, [], [], 0, []))
+
+    def test_a_refused_standard_input_leaves_the_file_unread(self):
+        """TASK-166 AC5: the file is read after standard input."""
+        reads = Reads()
+
+        def read_bytes(path):
+            reads.paths.append(path.as_posix())
+            return b'[]'
+
+        with mock.patch.object(pathlib.Path, 'read_bytes', read_bytes):
+            rc, out, stand, _, _ = run(WITH, stdin=Stdin(Buffer(raises=OSError('x'))), stand=KeywordStand())
+        self.assertEqual((rc, out, reads.paths, stand.calls),
+                         (1, 'finding: %s\n' % cli.STDIN_REFUSAL, [], []))
 
 
 if __name__ == '__main__':

@@ -1,12 +1,13 @@
 """The steps of the command ``aieos evaluate`` (task TASK-162; BT3b-2d-2b of DEF-0136 and DEF-0152; specification 7
 revision 14, section 3; decisions D-7276 to D-7298). One submitted task is evaluated from the project's event log, its
 contract at the evaluated commit, the saved CI data given as one JSON text and the evaluation sources at the contract's
-base commit.
+base commit; and, when its text is given, a reviews file (task TASK-166; DEF-0159 part B).
 
-``evaluate(root, repo, task_id, ci_text, recorder, now, read=None, read_log=None, append=None)`` returns a mapping with
+``evaluate(root, repo, task_id, ci_text, recorder, now, read=None, read_log=None, append=None,
+reviews_text=None)`` returns a mapping with
 exactly the keys result, reason, findings, event_id, decision, next_task_state, manifest_sha256, manifest, appended and
 uncovered. result is "evaluated", "duplicate" or "refused". reason is None unless refused, and then one of argument,
-log, state, contract, ci, policy_ref, sources, inputs, manifest, append and evaluate. findings is a list of str: a
+log, state, contract, ci, policy_ref, sources, inputs, reviews, manifest, append and evaluate. findings is a list of str: a
 refusal of a called module is given as "<its reason>: <its detail>" or as its own finding texts; the first refusal ends
 the call. appended is the list of the record ids whose appends the writer confirmed, in order.
 uncovered is the uncovered list of eval_inputs' evidence, or None before that step succeeded. manifest_sha256 and
@@ -17,7 +18,7 @@ read_log (default writer.read_log) and append (default writer.append_event) are 
 to every Git reader.
 
 The steps, in order. The arguments: root and repo non-empty absolute paths, task_id TASK- and digits, ci_text a str,
-recorder a non-empty str, now a timezone-aware UTC datetime with whole seconds; nothing is read or written before they
+recorder a non-empty str, now a timezone-aware UTC datetime with whole seconds, reviews_text None or a str; nothing is read or written before they
 pass. (1) The log is read once; the approved contract_hash, the evaluated commit and the task's record payloads come from
 evaluation._task_events over those bytes (a private helper, used as evaluation_sources uses evaluation._task_commits).
 (2) The contract is read at that commit by base_inputs.contract_at, and the bytes given to the evaluation are read at the
@@ -28,9 +29,14 @@ characters other than the evaluated commit, and evaluation_sources.load_sources 
 and no other. The loader's provenance must then hold exactly one mapping with the key contract, whose keys are
 contract and commit and whose values are the SHA-256 of step 2 and the evaluated commit; anything else refuses with
 reason sources and nothing is appended (task TASK-163; D-7351). With the real loader it holds by construction.
-(5) eval_inputs.eval_inputs assembles the inputs. (6) evaluation_intake.manifest makes the manifest from fresh
-copies of what it is given. (7) The records to append are eval_inputs' CI records and then the manifest record,
-left out when the log holds an equal payload under its record_id (a different one is a refusal with nothing written);
+(5) eval_inputs.eval_inputs assembles the inputs. Only with a reviews_text, governor.derive_inputs then derives
+the evidence profile from a copy of the inputs' values, and evaluation_intake.read_reviews makes the review records
+from the text, bound to the evaluated commit, the inputs' declared intent versions and the recorder; a refusal of
+the maker, or a profile that cannot be derived, refuses with reason reviews and nothing is appended.
+(6) evaluation_intake.manifest makes the manifest from fresh copies of what it is given and, with a reviews_text,
+names the text's SHA-256. (7) The records to append are eval_inputs' CI records, then the review records and then
+the manifest record; a review record or the manifest record is left out when the log holds an equal payload under
+its record_id (a different one is a refusal with nothing written);
 the event id of a record is the SHA-256 of "evaluation-record", the task id and the record id joined by line feeds. Each
 is first decided with eventlog.append over the log and the lines decided so far; only then is each written through append
 with expected_log_sha256, the SHA-256 of the log read followed by the lines this call has appended. An exception of
@@ -45,6 +51,12 @@ Limits: nothing checks that the base commit is one that the owner or the decisio
 appends of step 7, so with no record left to append step 7 calls nothing and a root without a store is not refused
 there; a refusal in step 7 or 8 may leave records with no decision; the CI texts are the caller's fetch,
 trusted unedited; the sources are those of gov-AIEOS, and with the sources' open gaps a task is refused at step 5.
+Limits of the reviews: they are the caller's statement, and nothing checks that a review happened, who wrote the
+file, the models or the decision reference; no record of the class human_authority is made, so a task whose
+owner-kept act is set cannot have its human types met here; a review binds the commit and the intent versions, so
+a later commit needs new reviews; the record_id does not hold the intent versions, so a changed version at the
+same commit refuses with append; a failed review stays in the log and the governor counts it, so at that commit no
+later pass clears it; whoever writes the log is trusted.
 """
 import datetime
 import hashlib
@@ -59,6 +71,7 @@ from aieos_bootstrap import evaluation
 from aieos_bootstrap import evaluation_intake
 from aieos_bootstrap import evaluation_sources
 from aieos_bootstrap import eventlog
+from aieos_bootstrap import governor
 from aieos_bootstrap import writer
 
 RESULT_KEYS = ('result', 'reason', 'findings', 'event_id', 'decision', 'next_task_state', 'manifest_sha256',
@@ -175,6 +188,34 @@ def _records_to_append(ci_records, manifest_record, payloads):
     return list(ci_records) + ([] if held else [manifest_record])
 
 
+def _reviews(text, task_id, commit, made, recorder):
+    """The review step: read_reviews' answer for the profile the governor derives from the inputs, or the refusal."""
+    try:
+        derived = governor.derive_inputs(_tree(made['values']))
+    except ValueError:
+        derived = None
+    if derived is None or derived['evidence_profile'] is None:
+        raise _Refuse('reviews', ['reviews: the evidence profile cannot be derived'])
+    given = evaluation_intake.read_reviews(text, task_id, commit, derived['evidence_profile'],
+                                           _tree(made['declared']['intent_versions']), recorder)
+    if given['result'] != 'present':
+        raise _Refuse('reviews', _texts(given['findings']))
+    return given
+
+
+def _fresh(review_records, payloads):
+    """The review records the log does not hold already; a conflicting one refuses."""
+    fresh = []
+    for record in review_records:
+        held = [p for p in payloads if p.get('record_id') == record['record_id']]
+        if held and not all(p == record for p in held):
+            raise _Refuse('append', ['append: the log holds another record under the record_id %s'
+                                     % record['record_id']])
+        if not held:
+            fresh.append(record)
+    return fresh
+
+
 def _event_id(task_id, record_id):
     return hashlib.sha256('\n'.join((EVENT_ID_PREFIX, task_id, record_id)).encode('utf-8')).hexdigest()
 
@@ -219,7 +260,7 @@ def _decide(root, repo, task_id, contract_bytes, made, recorder, now, read):
     return answer
 
 
-def evaluate(root, repo, task_id, ci_text, recorder, now, read=None, read_log=None, append=None):
+def evaluate(root, repo, task_id, ci_text, recorder, now, read=None, read_log=None, append=None, reviews_text=None):
     """Evaluate one submitted task; returns a mapping with the keys RESULT_KEYS."""
     out = {'result': 'refused', 'reason': None, 'findings': [], 'event_id': None, 'decision': None,
            'next_task_state': None, 'manifest_sha256': None, 'manifest': None, 'appended': [], 'uncovered': None}
@@ -228,6 +269,8 @@ def evaluate(root, repo, task_id, ci_text, recorder, now, read=None, read_log=No
         read_log = writer.read_log if read_log is None else read_log
         append = writer.append_event if append is None else append
         found = _argument_findings(root, repo, task_id, ci_text, recorder, now)
+        if reviews_text is not None and not isinstance(reviews_text, str):
+            found.append('argument: reviews_text is not a str')
         if found:
             raise _Refuse('argument', found)
         step = 'log'
@@ -255,14 +298,22 @@ def evaluate(root, repo, task_id, ci_text, recorder, now, read=None, read_log=No
         if made['refusal'] is not None:
             raise _Refuse('inputs', _texts([made['refusal']]))
         out['uncovered'] = made['evidence']['uncovered']
+        given = None
+        if reviews_text is not None:
+            step = 'reviews'
+            given = _reviews(reviews_text, task_id, commit, made, recorder)
         step = 'manifest'
         manifest = evaluation_intake.manifest(task_id, commit, policy_ref, sha, _tree(loaded['provenance']),
-                                              _tree(made['evidence']['ci']), _tree(files), recorder)
+                                              _tree(made['evidence']['ci']), _tree(files), recorder,
+                                              **({} if given is None else {'reviews_sha256': given['sha256']}))
         if manifest['result'] != 'present':
             raise _Refuse('manifest', _texts(manifest['findings']))
         out['manifest_sha256'], out['manifest'] = manifest['sha256'], manifest['text']
         step = 'append'
-        records = _records_to_append(made['ci_records'], manifest['record'], payloads)
+        before = made['ci_records']
+        if given is not None:
+            before = list(before) + _fresh(given['records'], payloads)
+        records = _records_to_append(before, manifest['record'], payloads)
         _append_all(root, task_id, records, log, recorder, now, append, out['appended'])
         step = 'evaluate'
         answer = _decide(root, repo, task_id, contract_bytes, made, recorder, now, read)

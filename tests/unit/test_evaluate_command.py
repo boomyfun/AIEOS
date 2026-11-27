@@ -6,8 +6,10 @@ runs Git or starts a process; the only files read are the module's source and th
 its own docstring."""
 
 import ast
+import copy
 import datetime
 import hashlib
+import json
 import pathlib
 import types
 import unittest
@@ -21,6 +23,7 @@ from aieos_bootstrap import evaluation
 from aieos_bootstrap import evaluation_intake
 from aieos_bootstrap import evaluation_sources
 from aieos_bootstrap import eventlog
+from aieos_bootstrap import governor
 from aieos_bootstrap import writer
 
 HERE = pathlib.Path(__file__).resolve()
@@ -209,7 +212,7 @@ class TASK162AC1Module(unittest.TestCase):
 
     def test_imports(self):
         """TASK-162 AC1: the module imports only the standard-library modules datetime, hashlib, os and re and modules
-        of aieos_bootstrap, and uses os only as os.path.isabs."""
+        of aieos_bootstrap (governor among them since TASK-166 AC4), and uses os only as os.path.isabs."""
         names = set()
         for n in ast.walk(self.tree()):
             if isinstance(n, ast.Import):
@@ -218,7 +221,8 @@ class TASK162AC1Module(unittest.TestCase):
                 names.update('%s.%s' % (n.module, a.name) for a in n.names)
         self.assertEqual(names, {'datetime', 'hashlib', 'os', 're'} | {
             'aieos_bootstrap.' + m for m in ('base_files', 'base_inputs', 'contract_path', 'eval_inputs', 'evaluation',
-                                             'evaluation_intake', 'evaluation_sources', 'eventlog', 'writer')})
+                                             'evaluation_intake', 'evaluation_sources', 'eventlog', 'governor',
+                                             'writer')})
         uses = [ast.unparse(n) for n in ast.walk(self.tree()) if isinstance(n, ast.Attribute)
                 and ast.unparse(n).startswith('os.')]
         self.assertEqual(sorted(set(uses)), ['os.path', 'os.path.isabs'])
@@ -611,6 +615,158 @@ class TASK163AC6Contract(unittest.TestCase):
                           'provenance': [{'contract': SHA, 'commit': COMMIT}], 'findings': []})
         out = w.run()
         self.assertEqual((out['result'], len(out['appended'])), ('evaluated', 3), out['findings'])
+
+
+# TASK-166: the review records.
+PROFILE = [{'dimension': 'SEC-002', 'evidence_types': ['ai_review']},
+           {'dimension': 'GOV-004', 'evidence_types': ['human_review']}]
+IV = {'SPEC-001': 'v2'}
+
+
+def other_model(**changes):
+    e = {'dimension': 'SEC-002', 'evidence_type': 'other_model_review', 'commit': COMMIT, 'outcome': 'pass',
+         'decision_ref': 'D-1', 'models': {'reviewer': 'm-a', 'implementer': 'm-b'}}
+    e.update(changes)
+    return e
+
+
+def agent_review(**changes):
+    e = {'dimension': 'GOV-004', 'evidence_type': 'decision_agent_review', 'commit': COMMIT, 'outcome': 'pass',
+         'decision_ref': 'D-2', 'basis': 'b-1', 'stands_for': 'human_review'}
+    e.update(changes)
+    return e
+
+
+def reviews_text(*entries):
+    return json.dumps(list(entries or (other_model(), agent_review())))
+
+
+def made_reviews(text):
+    """The records the real maker gives for the stand-ins' profile and intent versions."""
+    answer = evaluation_intake.read_reviews(text, TASK, COMMIT, PROFILE, IV, REC)
+    assert answer['result'] == 'present', answer
+    return answer['records']
+
+
+class ReviewWorld(World):
+    """World with intent versions in the inputs' declared values and a stand-in for governor.derive_inputs."""
+
+    derived = None
+
+    def eval_inputs(self, *args):
+        out = World.eval_inputs(self, *args)
+        out['declared'] = {'intent_versions': dict(IV)}
+        return out
+
+    def derive_inputs(self, values):
+        self.seen('derive_inputs', (values,))
+        return {'evidence_profile': copy.deepcopy(PROFILE)} if self.derived is None else self.derived
+
+    def run_reviews(self, text):
+        def manifest(*args, **keywords):
+            self.seen('manifest', args)
+            self.manifest_keywords = keywords
+            return REAL_MANIFEST(*args, **keywords)
+
+        with mock.patch.object(base_inputs, 'contract_at', self.contract_at), \
+                mock.patch.object(base_files, 'read_file', self.read_file), \
+                mock.patch.object(evaluation_intake, 'read_ci_data', self.read_ci_data), \
+                mock.patch.object(evaluation_sources, 'load_sources', self.load_sources), \
+                mock.patch.object(eval_inputs, 'eval_inputs', self.eval_inputs), \
+                mock.patch.object(governor, 'derive_inputs', self.derive_inputs), \
+                mock.patch.object(evaluation_intake, 'manifest', manifest), \
+                mock.patch.object(evaluation, 'evaluate_task', self.evaluate_task):
+            return evaluate_command.evaluate(ROOT, REPO, TASK, CI_TEXT, REC, NOW, read_log=self.log.read_log,
+                                             append=self.log.append, reviews_text=text)
+
+
+class TASK166Command(unittest.TestCase):
+    def test_the_reviews_are_appended_between_the_ci_records_and_the_manifest(self):
+        """TASK-166 AC4: the profile comes from derive_inputs on the inputs' values, the records join the batch, and the
+        manifest names the text's SHA-256."""
+        text = reviews_text()
+        ids = [r['record_id'] for r in made_reviews(text)]
+        w = ReviewWorld()
+        out = w.run_reviews(text)
+        self.assertEqual((out['result'], out['reason']), ('evaluated', None), out['findings'])
+        self.assertEqual(out['appended'], ['ci-1', 'ci-2'] + ids + [manifest_record_id(out['manifest_sha256'])])
+        self.assertEqual([c[2] for c in w.log.calls[2:4]], made_reviews(text))
+        self.assertEqual(w.calls['derive_inputs'], [({'v': 1},)])
+        self.assertEqual(w.manifest_keywords, {'reviews_sha256': text_sha(text)})
+        self.assertEqual(json.loads(out['manifest'])['reviews_sha256'], text_sha(text))
+        self.assertEqual(w.order[w.order.index('eval_inputs') + 1:][:2], ['derive_inputs', 'manifest'])
+
+    def test_without_a_text_no_profile_is_derived_and_the_manifest_has_no_keyword(self):
+        """TASK-166 AC4: with None every step is the one of before."""
+        w = ReviewWorld()
+        out = w.run_reviews(None)
+        self.assertEqual((out['result'], len(out['appended']), w.manifest_keywords), ('evaluated', 3, {}))
+        self.assertNotIn('derive_inputs', w.calls)
+        self.assertNotIn('reviews_sha256', out['manifest'])
+
+    def test_a_second_run_appends_nothing(self):
+        """TASK-166 AC4: a review record the log holds is left out."""
+        w = ReviewWorld()
+        first = w.run_reviews(reviews_text())
+        before = w.log.log
+        second = w.run_reviews(reviews_text())
+        self.assertEqual((len(first['appended']), second['result'], second['appended'], w.log.log),
+                         (5, 'evaluated', [], before))
+
+    def test_an_equal_held_record_is_left_out_alone(self):
+        """TASK-166 AC4: only the held review record is left out."""
+        text = reviews_text()
+        held, other = made_reviews(text)
+        w = ReviewWorld()
+        w.log.add('record.added', held, 'held-r')
+        out = w.run_reviews(text)
+        self.assertEqual(out['appended'],
+                         ['ci-1', 'ci-2', other['record_id'], manifest_record_id(out['manifest_sha256'])])
+
+    def test_a_different_held_record_refuses_and_writes_nothing(self):
+        """TASK-166 AC4: another payload under a review's record_id gives "append" with nothing written."""
+        text = reviews_text()
+        held = dict(made_reviews(text)[1], recorder='another')
+        w = ReviewWorld()
+        w.log.add('record.added', held, 'held-r')
+        out = w.run_reviews(text)
+        self.assertEqual((out['reason'], out['findings'], w.log.calls, out['appended']),
+                         ('append', ['append: the log holds another record under the record_id ' + held['record_id']],
+                          [], []))
+
+    def test_a_refused_file_appends_nothing(self):
+        """TASK-166 AC4: a refusal of the maker gives the reason reviews, before the manifest."""
+        for text, start in (('[]', 'entry: '), ('{', 'json: '), (reviews_text(agent_review(commit=BASE)), 'entry: '),
+                            (reviews_text(other_model(dimension='other')), 'entry: ')):
+            w = ReviewWorld()
+            out = w.run_reviews(text)
+            self.assertEqual((out['result'], out['reason'], w.log.calls, out['manifest'], out['appended']),
+                             ('refused', 'reviews', [], None, []), text)
+            self.assertEqual(len(out['findings']), 1)
+            self.assertTrue(out['findings'][0].startswith(start), out['findings'])
+            self.assertEqual(out['uncovered'], [{'gate': 'G3'}])
+            self.assertNotIn('evaluate_task', w.calls)
+
+    def test_a_profile_that_cannot_be_derived_refuses(self):
+        """TASK-166 AC4: a ValueError of derive_inputs or no profile gives "reviews"."""
+        for changes in ({'derived': {'evidence_profile': None}}, {'raises': {'derive_inputs': ValueError('v')}}):
+            w = ReviewWorld(**changes)
+            out = w.run_reviews(reviews_text())
+            self.assertEqual((out['reason'], w.log.calls, out['manifest']), ('reviews', [], None), changes)
+
+    def test_another_raise_in_the_step_names_it(self):
+        """TASK-166 AC4: an unexpected raise in the step is a refusal with the reason reviews."""
+        w = ReviewWorld(raises={'derive_inputs': KeyError('k')})
+        out = w.run_reviews(reviews_text())
+        self.assertEqual((out['reason'], out['findings']), ('reviews', ['reviews: a step raised KeyError']))
+
+    def test_a_text_that_is_not_a_str_is_an_argument_refusal(self):
+        """TASK-166 AC4: any other value than None or a str refuses before anything is read."""
+        for value in (b'[]', 5, []):
+            w = ReviewWorld()
+            out = w.run_reviews(value)
+            self.assertEqual((out['reason'], out['findings'], w.log.reads, w.calls),
+                             ('argument', ['argument: reviews_text is not a str'], 0, {}), value)
 
 
 if __name__ == '__main__':

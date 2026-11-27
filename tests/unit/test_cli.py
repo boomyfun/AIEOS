@@ -340,14 +340,15 @@ class TASK091AC5Module(unittest.TestCase):
         """TASK-091 AC5, as changed by TASK-092, by TASK-132 AC10 and by TASK-148 AC5: cli.py imports exactly datetime,
         json, os, re, sys, and execution and launcher from aieos_bootstrap, and claude_starter and task_capture from
         aieos_runtime (inside the entry block); and evaluate_command from aieos_bootstrap, as TASK-162 AC11 adds
-        it."""
+        it, and pathlib, as TASK-166 AC5 adds it."""
         names = set()
         for n in ast.walk(self.tree()):
             if isinstance(n, ast.Import):
                 names.update(a.name for a in n.names)
             elif isinstance(n, ast.ImportFrom):
                 names.update('%s.%s' % (n.module, a.name) for a in n.names)
-        self.assertEqual(names, {'datetime', 'json', 'os', 're', 'sys', 'aieos_bootstrap.evaluate_command',
+        self.assertEqual(names, {'datetime', 'json', 'os', 'pathlib', 're', 'sys',
+                                 'aieos_bootstrap.evaluate_command',
                                  'aieos_bootstrap.execution',
                                  'aieos_bootstrap.launcher', 'aieos_runtime.claude_starter',
                                  'aieos_runtime.task_capture'})

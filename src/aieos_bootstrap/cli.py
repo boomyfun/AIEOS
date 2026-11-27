@@ -16,7 +16,8 @@ What it does:
   edit only); run also takes --class and --by (each required, once), --write <path> (any number of times),
   --trace <path> (any number of times, task TASK-163) and
   --owner-kept-act false (optional, once, only with --class decision_agent: the caller's statement that the task's
-  contract ends owner_kept_act: false); evaluate also takes --repo <path> (required, once).
+  contract ends owner_kept_act: false); evaluate also takes --repo <path> (required, once) and
+  --reviews <path> (optional, once; task TASK-166).
   Anything else gives exit 2 and USAGE, with neither the clock nor a command's callee called.
 - tasks calls the clock once, then execution.list_tasks(root, now) once, looked up at each call. A list gives exit 0
   and one line "<task> <state> <contract_hash> lease=<lease>" per item (or "no task may be taken"), or under --json
@@ -102,8 +103,12 @@ What it does:
   gives exit 1 and the one finding EVALUATE_RUNTIME_REFUSAL, before standard input is read and before the clock.
   Else stdin.buffer.read(STDIN_CAP + 1) is called once: a stdin that is None or has no buffer, an access or a read
   that raises, a value that is not bytes, more than STDIN_CAP bytes (64 MiB) or bytes that are not UTF-8 give exit 1
-  and the one finding STDIN_REFUSAL; the text is the CI data. Then the clock once, then evaluate(root, repo, task,
-  text, EVALUATE_RECORDER, now) once, looked up at each call. "evaluated" and "duplicate" with a decision that is
+  and the one finding STDIN_REFUSAL; the text is the CI data. With --reviews (task TASK-166) pathlib's read_bytes
+  then reads that path once: any Exception of the read, a value that is not bytes, more than REVIEWS_CAP bytes
+  (1 MiB) or bytes that are not UTF-8 give exit 1 and the one finding REVIEWS_REFUSAL, with neither the clock nor
+  evaluate called; a byte-order mark is kept, and the maker then refuses the text. Then the clock once, then
+  evaluate(root, repo, task, text, EVALUATE_RECORDER, now) once, looked up at each call, with the keyword
+  reviews_text, the text of the reviews file, only when --reviews was given. "evaluated" and "duplicate" with a decision that is
   not None give exit 0; "refused", and an answer whose decision is None (the governor's error record: appended, but
   no decision), give exit 1; an answer out of form, its types checked exactly, gives exit 1 and EVALUATE_OUT_OF_FORM;
   a raise in the clock or evaluate gives "evaluate: a step raised <type>". The text lines are "evaluate: <result>
@@ -112,6 +117,11 @@ What it does:
   entry and "finding: <text>" per finding; --json gives one sorted JSON line of the whole answer. No line says that the
   task was accepted: exit 0 says a decision was recorded or already held. Limit: the text lines are written in the
   output's own encoding, so a character it cannot write gives exit 1 after the appends; --json writes ASCII only.
+  Limits of --reviews: AIEOS records what the caller states about who reviewed what and checks neither that a
+  review happened, nor who wrote the file, nor the models, nor the decision reference (the same limit as
+  approve --class); the refusal inside a runtime keeps a session under the runtime from giving its own reviews
+  through this command, and no more is claimed; the file is read whole before the size check, and a path that is
+  no regular file (a device, a pipe) may never return.
 - run <task> <intent> (task TASK-098; specification 7 section 3 :30), ``aieos run``, records the intent and makes
   and records its task through launcher.run_task, which classes the --write paths at the base and fills a fixed
   template; it drafts nothing: doing the change or drafting the proposal set is a launched session's.
@@ -145,6 +155,7 @@ its tests and its uses on a real project, each decided on its own.
 import datetime
 import json
 import os
+import pathlib
 import re
 import sys
 
@@ -169,7 +180,8 @@ USAGE = ('usage: python -m aieos_bootstrap.cli tasks --root <path> [--json]\n'
          '       python -m aieos_bootstrap.cli run <task> <intent> --root <path> '
          '--class <decision_agent|human_authority> --by <decision id or name> [--owner-kept-act false] '
          '[--write <path>]... [--trace <path>]... [--json]\n'
-         '       python -m aieos_bootstrap.cli evaluate <task> --root <path> --repo <path> [--json]\n'
+         '       python -m aieos_bootstrap.cli evaluate <task> --root <path> --repo <path> [--reviews <path>] '
+         '[--json]\n'
          '  tasks          the tasks that may be taken\n'
          '  end <session>  end a crashed session from outside the runtime\n'
          '  status         the status of the project\n'
@@ -183,6 +195,7 @@ USAGE = ('usage: python -m aieos_bootstrap.cli tasks --root <path> [--json]\n'
          '  evaluate <task> evaluate a submitted task, its CI data given on standard input\n'
          '  --root <path>  the project root (required)\n'
          '  --repo <path>  the Git repository (evaluate only; required)\n'
+         '  --reviews <path> the reviews file (evaluate only; at most once)\n'
          '  --class <c>    who acts, decision_agent or human_authority, as the caller states it (not checked)\n'
          '  --by <who>     the decision id (decision_agent) or the name (human_authority)\n'
          '  --note <text>  the edit note (edit only)\n'
@@ -229,6 +242,8 @@ EVALUATE_RUNTIME_REFUSAL = ('evaluate: refused inside a runtime (it writes; spec
                             'evaluate is refused for the same reason)')
 STDIN_REFUSAL = 'evaluate: standard input gave no UTF-8 bytes within the cap'
 EVALUATE_OUT_OF_FORM = 'evaluate: evaluate gave an answer out of form'
+REVIEWS_CAP = 1048576
+REVIEWS_REFUSAL = 'evaluate: the reviews file gave no UTF-8 bytes within the cap'
 
 
 def in_runtime(environ):
@@ -245,13 +260,14 @@ def _session_in_form(session):
 
 
 def _parse(argv):
-    """(command, session or task, root, as_json, source_class, who, note, write, owner_kept_act, trace) for a
-    well-formed
+    """(command, session or task, root, as_json, source_class, who, note, write, owner_kept_act, trace, reviews)
+    for a well-formed
     argv, else None (a usage error); source_class, who and note are None except for approve, edit and reject, and for
     run, whose --class is source_class, whose --by is who and whose intent is in the note's place; write is run's
     --write paths, a tuple, () for every other command; owner_kept_act is None, or the text false when run was given
     --owner-kept-act false (once, with --class decision_agent only; it is kept out of the required flags); for
-    evaluate, --repo is in the note's place; trace is run's --trace paths, a tuple, () for every other command."""
+    evaluate, --repo is in the note's place; trace is run's --trace paths, a tuple, () for every other command;
+    reviews is evaluate's --reviews path, or None."""
     if type(argv) is not list or not argv or any(type(a) is not str for a in argv):
         return None
     if argv[0] not in COMMANDS:
@@ -275,7 +291,7 @@ def _parse(argv):
     elif command == 'run':
         allowed = _APPROVAL_FLAGS[:2]
     elif command == 'evaluate':
-        allowed = ('--repo',)
+        allowed = ('--repo', '--reviews')
     root, as_json, values, write, kept, i, trace = None, False, {}, [], None, 0, []
     while i < len(rest):
         flag = rest[i]
@@ -306,7 +322,7 @@ def _parse(argv):
             as_json, i = True, i + 1
         else:
             return None
-    if root is None or set(values) != set(allowed):
+    if root is None or set(values) - {'--reviews'} != set(allowed) - {'--reviews'}:
         return None
     if (command in APPROVAL_COMMANDS or command == 'run') and values['--class'] not in launcher.APPROVAL_CLASSES:
         return None
@@ -319,7 +335,7 @@ def _parse(argv):
     else:
         note = values.get('--note')
     return (command, session, root, as_json, values.get('--class'), values.get('--by'), note, tuple(write), kept,
-            tuple(trace))
+            tuple(trace), values.get('--reviews'))
 
 
 def _findings(texts, as_json):
@@ -749,7 +765,7 @@ def _render_evaluate(answer, as_json):
     return ''.join(line + '\n' for line in lines)
 
 
-def _evaluate(task, root, repo, as_json, environ, clock, stdin):
+def _evaluate(task, root, repo, as_json, environ, clock, stdin, reviews=None):
     """(the exit code, the whole output) of evaluate."""
     if in_runtime(environ):
         return 1, _findings([EVALUATE_RUNTIME_REFUSAL], as_json)
@@ -760,9 +776,19 @@ def _evaluate(task, root, repo, as_json, environ, clock, stdin):
         text = None
     if text is None:
         return 1, _findings([STDIN_REFUSAL], as_json)
+    keywords = {}
+    if reviews is not None:
+        try:
+            data = pathlib.Path(reviews).read_bytes()
+            given = bytes.decode(data, 'utf-8') if type(data) is bytes and len(data) <= REVIEWS_CAP else None
+        except Exception:
+            given = None
+        if given is None:
+            return 1, _findings([REVIEWS_REFUSAL], as_json)
+        keywords['reviews_text'] = given
     try:
         now = clock()
-        answer = evaluate_command.evaluate(root, repo, task, text, EVALUATE_RECORDER, now)
+        answer = evaluate_command.evaluate(root, repo, task, text, EVALUATE_RECORDER, now, **keywords)
     except Exception as exc:
         return 1, _findings(['evaluate: a step raised %s' % type(exc).__name__], as_json)
     try:
@@ -783,7 +809,7 @@ def _run(argv, environ, clock, starter=None, capture=None, restore=None, stdin=N
         return 1, _findings(['cli: a step raised %s' % type(exc).__name__], False)
     if parsed is None:
         return 2, USAGE
-    command, session, root, as_json, source_class, who, note, write, owner_kept_act, trace = parsed
+    command, session, root, as_json, source_class, who, note, write, owner_kept_act, trace, reviews = parsed
     if command == 'end':
         try:
             return _end(session, root, as_json, environ, clock)
@@ -822,7 +848,7 @@ def _run(argv, environ, clock, starter=None, capture=None, restore=None, stdin=N
             return 1, _findings(['cli: a step raised %s' % type(exc).__name__], as_json)
     if command == 'evaluate':
         try:
-            return _evaluate(session, root, note, as_json, environ, clock, stdin)
+            return _evaluate(session, root, note, as_json, environ, clock, stdin, reviews)
         except Exception as exc:
             return 1, _findings(['cli: a step raised %s' % type(exc).__name__], as_json)
     code, kind, payload = _tasks(root, clock)
