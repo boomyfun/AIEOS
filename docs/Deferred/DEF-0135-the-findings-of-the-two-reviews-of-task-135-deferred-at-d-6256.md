@@ -25,3 +25,4 @@ None.
 
 ## Log
 - 2026-11-14: opened (session 26136a0a; decisions D-6255, D-6256, D-6257).
+- 2026-11-27 (session 228f426b; closure pass 2 of the deferred items, D-7443, D-7485; decided by: decision agent (A41, A51), D-7485, D-7486): stays in M8 under point (6) (f): finding 2, the reads of get_work_order and query are not in the observed read-set (mcp_server.py :67-:70; claude_code_reads.py :92-:93). Schedule unchanged.

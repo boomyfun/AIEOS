@@ -5,7 +5,7 @@
 - Deferred by: decision agent (A41), D-298 C2: none of the findings is blocking, and a fix is a new commit that makes the five reviews and the CI run stale (assurance-model.md line 39; D-278 C1).
 - Decision group: A (test and wording changes in a later fixture task; notes to TASK-006 and TASK-008).
 - Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
-- Scheduled in: M8, the conformance and runner test-fix task, before the M8 exit review
+- Scheduled in: v0.2 or later (concept section 16)
 
 ## What
 Non-blocking findings of TASK-010's five way-2 reviews (commit ead46b03260aaf032da91c9a7d2d54df4ebe78d1):
@@ -29,3 +29,4 @@ TASK-010 accepted (D-299) and on `main` (D-300).
 - 2026-10-10 (session 675f09ef): the TASK-008 point is in TASK-008's contract as AC9: a script reads the module's syntax tree and its imports hold only standard-library names and aieos_bootstrap.records; checked at TASK-008's acceptance.
 - 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled R1-1, R5-1, R5-3, R4-2, R4-3 (tests/integration/test_conformance_rc_set.py:176, :191, :179, :3, :5); open: R3-4 (no diff line); the contract-wording-only point (DEF-0028 :13) was not changed; the commit-message half of R4-2/R4-3 cannot change. Status stays open.
 - 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 1, decision D-5264): read in full; the TASK-006 and TASK-008 points are met (Log of 2026-10-10); git log f25b4576..HEAD (TASK-102's task commit) over the paths named in the Resume-when text printed no commit, so the event is not met (tests/integration/test_conformance_rc_set.py unchanged); open per the Log of 2026-10-30: R3-4 and the contract-wording-only point; the commit-message half of R4-2 and R4-3 cannot change. State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the conformance and runner test-fix task, before the M8 exit review.
+- 2026-11-27 (session 228f426b; closure pass 2 of the deferred items, D-7443, D-7485; decided by: decision agent (A41, A51), D-7485, D-7486): moved to "v0.2 or later (concept section 16)" under master plan section 6 point (6) (f): the item names no concrete wrong result of the kind of point (6) (a). Status and Resume when unchanged.

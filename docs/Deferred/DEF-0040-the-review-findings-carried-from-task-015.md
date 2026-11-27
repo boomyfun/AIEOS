@@ -5,7 +5,7 @@
 - Deferred by: decision agent (A41, A51), D-405 (TASK-015 accepted with these recorded, no fix in that task).
 - Decision group: A (test code and wording within the self-build).
 - Blocks v0.1: no (a non-blocking review finding or limit of an accepted task)
-- Scheduled in: M8, the state-module fix task (eventlog, recovery, writer, gitread, startup), before the M8 exit review
+- Scheduled in: v0.2 or later (concept section 16)
 
 ## What
 - tests/unit/test_eventlog.py: the kept name test_recorder_and_record_id_are_required_for_a_lease_event now says the opposite of its body (they are not required); TASK-015's AC4 kept the name; rename it, for example test_a_fence_refusal_without_recorder_or_record_id_carries_no_record.
@@ -27,3 +27,4 @@ TASK-015 accepted (done, D-405).
 - 2026-10-11: opened (decision file D-405).
 - 2026-10-30: TASK-102 (accepted by decision D-3707 at f25b4576; range fb90baaf..f25b4576; records d3a328bd; the map is docs/records/TASK-102.jsonl :44): settled the rename, the no-task_id and other-lease-event cases, the full record in the matrix, the mis-indented line (tests/unit/test_eventlog.py:299), the docstring R1 to R7 (test_eventlog.py:1-3, :301, :311, :318, :385); open the duplicated True case (test_eventlog.py:264, :399; the map says :263, :398), the finding text (src/aieos_bootstrap/eventlog.py:227, pinned at test_eventlog.py:389) and the untested conflict without recorder (no diff line). Status stays open.
 - 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass A batch 1, decision D-5264): read in full; git log f25b4576..HEAD (TASK-102's task commit) over the paths named in the Resume-when text printed no commit, so the event is not met (eventlog.py and tests/unit/test_eventlog.py unchanged); open per the Log of 2026-10-30: the duplicated True case (test_eventlog.py:264, :399), the finding text (eventlog.py:227), the untested conflict without recorder. State: open; Blocks v0.1: no (a non-blocking review finding or limit of an accepted task); Scheduled in: M8, the state-module fix task (eventlog, recovery, writer, gitread, startup), before the M8 exit review.
+- 2026-11-27 (session 228f426b; closure pass 2 of the deferred items, D-7443, D-7485; decided by: decision agent (A41, A51), D-7485): moved to "v0.2 or later (concept section 16)" under master plan section 6 point (6) (f): the item names no concrete wrong result of the kind of point (6) (a). Status and Resume when unchanged.

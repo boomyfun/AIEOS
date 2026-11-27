@@ -22,3 +22,4 @@ DEF-0107.
 ## Log
 - 2026-10-30: opened at TASK-103's acceptance (D-3830).
 - 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass E decision D-5258 (K4)): read in full; the Resume-when event (after the next three accepted tasks that change tests/) occurred: TASK-114, 115, 117, 118, 121, 122 and 123 changed tests (DEF-0110 Log) and each acceptance named its failures; the step stays report-only meanwhile. State: open; Blocks v0.1: no (the step is report-only and every acceptance names its base-test failures); Scheduled in: M8, the general policy decision for the evaluator paths, after the first real run and before the M8 exit review.
+- 2026-11-27 (session 228f426b; closure pass 2 of the deferred items, D-7443, D-7485; decided by: decision agent (A41, A51), D-7485): stays in M8: it is the same scheduled decision as DEF-0110 (master-plan.md section 4, "DEF-0110 to DEF-0112"). Schedule unchanged.

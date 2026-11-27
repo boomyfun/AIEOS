@@ -6,7 +6,7 @@
   places lie outside TASK-089's own fix and are carried here).
 - Decision group: A (a later task that changes the launcher's start or these helpers, within the self-build).
 - Blocks v0.1: no (the real callees always give a list or a tuple)
-- Scheduled in: M8, the Resume Check and records fix task (with the component-path reading of context_compiler and specification 6 section 11), before the M8 exit review
+- Scheduled in: v0.2 or later (concept section 16)
 
 ## What
 At the task head of TASK-089, 25aba8fa, these places took a findings value from another function's result without
@@ -41,3 +41,4 @@ TASK-086 (start), TASK-089 (end and _store_findings), TASK-064 (read_set_record'
 - 2026-10-25: TASK-090 accepted (decision D-2956): launcher.py's start (two places) and _store_findings closed;
   read_set_record.py's _core stays open (session ea6ea0a3; decisions D-2910, D-2956).
 - 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass C decisions D-5257 and D-5258): read in full; git log -L of read_set_record.py's _core shows only 011f63c (TASK-064), so the Resume-when event (the next task changing _core) is not met; the three launcher.py places were closed by TASK-090 (Log); the text at read_set_record.py:173 is `found = getattr(w, 'findings', ()) or ()`. State: open; Blocks v0.1: no (the real callees always give a list or a tuple); Scheduled in: M8, the Resume Check and records fix task (with the component-path reading of context_compiler and specification 6 section 11), before the M8 exit review.
+- 2026-11-27 (session 228f426b; closure pass 2 of the deferred items, D-7443, D-7485; decided by: decision agent (A41, A51), D-7485): moved to "v0.2 or later (concept section 16)" under master plan section 6 point (6) (f): the item names no concrete wrong result of the kind of point (6) (a). Status and Resume when unchanged.

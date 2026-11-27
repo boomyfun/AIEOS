@@ -5,7 +5,7 @@
 - Deferred by: decision agent (A41, A51), D-5024 (the two entries of this records commit)
 - Decision group: A (self-build)
 - Blocks v0.1: no (stale citations and comments after the pin upgrade; no behaviour)
-- Scheduled in: M8, the CI workflow revision task (each change its own A66 decision), before the M8 exit review
+- Scheduled in: v0.2 or later (concept section 16)
 
 ## What
 TASK-122 (L 837f4ec3778ee09b9beabf1d38bcd5b564bf27e8, accepted at D-5016) removed the import line and one blank line from src/aieos_bootstrap/resume_check.py, so every line of that file after line 41 now sits 2 lines higher. These texts were outside the contract's write set and stay as they were, and are now stale:
@@ -28,3 +28,5 @@ TASK-122; DEF-0129 for the workflow file (the same file changes there under A66,
 - 2026-11-05: opened (session 43f86835), in the records commit of TASK-122 (decision D-5024 C6).
 - 2026-11-06 (session 43f86835): the docstring of test_the_previous_value_line_and_the_two_pins says the previous value Q is 64 lowercase hex digits; since TASK-123 the workflow value is empty and the test checks only the constant OLD_PIN (found by the TASK-123 way-2 reviews, decision D-5053; the contract keeps that line byte for byte, so the stale statement is recorded here and the status stays open).
 - 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass E decision D-5258): read in full; the Resume-when event (a task whose write set covers these files) is not met; the workflow comment part goes with the CI workflow revision task, the citations in claude_code_channel.py and its test with the Claude Code hook fix task's next change of those files. State: open; Blocks v0.1: no (stale citations and comments after the pin upgrade; no behaviour); Scheduled in: M8, the CI workflow revision task (each change its own A66 decision), before the M8 exit review.
+- 2026-11-27 (session 228f426b; closure pass 2 of the deferred items, D-7443, D-7485; decided by: decision agent (A41, A51), D-7485): moved to "v0.2 or later (concept section 16)" under master plan section 6 point (6) (f): the item names no concrete wrong result of the kind of point (6) (a). Status and Resume when unchanged.
+- 2026-11-27 (session 228f426b; closure pass 2 of the deferred items, D-7443, D-7485; decided by: decision agent (A41, A51), D-7485): a correction of line citations, read at 96f2a658: the citation of resume_check.py:529 is at spec-07-cli-and-zero-friction-path.md :60 (the item says :49); the workflow comment "Set by revision 6 to the version accepted by decision D-363" is at aieos-checks.yml :217 (the item says :177); the other cited lines read as the item states. Status and schedule unchanged by this line.

@@ -5,7 +5,7 @@
 - Deferred by: decision agent (A41, A51), the acceptance decision of TASK-104 (D-3892)
 - Decision group: A
 - Blocks v0.1: no (wording and presentation points of one task's acceptance; no behaviour)
-- Scheduled in: M8, the launcher text-fix task (launcher, cli), before the M8 exit review
+- Scheduled in: v0.2 or later (concept section 16)
 
 ## What
 Findings of the acceptance review of TASK-104 (a Haiku 5.5 reviewer, D-3890) that change no behaviour and were not fixed in a second task commit:
@@ -27,3 +27,5 @@ TASK-104; DEF-0105.
 ## Log
 - 2026-10-30: opened at TASK-104's acceptance (D-3892).
 - 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass E decision D-5258 and the corrections of D-5259 C3 and D-5273 C2): read in full; git log -L over launcher.run_task shows b8b003f and ba83811 (TASK-115, 2026-11-02) after the item was opened (2026-10-30), so the Resume-when event occurred; git show ba83811 (read) leaves unchanged the run_task docstring sentence of point (a) and the finding text of point (c), and no hunk touches (d) or (e); b8b003f and point (b) were not read. State: open; Blocks v0.1: no (wording and presentation points of one task's acceptance; no behaviour); Scheduled in: M8, the launcher text-fix task (launcher, cli), before the M8 exit review.
+- 2026-11-27 (session 228f426b; closure pass 2 of the deferred items, D-7443, D-7485; decided by: decision agent (A41, A51), D-7485): moved to "v0.2 or later (concept section 16)" under master plan section 6 point (6) (f): the item names no concrete wrong result of the kind of point (6) (a). Status and Resume when unchanged.
+- 2026-11-27 (session 228f426b; closure pass 2 of the deferred items, D-7443, D-7485; decided by: decision agent (A41, A51), D-7485): a correction of line citations, read at 96f2a658: run_task is at src/aieos_bootstrap/launcher.py :2143 with its docstring's step sentence at :2146-:2147 and the same sentence of import_task at :1770; the finding of _run_conflict is at :2107; the module docstring's clause is at :289; the docstring of test_this_test_file is at tests/unit/test_cli_import.py :613 and its pin at :626. Status and schedule unchanged by this line.

@@ -22,3 +22,4 @@ TASK-117 (AC7, K3); spec-02 section 10 point 12 (the owner's); DEF-0101.
 ## Log
 - 2026-11-05: opened at the acceptance of TASK-117.
 - 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass E decision D-5258): read in full; the Resume-when event (before any measurement value resolves through the core, or any reading above low is allowed) is not met; the change would be under .github/ and its own A66 decision. State: open; Blocks v0.1: no (no reading above low is allowed and no measurement resolves through the core); Scheduled in: none.
+- 2026-11-27 (session 228f426b; closure pass 2 of the deferred items, D-7443, D-7485; decided by: decision agent (A41, A51), D-7485): a correction of a line citation, read at 96f2a658: the EVALUATOR lists of .github/workflows/aieos-checks.yml now begin at :529 and :601 (the item cites :481-491). Status and schedule unchanged by this line.
