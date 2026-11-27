@@ -641,11 +641,19 @@ def reviews_text(*entries):
     return json.dumps(list(entries or (other_model(), agent_review())))
 
 
-def made_reviews(text):
-    """The records the real maker gives for the stand-ins' profile and intent versions."""
-    answer = evaluation_intake.read_reviews(text, TASK, COMMIT, PROFILE, IV, REC)
-    assert answer['result'] == 'present', answer
-    return answer['records']
+# The ids are the SHA-256 of "review-record", TASK-162, the commit and each entry's canonical JSON text, joined by line
+# feeds, computed outside the code under test.
+OTHER_ID = 'bb01344211503d6a08ea6fda3a0f56061c82c343bff5a13bb7df5ee2fdc9f0fa'
+AGENT_ID = 'a3b4362ac77c10ca6e9189ee043042212059a3461d7e36ecbf294bfdea77ebcd'
+OTHER_RECORD = {'record_id': OTHER_ID, 'fact_kind': 'observation', 'source_class': 'same_lineage_review',
+                'recorder': 'aieos cli evaluate', 'subject': 'TASK-162', 'commit': '3' * 40,
+                'intent_versions': {'SPEC-001': 'v2'}, 'evidence_type': 'other_model_review', 'dimension': 'SEC-002',
+                'outcome': 'pass', 'decision_ref': 'D-1', 'models': {'reviewer': 'm-a', 'implementer': 'm-b'}}
+AGENT_RECORD = {'record_id': AGENT_ID, 'fact_kind': 'observation', 'source_class': 'decision_agent',
+                'recorder': 'aieos cli evaluate', 'subject': 'TASK-162', 'commit': '3' * 40,
+                'intent_versions': {'SPEC-001': 'v2'}, 'evidence_type': 'decision_agent_review',
+                'dimension': 'GOV-004', 'outcome': 'pass', 'decision_ref': 'D-2', 'basis': 'b-1',
+                'stands_for': 'human_review'}
 
 
 class ReviewWorld(World):
@@ -685,12 +693,12 @@ class TASK166Command(unittest.TestCase):
         """TASK-166 AC4: the profile comes from derive_inputs on the inputs' values, the records join the batch, and the
         manifest names the text's SHA-256."""
         text = reviews_text()
-        ids = [r['record_id'] for r in made_reviews(text)]
         w = ReviewWorld()
         out = w.run_reviews(text)
         self.assertEqual((out['result'], out['reason']), ('evaluated', None), out['findings'])
-        self.assertEqual(out['appended'], ['ci-1', 'ci-2'] + ids + [manifest_record_id(out['manifest_sha256'])])
-        self.assertEqual([c[2] for c in w.log.calls[2:4]], made_reviews(text))
+        self.assertEqual(out['appended'],
+                         ['ci-1', 'ci-2', OTHER_ID, AGENT_ID, manifest_record_id(out['manifest_sha256'])])
+        self.assertEqual([c[2] for c in w.log.calls[2:4]], [OTHER_RECORD, AGENT_RECORD])
         self.assertEqual(w.calls['derive_inputs'], [({'v': 1},)])
         self.assertEqual(w.manifest_keywords, {'reviews_sha256': text_sha(text)})
         self.assertEqual(json.loads(out['manifest'])['reviews_sha256'], text_sha(text))
@@ -715,24 +723,19 @@ class TASK166Command(unittest.TestCase):
 
     def test_an_equal_held_record_is_left_out_alone(self):
         """TASK-166 AC4: only the held review record is left out."""
-        text = reviews_text()
-        held, other = made_reviews(text)
         w = ReviewWorld()
-        w.log.add('record.added', held, 'held-r')
-        out = w.run_reviews(text)
-        self.assertEqual(out['appended'],
-                         ['ci-1', 'ci-2', other['record_id'], manifest_record_id(out['manifest_sha256'])])
+        w.log.add('record.added', copy.deepcopy(OTHER_RECORD), 'held-r')
+        out = w.run_reviews(reviews_text())
+        self.assertEqual(out['appended'], ['ci-1', 'ci-2', AGENT_ID, manifest_record_id(out['manifest_sha256'])])
 
     def test_a_different_held_record_refuses_and_writes_nothing(self):
         """TASK-166 AC4: another payload under a review's record_id gives "append" with nothing written."""
-        text = reviews_text()
-        held = dict(made_reviews(text)[1], recorder='another')
+        held = dict(AGENT_RECORD, recorder='another')
         w = ReviewWorld()
         w.log.add('record.added', held, 'held-r')
-        out = w.run_reviews(text)
+        out = w.run_reviews(reviews_text())
         self.assertEqual((out['reason'], out['findings'], w.log.calls, out['appended']),
-                         ('append', ['append: the log holds another record under the record_id ' + held['record_id']],
-                          [], []))
+                         ('append', ['append: the log holds another record under the record_id ' + AGENT_ID], [], []))
 
     def test_a_refused_file_appends_nothing(self):
         """TASK-166 AC4: a refusal of the maker gives the reason reviews, before the manifest."""
