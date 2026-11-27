@@ -1,6 +1,6 @@
 # DEF-0135: the findings of the two reviews of TASK-135 deferred at D-6256: a placement test, the read-set limit in the docstring, the tools/list check, the import chain of a test
 
-- Status: open
+- Status: done
 - Opened: 2026-11-14 (../History/2026-11/2026-11-14-2148-m8-stage-8-task-135-the-judge-fix-accepted-and-landed-26136a0a.md)
 - Deferred by: decision agent (A41, A51), D-6256 (the route to acceptance; the findings deferred to one DEF)
 - Decision group: A (scheduling)
@@ -26,3 +26,4 @@ None.
 ## Log
 - 2026-11-14: opened (session 26136a0a; decisions D-6255, D-6256, D-6257).
 - 2026-11-27 (session 228f426b; closure pass 2 of the deferred items, D-7443, D-7485; decided by: decision agent (A41, A51), D-7485, D-7486): stays in M8 under point (6) (f): finding 2, the reads of get_work_order and query are not in the observed read-set (mcp_server.py :67-:70; claude_code_reads.py :92-:93). Schedule unchanged.
+- 2026-11-28 (session 228f426b; TASK-171, accepted at D-7727, commit a2c808305d3f28df413e2771bfc247b4d3559a5a, docs/runs/TASK-171-acceptance.md; main CI runs 46058827716 and 46058827710 success): closed, done. 1: tests/unit/test_claude_code.py:393, which fails on a copy with the MCP branch moved first. 2: src/aieos_bootstrap/claude_code.py:16-18 and test_claude_code.py:357-358. 3: test_claude_code.py:400. 4, the worker's reading of the import-time code (parsed with Python's ast, nothing imported) of mcp_server, writer, base_inputs, context_compiler and the own modules they reach (eventlog, base_files, contract_path, gitread, records, resume_check, __init__): beyond imports and function definitions only assignments of constants (mcp_server.py:92-140 and writer.py:108-142 among them), calls of re.compile, frozenset, list, tuple, datetime.timedelta, TABLES.items and records._one_of (records.py:266-267), a read of os.devnull (gitread.py:100), class definitions, a few constant default values, __all__ lists and a __main__ guard (mcp_server.py:534-535); no statement run at import reads or writes a file, starts a process, opens a store or a connection, reads the environment or the clock, or changes state outside the module; the standard library imports were not read; review r1 found the reading consistent with the code as far as it checked, not every module-level line.

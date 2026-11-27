@@ -1,6 +1,6 @@
 # DEF-0104: end_outside's two edge limits
 
-- Status: open
+- Status: done
 - Opened: 2026-10-25 (session ea6ea0a3; TASK-092's records, decision D-3076)
 - Deferred by: decision agent (A41, A51), D-3076 (found by TASK-092's acceptance review t92x-S1, findings F1 and
   F2, both non-blocking).
@@ -34,3 +34,4 @@ TASK-092 (end_outside), TASK-089 (_store_findings' form).
 - 2026-10-25: opened with TASK-092's records (session ea6ea0a3; decision D-3076).
 - 2026-11-06 (session ce14b08a; triage decision D-5143 C3, pass C decisions D-5257 and D-5258): read in full; git log -L of launcher.end_outside and _outside_store shows only 0b37a1a (TASK-092); TASK-095's commit 3c14991 appended code after them and did not change them; the Resume-when event (the next task changing end_outside or _outside_store) is not met. State: open; Blocks v0.1: no (two edge cases the real writer does not reach); Scheduled in: M8, the launcher text-fix task (launcher, cli), before the M8 exit review.
 - 2026-11-27 (session 228f426b; closure pass 2 of the deferred items, D-7443, D-7485; decided by: decision agent (A41, A51), D-7485): moved to "v0.2 or later (concept section 16)" under master plan section 6 point (6) (f): the item names no concrete wrong result of the kind of point (6) (a). Status and Resume when unchanged.
+- 2026-11-28 (session 228f426b; TASK-171, accepted at D-7727, commit a2c808305d3f28df413e2771bfc247b4d3559a5a, docs/runs/TASK-171-acceptance.md; main CI runs 46058827716 and 46058827710 success): closed, done. F1: every raise after step "end" is entered says the session may be ended (src/aieos_bootstrap/launcher.py:1021-1022 and :1034-1035). F2: _outside_store's own finding quotes nothing the callee gave (:919-924), and a released task id out of form makes the value out of form (:945-953). Tests tests/unit/test_launcher_outside.py:408, :420 and :434. Limit L1 of the acceptance text: the callee's own findings remain callee text.
