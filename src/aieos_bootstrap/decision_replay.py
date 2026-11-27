@@ -6,7 +6,7 @@ every difference, and it fails closed on everything else.
 ``replay_execution(repo, log_bytes, record_index, accepted_engines, checked_commit=None, read=None, engine=None, engine_text=None,
 build_inputs=None)`` returns (True, []) or (False, findings), findings being non-empty strs, and never raises; with no ``engine`` given it
 refuses and imports nothing (erratum E1.7). ``record_index`` is the 0-based position of the record among the lines of the log
-(``log_bytes`` is the whole log). ``main(argv, read=None, out=print)``
+(``log_bytes`` is the whole log). ``main(argv, read=None, out=print, engine=None)``
 is the command-line entry (run as ``PYTHONPATH=src python -B -P -m aieos_bootstrap.decision_replay <repo> [--governor-pin <sha256>] [<accepted engine sha256> ...]``, erratum E1.7)
 and returns the exit code, 0 only when every decision record of the checked tree was replayed and passed, a recognised record of the violation path excepted (task TASK-141).
 
@@ -44,23 +44,32 @@ and counted apart; it is neither replayed nor counted as passed or as failed, be
 
 The replay of a decision.acceptance line (task TASK-167; DEF-0137 task B; decisions D-7557 and D-7558). The entry takes
 --governor-pin <sha256> after the repository, at most once; it is never an accepted engine, and an engine pin is never read as
-it. Without it every such line is counted failed and printed "NOT REPLAYED: decision.acceptance" with its place. With it, no
-module that imports the governor, directly or through its own imports (evaluation_sources through evaluation and
-scope_reconcile, eval_inputs, evaluate_command, evaluation), is imported unless the engine gate passes (the reader of
-contracts imports the Resume Check), the governor file that a plain import would load is the repository's own
-src/aieos_bootstrap/governor.py, the governor at the checked commit has the pin's SHA-256 and the record's ruleset_version
-is "governor-sha256:" and the pin; the fourth equal value, the governor at the record's policy_ref, is checked by
-evaluation_sources.load_sources with the pin. The log of the recomputation is the lines before the record (the record holds
-no log position). The evaluated commit and the approved contract hash come from those lines; the contract, its bytes and
-policy_ref from the commit (the helpers of the command aieos evaluate); the sources and the changed paths from load_sources
-with the pin and no CI log; the values from eval_inputs._assemble. Then evaluation.evaluate_task is called over the cut log
-with no extra record, with the recorder of the payload and the append time of the line, and with an append that writes
-nothing; the captured event type, event_id, task_id and every key of the record must equal the line's, by canonical JSON
-text. An evaluated commit that the checkout cannot read fails with its own finding. Limits: the CI and review records in the
-log are trusted as logged and nothing reads GitHub or a reviews file again; the readers, the evaluation modules and the
-governor run from the tree under check; after a change of the governor, or of a reader in a way that changes a result, older
-records fail, with no loader of the old code; a line appended between an evaluation's read and its own append makes its
-replay differ.
+it. Without it every such line is counted failed and printed "NOT REPLAYED: decision.acceptance" with its place. With it, the
+replay of an acceptance line imports no module that imports the governor, directly or through its own imports
+(evaluation_sources through evaluation and scope_reconcile, eval_inputs, evaluate_command, evaluation), unless the engine
+gate passes (the reader of contracts imports the Resume Check), the governor file that a plain import would load is the
+repository's own src/aieos_bootstrap/governor.py, the governor at the checked commit has the pin's SHA-256 and the record's
+ruleset_version is "governor-sha256:" and the pin; the fourth equal value, the governor at the record's policy_ref, is
+checked by evaluation_sources.load_sources with the pin. This holds for the acceptance replay only: the replay of a
+decision.execution line imports the governor with no governor gate, through resume_log_inputs, scope_reconcile and
+scope_drift, as before this task, so an entry over a log that holds execution lines has imported it before any acceptance
+line. The log of the recomputation is the lines before the record (the record holds no log position). The evaluated commit
+and the approved contract hash come from those lines; the contract, its bytes and policy_ref from the commit (the helpers
+of the command aieos evaluate); the sources and the changed paths from load_sources with the pin and no CI log; the values
+from eval_inputs._assemble, then derived and refused as eval_inputs does by its own function, so a governor error record
+that aieos evaluate would not write fails. A line holding fencing_token or corrects fails (the evaluation writes neither).
+Then evaluation.evaluate_task is called over the cut log with no extra record, with the recorder of the payload and the
+append time of the line, and with an append that writes nothing; the captured event type, event_id and task_id must equal
+the line's, and every key of the record the payload's, by canonical JSON text. An evaluated commit that the checkout cannot
+read fails with its own finding. Limits: the CI and review records in the log are trusted as logged and nothing reads GitHub
+or a reviews file again; the command's refusals that rest on records trusted as logged (ci_evidence, the record-id guard,
+the reviews file, the manifest, the argument checks) are not repeated (DEF-0137); appended_at is taken from the line and
+not otherwise checked; the readers, the evaluation modules and the governor run from the tree under check (GOV-003 is not
+met by them); after a change of the governor, or of a reader in a way that changes a result, older records fail, with no
+loader of the old code; a line appended between an evaluation's read and its own append makes its replay differ; a record
+whose evaluated commit the checkout does not hold fails, and which of fetching it, keeping such a record out of main's log,
+or another course is taken is the decision of the later workflow step; no logged acceptance record of the self-build
+exists, so no real record has been replayed.
 
 The module violation is imported when this module is loaded, so before the gates of the entry.
 
@@ -158,7 +167,8 @@ LIMITS = (
     'after a pinned engine upgrade, records written under the old engine fail closed until a historical-engine loader exists (erratum E1)',
     'runtime.max_risk is taken from the record; the held lease is None and the clock is a fixed constant',
     'a decision.acceptance record is replayed only with --governor-pin and fails without it; the python value of engine_identity is reported, not compared',
-    'a decision.acceptance replay trusts the CI and review records as logged and reads nothing from GitHub or a reviews file; it uses the readers, the evaluation modules and the governor of the tree under check; a record whose evaluated commit this checkout does not hold fails',
+    'a decision.acceptance replay trusts the CI and review records as logged and reads nothing from GitHub or a reviews file; it uses the readers, the evaluation modules and the governor of the tree under check (GOV-003 is not met by them); a record whose evaluated commit this checkout does not hold fails, and the course for such a record is the decision of the later workflow step',
+    'a decision.acceptance replay does not repeat the refusals of aieos evaluate that rest on records trusted as logged (ci_evidence, the record-id guard, the reviews file, the manifest, the argument checks; DEF-0137); appended_at is not otherwise checked; no logged acceptance record of the self-build exists, so no real record has been replayed',
     'a record of the violation path is recognised by its form and by the violation.detected line that it names, and nothing recomputes it (task TASK-141): a forged pair of such lines is reported NOT REPLAYED: violation-path record and does not fail this entry; the module violation, read from the tree under check, decides what is recognised',
     'the status read does not see assume-unchanged or skip-worktree flags and counts untracked files that are not ignored: run in a clean checkout where no file shadows a library module',
     'this entry and its reader modules run from the tree under check, not from a base or a pinned ref: GOV-003 is not met by them, and a change to them can change what passes; only the engine is pinned (decision D-6332)',
@@ -411,6 +421,9 @@ def _acceptance_record(lines, index):
     if not (isinstance(event.get('payload'), dict) and isinstance(task_id, str) and _TASK.fullmatch(task_id)
             and isinstance(event_id, str) and event_id):
         return None, 'record: line %d has no payload, task_id or event_id in form' % (index + 1)
+    for key in ('fencing_token', 'corrects'):
+        if key in event:
+            return None, 'record: line %d holds %s, which the evaluation does not write' % (index + 1, key)
     return event, None
 
 
@@ -456,9 +469,9 @@ def _replay_acceptance(repo, log_bytes, index, governor_pin, checked_commit, rea
     def git(where, args, timeout=TIMEOUT):
         return read(where, args, timeout)
 
-    # every module below imports the governor, directly or through its own imports: only after the gate
-    from aieos_bootstrap import eval_inputs, evaluate_command, evaluation, evaluation_sources
     try:
+        # every module below is the governor or imports it, directly or through its own imports: only after the gate
+        from aieos_bootstrap import eval_inputs, evaluate_command, evaluation, evaluation_sources, governor
         state = evaluation._task_events(lambda _root: cut_log, repo, task_id)
         approved_hash, commit = state[0], state[3]
         answer = git(repo, ['cat-file', '-p', commit])
@@ -474,6 +487,14 @@ def _replay_acceptance(repo, log_bytes, index, governor_pin, checked_commit, rea
         declared, values, _, refusal = eval_inputs._assemble(contract, loaded['changed_paths'], loaded['sources'])
         if refusal is not None:
             return ['inputs: %s: %s' % refusal]
+        derived, held = None, None
+        try:
+            derived = governor.derive_inputs(eval_inputs._copy(values))
+        except Exception as exc:
+            held = exc
+        detail = eval_inputs._incomplete(derived, held)
+        if detail is not None:
+            return ['inputs: incomplete: %s' % detail]
         calls = []
 
         def capture(root, event_type, record, event_id, appended_at, recorder, task_id=None):

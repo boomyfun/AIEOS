@@ -14,8 +14,9 @@ D-6836 to meet AC5), already_in_log and gaps. The reasons are a closed set: argu
 policy_path, ci, conflict and incomplete. It never raises an Exception; a BaseException that is not an Exception passes
 through.
 
-Checks (2) to (6) and the values mapping are the private function _assemble(contract, changed_paths, sources), which the
-replay of decision records calls too, so the values have one definition (task TASK-167; DEF-0137).
+Checks (2) to (6) and the values mapping are the private function _assemble(contract, changed_paths, sources), and the
+completeness check (9) is the private function _incomplete(derived, held); the replay of decision records calls both, so
+the values and that refusal have one definition (task TASK-167; DEF-0137).
 
 The checks, in order: (1) the arguments; (2) policy_path: a task whose changed paths include one of the five policy
 source files is refused (a task cannot edit the rules that evaluate it); (3) the gaps: ``sources`` is a dict with exactly
@@ -289,6 +290,26 @@ def _assemble(contract, changed_paths, sources):
     return declared, values, plan_entries, None
 
 
+def _incomplete(derived, held):
+    """None when governor.derive_inputs gave a risk, an evidence profile and a delegation, else the detail of the refusal
+    incomplete. held is what derive_inputs raised, or None: a ValueError gives the detail, any other one is raised again.
+    The replay of decision records calls it too (task TASK-167, erratum E1)."""
+    if held is not None:
+        if isinstance(held, ValueError):
+            return 'governor.derive_inputs refused the values: ' + str(held)
+        raise held
+    missing = []
+    if derived['risk'] is None:
+        missing.append('the risk cannot be derived')
+    if derived['evidence_profile'] is None:
+        missing.append('the evidence profile cannot be derived')
+    if derived['delegation_in_force'] is None:
+        missing.append('the delegation is not a bool')
+    if missing:
+        return 'governor.derive_inputs gives no decision: ' + '; '.join(missing)
+    return None
+
+
 def eval_inputs(task_id, evaluated_commit, policy_ref, contract, contract_sha256, changed_paths, runs, sources,
                 log_payloads, recorder):
     """The inputs of evaluation.evaluate_task and the CI records to append, or the refusal."""
@@ -318,19 +339,9 @@ def eval_inputs(task_id, evaluated_commit, policy_ref, contract, contract_sha256
         fresh, already, clash = _guard(made['records'], log_payloads)
         if clash is not None:
             return _refuse('conflict', 'the log holds another record under the record_id ' + clash)
-        if held is not None:
-            if isinstance(held, ValueError):
-                return _refuse('incomplete', 'governor.derive_inputs refused the values: ' + str(held))
-            raise held
-        missing = []
-        if derived['risk'] is None:
-            missing.append('the risk cannot be derived')
-        if derived['evidence_profile'] is None:
-            missing.append('the evidence profile cannot be derived')
-        if derived['delegation_in_force'] is None:
-            missing.append('the delegation is not a bool')
-        if missing:
-            return _refuse('incomplete', 'governor.derive_inputs gives no decision: ' + '; '.join(missing))
+        detail = _incomplete(derived, held)
+        if detail is not None:
+            return _refuse('incomplete', detail)
         evidence = {'policy_ref': policy_ref, 'evaluated_commit': evaluated_commit, 'contract_sha256': contract_sha256,
                     'ci': _copy(made['evidence']), 'uncovered': _copy(made['uncovered']),
                     'already_in_log': list(already), 'gaps': []}

@@ -1,9 +1,7 @@
 """Unit tests of the replay of decision.acceptance lines in aieos_bootstrap.decision_replay (task TASK-167; DEF-0137 task
 B). Every Git answer comes from a stand-in read over objects held in memory; no test runs Git, starts a process or writes a
-file. The only files read are this repository's own module files, by the path checks of the module under test. The literal
-ids and the literal record below were computed apart from the code under test, by a script that imports hashlib only and
-writes the canonical form from docs/specs/conformance-files.md section 2 (decision D-7565 C2): they are typed here, never
-copied from a run of the replay or of the governor."""
+file. The literal ids and the literal record below are typed here; they are never copied from a run of the replay or of
+the governor."""
 
 import copy
 import datetime
@@ -152,11 +150,12 @@ class World:
     """The policy commit, the task commit, the event log with one acceptance line and the checked commit that holds it."""
 
     def __init__(self, policy_text=POLICY_TEXT, governor_at_policy=GOVERNOR_TEXT, governor_checked=GOVERNOR_TEXT,
-                 changed=('docs/b.md', 'docs/c.md'), records=(), payload=PAYLOAD, event_id=EVENT_ID):
+                 changed=('docs/b.md', 'docs/c.md'), records=(), payload=PAYLOAD, event_id=EVENT_ID,
+                 resume_text=RESUME_TEXT):
         g = self.git = Git()
         base = {POLICY_PATH: policy_text, 'docs/specs/risk-rules-gov-aieos.md': RISK_TEXT,
                 GOVERNOR_PATH: governor_at_policy, 'docs/pre-genesis/decision-matrix.md': DM_TEXT, 'docs/a.md': A_TEXT,
-                RESUME_PATH: RESUME_TEXT}
+                RESUME_PATH: resume_text}
         self.policy = g.commit(g.tree_of(base), message='policy\n')
         self.contract = CONTRACT_FORM % (self.policy, A_SHA)
         self.evaluated = g.commit(g.tree_of(dict(base, **{CONTRACT_PATH: self.contract})), parents=(self.policy,),
@@ -284,17 +283,45 @@ class TheReplay(unittest.TestCase):
         w = World()
         log = w.log.replace(b'"table_row":3', b'"table_row":NaN')
         self.assertNotEqual(log, w.log)
-        found = w.replay(log)
-        self.assertTrue(found and found[0].startswith('log: line '), found)
+        self.assertEqual(w.replay(log),
+                         ['log: line 3: 6.1:json: the line is not one JSON object (NaN is not a JSON value)'])
 
     def test_the_old_side_of_a_rename_is_in_the_changed_paths(self):
-        """TASK-167 AC10 and F5 of DEF-0152: the diff lists the old and the new path; an old path that no risk rule
-        matches changes the record, so it was read."""
+        """TASK-167 AC10 and the rename duty of DEF-0152: the diff lists the old and the new path, both reach the values
+        of the evaluation, and the replay passes."""
+        from aieos_bootstrap import evaluation
+        w = World(changed=('docs/old.md', 'docs/c.md'))
+        seen = []
+        real = evaluation.evaluate_task
+
+        def watched(*args, **kwargs):
+            seen.append(list(args[5]['changed_paths']))
+            return real(*args, **kwargs)
+
+        with mock.patch.object(evaluation, 'evaluate_task', watched):
+            self.assertEqual(w.replay(), [])
+        self.assertEqual(seen, [['docs/c.md', 'docs/old.md']])
+        diffs = [c for c in w.git.calls if c[0] == 'diff-tree']
+        self.assertTrue(diffs)
+        self.assertTrue(all('--no-renames' in c for c in diffs))
+
+    def test_values_that_give_no_risk_fail_as_the_command_refuses_them(self):
+        """TASK-167 erratum E1.2: a changed path that no risk rule matches; the governor would give an error record,
+        which aieos evaluate never writes, so the replay fails before it calls the evaluation."""
+        from aieos_bootstrap import evaluation
         w = World(changed=('.old', 'docs/c.md'))
-        found = w.replay()
-        self.assertEqual(len(found), 1, found)
-        self.assertTrue(found[0].startswith('record: the recomputed record differs'), found)
-        self.assertIn('decision', found[0])
+        with mock.patch.object(evaluation, 'evaluate_task', side_effect=AssertionError('the evaluation was called')):
+            self.assertEqual(w.replay(), ['inputs: incomplete: governor.derive_inputs gives no decision: the risk cannot '
+                                          'be derived; the evidence profile cannot be derived'])
+
+    def test_a_line_with_a_fencing_token_or_a_corrects_field_fails(self):
+        """TASK-167 erratum E1.2: the evaluation writes neither."""
+        for key, value in (('fencing_token', {'epoch': 'e0', 'counter': 2}), ('corrects', 'a1')):
+            with self.subTest(key):
+                w = World()
+                log = w.changed_line(lambda e: e.update({key: value}))
+                self.assertEqual(w.replay(log),
+                                 ['record: line 3 holds %s, which the evaluation does not write' % key])
 
     def test_a_record_on_the_first_line_and_a_line_of_another_type_fail(self):
         w = World()
@@ -343,6 +370,16 @@ class TheGates(unittest.TestCase):
                 found, loaded = self.without_the_governor(lambda: call(world))
                 self.assertTrue(found, what)
                 self.assertEqual(loaded, [], what)
+
+    def test_none_of_them_is_loaded_after_the_entrys_own_refusals(self):
+        """TASK-167 erratum E1.5: the engine gate, a malformed governor pin and two governor pins."""
+        for argv in ([ROOT, '--governor-pin', PIN, '0' * 64], [ROOT, '--governor-pin', 'zz', RESUME_PIN],
+                     [ROOT, '--governor-pin', PIN, '--governor-pin', PIN, RESUME_PIN]):
+            with self.subTest(argv[1:]):
+                w = World()
+                (code, lines), loaded = self.without_the_governor(lambda: entry(w, argv))
+                self.assertEqual(code, 1, lines)
+                self.assertEqual(loaded, [])
 
     def test_the_entry_loads_none_of_them_without_a_governor_pin(self):
         w = World()
@@ -403,6 +440,12 @@ class TheEntry(unittest.TestCase):
 
     def test_the_governor_pin_is_not_an_accepted_engine(self):
         code, lines = entry(World(), [ROOT, '--governor-pin', PIN])
+        self.assertEqual(code, 1, lines)
+        self.assertTrue(any(l.startswith('FAIL ') and 'not an accepted engine (0 accepted)' in l for l in lines), lines)
+
+    def test_the_governor_pin_given_alone_does_not_pass_the_engine_gate_even_when_it_is_the_engines_hash(self):
+        """TASK-167 erratum E1.5: here the engine file holds the governor's text, so its hash is the governor pin."""
+        code, lines = entry(World(resume_text=GOVERNOR_TEXT), [ROOT, '--governor-pin', PIN])
         self.assertEqual(code, 1, lines)
         self.assertTrue(any(l.startswith('FAIL ') and 'not an accepted engine (0 accepted)' in l for l in lines), lines)
 

@@ -164,6 +164,18 @@ class TASK167TheSharedValues(unittest.TestCase):
                 self.assertEqual(eval_inputs._assemble(contract, paths, sources), (None, None, None, expected))
                 self.assertEqual(refusal(call(contract=contract, changed_paths=paths, sources=sources)), expected)
 
+    def test_the_completeness_check(self):
+        """TASK-167 erratum E1.1: the private function that eval_inputs and the replay both call after derive_inputs."""
+        whole = {'risk': 'low', 'evidence_profile': [], 'delegation_in_force': False}
+        self.assertIsNone(eval_inputs._incomplete(whole, None))
+        self.assertEqual(eval_inputs._incomplete(None, ValueError('x')), 'governor.derive_inputs refused the values: x')
+        with self.assertRaises(KeyError):
+            eval_inputs._incomplete(None, KeyError('y'))
+        self.assertEqual(
+            eval_inputs._incomplete({'risk': None, 'evidence_profile': None, 'delegation_in_force': None}, None),
+            'governor.derive_inputs gives no decision: the risk cannot be derived; the evidence profile cannot be '
+            'derived; the delegation is not a bool')
+
 
 class AC1TheModule(unittest.TestCase):
     def setUp(self):
