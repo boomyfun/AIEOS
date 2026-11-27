@@ -187,6 +187,7 @@
 # and now holds its literal CAPTURE_FORMS to the new form; no ALLOW entry, keyword set, deny set or other pin changes. It grants no write access, uses no secret or token and changes no setting; the EVALUATOR lists are unchanged. Limit: until the module's own commit (task BT1c) has landed, the literal in
 # src/aieos_runtime/task_capture.py differs from this pin, so check_capture and the pin test of tests/unit/test_task_capture.py would report that difference on a task run; nothing runs them on a push to main without a task.
 # Revision 30 (TASK-156, E7; the decision agent's own decision under DM A66, its own decision on the exact diff; DM A66, D-6888 C4, D-6896 F5, D-6967) ADDS four entries at the end of both embedded EVALUATOR lists: docs/pre-genesis/assurance-model.md, docs/pre-genesis/decision-matrix.md, docs/pre-genesis/governor-spec.md and docs/specs/evaluation-policy-gov-aieos.md, the entries of EVIDENCE_DEFINING_PATHS of src/aieos_bootstrap/evaluation_policy.py that the lists did not match (the five other entries are matched by the names constitution.md and risk-rules-gov-aieos.md and by src/aieos_bootstrap/**), so that a change to any of them is read by GOV-003 as an evaluator change and is judged by the base version, never auto-accepted. It removes and loosens no check, grants no write access, uses no secret or token and changes no setting; no step, rule, pin or other line changes; the step "GOV-003 evaluator lists equal" still holds (two equal copies of 40 entries). Limits: the lists match by name, so a later change of the reader list EVIDENCE_DEFINING_PATHS is covered only if the unit test that every entry is matched by both lists is kept and passes; the counts of the CI line "GOV-003 evaluator lists" change from 36 to 40 entries.
+# Revision 31 (DEF-0137: the A66 step after TASK-167 and TASK-168; the decision agent's own decision under DM A66, its own decision on the exact diff; D-7593 C3) LOOSENS ONE CHECK, the step "INV-010 replay", and ADDS one fetch. LOOSENS: before it every decision.acceptance record in a tracked events.jsonl failed the step; from it on the step gives the entry --governor-pin with AIEOS_PINNED_GOVERNOR when that is not empty, and a decision.acceptance record that passes the entry's gates and recomputes equal now PASSES; one that does not, and every such record when the pin is empty, still FAILS; a pin that is not 64 lowercase hex digits fails the step. The step also prints whether a governor pin is given. ADDS: the checkout step also fetches refs/heads/task/* (anonymous, read only), so that a record whose evaluated commit is on a pushed task branch can be recomputed; a record that names a commit in no fetched history still fails. The pin's value does not change. It grants no write access, uses no secret or token and changes no setting; the EVALUATOR lists are unchanged. Limits: open points of DEF-0137 stay: the refusals of aieos evaluate that need the saved CI data or the reviews text are not repeated, and the replay compares only the record.added payloads under the manifest's record_id, so a forged log that aieos evaluate would refuse to write can pass; older acceptance records fail closed after a change of governor.py or of the pin; a task branch that a record names must never be deleted, or every later run fails; GOV-003 does not hold for the entry and its reader modules (DEF-0110).
 name: aieos-checks
 
 on:
@@ -204,7 +205,7 @@ jobs:
       # points 5 and 6), set by revision 4 to the first version, which the owner accepted (DM A64; the file at commit
       # aa14ae8d). Pinned: the conformance base run fails unless the base's governor file and the run's governor
       # identity have this SHA-256 and the outcome is pass. Empty: no version is pinned, and the base run reports and
-      # does not fail on its outcome. The replay step fails on any decision record either way (revision 4). The one
+      # does not fail on its outcome. The INV-010 replay step gives this pin to its entry only when it is not empty (revision 31). The one
       # place; a change to it is a change under .github/, each its own decision of the decision agent (DM A66; decision
       # D-317), except that emptying it, which would undo the owner's decision DM A65, stays the owner's; accepting a new
       # governor version is not decided by that change (DM A64, A65).
@@ -238,6 +239,7 @@ jobs:
           git init -q work
           git -C work fetch -q "$SERVER/$REPO.git" "$SHA"
           git -C work fetch -q "$SERVER/$REPO.git" "+refs/heads/main:refs/remotes/origin/main"
+          git -C work fetch -q "$SERVER/$REPO.git" "+refs/heads/task/*:refs/remotes/origin/task/*"
           git -C work checkout -q --detach "$SHA"
           test "$(git -C work rev-parse HEAD)" = "$SHA"
           printf '%s\n' "$BEFORE" > before.txt
@@ -658,12 +660,12 @@ jobs:
         working-directory: work
         shell: python3 {0}
         run: |
-          # AIEOS CI: replay (INV-010) (D-181 P4; revision 21: TASK-139, accepted at decision D-6342, and its A66 step). Standard library only. Run in the checkout of the pushed commit, on every push.
-          # It runs the replay entry of the checked tree, src/aieos_bootstrap/decision_replay.py, as erratum E1.7 of TASK-139 sets: PYTHONPATH=src python -B -P -m aieos_bootstrap.decision_replay <repo> [<accepted engine sha256> ...],
+          # AIEOS CI: replay (INV-010) (D-181 P4; revision 21: TASK-139, accepted at decision D-6342, and its A66 step; revision 31). Standard library only. Run in the checkout of the pushed commit, on every push.
+          # It runs the replay entry of the checked tree, src/aieos_bootstrap/decision_replay.py, as erratum E1.7 of TASK-139 sets: PYTHONPATH=src python -B -P -m aieos_bootstrap.decision_replay <repo> [--governor-pin <sha256>] [<accepted engine sha256> ...],
           # with the job's AIEOS_PINNED_RESUME_CHECK as the first accepted engine and AIEOS_PINNED_RESUME_CHECK_PREVIOUS as the second only when it is set. The entry recomputes every decision.execution record of the tree with the Resume
-          # Check pinned by those values and fails on any difference, on any decision.acceptance record (not replayed: a separate task), on a dirty or filter-configured tree and on any log it cannot read. With no decision record it passes.
+          # Check pinned by those values and fails on any difference, on a dirty or filter-configured tree and on any log it cannot read. A decision.acceptance record is recomputed only when AIEOS_PINNED_GOVERNOR is not empty, which the step then gives as --governor-pin; without it each such record fails (revision 31, which loosens this check once more). With no decision record it passes.
           # This step no longer fails on a decision record as such: it fails on a record that does not replay (revision 21 says so plainly: a loosening of this check). The entry and its reader modules run from the tree under check,
-          # not from a base: GOV-003 does not hold for them (decision D-6332), and only the engine is tied to the record by its hash and to the pin. Before the entry runs, this step refuses a runner older than Python 3.11 (the -P flag)
+          # not from a base: GOV-003 does not hold for them (decision D-6332), and only the engine is tied to the record by its hash and to the pin, and, from revision 31, the governor of a decision.acceptance record is tied to the record by its ruleset_version and to AIEOS_PINNED_GOVERNOR by its hash. Before the entry runs, this step refuses a runner older than Python 3.11 (the -P flag)
           # and a src folder that holds a top-level name that a standard-library module has, or sitecustomize or usercustomize, because PYTHONPATH=src would then shadow it (decision D-6335 C4, B3). The one limit left open
           # is B2: the engine file that runs is the repository's own file, checked by path and by hash against the record, the pin and the commit, and not hashed again at the moment it runs.
           import os
@@ -671,6 +673,7 @@ jobs:
           import sys
 
           PINS = [v for v in (os.environ.get('AIEOS_PINNED_RESUME_CHECK', ''), os.environ.get('AIEOS_PINNED_RESUME_CHECK_PREVIOUS', '')) if v]
+          GOVERNOR = os.environ.get('AIEOS_PINNED_GOVERNOR', '')
 
 
           def main():
@@ -682,8 +685,10 @@ jobs:
                   print('replay FAIL: a top-level name under src shadows a standard-library module under PYTHONPATH=src: %s' % ', '.join(clash))
                   return 1
               print('replay: running the entry with %d accepted engine pin(s); python %d.%d' % (len(PINS), sys.version_info[0], sys.version_info[1]), flush=True)
+              print('replay: governor pin given: %s' % ('yes' if GOVERNOR else 'no'), flush=True)
               env = dict(os.environ, PYTHONPATH='src')
-              return subprocess.run([sys.executable, '-B', '-P', '-m', 'aieos_bootstrap.decision_replay', os.getcwd()] + PINS, env=env).returncode
+              flags = ['--governor-pin', GOVERNOR] if GOVERNOR else []
+              return subprocess.run([sys.executable, '-B', '-P', '-m', 'aieos_bootstrap.decision_replay', os.getcwd()] + flags + PINS, env=env).returncode
 
 
           if __name__ == '__main__':
