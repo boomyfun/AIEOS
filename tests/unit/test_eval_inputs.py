@@ -581,5 +581,134 @@ class AC7TheResultAndTheCompleteness(unittest.TestCase):
         self.assertEqual(call(sources=good_sources(delegation=None)), call(sources=good_sources(delegation=None)))
 
 
+# TASK-165: the build and lint records of the derived evidence profile.
+BUILD_ID = 'e12bc12cd9863eb9d180ffefbe0a6b95bccc48d754b4af596a7b9dc5737cf894'
+LINT_ID = 'e9aca1088559f188daac4a112337f6eb1983ec1e40b1ea6eeaec179b1a170aea'
+DELIVERY_BUILD_ID = 'e29cc5f7635325bf0cfb7399d33ebbd4ca273f04a430b50ca3494d0de2d7ed9a'
+CONSTITUTION = [
+    "SEC-001 secret scan (tip tree; every commit's message, file names and added lines)",
+    "SEC-002 pattern rules (every commit's added lines)", 'OPS-002 owner-kept paths', 'INV-010 replay',
+    'deterministic_rule (INV-001, INV-002, INV-004)', 'OPS-003 pattern rules',
+    'static_security_analysis (bandit, every package pinned by version and hash)']
+LOW_PLAN = [{'gate': 'G0', 'check': 'scope'}, {'gate': 'G1', 'check': 'build'}, {'gate': 'G2', 'check': 'lint'},
+            {'gate': 'G3', 'check': 'constitution', 'args': ['AC1', 'AC2']}]
+
+
+def typed_sources(**changes):
+    """good_sources with a medium default profile of functional build and lint; fixture values, not policy."""
+    profile = [{'dimension': 'functional', 'evidence_types': ['build', 'lint']}]
+    return good_sources(default_profiles={'medium': profile, 'critical': copy.deepcopy(profile)}, **changes)
+
+
+def type_part(out):
+    return [(r['record_id'], r['evidence_type'], r['dimension'], r['outcome']) for r in out['ci_records']
+            if 'evidence_type' in r]
+
+
+def low_call(conclusion='success'):
+    steps = [step(n, conclusion if n == 'G1 build' else 'success') for n in MAPPED + CONSTITUTION]
+    sources = good_sources(
+        default_profiles={'low': [{'dimension': 'functional', 'evidence_types': ['build', 'lint']}]},
+        requirement_profiles=[], risk_rules=[{'match': ['docs/**'], 'class': 'low'}],
+        articles=[{'id': 'GOV-004', 'scope': ['**'], 'evidence_required': ['human_review']},
+                  {'id': 'SEC-002', 'scope': ['**'], 'evidence_required': ['ai_review']}])
+    return call(contract=good_contract(verification_plan=copy.deepcopy(LOW_PLAN)), sources=sources,
+                changed_paths=['docs/Deferred/a.md'], runs=[run(conclusion=conclusion, steps=steps)])
+
+
+def decide(out):
+    request = {'task_id': TASK, 'task_content_hash': 'c' * 64, 'evaluated_commit': COMMIT,
+               'intent_versions': {'SPEC-001': 'v2'}, 'task_state': 'VERIFYING',
+               'changed_paths': ['docs/Deferred/a.md'], 'retry_count': {'used': 0, 'limit': 1}}
+    return governor.evaluate(request, governor.derive_inputs(copy.deepcopy(out['values'])), out['ci_records'])
+
+
+class TASK165TheTypedRecords(unittest.TestCase):
+    def test_a_profile_with_build_and_lint_gives_the_two_records(self):
+        out = call(sources=typed_sources())
+        self.assertIsNone(out['refusal'])
+        self.assertEqual(out['ci_records'][:3], ci_records())
+        self.assertEqual(type_part(out), [(BUILD_ID, 'build', 'functional', 'pass'),
+                                          (LINT_ID, 'lint', 'functional', 'pass')])
+
+    def test_a_requirement_profile_gives_its_own_dimension(self):
+        adds = [{'id': 'SPEC-001', 'add': [{'dimension': 'delivery', 'evidence_types': ['build']}]}]
+        out = call(sources=good_sources(requirement_profiles=adds))
+        self.assertIsNone(out['refusal'])
+        self.assertEqual(type_part(out), [(DELIVERY_BUILD_ID, 'build', 'delivery', 'pass')])
+
+    def test_a_profile_without_build_or_lint_gives_the_gate_records_only(self):
+        self.assertEqual(call()['ci_records'], ci_records())
+
+    def test_a_type_record_passes_the_guard_against_the_log(self):
+        made = call(sources=typed_sources())['ci_records']
+        self.assertEqual(len(made), 5)
+        out = call(sources=typed_sources(), log_payloads=[copy.deepcopy(made[3])])
+        self.assertEqual(out['evidence']['already_in_log'], [BUILD_ID])
+        self.assertEqual([r['record_id'] for r in out['ci_records']],
+                         [r['record_id'] for r in made if r['record_id'] != BUILD_ID])
+        other = copy.deepcopy(made[3])
+        other['outcome'] = 'fail'
+        out = call(sources=typed_sources(), log_payloads=[other])
+        self.assertEqual(refusal(out), ('conflict', 'the log holds another record under the record_id ' + BUILD_ID))
+
+    def test_the_refusals_of_the_derivation_keep_their_place(self):
+        bad = good_sources(articles=[{'id': 'X'}])
+        self.assertEqual(refusal(call(sources=bad, runs=[]))[0], 'ci')
+        for error in (ValueError('v'), RuntimeError('r')):
+            with mock.patch.object(eval_inputs.governor, 'derive_inputs', mock.Mock(side_effect=error)):
+                self.assertEqual(refusal(call(runs=[]))[0], 'ci')
+                record = ci_records()[0]
+                record['recorder'] = 'another recorder'
+                self.assertEqual(refusal(call(log_payloads=[record]))[0], 'conflict')
+                want = (('incomplete', 'governor.derive_inputs refused the values: v') if isinstance(error, ValueError)
+                        else ('argument', 'an argument could not be read: RuntimeError'))
+                self.assertEqual(refusal(call()), want)
+
+    def test_without_a_pair_the_call_has_the_eight_arguments(self):
+        seen = []
+
+        def eight(task_id, commit, contract_sha256, intent_versions, plan, changed_paths, runs, recorder):
+            seen.append(recorder)
+            return {'records': [], 'uncovered': [], 'evidence': {'head_sha': commit}, 'refusal': None}
+
+        with mock.patch.object(eval_inputs.ci_evidence, 'ci_evidence', eight):
+            self.assertIsNone(call()['refusal'])
+        self.assertEqual(seen, ['external CI'])
+
+    def test_with_pairs_the_call_names_them(self):
+        seen = []
+
+        def with_typed(task_id, commit, contract_sha256, intent_versions, plan, changed_paths, runs, recorder,
+                       typed=None):
+            seen.append(typed)
+            return {'records': [], 'uncovered': [], 'evidence': {'head_sha': commit}, 'refusal': None}
+
+        with mock.patch.object(eval_inputs.ci_evidence, 'ci_evidence', with_typed):
+            self.assertIsNone(call(sources=typed_sources())['refusal'])
+        self.assertEqual(seen, [[{'dimension': 'functional', 'evidence_type': 'build'},
+                                 {'dimension': 'functional', 'evidence_type': 'lint'}]])
+
+    def test_a_run_made_low_plan_misses_only_the_article_reviews(self):
+        out = low_call()
+        self.assertIsNone(out['refusal'])
+        decision = decide(out)
+        self.assertEqual((decision['missing_gates'], decision['failed_gates']), ([], []))
+        self.assertEqual((decision['decision'], decision['table_row']), ('INSUFFICIENT_EVIDENCE', 3))
+        self.assertEqual(decision['profile_used'], [
+            {'dimension': 'functional', 'required': ['build', 'lint'], 'satisfied_by': sorted([BUILD_ID, LINT_ID]),
+             'missing_types': []},
+            {'dimension': 'GOV-004', 'required': ['human_review'], 'satisfied_by': [],
+             'missing_types': ['human_review']},
+            {'dimension': 'SEC-002', 'required': ['ai_review'], 'satisfied_by': [], 'missing_types': ['ai_review']}])
+
+    def test_a_failed_build_step_gives_a_fail_record_and_rework(self):
+        out = low_call('failure')
+        self.assertIsNone(out['refusal'])
+        self.assertIn((BUILD_ID, 'build', 'functional', 'fail'), type_part(out))
+        decision = decide(out)
+        self.assertEqual((decision['decision'], decision['table_row']), ('NEEDS_REWORK', 2))
+
+
 if __name__ == '__main__':
     unittest.main()

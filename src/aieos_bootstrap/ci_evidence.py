@@ -5,7 +5,8 @@ environment and no network, and holds no credential: the CI data enters as plain
 package has fetched (the saved, unedited output of ``gh run view <id> --attempt <n> --log`` and the run metadata of every
 attempt).
 
-``ci_evidence(task_id, commit, contract_sha256, intent_versions, plan, changed_paths, runs, recorder)`` returns a mapping
+``ci_evidence(task_id, commit, contract_sha256, intent_versions, plan, changed_paths, runs, recorder,
+typed=None)`` returns a mapping
 with exactly the keys records, uncovered, evidence and refusal. On a refusal records and uncovered are empty lists,
 evidence is None and refusal is {reason, detail}; otherwise refusal is None. The reasons are a closed set: argument,
 log_format, detect, run, rerun, path and maker. It never raises an Exception; a BaseException that is not an Exception
@@ -29,6 +30,12 @@ maker: gate_records.gate_records is called once with the steps of the run with t
 entries rebuilt with exactly gate and check (the optional args key of a contract's entry is dropped), a fresh copy of
 the intent versions and a fresh copy of DEFAULT_CHECK_MAP (the constant is never passed and never changed).
 
+(6) The type records (task TASK-165; DEF-0159 part A): typed is None or a list of dicts with exactly the keys
+dimension and evidence_type (build or lint), checked with the other arguments (a wrong form is refusal argument). Only
+when it holds a pair, gate_records.type_records is called once with the steps of the same chosen run, and its records
+follow the gate records; its error or an Exception of it is refusal maker. With typed None or empty the answer is that of
+the gate maker alone; uncovered and evidence do not change.
+
 The evidence mapping, for the caller that keeps the provenance: head_sha, workflow_path, detect_line, contract_sha256 and
 runs (a list of run_id, attempt and the SHA-256 of the UTF-8 bytes of that attempt's log).
 
@@ -42,6 +49,11 @@ text states (listed in the docstring of gate_records), and the run-made AC1 is j
 the task is in review (decision-matrix row A82); the module
 cannot see the mapping that evaluation.evaluate_task declares, so passing the same copy of the intent versions is the
 caller's duty; a change of the detect step's output wording or of the log form makes the answer a refusal (fail closed).
+The type records have the limits that gate_records states for type_records: build and lint cover src and tests only,
+compileall -q and the default pyflakes checks and nothing more; attempts that disagree on one of the two steps refuse the
+whole call (the rerun rule of (4)); the record_id binds neither the outcome nor the intent versions, so a differing
+record already in the log under it is a conflict for the caller; the governor counts every CI-class record of that type in
+the log, so whoever writes the log is trusted.
 The caller's duties: pass EVERY attempt of every run of the task branch (the module cannot know how many attempts there
 are, so an omitted earlier attempt is invisible and the highest attempt given decides); pass EVERY path the commit changes,
 including the old side of a rename (a diff without rename detection), because the .github rule sees only the list given
@@ -85,11 +97,19 @@ def _text(value):
     return isinstance(value, str) and value != ''
 
 
+def _encodes(value):
+    try:
+        value.encode('utf-8')
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 def _int(value):
     return type(value) is int and value > 0
 
 
-def _argument_error(task_id, commit, contract_sha256, intent_versions, plan, changed_paths, runs, recorder):
+def _argument_error(task_id, commit, contract_sha256, intent_versions, plan, changed_paths, runs, recorder, typed):
     """The first malformed argument as a short text, or None."""
     if not isinstance(task_id, str) or _TASK.fullmatch(task_id) is None:
         return 'task_id is not TASK- and digits'
@@ -135,6 +155,17 @@ def _argument_error(task_id, commit, contract_sha256, intent_versions, plan, cha
                 return 'a step has a conclusion that is neither a text nor None'
     if not _text(recorder):
         return 'recorder is not a non-empty text'
+    if typed is None:
+        return None
+    if not isinstance(typed, list):
+        return 'typed is neither None nor a list'
+    for item in typed:
+        if not isinstance(item, dict) or set(item) != {'dimension', 'evidence_type'}:
+            return 'a typed entry is not a mapping with exactly the keys dimension and evidence_type'
+        if not _text(item['dimension']) or not _encodes(item['dimension']):
+            return 'a typed entry has a dimension that is not a non-empty text that UTF-8 can encode'
+        if not isinstance(item['evidence_type'], str) or item['evidence_type'] not in ('build', 'lint'):
+            return 'a typed entry has an evidence_type that is not build or lint'
     return None
 
 
@@ -194,10 +225,12 @@ def eligible_run(run, task_id, commit):
             and run['head_branch'] == 'task/' + task_id)
 
 
-def ci_evidence(task_id, commit, contract_sha256, intent_versions, plan, changed_paths, runs, recorder):
+def ci_evidence(task_id, commit, contract_sha256, intent_versions, plan, changed_paths, runs, recorder,
+                typed=None):
     """The gate-result records of one task commit from its saved CI data, or the refusal."""
     try:
-        error = _argument_error(task_id, commit, contract_sha256, intent_versions, plan, changed_paths, runs, recorder)
+        error = _argument_error(task_id, commit, contract_sha256, intent_versions, plan, changed_paths, runs, recorder,
+                                typed)
         if error is not None:
             return _refuse('argument', error)
         for path in changed_paths:
@@ -242,9 +275,20 @@ def ci_evidence(task_id, commit, contract_sha256, intent_versions, plan, changed
             return _refuse('maker', 'the maker raised ' + type(exc).__name__)
         if made['error'] is not None:
             return _refuse('maker', made['error'])
+        records = made['records']
+        if typed:
+            try:
+                extra = gate_records.type_records(
+                    task_id, commit, dict(intent_versions), [dict(t) for t in typed],
+                    [dict(s) for s in steps], recorder)
+            except Exception as exc:
+                return _refuse('maker', 'the maker raised ' + type(exc).__name__)
+            if extra['error'] is not None:
+                return _refuse('maker', extra['error'])
+            records = records + extra['records']
         evidence = {
             'head_sha': commit, 'workflow_path': _WORKFLOW, 'detect_line': lines[0], 'contract_sha256': contract_sha256,
             'runs': [{'run_id': r['run_id'], 'attempt': r['attempt'], 'log_sha256': d} for r, d in zip(eligible, digests)]}
-        return _answer(made['records'], made['uncovered'], evidence, None)
+        return _answer(records, made['uncovered'], evidence, None)
     except Exception as exc:
         return _refuse('argument', 'an argument could not be read: ' + type(exc).__name__)

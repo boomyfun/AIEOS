@@ -6,6 +6,7 @@ import copy
 import hashlib
 import pathlib
 import unittest
+from unittest import mock
 
 from aieos_bootstrap import gate_records
 from aieos_bootstrap import governor
@@ -76,7 +77,7 @@ class AC1TheModule(unittest.TestCase):
     def setUp(self):
         self.source = (ROOT / 'src/aieos_bootstrap/gate_records.py').read_bytes().decode('utf-8')
 
-    def test_public_names_are_exactly_two(self):
+    def test_public_names_are_exactly_three(self):
         tree = ast.parse(self.source)
         public = set()
         for node in tree.body:
@@ -84,7 +85,7 @@ class AC1TheModule(unittest.TestCase):
                 public.add(node.name)
             elif isinstance(node, ast.Assign):
                 public.update(t.id for t in node.targets if isinstance(t, ast.Name) and not t.id.startswith('_'))
-        self.assertEqual(public, {'gate_records', 'DEFAULT_CHECK_MAP'})
+        self.assertEqual(public, {'gate_records', 'type_records', 'DEFAULT_CHECK_MAP'})
 
     def test_imports_only_hashlib_and_re_and_no_forbidden_name(self):
         calls, imports, names = imports_and_names(self.source)
@@ -455,6 +456,88 @@ class AC5TheDefaultMap(unittest.TestCase):
         for names in gate_records.DEFAULT_CHECK_MAP.values():
             for name in names:
                 self.assertEqual(lines.count('- name: ' + name), 1, name)
+
+
+# TASK-165: the maker of the build and lint evidence records.
+BUILD_ID = '3eaa667526710df93f39bfc6e7d10cf893335d84f0323a90a19f091b8e5347fb'
+LINT_ID = 'f2410d69ca74fab3250bbbbc399f7390b490b26e4e0e50863e6fdbddd285db9d'
+BOTH = [{'dimension': 'functional', 'evidence_type': 'build'}, {'dimension': 'functional', 'evidence_type': 'lint'}]
+WRONG_WANTED = [
+    {}, 'build', (), 7, ['build'], [[]], [{'dimension': 'functional'}], [{'evidence_type': 'build'}],
+    [{'dimension': 'functional', 'evidence_type': 'build', 'gate': 'G1'}], [{'dimension': '', 'evidence_type': 'build'}],
+    [{'dimension': 7, 'evidence_type': 'build'}], [{'dimension': '\ud800', 'evidence_type': 'build'}],
+    [{'dimension': 'functional', 'evidence_type': 'unit_test'}], [{'dimension': 'functional', 'evidence_type': ''}],
+    [{'dimension': 'functional', 'evidence_type': ['build']}]]
+
+
+def typed(wanted=DEFAULT, steps=DEFAULT, task=TASK, commit=COMMIT, iv=DEFAULT, recorder='external CI'):
+    return gate_records.type_records(
+        task, commit, dict(IV) if iv is DEFAULT else iv, copy.deepcopy(BOTH) if wanted is DEFAULT else wanted,
+        all_steps() if steps is DEFAULT else steps, recorder)
+
+
+def record(ident, kind, outcome='pass', dimension='functional'):
+    return {'record_id': ident, 'fact_kind': 'observation', 'source_class': CI, 'recorder': 'external CI',
+            'subject': TASK, 'commit': COMMIT, 'intent_versions': {'SPEC-001': 'v2'}, 'evidence_type': kind,
+            'dimension': dimension, 'outcome': outcome}
+
+
+class TASK165TheTypeMaker(unittest.TestCase):
+    def test_a_build_and_a_lint_pair_give_the_two_exact_records(self):
+        before = copy.deepcopy(MAP)
+        iv = dict(IV)
+        out = typed(iv=iv)
+        self.assertEqual(out, {'records': [record(BUILD_ID, 'build'), record(LINT_ID, 'lint')], 'error': None})
+        for r in out['records']:
+            self.assertEqual(records.check_record(r), [])
+            self.assertIsNot(r['intent_versions'], iv)
+        self.assertEqual(MAP, before)
+
+    def test_a_failed_step_gives_a_fail_record(self):
+        steps = [step(BUILD_STEP, 'failure') if s['name'] == BUILD_STEP else s for s in all_steps()]
+        self.assertEqual(typed(steps=steps)['records'],
+                         [record(BUILD_ID, 'build', 'fail'), record(LINT_ID, 'lint')])
+
+    def test_an_absent_repeated_skipped_or_open_step_gives_no_record(self):
+        others = [s for s in all_steps() if s['name'] != BUILD_STEP]
+        for steps in (others, all_steps() + [step(BUILD_STEP)], others + [step(BUILD_STEP, 'skipped')],
+                      others + [step(BUILD_STEP, None)]):
+            out = typed(steps=steps)
+            self.assertEqual(out, {'records': [record(LINT_ID, 'lint')], 'error': None}, steps[-1])
+
+    def test_the_step_names_are_those_of_the_default_map(self):
+        with mock.patch.dict(gate_records.DEFAULT_CHECK_MAP, {'build': ['another step']}):
+            self.assertEqual(typed()['records'], [record(LINT_ID, 'lint')])
+            self.assertEqual(typed(steps=all_steps() + [step('another step')])['records'][0],
+                             record(BUILD_ID, 'build'))
+
+    def test_a_repeated_pair_is_made_once_and_an_empty_wanted_gives_nothing(self):
+        out = typed(wanted=BOTH + BOTH)
+        self.assertEqual([r['record_id'] for r in out['records']], [BUILD_ID, LINT_ID])
+        self.assertEqual(typed(wanted=[]), {'records': [], 'error': None})
+
+    def test_the_dimension_is_the_pairs_and_the_id_binds_it(self):
+        out = typed(wanted=[{'dimension': 'delivery', 'evidence_type': 'build'}])
+        self.assertEqual(out['records'], [record(
+            'b03128543bf1de940fd5d86afbd7e61335a63912bcf6fe25aad5265c8bb1e526', 'build', dimension='delivery')])
+
+    def test_each_wrong_form_is_an_error_with_no_record(self):
+        for wanted in WRONG_WANTED + [None]:
+            out = typed(wanted=wanted)
+            self.assertEqual((set(out), out['records']), ({'records', 'error'}, []), wanted)
+            self.assertTrue(isinstance(out['error'], str) and out['error'], wanted)
+        for changes in (dict(task='TASK-x'), dict(commit='A' * 40), dict(iv={}), dict(iv={'S': 'two'}),
+                        dict(steps={}), dict(steps=[{'name': 'x'}]), dict(recorder='')):
+            out = typed(**changes)
+            self.assertEqual(out['records'], [], changes)
+            self.assertTrue(isinstance(out['error'], str) and out['error'], changes)
+
+    def test_no_exception_leaves_and_a_base_exception_passes_through(self):
+        with mock.patch.object(gate_records.hashlib, 'sha256', mock.Mock(side_effect=RuntimeError('x'))):
+            self.assertEqual(typed(), {'records': [], 'error': 'an argument could not be read: RuntimeError'})
+        with mock.patch.object(gate_records.hashlib, 'sha256', mock.Mock(side_effect=Boom())):
+            with self.assertRaises(Boom):
+                typed()
 
 
 if __name__ == '__main__':

@@ -619,5 +619,77 @@ class AC8TheG3ResultAndTheGovernor(unittest.TestCase):
         self.assertEqual(decision['decision'], 'NEEDS_REWORK')
 
 
+# TASK-165: ci_evidence's parameter typed.
+BUILD_ID = 'e12bc12cd9863eb9d180ffefbe0a6b95bccc48d754b4af596a7b9dc5737cf894'
+LINT_ID = 'e9aca1088559f188daac4a112337f6eb1983ec1e40b1ea6eeaec179b1a170aea'
+BOTH = [{'dimension': 'functional', 'evidence_type': 'build'}, {'dimension': 'functional', 'evidence_type': 'lint'}]
+WRONG_TYPED = [
+    {}, 'build', (), 7, ['build'], [[]], [{'dimension': 'functional'}], [{'evidence_type': 'build'}],
+    [{'dimension': 'functional', 'evidence_type': 'build', 'gate': 'G1'}], [{'dimension': '', 'evidence_type': 'build'}],
+    [{'dimension': 7, 'evidence_type': 'build'}], [{'dimension': '\ud800', 'evidence_type': 'build'}],
+    [{'dimension': 'functional', 'evidence_type': 'unit_test'}], [{'dimension': 'functional', 'evidence_type': ''}],
+    [{'dimension': 'functional', 'evidence_type': ['build']}]]
+
+
+def call_typed(typed, runs=None):
+    return ci_evidence.ci_evidence(TASK, COMMIT, SHA, dict(IV), copy.deepcopy(PLAN4),
+                                   ['src/aieos_bootstrap/gate_records.py'], runs or [run()], 'external CI', typed)
+
+
+class TASK165TheTypedPairs(unittest.TestCase):
+    def test_no_typed_pair_gives_the_answer_without_the_parameter(self):
+        want = call()
+        self.assertEqual(call_typed(None), want)
+        stand_in = mock.Mock(side_effect=RuntimeError('not called'))
+        with mock.patch.object(ci_evidence.gate_records, 'type_records', stand_in):
+            self.assertEqual(call_typed([]), want)
+        self.assertEqual(stand_in.call_count, 0)
+
+    def test_the_type_records_follow_the_gate_records(self):
+        given = copy.deepcopy(BOTH)
+        out = call_typed(given)
+        self.assertIsNone(out['refusal'])
+        base = call()
+        self.assertEqual(out['records'][:3], base['records'])
+        self.assertEqual([(r['record_id'], r['evidence_type'], r['dimension'], r['outcome']) for r in out['records'][3:]],
+                         [(BUILD_ID, 'build', 'functional', 'pass'), (LINT_ID, 'lint', 'functional', 'pass')])
+        self.assertEqual((out['uncovered'], out['evidence']), (base['uncovered'], base['evidence']))
+        self.assertEqual(given, BOTH)
+        for r in out['records']:
+            self.assertEqual(records.check_record(r), [])
+
+    def test_the_steps_are_those_of_the_chosen_run(self):
+        first = all_steps() + [step('unit_test', 'failure')]
+        second = all_steps() + [step('unit_test', 'success')]
+        seen = []
+
+        def capture(task_id, commit, intent_versions, wanted, steps, recorder):
+            seen.append(steps)
+            return {'records': [], 'error': None}
+
+        with mock.patch.object(ci_evidence.gate_records, 'type_records', capture):
+            call_typed(copy.deepcopy(BOTH), [run(attempt=2, steps=second), run(conclusion='failure', steps=first)])
+        self.assertEqual(seen, [second])
+
+    def test_attempts_that_disagree_on_the_build_step_are_refused(self):
+        failed = [step('G1 build', 'failure') if s['name'] == 'G1 build' else s for s in all_steps()]
+        out = call_typed(copy.deepcopy(BOTH), [run(conclusion='failure', steps=failed), run(attempt=2)])
+        self.assertEqual(refusal(out), ('rerun', 'the attempts disagree on the step G1 build'))
+        self.assertEqual(out['records'], [])
+
+    def test_each_wrong_form_of_typed_is_an_argument_refusal(self):
+        for typed in WRONG_TYPED:
+            out = call_typed(typed)
+            self.assertEqual(out['refusal']['reason'], 'argument', typed)
+            self.assertEqual(out['records'], [], typed)
+
+    def test_an_error_or_an_exception_of_the_type_maker_is_a_maker_refusal(self):
+        stand_in = mock.Mock(return_value={'records': [], 'error': 'an error text of the maker'})
+        with mock.patch.object(ci_evidence.gate_records, 'type_records', stand_in):
+            self.assertEqual(refusal(call_typed(copy.deepcopy(BOTH))), ('maker', 'an error text of the maker'))
+        with mock.patch.object(ci_evidence.gate_records, 'type_records', mock.Mock(side_effect=RuntimeError('x'))):
+            self.assertEqual(refusal(call_typed(copy.deepcopy(BOTH))), ('maker', 'the maker raised RuntimeError'))
+
+
 if __name__ == '__main__':
     unittest.main()

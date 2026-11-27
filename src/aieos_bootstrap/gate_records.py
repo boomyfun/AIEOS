@@ -51,6 +51,23 @@ the decision agent's review while the task is in review (decision-matrix row A82
 evidence profile of a run-made low task, so the governor still answers INSUFFICIENT_EVIDENCE for it (the contract of
 TASK-164, AC7).
 
+type_records(task_id, commit, intent_versions, wanted, steps, recorder) (task TASK-165; DEF-0159 part A) makes the
+evidence records of the types build and lint for the wanted (dimension, evidence type) pairs from the same step
+conclusions. wanted is a list of dicts with exactly the keys dimension (a non-empty text that UTF-8 can encode) and
+evidence_type (build or lint); the other arguments are checked as for gate_records. It returns a mapping with exactly the
+keys records and error. For each pair, in order, a repeated pair once, one record is made when every step that
+DEFAULT_CHECK_MAP names for the check of the type's name occurs exactly once and concluded success or failure (outcome
+fail when one failed), and none otherwise. The record has no gate key; it has evidence_type and dimension, and its
+record_id is the SHA-256 of "ci-type", the task, the commit, the type and the dimension joined by LF, the dimension last
+because it alone may hold a LF. Limits: a build record is the conclusion of the step "G1 build" (compileall -q over src
+and tests: the files compile, and nothing more) and a lint record that of the lint step (pyflakes with its default checks
+over src and tests), so neither checks a change outside src and tests, such as a docs change; both steps conclude success
+in a run that has no task; the CI class rests on the steps the caller gives; only build and lint are made, so an entry of
+another CI type stays unmet; the record_id binds neither the outcome nor the intent versions; the governor counts every
+record in the log of the CI source class with that type under that dimension, so whoever writes the log is trusted; this
+module is not on EVIDENCE_DEFINING_PATHS (evaluation_policy.py), an open part of DEF-0154. A gate record satisfies no
+build or lint entry, since it carries no evidence_type and no dimension.
+
 What the caller owes (the limits of this function): (1) the arguments are plain data, as loaded from JSON; an object of
 a subclass whose methods lie or change between two reads is outside the guarantee. (2) The plan entries are given
 without their optional args key: an entry with any key other than gate and check makes the whole call an error. (3) The
@@ -158,6 +175,60 @@ def _entry(check, check_map, seen):
     if any(c not in ('success', 'failure') for c in conclusions):
         return 'uncovered', _NOT_CONCLUDED
     return 'covered', 'fail' if 'failure' in conclusions else 'pass'
+
+
+_TYPES = ('build', 'lint')
+_WANTED_KEYS = frozenset({'dimension', 'evidence_type'})
+
+
+def _wanted_error(wanted):
+    """The first malformed entry of wanted as a short text, or None."""
+    if not isinstance(wanted, list):
+        return 'wanted is not a list'
+    for item in wanted:
+        if not isinstance(item, dict) or set(item) != _WANTED_KEYS:
+            return 'a wanted entry is not a mapping with exactly the keys dimension and evidence_type'
+        if not _text(item['dimension']):
+            return 'a wanted entry has a dimension that is not a non-empty text'
+        try:
+            item['dimension'].encode('utf-8')
+        except UnicodeEncodeError:
+            return 'a wanted entry has a dimension that UTF-8 cannot encode'
+        if not isinstance(item['evidence_type'], str) or item['evidence_type'] not in _TYPES:
+            return 'a wanted entry has an evidence_type that is not build or lint'
+    return None
+
+
+def type_records(task_id, commit, intent_versions, wanted, steps, recorder):
+    """The build and lint evidence records of one CI run for the wanted (dimension, evidence type) pairs."""
+    try:
+        error = _argument_error(task_id, commit, intent_versions, [{'gate': 'G0', 'check': 'scope'}], steps,
+                                DEFAULT_CHECK_MAP, recorder)
+        if error is None:
+            error = _wanted_error(wanted)
+        if error is not None:
+            return {'records': [], 'error': error}
+        seen = {}
+        for step in steps:
+            seen.setdefault(step['name'], []).append(step['conclusion'])
+        records, done = [], set()
+        for item in wanted:
+            kind, dimension = item['evidence_type'], item['dimension']
+            if (kind, dimension) in done:
+                continue
+            done.add((kind, dimension))
+            state, outcome = _entry(kind, DEFAULT_CHECK_MAP, seen)
+            if state != 'covered':
+                continue
+            ident = hashlib.sha256('\n'.join(('ci-type', task_id, commit, kind, dimension)).encode('utf-8')).hexdigest()
+            records.append({
+                'record_id': ident, 'fact_kind': 'observation', 'source_class': 'deterministic_tool_external_ci',
+                'recorder': recorder, 'subject': task_id, 'commit': commit,
+                'intent_versions': dict(intent_versions), 'evidence_type': kind, 'dimension': dimension,
+                'outcome': outcome})
+        return {'records': records, 'error': None}
+    except Exception as exc:
+        return {'records': [], 'error': 'an argument could not be read: ' + type(exc).__name__}
 
 
 def gate_records(task_id, commit, intent_versions, plan, steps, check_map, recorder):

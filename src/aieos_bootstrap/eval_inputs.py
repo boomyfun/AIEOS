@@ -27,9 +27,15 @@ reader already refuses a repeated key (base_inputs.py :362-:363) and returns pla
 D-6828; (5) plan: the gate ids are the verification_plan entries' gate values in order, each G and digits (the run-made
 contracts that launcher.py writes carry mappings with gate, check and args); (6) risk_rules: the list that
 scope_reconcile.rules_from_policy returns, each rule exactly {match, class}; (7) the CI records through
-ci_evidence.ci_evidence, called once; (8) the guard against the records already in the log, in the order check all,
-then append; (9) the completeness check: a copy of the values goes to governor.derive_inputs, and a risk, an evidence
-profile or a delegation that it cannot derive is a refusal, so the values returned are never turned into no decision.
+ci_evidence.ci_evidence, called once, with typed holding one pair {dimension, evidence_type} for each type build or lint
+of each entry of the evidence profile that governor.derive_inputs derives from a copy of the values (task TASK-165;
+DEF-0159 part A): derive_inputs is called once, before ci_evidence, what it raises is held, no dimension is typed here,
+and typed is passed only when it holds a pair; (8) the guard against the records already in the log, the type records
+among them, in the order check all, then append; (9) the completeness check: what derive_inputs raised is acted on here,
+so every refusal keeps its reason and its order, and a risk, an evidence profile or a delegation that it cannot derive is
+a refusal, so the values returned are never turned into no decision. The build and lint records have the limits that
+gate_records states for type_records: they cover src and tests only, their CI class rests on the caller's fetched run
+data, and only build and lint are made.
 
 owner_kept_act reaches the module as the text true or false (the subset reader gives scalars as texts) and is converted
 to the bool; evaluation.evaluate_task binds the field to the contract bytes again.
@@ -269,13 +275,6 @@ def eval_inputs(task_id, evaluated_commit, policy_ref, contract, contract_sha256
             paths = list(changed_paths)
         except ValueError as exc:
             return _refuse('argument', 'a source or a plan entry is not plain data: ' + str(exc))
-        made = ci_evidence.ci_evidence(task_id, evaluated_commit, contract_sha256, copies['intent_versions'],
-                                       plan_entries, list(paths), runs, recorder)
-        if made['refusal'] is not None:
-            return _refuse('ci', 'ci_evidence refused: %s: %s' % (made['refusal']['reason'], made['refusal']['detail']))
-        fresh, already, clash = _guard(made['records'], log_payloads)
-        if clash is not None:
-            return _refuse('conflict', 'the log holds another record under the record_id ' + clash)
         values = {
             'contract': {'traces_to': list(contract['traces_to']), 'risk': contract['risk'],
                          'owner_kept_act': contract['owner_kept_act'] == 'true', 'verification_plan': gates},
@@ -285,10 +284,28 @@ def eval_inputs(task_id, evaluated_commit, policy_ref, contract, contract_sha256
             'evidence_comparison': copies['evidence_comparison'], 'delegation': copies['delegation'],
             'auto_accept': copies['auto_accept'], 'policy_version': copies['policy_version'],
             'level_version': copies['level_version'], 'ruleset_version': copies['ruleset_version']}
+        derived, held = None, None
         try:
             derived = governor.derive_inputs(_copy(values))
-        except ValueError as exc:
-            return _refuse('incomplete', 'governor.derive_inputs refused the values: ' + str(exc))
+        except Exception as exc:
+            held = exc
+        typed = []
+        if derived is not None and derived['evidence_profile'] is not None:
+            typed = [{'dimension': entry['dimension'], 'evidence_type': kind}
+                     for entry in derived['evidence_profile'] for kind in entry['evidence_types']
+                     if kind in ('build', 'lint')]
+        made = ci_evidence.ci_evidence(task_id, evaluated_commit, contract_sha256, copies['intent_versions'],
+                                       plan_entries, list(paths), runs, recorder,
+                                       **({'typed': typed} if typed else {}))
+        if made['refusal'] is not None:
+            return _refuse('ci', 'ci_evidence refused: %s: %s' % (made['refusal']['reason'], made['refusal']['detail']))
+        fresh, already, clash = _guard(made['records'], log_payloads)
+        if clash is not None:
+            return _refuse('conflict', 'the log holds another record under the record_id ' + clash)
+        if held is not None:
+            if isinstance(held, ValueError):
+                return _refuse('incomplete', 'governor.derive_inputs refused the values: ' + str(held))
+            raise held
         missing = []
         if derived['risk'] is None:
             missing.append('the risk cannot be derived')
