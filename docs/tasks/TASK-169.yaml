@@ -1,0 +1,412 @@
+# Task contract TASK-169 (task A of the batch 1 clean-up, master plan section 6 point (6) (c), revision 12; session
+# 228f426b, 2026-11-27; decisions D-7623, D-7630, D-7638). Drafted by script fill_contract_169.py: base_commit,
+# intent_versions and forbidden are computed; the rest is the worker's text. Whether it is approved is recorded in the
+# decision files, not here.
+task: TASK-169
+contract_version: v1
+task_type: implementation
+objective: >-
+  Finish, by tests and dated errata only, the open points of DEF-0037, DEF-0044, DEF-0080, DEF-0081, DEF-0082 and
+  DEF-0134, so that each can be closed as done with cited evidence.
+traces_to:
+  - docs/Deferred/DEF-0037-the-review-findings-carried-from-task-014.md
+  - docs/Deferred/DEF-0044-the-fixture-review-findings-and-erratum-e1.md
+  - docs/Deferred/DEF-0080-the-next-text-change-of-the-claude-code-channel.md
+  - docs/Deferred/DEF-0081-the-next-text-change-of-read-set-record-and-task-064s-ac3.md
+  - docs/Deferred/DEF-0082-the-next-text-change-of-claude-code-reads.md
+  - docs/Deferred/DEF-0134-two-tests-of-test-runner-rc-depend-on-the-order-of-imports.md
+  - docs/plan/master-plan.md
+input_state:
+  base_commit: d3af070e03824f28777327f978c462dfde273ece
+  depends_on: [TASK-168]
+  intent_versions:
+    tests/unit/test_runner_rc.py: 8d29076a68e1773133bd7e9db4d1c577ec9732a00ffcee1e1011e6003bf2b1ff
+    tests/unit/test_conformance_files.py: 71927f5fd3a02d3437dbbe26c0aca182a4fcc2a0c480c97dc346e156c677dcb0
+    tests/unit/test_conformance_risk_files.py: ecc268bd01c047619ccfafeafa1332083bf1d18f641c87ea417d56e829ac5064
+    tests/unit/test_claude_code_channel.py: be070f2f1f5c7088190dd7198cc4d0a565e7bf6c412393c78d38cb7a20ca84c7
+    tests/unit/test_read_set_record.py: 43d674c2c31e226c5e405e843366a0bc5f354e5ba3fba2abf14475131166d3fc
+    tests/unit/test_claude_code_reads.py: 3be265fb43cdfb94b895548c2dc2932c3e720626e838acfb29aea33d3f64b5c3
+    tests/integration/test_claude_code_reads_inputs.py: be33bd9bf4729d19cc79b7037c155db773fe5afe2ca207dfdd21d6b6ccb359ce
+    src/aieos_bootstrap/conformance.py: 2ee18a9f08db8cabffa740eef82869fd25632c03575670089bc49e262d75eea2
+    src/aieos_bootstrap/evaluation.py: 9ea5969d8da752d4232ec3b282307437173631aa6650bcee15c27341502b8469
+    src/aieos_bootstrap/claude_code_channel.py: c1f4a3773f0beec75a74f0a2a0097eed2325215fdd8e68ca903dc49260c0e814
+    src/aieos_bootstrap/claude_code_reads.py: ed57186956e7e235e63c760f5693b10048f15c93d221550fc4e4a5750da35414
+    src/aieos_bootstrap/read_set_record.py: de392623846380712ffb2682c5e7b7f1de24fdb729664b344875d26c34be7095
+    src/aieos_bootstrap/governor.py: 2f2dcd7525bcc39dcb3539ada93daff428a624cf2c47876c2d17599cf7ec022f
+    src/aieos_bootstrap/records.py: 2b7b456b1ef9fecde0c8b84eaf75b1fd85b7ac2e8f40e9e329a7dea3b7b31297
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/decision-matrix.md: d1ed86ade033617540ba8f9969afe22420f90e1dc9d179421de1903a0f721656
+    docs/plan/master-plan.md: 51c45f7601d83523a7450c7d644cb8dbb8d9953261f73b98b92bf771d8086bfe
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/specs/evaluation-policy-gov-aieos.md: 0777508cafbc5c0c09fb1718bebbf2f8233c492b0569849137d76da14aef8ddb
+    docs/pre-genesis/conformance-scenarios-initial.md: 6b5c0666a1f364f5ecec9ad516c9a749969a1963f4e5dbef566adcbc8c80e24d
+    docs/tasks/TASK-018.yaml: 2d28b65c48534c9b0788e4c7241a9483a7a0b569847cc6219fe371959b92f5c0
+    docs/tasks/TASK-063.yaml: 95b72dfe1c260c032f69171b5e11d9c6c8dfbf56468f49741d513c17971fc45d
+    docs/tasks/TASK-064.yaml: c04a8b389d4443a3e7c7aa2381366dfc37042f8edf4e51650c2affd4b4264262
+    docs/tasks/TASK-065.yaml: afefbf11ecb56f2f90462f249478069862d7f52c3a6aca039e06cc0e6ecb3621
+    docs/Deferred/DEF-0037-the-review-findings-carried-from-task-014.md: 4f225dd82fc932a73be60334160194e778852b333a4429c1c5e2fe7dfc169335
+    docs/Deferred/DEF-0044-the-fixture-review-findings-and-erratum-e1.md: 4bd203425a2a9a114af4731552c791e4672e394a99b3982eafa49a98f56aa977
+    docs/Deferred/DEF-0080-the-next-text-change-of-the-claude-code-channel.md: 64bf91ade865ce104fe5aca8670fef9d07a5f106e86901a4b39a342335a1e367
+    docs/Deferred/DEF-0081-the-next-text-change-of-read-set-record-and-task-064s-ac3.md: c692cd9c6dcf111bb437ebe6782839588ec1b6dc627a856228aec470e8e6697e
+    docs/Deferred/DEF-0082-the-next-text-change-of-claude-code-reads.md: de0909cd6020084d3e2fc3e917bea1ecba24ae5e7755ad750d97e2a646cf3339
+    docs/Deferred/DEF-0134-two-tests-of-test-runner-rc-depend-on-the-order-of-imports.md: 5cd9d1182c926ba571fb57aade5f9290b2a31007f39ccf63c1234a79372fef06
+write_set:
+  paths:
+    - tests/unit/test_runner_rc.py
+    - tests/unit/test_conformance_files.py
+    - tests/unit/test_conformance_risk_files.py
+    - tests/unit/test_claude_code_channel.py
+    - tests/unit/test_read_set_record.py
+    - tests/unit/test_claude_code_reads.py
+    - tests/integration/test_claude_code_reads_inputs.py
+read_set:
+  paths:
+    - tests/unit/test_runner_rc.py
+    - tests/unit/test_conformance_files.py
+    - tests/unit/test_conformance_risk_files.py
+    - tests/unit/test_claude_code_channel.py
+    - tests/unit/test_read_set_record.py
+    - tests/unit/test_claude_code_reads.py
+    - tests/integration/test_claude_code_reads_inputs.py
+    - src/aieos_bootstrap/conformance.py
+    - src/aieos_bootstrap/evaluation.py
+    - src/aieos_bootstrap/claude_code_channel.py
+    - src/aieos_bootstrap/claude_code_reads.py
+    - src/aieos_bootstrap/read_set_record.py
+    - src/aieos_bootstrap/governor.py
+    - src/aieos_bootstrap/records.py
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/decision-matrix.md
+    - docs/plan/master-plan.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/specs/evaluation-policy-gov-aieos.md
+    - docs/pre-genesis/conformance-scenarios-initial.md
+    - docs/tasks/TASK-018.yaml
+    - docs/tasks/TASK-063.yaml
+    - docs/tasks/TASK-064.yaml
+    - docs/tasks/TASK-065.yaml
+    - docs/Deferred/DEF-0037-the-review-findings-carried-from-task-014.md
+    - docs/Deferred/DEF-0044-the-fixture-review-findings-and-erratum-e1.md
+    - docs/Deferred/DEF-0080-the-next-text-change-of-the-claude-code-channel.md
+    - docs/Deferred/DEF-0081-the-next-text-change-of-read-set-record-and-task-064s-ac3.md
+    - docs/Deferred/DEF-0082-the-next-text-change-of-claude-code-reads.md
+    - docs/Deferred/DEF-0134-two-tests-of-test-runner-rc-depend-on-the-order-of-imports.md
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+# forbidden governs writes; reading a forbidden path that the read_set lists is allowed.
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - docs/**
+  - src/**
+  - tests/conformance/**
+  - tests/run_tests.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_base_files_repo.py
+  - tests/integration/test_base_inputs_repo.py
+  - tests/integration/test_ci_lint_step.py
+  - tests/integration/test_ci_resume_pin_logic.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_decision_replay_real_record.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_g0_detect_copies.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_launcher_repo.py
+  - tests/integration/test_mcp_server_work_order_repo.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_resume_inputs_repo.py
+  - tests/integration/test_resume_log_inputs_repo.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_base_files_properties.py
+  - tests/property/test_base_inputs_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_claude_starter_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_context_compiler_properties.py
+  - tests/property/test_contract_path_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_mcp_server_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_adapter_declaration.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_base_files.py
+  - tests/unit/test_base_inputs.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_capture_submit.py
+  - tests/unit/test_ci_evidence.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_claude_starter.py
+  - tests/unit/test_cli.py
+  - tests/unit/test_cli_approve.py
+  - tests/unit/test_cli_evaluate.py
+  - tests/unit/test_cli_import.py
+  - tests/unit/test_cli_init.py
+  - tests/unit/test_cli_launch.py
+  - tests/unit/test_cli_run.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_contract_path.py
+  - tests/unit/test_decision_replay.py
+  - tests/unit/test_decision_replay_acceptance.py
+  - tests/unit/test_done.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_eval_inputs.py
+  - tests/unit/test_evaluate_command.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_derive.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_intake.py
+  - tests/unit/test_evaluation_policy.py
+  - tests/unit/test_evaluation_policy_file.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_sources.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_evaluator_covers_evidence_paths.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_execution_list_tasks.py
+  - tests/unit/test_execution_status.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_governor.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_resume.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gate_records.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_handoff_file.py
+  - tests/unit/test_intent_map.py
+  - tests/unit/test_launcher.py
+  - tests/unit/test_launcher_end.py
+  - tests/unit/test_launcher_gone.py
+  - tests/unit/test_launcher_outside.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_mcp_server_work_order.py
+  - tests/unit/test_metrics_report.py
+  - tests/unit/test_native_isolation.py
+  - tests/unit/test_read_set_gone.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_resume_inputs.py
+  - tests/unit/test_resume_log_inputs.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_capture.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-007, INV-008, INV-009, INV-010, INV-011, GOV-001, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      Scope. The task commits change only the seven test modules of the write set; in the task commits no file under src/,
+      .github/, docs/ or tests/conformance/ changes (the contract commit and the records commit are not task commits; AC11).
+      No name that the deterministic_rule step refuses (for example input, open or compile as a variable) is used. Existing tests pass; their assertions are only added to or made stricter, except the one
+      altered case named in AC3. No test writes a file, starts a process or imports a module that the workflow's
+      deterministic_rule step refuses; no exec, eval, compile, __import__ or importlib is used; the only imports added
+      are of the own package.
+  - AC2: >-
+      DEF-0134. tests/unit/test_runner_rc.py imports aieos_bootstrap.evaluation at module level, and a test uses that
+      import (so the lint step finds no unused import), so that the tests test_absent and test_a_loaded_module of
+      R3EntryPoint pass when that file is run alone. The worker's own evidence: the file run alone at base_commit shows
+      those two failures, and the file run alone at the task commit passes.
+  - AC3: >-
+      DEF-0037. In tests/unit/test_conformance_files.py the base case 'a fixture path' isolates the path rule: the moved
+      path's bytes are in the files map and the case asserts the exact error list of the path rule alone (it may move into
+      test_a_moved_fixture_errs_by_the_path_rule_alone or a test of its own; the case is not dropped). A copy of the set
+      check without the path rule fails that test.
+  - AC4: >-
+      DEF-0044. In tests/unit/test_conformance_risk_files.py: a test asserts the Source cell and the other cells of
+      RISK-01's row not asserted at base_commit, against the bound scenario file's text; and each observation record of the
+      fixture is also checked with aieos_bootstrap.records.check_record, finding nothing, and each case's request is
+      also checked with aieos_bootstrap.governor._request_errors (a private name; records.py holds no request check),
+      finding nothing. The module's own record and request checks stay. For this task only, this supersedes the sentence of TASK-018's AC8 that the test modules import only the
+      standard library; the module docstring says so.
+  - AC5: >-
+      DEF-0080. In tests/unit/test_claude_code_channel.py: (a) a test with a copy of _root_relative that lacks the
+      backslash check, written out in the test, shows that the copy accepts a path with a backslash that the module
+      refuses; (b) a copy without the leading-slash check still refuses '/etc/x', and
+      a copy without the empty-text check still refuses '' (each returns False, as the empty-segment check of
+      claude_code_channel.py:207 gives), and a copy lacking also that segment check accepts the same input; the test
+      names the segment check.
+  - AC6: >-
+      DEF-0081. In tests/unit/test_read_set_record.py, for each of the two broken copies the item names (the given list
+      changed in place by build or observe; observe without its record-is-None check): a test that fails under that broken
+      copy (an existing test may be it, for example tests/unit/test_read_set_record.py:84-90 and :148-161, when the
+      worker's run shows it fails), or an executable test that shows why it changes no result. The worker runs each
+      broken copy outside the repository and records which test fails.
+  - AC7: >-
+      DEF-0082. For R2-3, R3-6 and R5-4, one broken copy of claude_code_reads.py for each kind the item names: the input
+      kinds (one each for input_bytes, input_json, input_shape and input), Glob (not in SEARCH_TOOLS), MCP (no mcp__
+      class), the subagent class (SUBAGENT_TOOLS empty), a non-string file_path accepted, a non-object tool_input
+      accepted. For each, a test of tests/unit/test_claude_code_reads.py fails under it; where an existing test already
+      does (for example :34-47, :108-112, :122-133), it is named. For R3-2, a test of the AC5 integration module
+      (tests/integration/test_claude_code_reads_inputs.py) asserts that a "read" result's read_paths is exactly the one
+      input path, for a path with mixed case and forward slashes as well, so that a copy that changes the returned list
+      (a second entry, another case) fails a test of that module. The worker runs each broken copy outside the repository
+      and records which test fails. The record of TASK-065 does not state the content of the broken copy it calls R5; the
+      acceptance text says so.
+      The record of TASK-065 does not state the content of mutant R5; AC11's line on DEF-0082 records the R3-2 point as
+      met by the returned-list test of the AC5 module on the reading of decision D-7640, without claiming that mutant R5
+      is killed.
+  - AC8: >-
+      Errata (D-7623 R1). The acceptance text carries one dated erratum for each text that cannot change, quoting it,
+      citing it by file and line or commit and stating the correct reading: (a) the message of TASK-014's task commit
+      948f70009fcbfe7ef3a09e6eafb65d0ebceff1c4 (the two wrong-folder cases were added only to
+      tests/unit/test_conformance_files.py, not to all three modules it names); (b) docs/tasks/TASK-018.yaml:23-26, the
+      header sentence on what TASK-017's test modules glob (true: tests/unit/test_runner_risk.py:28 and
+      tests/integration/test_runner_risk_run.py:78 read only fixtures and fixtures_rc; checked by script at drafting,
+      not from the reviewers' inputs), and its AC8's word "compile" (:218: the builtin, as the deterministic_rule step
+      reads bare names); (c) docs/tasks/TASK-063.yaml:19-20, "specification 2 revision 6 keeps no session key on a
+      record" (a session key is kept on an agent's claim and not on the read-set observation: records.py:109, :117,
+      :439-441); (d) docs/tasks/TASK-064.yaml's header on the fence and on "duplicate" (:24-33) and the same sentence of
+      its AC3 (:349-350): eventlog.append decides "duplicate" or "conflict" by the stored event, the fencing token among
+      the compared keys, before the lease is looked at (eventlog.py:176-187), so a repeat after a release or under
+      another token gives "duplicate" or "conflict", not the fence refusal, and its citation writer.py:209-224 is not
+      the fence; (e) docs/tasks/TASK-065.yaml:25-35: the header's "carries tool_name 'Read'" is looser than its
+      sources: the name is seen only on the model side, and that a PostToolUse input of Read holds tool_name "Read" with
+      tool_input.file_path is an inference from the documentation, never measured; and the message of its commit
+      f15ccce8683ab70a312fd11c8aedacec934fd0ac, "the tests of AC1 to AC9": no test of the three modules names AC8; (f)
+      docs/tasks/TASK-018.yaml:217-218, that the test modules import only the standard library: from this task on,
+      tests/unit/test_conformance_risk_files.py also imports aieos_bootstrap's records and governor for AC4. Each
+      correct reading is checked against the code or the text at base_commit before it is written.
+  - AC9: >-
+      Checks. unit_test, integration_test and property_test pass in CI on the task commit; deterministic_rule, OPS-003,
+      SEC-001, SEC-002, static_security_analysis and lint (pyflakes, .github/workflows/aieos-checks.yml:2235-2247) report
+      no finding; before each commit the added text is scanned with
+      the workflow's SEC-001, SEC-002 and OPS-003 patterns and each count is 0.
+  - AC10: >-
+      GOV-003 (a stated departure for this task, DEF-0107's form; DEF-0110 gives these paths no other policy yet): every
+      changed path is an evaluator path. The acceptance text states the departure, gives the base-tests step's printed
+      line with every failing name, and a review of the test diff by a model other than the implementer's.
+  - AC11: >-
+      Records, in the records commit (made by the worker under its own decision, no AIEOS-Task trailer, pushed only after
+      the task commits are on main; not a task commit, so the task's capabilities do not cover it; its paths are under
+      docs/runs, docs/Deferred, docs/records and docs/History): a dated
+      line on each of DEF-0037, DEF-0044, DEF-0080, DEF-0081, DEF-0082 and DEF-0134 saying point by point what closed it,
+      with file and line, and the state done only where every open point is met; a point not met stays open and the item
+      counts nothing; the counts and accepted limits of master plan section 6 point (6); the number of items this task
+      closed as done toward the 36 of point (6) (c) (the rise of batch 1, decision D-7616) and the cumulative number of
+      the series; the series' cap stated openly (at most 16 after three tasks on the plan of decision D-7638); a history
+      page.
+  - AC12: >-
+      Limits. The broken-copy runs, the single-file runs and the added-text scans are the worker's own runs, each under
+      its decision, outside the task's shell capability; the broken-copy runs are not part of CI. A copy written
+      in a test stands for the module's text at base_commit; a later change of the module does not update it. The errata
+      correct readings; they change no accepted task's contract, record or commit.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [tests/unit/test_runner_rc.py, tests/unit/test_conformance_files.py, tests/unit/test_conformance_risk_files.py, tests/unit/test_claude_code_channel.py, tests/unit/test_read_set_record.py, tests/unit/test_claude_code_reads.py, tests/integration/test_claude_code_reads_inputs.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+# Risk: tests/**: risk-rules-gov-aieos.md R2 raised by R3, unevaluable and therefore matching (:18); re-checked at the contract commit. The records commit lies outside the task (AC11).
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 900k, wall_time: 6h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC9]}
+  - {gate: G3, check: constitution, args: [AC8, AC10, AC11, AC12, INV-001, INV-002, INV-003, INV-004, INV-007, INV-008, INV-009, INV-010, INV-011, GOV-001, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of risk high is satisfied (an other_model_review and a separate decision_agent_review, both bound to the evaluated commit, the contract and the pins, before any fast-forward of main) AND the task acceptance by the decision agent before any landing step AND the aieos-checks run of the accepted commit succeeds
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
