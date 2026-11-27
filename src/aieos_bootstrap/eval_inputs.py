@@ -14,6 +14,9 @@ D-6836 to meet AC5), already_in_log and gaps. The reasons are a closed set: argu
 policy_path, ci, conflict and incomplete. It never raises an Exception; a BaseException that is not an Exception passes
 through.
 
+Checks (2) to (6) and the values mapping are the private function _assemble(contract, changed_paths, sources), which the
+replay of decision records calls too, so the values have one definition (task TASK-167; DEF-0137).
+
 The checks, in order: (1) the arguments; (2) policy_path: a task whose changed paths include one of the five policy
 source files is refused (a task cannot edit the rules that evaluate it); (3) the gaps: ``sources`` is a dict with exactly
 the twelve keys intent_versions, owner_kept_rules, articles, default_profiles, requirement_profiles,
@@ -227,6 +230,65 @@ def _guard(records, log_payloads):
     return fresh, already, None
 
 
+def _assemble(contract, changed_paths, sources):
+    """(declared, values, copies of the plan entries, None), or (None, None, None, (reason, detail)): the steps of
+    eval_inputs between its argument checks and its call of governor.derive_inputs, in their order. The replay of
+    decision records calls it too, so the values have one definition (task TASK-167). What it raises on arguments that
+    are not in the form eval_inputs checks is the caller's to catch."""
+    for path in changed_paths:
+        if path in _POLICY_PATHS:
+            return None, None, None, ('policy_path', 'a changed path is a policy source: ' + path)
+    open_gaps = [name for name in _GAPS if sources[name] is None]
+    if open_gaps:
+        return None, None, None, ('gap', 'open gaps: ' + ', '.join(open_gaps))
+    retries, detail = _retries(contract['autonomy'])
+    if detail is not None:
+        return None, None, None, ('retries', detail)
+    gates, detail = _plan(contract['verification_plan'])
+    if detail is not None:
+        return None, None, None, ('plan', detail)
+    rules, detail = _rules(sources['risk_rules'])
+    if detail is not None:
+        return None, None, None, ('risk_rules', detail)
+    if not _text(sources['policy_version']):
+        return None, None, None, ('argument', 'policy_version is not a non-empty text')
+    for name in ('level_version', 'ruleset_version'):
+        if not _text(sources[name]):
+            return None, None, None, ('argument', name + ' is not a non-empty text')
+    okr = sources['owner_kept_rules']
+    if not isinstance(okr, list) or not all(isinstance(r, dict) and _texts(r.get('match')) for r in okr):
+        return None, None, None, ('argument', 'owner_kept_rules is not a list of dicts whose match is a non-empty list '
+                                              'of non-empty texts')
+    comp = sources['evidence_comparison']
+    if not isinstance(comp, dict) or set(comp) != {'weakens'} or not isinstance(comp['weakens'], bool):
+        return None, None, None, ('argument', 'evidence_comparison is not a dict with exactly the key weakens and a '
+                                              'bool value')
+    if not isinstance(sources['auto_accept'], dict):
+        return None, None, None, ('argument', 'auto_accept is not a dict')
+    reqs = sources['requirement_profiles']
+    if not isinstance(reqs, list):
+        return None, None, None, ('argument', 'requirement_profiles is not a list')
+    if not all(_text(r.get('id')) for r in reqs if isinstance(r, dict)):
+        return None, None, None, ('argument', 'a requirement profile has no text id')
+    try:
+        copies = {name: _copy(sources[name]) for name in _GAPS}
+        plan_entries = [_copy(e) for e in contract['verification_plan']]
+        paths = list(changed_paths)
+    except ValueError as exc:
+        return None, None, None, ('argument', 'a source or a plan entry is not plain data: ' + str(exc))
+    values = {
+        'contract': {'traces_to': list(contract['traces_to']), 'risk': contract['risk'],
+                     'owner_kept_act': contract['owner_kept_act'] == 'true', 'verification_plan': gates},
+        'changed_paths': paths, 'risk_rules': rules, 'owner_kept_rules': copies['owner_kept_rules'],
+        'articles': copies['articles'], 'default_profiles': copies['default_profiles'],
+        'requirement_profiles': copies['requirement_profiles'],
+        'evidence_comparison': copies['evidence_comparison'], 'delegation': copies['delegation'],
+        'auto_accept': copies['auto_accept'], 'policy_version': copies['policy_version'],
+        'level_version': copies['level_version'], 'ruleset_version': copies['ruleset_version']}
+    declared = {'intent_versions': copies['intent_versions'], 'retries': retries}
+    return declared, values, plan_entries, None
+
+
 def eval_inputs(task_id, evaluated_commit, policy_ref, contract, contract_sha256, changed_paths, runs, sources,
                 log_payloads, recorder):
     """The inputs of evaluation.evaluate_task and the CI records to append, or the refusal."""
@@ -235,55 +297,9 @@ def eval_inputs(task_id, evaluated_commit, policy_ref, contract, contract_sha256
                                 sources, log_payloads, recorder)
         if error is not None:
             return _refuse('argument', error)
-        for path in changed_paths:
-            if path in _POLICY_PATHS:
-                return _refuse('policy_path', 'a changed path is a policy source: ' + path)
-        open_gaps = [name for name in _GAPS if sources[name] is None]
-        if open_gaps:
-            return _refuse('gap', 'open gaps: ' + ', '.join(open_gaps))
-        retries, detail = _retries(contract['autonomy'])
-        if detail is not None:
-            return _refuse('retries', detail)
-        gates, detail = _plan(contract['verification_plan'])
-        if detail is not None:
-            return _refuse('plan', detail)
-        rules, detail = _rules(sources['risk_rules'])
-        if detail is not None:
-            return _refuse('risk_rules', detail)
-        if not _text(sources['policy_version']):
-            return _refuse('argument', 'policy_version is not a non-empty text')
-        for name in ('level_version', 'ruleset_version'):
-            if not _text(sources[name]):
-                return _refuse('argument', name + ' is not a non-empty text')
-        okr = sources['owner_kept_rules']
-        if not isinstance(okr, list) or not all(isinstance(r, dict) and _texts(r.get('match')) for r in okr):
-            return _refuse('argument', 'owner_kept_rules is not a list of dicts whose match is a non-empty list of '
-                                       'non-empty texts')
-        comp = sources['evidence_comparison']
-        if not isinstance(comp, dict) or set(comp) != {'weakens'} or not isinstance(comp['weakens'], bool):
-            return _refuse('argument', 'evidence_comparison is not a dict with exactly the key weakens and a bool value')
-        if not isinstance(sources['auto_accept'], dict):
-            return _refuse('argument', 'auto_accept is not a dict')
-        reqs = sources['requirement_profiles']
-        if not isinstance(reqs, list):
-            return _refuse('argument', 'requirement_profiles is not a list')
-        if not all(_text(r.get('id')) for r in reqs if isinstance(r, dict)):
-            return _refuse('argument', 'a requirement profile has no text id')
-        try:
-            copies = {name: _copy(sources[name]) for name in _GAPS}
-            plan_entries = [_copy(e) for e in contract['verification_plan']]
-            paths = list(changed_paths)
-        except ValueError as exc:
-            return _refuse('argument', 'a source or a plan entry is not plain data: ' + str(exc))
-        values = {
-            'contract': {'traces_to': list(contract['traces_to']), 'risk': contract['risk'],
-                         'owner_kept_act': contract['owner_kept_act'] == 'true', 'verification_plan': gates},
-            'changed_paths': list(paths), 'risk_rules': rules, 'owner_kept_rules': copies['owner_kept_rules'],
-            'articles': copies['articles'], 'default_profiles': copies['default_profiles'],
-            'requirement_profiles': copies['requirement_profiles'],
-            'evidence_comparison': copies['evidence_comparison'], 'delegation': copies['delegation'],
-            'auto_accept': copies['auto_accept'], 'policy_version': copies['policy_version'],
-            'level_version': copies['level_version'], 'ruleset_version': copies['ruleset_version']}
+        declared, values, plan_entries, refusal = _assemble(contract, changed_paths, sources)
+        if refusal is not None:
+            return _refuse(*refusal)
         derived, held = None, None
         try:
             derived = governor.derive_inputs(_copy(values))
@@ -294,8 +310,8 @@ def eval_inputs(task_id, evaluated_commit, policy_ref, contract, contract_sha256
             typed = [{'dimension': entry['dimension'], 'evidence_type': kind}
                      for entry in derived['evidence_profile'] for kind in entry['evidence_types']
                      if kind in ('build', 'lint')]
-        made = ci_evidence.ci_evidence(task_id, evaluated_commit, contract_sha256, copies['intent_versions'],
-                                       plan_entries, list(paths), runs, recorder,
+        made = ci_evidence.ci_evidence(task_id, evaluated_commit, contract_sha256, _copy(declared['intent_versions']),
+                                       plan_entries, list(values['changed_paths']), runs, recorder,
                                        **({'typed': typed} if typed else {}))
         if made['refusal'] is not None:
             return _refuse('ci', 'ci_evidence refused: %s: %s' % (made['refusal']['reason'], made['refusal']['detail']))
@@ -315,7 +331,6 @@ def eval_inputs(task_id, evaluated_commit, policy_ref, contract, contract_sha256
             missing.append('the delegation is not a bool')
         if missing:
             return _refuse('incomplete', 'governor.derive_inputs gives no decision: ' + '; '.join(missing))
-        declared = {'intent_versions': _copy(copies['intent_versions']), 'retries': retries}
         evidence = {'policy_ref': policy_ref, 'evaluated_commit': evaluated_commit, 'contract_sha256': contract_sha256,
                     'ci': _copy(made['evidence']), 'uncovered': _copy(made['uncovered']),
                     'already_in_log': list(already), 'gaps': []}

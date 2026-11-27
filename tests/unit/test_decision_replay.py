@@ -430,7 +430,7 @@ class MainTests(unittest.TestCase):
         # every case uses a log text that passes (LOG13), so the exit code and the printed lines come from the argument gate alone
         good = LOG13.decode('utf-8')
         rc, lines = self.run_main([], files=good)
-        self.assertEqual((rc, lines), (1, ['usage: decision_replay <repo> [<accepted engine sha256> ...]']))
+        self.assertEqual((rc, lines), (1, ['usage: decision_replay <repo> [--governor-pin <sha256>] [<accepted engine sha256> ...]']))
         rc, lines = self.run_main([str(ROOT), 'zz'], files=good)
         self.assertEqual((rc, lines), (1, ['FAIL: an accepted engine argument is not 64 lowercase hex characters']))
         rc, lines = self.run_main(['relative/path'], files=good)
@@ -656,6 +656,38 @@ class ViolationPathTests(unittest.TestCase):
         self.assertIn('violation.DECISION', text)
         self.assertIn('violation.RECORDER', text)
         self.assertNotIn('STOP: violation', text)
+
+
+class CarriedFindingTests(unittest.TestCase):
+    """TASK-167 AC8: DEF-0144 items 1, 2, 3 and 16."""
+    lines_with = ViolationPathTests.lines_with
+    recognised = ViolationPathTests.recognised
+    entry = ViolationPathTests.entry
+
+    def test_a_task_id_that_is_not_a_text_is_not_recognised(self):
+        self.assertFalse(self.recognised(_changed(DETECTED, task_id=3), _changed(STOP, task_id=3)))
+
+    def test_an_earlier_line_that_cannot_be_read_or_is_no_object_is_skipped(self):
+        for line in (b'not json', b'[1]', b'7'):
+            with self.subTest(line):
+                self.assertTrue(decision_replay.violation_path_record([line, _line(DETECTED), _line(STOP)], 2))
+
+    def test_a_negative_index_is_never_recognised(self):
+        self.assertTrue(decision_replay.violation_path_record([_line(DETECTED), _line(STOP)], 1))
+        self.assertFalse(decision_replay.violation_path_record([_line(DETECTED), _line(STOP)], -1))
+
+    def test_an_engine_pin_that_does_not_match_fails_the_recognised_record_too(self):
+        rc, lines = self.entry((_line(DETECTED) + b'\n' + _line(STOP) + b'\n').decode('utf-8'), argv=[str(ROOT), '0' * 64])
+        self.assertEqual(rc, 1, lines)
+        self.assertFalse(any(l.startswith('NOT REPLAYED: violation-path record') for l in lines))
+        self.assertIn('decision records: 1, replayed and passed: 0, failed: 1, not replayed (violation path): 0', lines[-1])
+
+    def test_two_records_that_are_not_recognised_both_fail(self):
+        first = _payload_changed(STOP, decision='CONTINUE')
+        second = _changed(_payload_changed(STOP, recorder='another recorder'), seq=16, event_id='launch-x/pretool/t1/decision-2')
+        rc, lines = self.entry((_line(DETECTED) + b'\n' + _line(first) + b'\n' + _line(second) + b'\n').decode('utf-8'))
+        self.assertEqual(rc, 1, lines)
+        self.assertIn('decision records: 2, replayed and passed: 0, failed: 2, not replayed (violation path): 0', lines[-1])
 
 
 class SourceTests(unittest.TestCase):

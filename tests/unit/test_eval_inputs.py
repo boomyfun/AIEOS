@@ -125,6 +125,46 @@ class Boom(BaseException):
     """A BaseException that is not an Exception (AC1)."""
 
 
+class TASK167TheSharedValues(unittest.TestCase):
+    """TASK-167 AC2: the private function that eval_inputs and the replay of decision records both call."""
+
+    def test_it_gives_the_declared_mapping_the_values_and_the_plan_entries(self):
+        sources = good_sources()
+        declared, values, entries, refusal_ = eval_inputs._assemble(good_contract(), ['src/x.py'], sources)
+        self.assertIsNone(refusal_)
+        self.assertEqual(declared, {'intent_versions': {'SPEC-001': 'v2'}, 'retries': 1})
+        self.assertEqual(entries, PLAN4)
+        self.assertEqual(values['contract'], {'traces_to': ['SPEC-001'], 'risk': 'low', 'owner_kept_act': False,
+                                              'verification_plan': ['G0', 'G1', 'G2', 'G3']})
+        self.assertEqual(values['changed_paths'], ['src/x.py'])
+        self.assertEqual(set(values), {'contract', 'changed_paths', 'risk_rules', 'owner_kept_rules', 'articles',
+                                       'default_profiles', 'requirement_profiles', 'evidence_comparison', 'delegation',
+                                       'auto_accept', 'policy_version', 'level_version', 'ruleset_version'})
+        self.assertIsNot(declared['intent_versions'], sources['intent_versions'])
+        self.assertIsNot(values['articles'], sources['articles'])
+
+    def test_its_values_are_the_values_of_eval_inputs(self):
+        out = call()
+        declared, values, _, _ = eval_inputs._assemble(good_contract(), ['src/x.py'], good_sources())
+        self.assertEqual((out['declared'], out['values']), (declared, values))
+
+    def test_its_refusals_come_in_the_order_of_eval_inputs(self):
+        path = POLICY_PATHS[0]
+        cases = (
+            (good_contract(), [path], good_sources(articles=None),
+             ('policy_path', 'a changed path is a policy source: ' + path)),
+            (good_contract(autonomy={}), ['src/x.py'], good_sources(articles=None),
+             ('gap', 'open gaps: articles')),
+            (good_contract(autonomy={}), ['src/x.py'], good_sources(risk_rules='x'),
+             ('retries', 'autonomy has no budgets')),
+            (good_contract(), ['src/x.py'], good_sources(risk_rules='x'), ('risk_rules', 'risk_rules is not a list')),
+        )
+        for contract, paths, sources, expected in cases:
+            with self.subTest(expected[0]):
+                self.assertEqual(eval_inputs._assemble(contract, paths, sources), (None, None, None, expected))
+                self.assertEqual(refusal(call(contract=contract, changed_paths=paths, sources=sources)), expected)
+
+
 class AC1TheModule(unittest.TestCase):
     def setUp(self):
         self.source = (ROOT / 'src/aieos_bootstrap/eval_inputs.py').read_bytes().decode('utf-8')

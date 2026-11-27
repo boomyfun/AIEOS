@@ -6,7 +6,10 @@ and through the two helpers of evaluation that evaluate_task uses for the task's
 evaluation._changed_paths, and evaluation._Stop which they raise); the seam read (default gitread.run) is passed to all
 of them.
 
-load_sources(repo, policy_ref, evaluated_commit, task_id, ci_logs, read=None, max_commits=1000) returns a mapping with
+load_sources(repo, policy_ref, evaluated_commit, task_id, ci_logs, read=None, max_commits=1000, *, pin=None) returns a
+mapping. With a pin (64 lowercase hexadecimal characters; ci_logs must then be None) the pin is not taken from logs:
+pinned_governor is not called, governor.py at policy_ref is checked against the given pin, and the provenance entry of the
+pin is {pin: given, value} (task TASK-167: the replay holds no CI log). The mapping has
 exactly the keys result, sources, changed_paths, provenance and findings. result is present or refused. On present:
 sources holds exactly the twelve keys of eval_inputs, in the order of eval_inputs._GAPS; changed_paths is the sorted list
 without duplicate of the task's change at evaluated_commit; provenance lists the facts that only the loader knows (the
@@ -80,6 +83,7 @@ _TASK = re.compile(r'TASK-[0-9]+')
 _STAMP = re.compile('\ufeff?[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:[.][0-9]+)?Z(?: (.*))?', re.S)
 _PIN_MESSAGE = re.compile(r'  AIEOS_PINNED_GOVERNOR: ([0-9a-f]{64})')
 _VERSION_LINE = re.compile(r'policy_version: (\S+)')
+_PIN = re.compile(r'[0-9a-f]{64}')
 _RISKS = ('low', 'medium', 'high', 'critical')
 _SOURCES = ('intent_versions', 'owner_kept_rules', 'articles', 'default_profiles', 'requirement_profiles',
             'evidence_comparison', 'delegation', 'auto_accept', 'level_version', 'ruleset_version', 'policy_version',
@@ -110,7 +114,7 @@ def _refused(reason, detail):
             'findings': [{'reason': reason, 'detail': str(detail)[:_MAX_DETAIL]}]}
 
 
-def _argument_error(repo, policy_ref, evaluated_commit, task_id, ci_logs, read, max_commits):
+def _argument_error(repo, policy_ref, evaluated_commit, task_id, ci_logs, read, max_commits, pin):
     """The first malformed argument as a short text, or None."""
     if type(policy_ref) is not str or _COMMIT.fullmatch(policy_ref) is None:
         return 'policy_ref is not 40 lowercase hexadecimal characters'
@@ -120,8 +124,13 @@ def _argument_error(repo, policy_ref, evaluated_commit, task_id, ci_logs, read, 
         return 'policy_ref equals evaluated_commit'
     if type(task_id) is not str or _TASK.fullmatch(task_id) is None:
         return 'task_id is not TASK- and digits'
-    if type(ci_logs) is not list or any(type(log) is not str for log in ci_logs):
-        return 'ci_logs is not a list of texts'
+    if pin is None:
+        if type(ci_logs) is not list or any(type(log) is not str for log in ci_logs):
+            return 'ci_logs is not a list of texts'
+    elif type(pin) is not str or _PIN.fullmatch(pin) is None:
+        return 'pin is not 64 lowercase hexadecimal characters'
+    elif ci_logs is not None:
+        return 'ci_logs is given together with a pin'
     if read is not None and not callable(read):
         return 'read is not callable'
     if type(max_commits) is not int or not 1 <= max_commits <= 10000:
@@ -219,8 +228,8 @@ def _intent(repo, policy_ref, evaluated_commit, task_id, read, provenance):
     return dict(answer['value']), note
 
 
-def _load(repo, policy_ref, evaluated_commit, task_id, ci_logs, read, max_commits):
-    why = _argument_error(repo, policy_ref, evaluated_commit, task_id, ci_logs, read, max_commits)
+def _load(repo, policy_ref, evaluated_commit, task_id, ci_logs, read, max_commits, pin):
+    why = _argument_error(repo, policy_ref, evaluated_commit, task_id, ci_logs, read, max_commits, pin)
     if why is not None:
         raise _Refuse('argument', why)
     provenance = []
@@ -236,10 +245,16 @@ def _load(repo, policy_ref, evaluated_commit, task_id, ci_logs, read, max_commit
     level = evaluation_derive.level_version(policy_version)
     if level['value'] is None:
         raise _Refuse('rules', level['findings'][0]['detail'])
-    pin = pinned_governor(ci_logs)
-    if pin['value'] is None:
-        raise _Refuse('pin', pin['findings'][0]['detail'])
-    ruleset = evaluation_derive.ruleset_version(governor_text.encode('utf-8'), pin['value'])
+    if pin is None:
+        printed = pinned_governor(ci_logs)
+        if printed['value'] is None:
+            raise _Refuse('pin', printed['findings'][0]['detail'])
+        value = printed['value']
+        origin = {'pin': 'ci_log', 'value': value, 'logs': len(ci_logs)}
+    else:
+        value = pin
+        origin = {'pin': 'given', 'value': value}
+    ruleset = evaluation_derive.ruleset_version(governor_text.encode('utf-8'), value)
     if ruleset['value'] is None:
         finding = ruleset['findings'][0]
         raise _Refuse('governor', finding['detail'])
@@ -252,17 +267,17 @@ def _load(repo, policy_ref, evaluated_commit, task_id, ci_logs, read, max_commit
     sources['ruleset_version'] = ruleset['value']
     sources['policy_version'] = policy_version
     sources['risk_rules'] = risk_rules
-    provenance.append({'pin': 'ci_log', 'value': pin['value'], 'logs': len(ci_logs)})
+    provenance.append(origin)
     sources['intent_versions'], note = _intent(repo, policy_ref, evaluated_commit, task_id, read, provenance)
     provenance.append(note)
     ordered = {key: sources[key] for key in _SOURCES}
     return {'result': 'present', 'sources': ordered, 'changed_paths': paths, 'provenance': provenance, 'findings': []}
 
 
-def load_sources(repo, policy_ref, evaluated_commit, task_id, ci_logs, read=None, max_commits=1000):
+def load_sources(repo, policy_ref, evaluated_commit, task_id, ci_logs, read=None, max_commits=1000, *, pin=None):
     try:
         try:
-            answer = _load(repo, policy_ref, evaluated_commit, task_id, ci_logs, read, max_commits)
+            answer = _load(repo, policy_ref, evaluated_commit, task_id, ci_logs, read, max_commits, pin)
         except _Refuse as refusal:
             answer = _refused(refusal.reason, refusal.detail)
         except Exception as exc:

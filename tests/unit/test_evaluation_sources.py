@@ -566,6 +566,39 @@ class AC3ThePin(Base):
         self.refused(load(ci_logs=[log_of('checks\tRun\t' + STAMP + ' none')]), 'pin')
 
 
+class TASK167TheGivenPin(Base):
+    """TASK-167 AC3: a pin given by keyword in place of the CI logs."""
+
+    def test_the_given_pin_gives_the_same_sources_and_names_its_origin(self):
+        g, p, e = scenario()
+        from_logs = load(g, p, e)
+        with mock.patch.object(ES, 'pinned_governor', side_effect=AssertionError('the logs were read')):
+            given = load(g, p, e, ci_logs=None, pin=PIN)
+        self.assertEqual(given['result'], 'present', given['findings'])
+        self.assertEqual(given['sources'], from_logs['sources'])
+        self.assertEqual(given['changed_paths'], from_logs['changed_paths'])
+        self.assertEqual(given['provenance'][3], {'pin': 'given', 'value': PIN})
+        self.assertEqual(from_logs['provenance'][3], {'pin': 'ci_log', 'value': PIN, 'logs': 1})
+        self.assertEqual(given['provenance'][:3] + given['provenance'][4:],
+                         from_logs['provenance'][:3] + from_logs['provenance'][4:])
+
+    def test_a_pin_out_of_form_or_with_logs_is_an_argument_refusal(self):
+        for changes, detail in (({'ci_logs': None, 'pin': 'x'}, 'pin is not 64 lowercase hexadecimal characters'),
+                                ({'ci_logs': None, 'pin': PIN.upper()},
+                                 'pin is not 64 lowercase hexadecimal characters'),
+                                ({'ci_logs': None, 'pin': 5}, 'pin is not 64 lowercase hexadecimal characters'),
+                                ({'ci_logs': [GOOD_LOG], 'pin': PIN}, 'ci_logs is given together with a pin'),
+                                ({'ci_logs': [], 'pin': PIN}, 'ci_logs is given together with a pin')):
+            with self.subTest(changes):
+                self.assertEqual(self.refused(load(**changes), 'argument'), detail)
+
+    def test_no_logs_and_no_pin_is_refused_as_before(self):
+        self.assertEqual(self.refused(load(ci_logs=None), 'argument'), 'ci_logs is not a list of texts')
+
+    def test_a_governor_that_differs_from_the_given_pin_is_refused(self):
+        self.refused(load(ci_logs=None, pin='1' * 64), 'governor')
+
+
 class AC3ThePartialSavedLogs(Base):
     """AC3 (i): the partial form of the four whole saved logs (the fixture above, made by script)."""
 

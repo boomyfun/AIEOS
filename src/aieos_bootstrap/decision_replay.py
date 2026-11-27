@@ -7,12 +7,12 @@ every difference, and it fails closed on everything else.
 build_inputs=None)`` returns (True, []) or (False, findings), findings being non-empty strs, and never raises; with no ``engine`` given it
 refuses and imports nothing (erratum E1.7). ``record_index`` is the 0-based position of the record among the lines of the log
 (``log_bytes`` is the whole log). ``main(argv, read=None, out=print)``
-is the command-line entry (run as ``PYTHONPATH=src python -B -P -m aieos_bootstrap.decision_replay <repo> [<accepted engine sha256> ...]``, erratum E1.7)
+is the command-line entry (run as ``PYTHONPATH=src python -B -P -m aieos_bootstrap.decision_replay <repo> [--governor-pin <sha256>] [<accepted engine sha256> ...]``, erratum E1.7)
 and returns the exit code, 0 only when every decision record of the checked tree was replayed and passed, a recognised record of the violation path excepted (task TASK-141).
 
 What a replay does, in order (each step a failure with its finding when it does not hold):
 1. The log is checked by records.check_log; the record is the line ``record_index``: a decision.execution event with a task_id and a payload
-   holding head_commit (a commit id), log_seq (an int), engine_identity (code_sha256, python) and runtime (adapter, max_risk); its own
+   holding head_commit (a commit id), log_seq (an int), engine_identity (code_sha256) and runtime (adapter, max_risk); its own
    seq is log_seq + 1 (erratum E1.1: the record is not one of its own inputs).
 2. The log is cut at the lines with seq <= log_seq; they must be exactly the lines before ``record_index`` (a log with a line out of order
    fails). The cut log is the log of the recomputation, as the launcher read it when it granted the start.
@@ -20,7 +20,7 @@ What a replay does, in order (each step a failure with its finding when it does 
    by a plain import statement (no exec, no compile, no importlib: the deterministic_rule step of the CI refuses them). The replay
    calls its check only when all four values are equal: (a) the SHA-256 of the engine text at head_commit, (b) the record's
    engine_identity.code_sha256, (c) the SHA-256 of the same file at the checked commit, and (d) one of ``accepted_engines``; each text
-   is read through base_files.read_file and hashed as launcher.py hashes it (the text encoded as UTF-8; raw git bytes are not used: the hash is of the text
+   is read through base_files.read_file and hashed as launcher.py hashes it (raw git bytes are not used: the hash is of the text
    as base_files.read_file returns it, encoded as UTF-8). With no accepted engine every
    record fails. A head_commit engine that differs from the checked tree's fails with "no historical-engine loader (erratum E1)".
 4. The 22 inputs of the Resume Check are built as launcher._inputs builds them (resume_inputs.git_inputs, resume_log_inputs.log_inputs,
@@ -37,10 +37,32 @@ The one name that the status form needs is ".git": it is the one name the form n
 not be named in src (INV-004); git status never reports .git, so the exclusion hides nothing. HEAD comes from gitread's rev-parse form
 and every tracked file named events.jsonl (its last path component, at any depth) comes from base_files.list_paths(repo, HEAD, "")
 and base_files.read_file; a refused listing or read is a failure, never a skip. Each decision.execution line is replayed and each
-decision.acceptance line is reported "NOT REPLAYED: decision.acceptance" and fails (their replay is a separate task); no record is
+decision.acceptance line is replayed as the next paragraph says, or fails; no record is
 skipped or counted as passing without a replay, with ONE exception (task TASK-141): a record of the violation path, recognised by violation_path_record
 (the form that violation.py writes and the earlier violation.detected line that it names), is reported "NOT REPLAYED: violation-path record (no Resume Check ran)"
 and counted apart; it is neither replayed nor counted as passed or as failed, because no Resume Check ran for it (violation.py UNCOVERED). The engine gate comes first: when the engine is not an accepted one, every decision.execution line fails, a recognised record included.
+
+The replay of a decision.acceptance line (task TASK-167; DEF-0137 task B; decisions D-7557 and D-7558). The entry takes
+--governor-pin <sha256> after the repository, at most once; it is never an accepted engine, and an engine pin is never read as
+it. Without it every such line is counted failed and printed "NOT REPLAYED: decision.acceptance" with its place. With it, no
+module that imports the governor, directly or through its own imports (evaluation_sources through evaluation and
+scope_reconcile, eval_inputs, evaluate_command, evaluation), is imported unless the engine gate passes (the reader of
+contracts imports the Resume Check), the governor file that a plain import would load is the repository's own
+src/aieos_bootstrap/governor.py, the governor at the checked commit has the pin's SHA-256 and the record's ruleset_version
+is "governor-sha256:" and the pin; the fourth equal value, the governor at the record's policy_ref, is checked by
+evaluation_sources.load_sources with the pin. The log of the recomputation is the lines before the record (the record holds
+no log position). The evaluated commit and the approved contract hash come from those lines; the contract, its bytes and
+policy_ref from the commit (the helpers of the command aieos evaluate); the sources and the changed paths from load_sources
+with the pin and no CI log; the values from eval_inputs._assemble. Then evaluation.evaluate_task is called over the cut log
+with no extra record, with the recorder of the payload and the append time of the line, and with an append that writes
+nothing; the captured event type, event_id, task_id and every key of the record must equal the line's, by canonical JSON
+text. An evaluated commit that the checkout cannot read fails with its own finding. Limits: the CI and review records in the
+log are trusted as logged and nothing reads GitHub or a reviews file again; the readers, the evaluation modules and the
+governor run from the tree under check; after a change of the governor, or of a reader in a way that changes a result, older
+records fail, with no loader of the old code; a line appended between an evaluation's read and its own append makes its
+replay differ.
+
+The module violation is imported when this module is loaded, so before the gates of the entry.
 
 Limits, stated (erratum E1; D-6314 C2 and C3; D-6313 C5):
 - The reader modules (resume_inputs, resume_log_inputs, execution, base_files, gitread and records, whose check_log is used) are those of
@@ -54,7 +76,7 @@ Limits, stated (erratum E1; D-6314 C2 and C3; D-6313 C5):
   exists; it is a later task, not this one.
 - runtime.max_risk is taken from the record: the launcher reads it from the adapter declaration (launcher.py), which the replay does not
   repeat. The held lease is None and ``now`` is a fixed constant, which only the argument checks of task_view use.
-- The replay of decision.acceptance records is not done here: their inputs (evaluation.py's declared and values) have no assembler in src.
+- The workflow of the CI passes no governor pin until its own step is decided, so there a decision.acceptance record fails.
 - A record of the violation path is recognised by its form and by the violation.detected line that it names, and nothing recomputes it (task TASK-141): a forged
   pair of such lines would be reported "NOT REPLAYED: violation-path record" and would not fail the replay; the state-commit gate of the worker names the lines it accepts.
 - The interpreter of the CI runner may differ from the recorded python; it is reported, not failed.
@@ -99,7 +121,7 @@ def _safe_path_ok(flags):
     return bool(getattr(flags, 'safe_path', False))
 
 
-# erratum E1.7 (decision D-6333): a guard placed before every other import of this module. It detects a run without -P only; a module that
+# erratum E1.7 (decision D-6333): a guard placed before this module's other imports. It detects a run without -P only; a module that
 # shadows a library module and is imported before this guard is not caught: the defence is the invocation of the A66 step.
 if __name__ == '__main__' and not _safe_path_ok(sys.flags):
     sys.stdout.write('FAIL: this entry must be run with -P (and -B), as erratum E1.7 sets: the current directory must not be on the import path\n')
@@ -115,6 +137,10 @@ import aieos_bootstrap
 from aieos_bootstrap import base_files, gitread, records, violation
 
 ENGINE_PATH = 'src/aieos_bootstrap/resume_check.py'
+GOVERNOR_PATH = 'src/aieos_bootstrap/governor.py'
+GOVERNOR_FLAG = '--governor-pin'
+RULESET_PREFIX = 'governor-sha256:'
+ACCEPTANCE = 'decision.acceptance'
 EVENTS_NAME = 'events.jsonl'
 TIMEOUT = 60
 # the one name the status form needs (see the docstring): git status never reports it
@@ -131,7 +157,8 @@ LIMITS = (
     'any difference fails closed, with no skip list; the remedy for a historical record that a reader change makes differ is to load the readers from head_commit (a decision of the decision agent)',
     'after a pinned engine upgrade, records written under the old engine fail closed until a historical-engine loader exists (erratum E1)',
     'runtime.max_risk is taken from the record; the held lease is None and the clock is a fixed constant',
-    'decision.acceptance records are not replayed and fail this entry; the python value of engine_identity is reported, not compared',
+    'a decision.acceptance record is replayed only with --governor-pin and fails without it; the python value of engine_identity is reported, not compared',
+    'a decision.acceptance replay trusts the CI and review records as logged and reads nothing from GitHub or a reviews file; it uses the readers, the evaluation modules and the governor of the tree under check; a record whose evaluated commit this checkout does not hold fails',
     'a record of the violation path is recognised by its form and by the violation.detected line that it names, and nothing recomputes it (task TASK-141): a forged pair of such lines is reported NOT REPLAYED: violation-path record and does not fail this entry; the module violation, read from the tree under check, decides what is recognised',
     'the status read does not see assume-unchanged or skip-worktree flags and counts untracked files that are not ignored: run in a clean checkout where no file shadows a library module',
     'this entry and its reader modules run from the tree under check, not from a base or a pinned ref: GOV-003 is not met by them, and a change to them can change what passes; only the engine is pinned (decision D-6332)',
@@ -234,6 +261,8 @@ def violation_path_record(lines, index):
     and whose task_id is the same. Every other line is not one. It checks the FORM only: nothing recomputes the record. ``lines`` is the log split at newlines, ``index`` the 0-based position of the
     line. Never raises."""
     try:
+        if type(index) is not int or index < 0:
+            return False
         event = json.loads(lines[index].decode('utf-8'))
         if not isinstance(event, dict) or event.get('type') != 'decision.execution':
             return False
@@ -363,6 +392,117 @@ def replay_execution(repo, log_bytes, record_index, accepted_engines, checked_co
     return (not findings), [_cut(f) for f in findings]
 
 
+class _Captured:
+    """What the capturing append answers: the evaluation reads the attribute result."""
+
+    result = 'appended'
+
+
+def _acceptance_record(lines, index):
+    """(the line's event, None) or (None, a finding)."""
+    try:
+        event = json.loads(lines[index].decode('utf-8'))
+    except (ValueError, UnicodeDecodeError, RecursionError):
+        return None, 'record: line %d is not JSON' % (index + 1)
+    if not isinstance(event, dict) or event.get('type') != ACCEPTANCE:
+        return None, 'record: line %d is not a decision.acceptance event' % (index + 1)
+    task_id = event.get('task_id')
+    event_id = event.get('event_id')
+    if not (isinstance(event.get('payload'), dict) and isinstance(task_id, str) and _TASK.fullmatch(task_id)
+            and isinstance(event_id, str) and event_id):
+        return None, 'record: line %d has no payload, task_id or event_id in form' % (index + 1)
+    return event, None
+
+
+def _governor_gate(repo, checked_commit, governor_pin, read):
+    """A finding, or None when the governor that a plain import would load is the repository's file and the governor at the
+    checked commit has the pin's SHA-256. Nothing that imports the governor is imported here."""
+    governor_file = os.path.join(os.path.dirname(os.path.abspath(aieos_bootstrap.__file__)), 'governor.py')
+    if not _own_file(governor_file, repo, GOVERNOR_PATH):
+        return 'governor: the governor file is not the repository\'s %s' % GOVERNOR_PATH
+    got, found = base_files.read_file(repo, checked_commit, GOVERNOR_PATH, read)
+    if found is not None:
+        return 'governor at the checked commit: %s' % '; '.join(found)
+    if _sha(got['text']) != governor_pin:
+        return 'governor: the governor at the checked commit is not the pinned one; it is not imported'
+    return None
+
+
+def _replay_acceptance(repo, log_bytes, index, governor_pin, checked_commit, read):
+    """The findings of the replay of one decision.acceptance line; an empty list is a pass. The caller has passed the
+    engine gate, because the reader of contracts imports the Resume Check."""
+    report = records.check_log(log_bytes)
+    found = ['log: line %d: %s' % (n, f) for n, f in report.findings()]
+    if found:
+        return found
+    lines = log_bytes.split(b'\n')
+    if lines and lines[-1] == b'':
+        lines = lines[:-1]
+    if index >= len(lines):
+        return ['record: index %d is past the %d lines of the log' % (index, len(lines))]
+    event, finding = _acceptance_record(lines, index)
+    if finding is not None:
+        return [finding]
+    if index == 0:
+        return ['log: a record on the first line has no earlier line to recompute from']
+    task_id, payload = event['task_id'], event['payload']
+    if payload.get('ruleset_version') != RULESET_PREFIX + governor_pin:
+        return ['record: ruleset_version is not "%s" and the governor pin' % RULESET_PREFIX]
+    finding = _governor_gate(repo, checked_commit, governor_pin, read)
+    if finding is not None:
+        return [finding]
+    cut_log = b'\n'.join(lines[:index]) + b'\n'
+
+    def git(where, args, timeout=TIMEOUT):
+        return read(where, args, timeout)
+
+    # every module below imports the governor, directly or through its own imports: only after the gate
+    from aieos_bootstrap import eval_inputs, evaluate_command, evaluation, evaluation_sources
+    try:
+        state = evaluation._task_events(lambda _root: cut_log, repo, task_id)
+        approved_hash, commit = state[0], state[3]
+        answer = git(repo, ['cat-file', '-p', commit])
+        if not (isinstance(answer, dict) and answer.get('error') is None and answer.get('exit') == 0):
+            return ['record: the evaluated commit %s cannot be read in this checkout' % commit]
+        contract, sha, contract_bytes = evaluate_command._contract(repo, commit, task_id, approved_hash, git)
+        policy_ref = evaluate_command._policy_ref(contract, commit)
+        loaded = evaluation_sources.load_sources(repo, policy_ref, commit, task_id, None, git, pin=governor_pin)
+        if loaded['result'] != 'present':
+            return ['sources: %s: %s' % (f['reason'], f['detail']) for f in loaded['findings']]
+        if not evaluate_command._same_contract(loaded.get('provenance'), sha, commit):
+            return ['sources: the loader\'s contract digest or commit differs from the replay\'s']
+        declared, values, _, refusal = eval_inputs._assemble(contract, loaded['changed_paths'], loaded['sources'])
+        if refusal is not None:
+            return ['inputs: %s: %s' % refusal]
+        calls = []
+
+        def capture(root, event_type, record, event_id, appended_at, recorder, task_id=None):
+            calls.append((event_type, record, event_id, task_id))
+            return _Captured()
+
+        now = datetime.datetime.strptime(event['appended_at'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=datetime.timezone.utc)
+        out = evaluation.evaluate_task(repo, repo, task_id, contract_bytes, declared, values, [], payload.get('recorder'),
+                                       now, read=git, read_log=lambda _root: cut_log, append=capture)
+        if out['result'] != 'evaluated' or len(calls) != 1:
+            return ['evaluate: the evaluation gave %s (%s) with %d appends: %s'
+                    % (out['result'], out['reason'], len(calls), '; '.join(out['findings']))]
+        event_type, record, event_id, recomputed_task = calls[0]
+        differing = [name for name, a, b in (('type', event_type, event['type']), ('event_id', event_id, event['event_id']),
+                                             ('task_id', recomputed_task, task_id)) if a != b]
+        for key in sorted(set(record) | set(payload)):
+            a = record.get(key, _ABSENT)
+            b = payload.get(key, _ABSENT)
+            if a is _ABSENT or b is _ABSENT or _canon(a) != _canon(b):
+                differing.append(key)
+        if differing:
+            return ['record: the recomputed record differs from the logged one at: %s' % ', '.join(differing)]
+        return []
+    except Exception as exc:  # every refusal of a called function and every exception is a finding
+        told = getattr(exc, 'findings', None)
+        told = [f for f in told if isinstance(f, str)] if isinstance(told, list) else []
+        return told or ['acceptance: the replay raised %s' % type(exc).__name__]
+
+
 def config_refused(output):
     """(the refused keys of ``git config --list -z`` output, None) or (None, a finding). A key is refused when, ASCII-lowercased,
     it begins with b'filter.' or equals b'core.worktree'; the output must be bytes ending in NUL and hold no empty key."""
@@ -384,10 +524,15 @@ def config_refused(output):
 
 def engine_file_matches(engine_file, repo):
     """Whether ``engine_file`` is the repository's own engine path (a path comparison; no file is read)."""
-    if not (isinstance(engine_file, str) and isinstance(repo, str)):
+    return _own_file(engine_file, repo, ENGINE_PATH)
+
+
+def _own_file(file, repo, path):
+    """Whether ``file`` is the repository's own file at ``path`` (a path comparison; no file is read)."""
+    if not (isinstance(file, str) and isinstance(repo, str)):
         return False
-    want = os.path.normcase(os.path.abspath(repo + '/' + ENGINE_PATH))
-    return os.path.normcase(os.path.abspath(engine_file)) == want
+    want = os.path.normcase(os.path.abspath(repo + '/' + path))
+    return os.path.normcase(os.path.abspath(file)) == want
 
 
 def _tree_findings(repo, read):
@@ -419,9 +564,17 @@ def _main(argv, read, out, engine):
     eng = engine
     args = list(argv)
     if not args:
-        out('usage: decision_replay <repo> [<accepted engine sha256> ...]')
+        out('usage: decision_replay <repo> [%s <sha256>] [<accepted engine sha256> ...]' % GOVERNOR_FLAG)
         return 1
     repo, pins = args[0], args[1:]
+    governor_pin = None
+    if GOVERNOR_FLAG in pins:
+        at = pins.index(GOVERNOR_FLAG)
+        if pins.count(GOVERNOR_FLAG) != 1 or at + 1 >= len(pins) or _HEX64.fullmatch(pins[at + 1]) is None:
+            out('FAIL: %s is given once, followed by 64 lowercase hex characters' % GOVERNOR_FLAG)
+            return 1
+        governor_pin = pins[at + 1]
+        pins = pins[:at] + pins[at + 2:]
     bad = [p for p in pins if _HEX64.fullmatch(p) is None]
     if bad:
         out('FAIL: an accepted engine argument is not 64 lowercase hex characters')
@@ -490,21 +643,24 @@ def _main(argv, read, out, engine):
             rid = _safe(event.get('payload', {}).get('record_id') if isinstance(event.get('payload'), dict) else None)
             seq = _safe(event.get('seq'))
             where = '%s %s:%s' % (rid, _safe(path), seq)
-            if kind == 'decision.acceptance':
+            if kind == ACCEPTANCE and governor_pin is None:
                 failed += 1
-                out('NOT REPLAYED: decision.acceptance %s' % where)
+                out('NOT REPLAYED: decision.acceptance %s: no governor pin was given' % where)
                 continue
             if engine_gate is not None:
                 failed += 1
                 out('FAIL %s: %s' % (where, engine_gate))
                 continue
-            if violation_path_record(lines, index):
+            if kind != ACCEPTANCE and violation_path_record(lines, index):
                 skipped += 1
                 out('NOT REPLAYED: violation-path record (no Resume Check ran) %s' % where)
                 continue
-            if eng is None:
-                eng = _engine_module()
-            findings, notes = replay_detail(repo, log_bytes, index, pins, head, read, eng)
+            if kind == ACCEPTANCE:
+                findings, notes = _replay_acceptance(repo, log_bytes, index, governor_pin, head, read), []
+            else:
+                if eng is None:
+                    eng = _engine_module()
+                findings, notes = replay_detail(repo, log_bytes, index, pins, head, read, eng)
             if findings:
                 failed += 1
                 out('FAIL %s: %s' % (where, _safe(_cut('; '.join(findings)))))
