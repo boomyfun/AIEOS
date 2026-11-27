@@ -46,37 +46,47 @@ The replay of a decision.acceptance line (task TASK-167; DEF-0137 task B; decisi
 --governor-pin <sha256> after the repository, at most once; it is never an accepted engine, and an engine pin is never read as
 it. Without it every such line is counted failed and printed "NOT REPLAYED: decision.acceptance" with its place. With it, the
 replay of an acceptance line imports no module that imports the governor, directly or through its own imports
-(evaluation_sources through evaluation and scope_reconcile, eval_inputs, evaluate_command, evaluation), unless the engine
-gate passes (the reader of contracts imports the Resume Check), the governor file that a plain import would load is the
+(evaluation_sources through evaluation and scope_reconcile, eval_inputs, evaluate_command, evaluation, evaluation_intake),
+unless the engine gate passes (the reader of contracts imports the Resume Check), the governor file that a plain import
+would load is the
 repository's own src/aieos_bootstrap/governor.py, the governor at the checked commit has the pin's SHA-256 and the record's
 ruleset_version is "governor-sha256:" and the pin; the fourth equal value, the governor at the record's policy_ref, is
 checked by evaluation_sources.load_sources with the pin. This holds for the acceptance replay only: the replay of a
 decision.execution line imports the governor with no governor gate, through resume_log_inputs, scope_reconcile and
-scope_drift, as before this task; so when an execution line is replayed before an acceptance line, the governor is already
-imported when that line's governor gate runs, and the gate still checks the governor file and its SHA-256 before the
-acceptance replay uses it. Before the recomputation a line fails when the log does not end with LF, when the line is an
-ignored duplicate of an earlier one, when it is not in the form the writer writes, or when it holds fencing_token or
-corrects (the evaluation writes neither). The log of the recomputation is the lines before the record (the record holds no
-log position). The evaluated commit and the approved contract hash come from those lines; the contract, its bytes and
+scope_drift, as before this task; so when an execution line that reached its inputs was replayed before an acceptance
+line, the governor is already imported when that line's governor gate runs, and the gate still checks the governor file
+and its SHA-256 before the acceptance replay uses it. Before the recomputation a line fails when the log does not end with
+LF, when the line or any line before it is an ignored duplicate of an earlier one or is not in the form the writer writes,
+or when the line holds fencing_token or corrects (the evaluation writes neither). The log of the recomputation is the
+lines before the record (the record holds no log position). The evaluated commit and the approved contract hash come from those lines; the contract, its bytes and
 policy_ref from the commit (the helpers of the command aieos evaluate); the sources and the changed paths from load_sources
 with the pin and no CI log; the argument checks of eval_inputs are made over them by eval_inputs._argument_error, with
 the CI runs and the log payloads passed as empty lists; the values come from eval_inputs._assemble and are then derived and
 refused as eval_inputs does by its own function, so a governor error record that aieos evaluate would not write fails.
+Before the evaluation, the manifest (task TASK-168): among the task's record.added payloads on the earlier lines at
+least one evaluation_manifest of the evaluated commit must be remade equal by evaluation_intake.manifest from its one basis
+text, name the task, commit, policy_ref and contract SHA-256 of the replay, hold the replay's provenance with the pin
+mapping as the command writes it from the CI logs (logs equal to the number of its runs), hold a ci mapping of the form
+ci_evidence gives, and stand on a line with the event id that evaluate_command gives it; and no other earlier payload of
+the task may share its record_id with different content. Nothing of the manifest is an input of the recomputation.
 Then evaluation.evaluate_task is called over the cut log with no extra record, with the recorder of the payload and the
 append time of the line, and with an append that writes nothing; the captured event type, event_id and task_id must equal
 the line's, and every key of the record the payload's, by canonical JSON text. An evaluated commit that the checkout cannot
-read fails with its own finding. Limits: the CI and review records in the log are trusted as logged and nothing reads GitHub
-or a reviews file again; the command's refusals that rest on records trusted as logged (ci_evidence, the record-id guard,
-the reviews file, the manifest, and the form checks of the CI runs and the log payloads, which the replay passes as empty
-lists) are not repeated (DEF-0137); the duplicate, byte-form and final-LF checks apply to decision.acceptance lines only;
-decision.execution lines are compared by value, as before this task (DEF-0137); appended_at is taken from the line and
-not otherwise checked; the readers, the evaluation modules and the governor run from the tree under check (GOV-003 is not
-met by them); after a change of the governor, or of a reader in a way that changes a result, older records fail, with no
-loader of the old code; a line appended between an evaluation's read and its own append can make its replay differ (when it changes the
-recomputed record); a record
-whose evaluated commit the checkout does not hold fails, and which of fetching it, keeping such a record out of main's log,
-or another course is taken is the decision of the later workflow step; no logged acceptance record of the self-build
-exists, so no real record has been replayed.
+read fails with its own finding. Every line of a log must be in the form the writer writes (no ignored duplicate,
+canonical bytes, a final LF): in the entry a file with such a finding fails and none of its decision records is counted as
+passed, and replay_execution refuses such a log.
+Accepted limits: the CI and review records in the log are trusted as logged and nothing reads GitHub or a reviews file
+again; a manifest record is trusted as logged beyond what is compared above (the runs and their log hashes, the contract
+commit and base of the detect line, files and reviews_sha256), so whoever writes the log can write a matching manifest;
+appended_at is taken from the line and not otherwise checked; the readers, the evaluation modules and the governor run
+from the tree under check (GOV-003 is not met by them); a line appended between an evaluation's read and its own append can
+make its replay differ (when it changes the recomputed record); no logged acceptance record of the self-build exists, so
+no real record has been replayed. Open items, not accepted limits (DEF-0137): the refusals of aieos evaluate that need the
+saved CI data or the reviews text are not repeated (read_ci_data, ci_evidence, the record-id guard over the CI records,
+the reviews maker and its guard); after a change of the governor or of the governor pin, or of a reader in a way that
+changes a result, older records fail closed, with no loader of the old code. A record whose evaluated commit the checkout
+does not hold fails, and which of fetching it, keeping such a record out of main's log, or another course is taken is the
+decision of the later workflow step.
 
 The module violation is imported when this module is loaded, so before the gates of the entry.
 
@@ -175,8 +185,8 @@ LIMITS = (
     'runtime.max_risk is taken from the record; the held lease is None and the clock is a fixed constant',
     'a decision.acceptance record is replayed only with --governor-pin and fails without it; the python value of engine_identity is reported, not compared',
     'a decision.acceptance replay trusts the CI and review records as logged and reads nothing from GitHub or a reviews file; it uses the readers, the evaluation modules and the governor of the tree under check (GOV-003 is not met by them); a record whose evaluated commit this checkout does not hold fails, and the course for such a record is the decision of the later workflow step',
-    'a decision.acceptance replay does not repeat the refusals of aieos evaluate that rest on records trusted as logged (ci_evidence, the record-id guard, the reviews file, the manifest, and the form checks of the CI runs and the log payloads, which the replay passes as empty lists; DEF-0137); appended_at is not otherwise checked; no logged acceptance record of the self-build exists, so no real record has been replayed',
-    'the duplicate, byte-form and final-LF checks apply to decision.acceptance lines only; decision.execution lines are compared by value, as before this task (DEF-0137)',
+    'a decision.acceptance replay trusts a manifest record as logged beyond what it compares (its runs and log hashes, the contract commit and base of its detect line, files and reviews_sha256); appended_at is not otherwise checked; no logged acceptance record of the self-build exists, so no real record has been replayed',
+    'open (DEF-0137), not accepted limits: the refusals of aieos evaluate that need the saved CI data or the reviews text are not repeated; after a change of the governor or of its pin older acceptance records fail closed',
     'a record of the violation path is recognised by its form and by the violation.detected line that it names, and nothing recomputes it (task TASK-141): a forged pair of such lines is reported NOT REPLAYED: violation-path record and does not fail this entry; the module violation, read from the tree under check, decides what is recognised',
     'the status read does not see assume-unchanged or skip-worktree flags and counts untracked files that are not ignored: run in a clean checkout where no file shadows a library module',
     'this entry and its reader modules run from the tree under check, not from a base or a pinned ref: GOV-003 is not met by them, and a change to them can change what passes; only the engine is pinned (decision D-6332)',
@@ -305,6 +315,30 @@ def violation_path_record(lines, index):
         return False
 
 
+def _form_findings(log_bytes, report):
+    """The findings of a form that the writer never writes, over the bytes of an event log and the report of
+    records.check_log over them; an empty log has none."""
+    if not log_bytes:
+        return []
+    found = []
+    if not log_bytes.endswith(b'\n'):
+        found.append('log: the log does not end with LF')
+    lines = log_bytes.split(b'\n')
+    if lines[-1] == b'':
+        lines = lines[:-1]
+    for number, line in enumerate(lines, 1):
+        first = report.lines[number - 1].duplicate_of if number <= len(report.lines) else None
+        if first is not None:
+            found.append('log: line %d is an ignored duplicate of line %d, which the writer never writes' % (number, first))
+        try:
+            written = eventlog._canonical(json.loads(line.decode('utf-8'))).encode('ascii')
+        except (ValueError, TypeError, UnicodeDecodeError, RecursionError):
+            written = None
+        if line != written:
+            found.append('log: line %d is not in the form the writer writes' % number)
+    return found
+
+
 def _replay(repo, log_bytes, record_index, accepted_engines, checked_commit, read, engine, engine_text, build_inputs):
     """(the findings, the notes); an empty findings list is a pass."""
     index = record_index
@@ -316,6 +350,9 @@ def _replay(repo, log_bytes, record_index, accepted_engines, checked_commit, rea
         return ['argument: accepted_engines is not a list of 64-hex strings'], []
     report = records.check_log(log_bytes)
     found = ['log: line %d: %s' % (n, f) for n, f in report.findings()]
+    if found:
+        return found, []
+    found = _form_findings(log_bytes, report)
     if found:
         return found, []
     lines = log_bytes.split(b'\n')
@@ -449,6 +486,75 @@ def _governor_gate(repo, checked_commit, governor_pin, read):
     return None
 
 
+def _manifest_finding(lines, index, task_id, commit, policy_ref, sha, provenance, governor_pin, read_json, make,
+                      ci_module, event_id_of):
+    """None when a manifest record of the log before the line matches the replay (task TASK-168 AC5), else one finding.
+    The values of a matching manifest are compared and never used as inputs of the recomputation."""
+    events = [json.loads(line.decode('utf-8')) for line in lines[:index]]
+    added = [(e, e['payload']) for e in events
+             if e.get('type') == 'record.added' and e.get('task_id') == task_id and isinstance(e.get('payload'), dict)]
+    matched = []
+    for event, payload in added:
+        basis = payload.get('basis')
+        if not (payload.get('evidence_type') == 'evaluation_manifest' and payload.get('commit') == commit
+                and isinstance(basis, list) and len(basis) == 1 and isinstance(basis[0], str)):
+            continue
+        text = basis[0]
+        parsed = read_json(text)
+        held = parsed['value']
+        keys = {'task_id', 'evaluated_commit', 'policy_ref', 'contract_sha256', 'provenance', 'ci', 'files'}
+        if parsed['findings'] or not isinstance(held, dict) or set(held) - {'reviews_sha256'} != keys:
+            continue
+        more = {'reviews_sha256': held['reviews_sha256']} if 'reviews_sha256' in held else {}
+        made = make(held['task_id'], held['evaluated_commit'], held['policy_ref'], held['contract_sha256'],
+                    held['provenance'], held['ci'], held['files'], payload.get('recorder'), **more)
+        if not (made['result'] == 'present' and made['text'] == text and _canon(made['record']) == _canon(payload)):
+            continue
+        if [held['task_id'], held['evaluated_commit'], held['policy_ref'], held['contract_sha256']] != [
+                task_id, commit, policy_ref, sha]:
+            continue
+        ci = held['ci']
+        if not _ci_matches(ci, task_id, commit, sha, ci_module):
+            continue
+        given = {'pin': 'given', 'value': governor_pin}
+        logged = {'pin': 'ci_log', 'value': governor_pin, 'logs': len(ci['runs'])}
+        wanted = [logged if entry == given else entry for entry in provenance]
+        if _canon(held['provenance']) != _canon(wanted):
+            continue
+        if event.get('event_id') != event_id_of(task_id, made['record']['record_id']):
+            continue
+        matched.append(payload)
+    if not matched:
+        return 'manifest: no manifest record of the log before the line matches'
+    for record in matched:
+        ident = record['record_id']
+        if any(other.get('record_id') == ident and _canon(other) != _canon(record) for _, other in added):
+            return 'manifest: the log holds another record under the record_id %s' % ident
+    return None
+
+
+def _ci_matches(ci, task_id, commit, sha, ci_module):
+    """Whether the ci mapping of a manifest has the form ci_evidence gives for this task, commit and contract."""
+    if not (isinstance(ci, dict) and set(ci) == {'head_sha', 'workflow_path', 'detect_line', 'contract_sha256', 'runs'}):
+        return False
+    line = ci['detect_line']
+    detect = ci_module._DETECT.fullmatch(line) if isinstance(line, str) else None
+    if not (ci['head_sha'] == commit and ci['contract_sha256'] == sha and ci['workflow_path'] == ci_module._WORKFLOW
+            and detect is not None and detect.group(1) == task_id):
+        return False
+    runs = ci['runs']
+    if not (isinstance(runs, list) and runs):
+        return False
+    order = []
+    for run in runs:
+        if not (isinstance(run, dict) and set(run) == {'run_id', 'attempt', 'log_sha256'}
+                and all(type(run[k]) is int and run[k] > 0 for k in ('run_id', 'attempt'))
+                and isinstance(run['log_sha256'], str) and _HEX64.fullmatch(run['log_sha256'])):
+            return False
+        order.append((run['run_id'], run['attempt']))
+    return all(a < b for a, b in zip(order, order[1:]))
+
+
 def _replay_acceptance(repo, log_bytes, index, governor_pin, checked_commit, read):
     """The findings of the replay of one decision.acceptance line; an empty list is a pass. The caller has passed the
     engine gate, because the reader of contracts imports the Resume Check."""
@@ -475,6 +581,9 @@ def _replay_acceptance(repo, log_bytes, index, governor_pin, checked_commit, rea
             return ['record: line %d is not in the form the writer writes' % (index + 1)]
         if index == 0:
             return ['log: a record on the first line has no earlier line to recompute from']
+        earlier = _form_findings(b'\n'.join(lines[:index]) + b'\n', report)
+        if earlier:
+            return earlier
         task_id, payload = event['task_id'], event['payload']
         if payload.get('ruleset_version') != RULESET_PREFIX + governor_pin:
             return ['record: ruleset_version is not "%s" and the governor pin' % RULESET_PREFIX]
@@ -483,7 +592,8 @@ def _replay_acceptance(repo, log_bytes, index, governor_pin, checked_commit, rea
             return [finding]
         cut_log = b'\n'.join(lines[:index]) + b'\n'
         # every module below is the governor or imports it, directly or through its own imports: only after the gate
-        from aieos_bootstrap import eval_inputs, evaluate_command, evaluation, evaluation_sources, governor
+        from aieos_bootstrap import (ci_evidence, eval_inputs, evaluate_command, evaluation, evaluation_intake,
+                                     evaluation_sources, governor)
         state = evaluation._task_events(lambda _root: cut_log, repo, task_id)
         approved_hash, commit = state[0], state[3]
         answer = git(repo, ['cat-file', '-p', commit])
@@ -512,6 +622,11 @@ def _replay_acceptance(repo, log_bytes, index, governor_pin, checked_commit, rea
         detail = eval_inputs._incomplete(derived, held)
         if detail is not None:
             return ['inputs: incomplete: %s' % detail]
+        finding = _manifest_finding(lines, index, task_id, commit, policy_ref, sha, loaded['provenance'], governor_pin,
+                                    evaluation_sources.parse_json, evaluation_intake.manifest, ci_evidence,
+                                    evaluate_command._event_id)
+        if finding is not None:
+            return [finding]
         calls = []
 
         def capture(root, event_type, record, event_id, appended_at, recorder, task_id=None):
@@ -657,6 +772,10 @@ def _main(argv, read, out, engine):
         for n, f in report.findings():
             failed += 1
             out('FAIL: %s: log: line %s: %s' % (_safe(path), n, _cut(f)))
+        form = _form_findings(log_bytes, report)
+        for f in form:
+            failed += 1
+            out('FAIL: %s: %s' % (_safe(path), f))
         lines = log_bytes.split(b'\n')
         for index, line in enumerate(lines):
             names = b'decision.acceptance' in line or b'decision.execution' in line
@@ -681,6 +800,10 @@ def _main(argv, read, out, engine):
             rid = _safe(event.get('payload', {}).get('record_id') if isinstance(event.get('payload'), dict) else None)
             seq = _safe(event.get('seq'))
             where = '%s %s:%s' % (rid, _safe(path), seq)
+            if form:
+                failed += 1
+                out('FAIL %s: log: the file is not in the form the writer writes' % where)
+                continue
             if kind == ACCEPTANCE and governor_pin is None:
                 failed += 1
                 out('NOT REPLAYED: decision.acceptance %s: no governor pin was given' % where)

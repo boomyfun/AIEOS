@@ -308,7 +308,7 @@ class MainTests(unittest.TestCase):
     def run_main(self, argv, read=clean_read, engine=None, paths=None, files=None, detail=None, engine_text=ENGINE_TEXT, no_engine=False):
         lines = []
         paths = ['a/b.py', '.aieos/events.jsonl'] if paths is None else paths
-        text = (LOG13 + b'{"type":"decision.acceptance","seq":14,"payload":{"record_id":"r"}}\n').decode('utf-8') if files is None else files
+        text = (LOG13 + b'{"payload":{"record_id":"r"},"seq":14,"type":"decision.acceptance"}\n').decode('utf-8') if files is None else files
 
         def read_file(repo, commit, path, read=None):
             return ({'blob': 'b', 'text': engine_text if path == decision_replay.ENGINE_PATH else text}, None)
@@ -635,7 +635,7 @@ class ViolationPathTests(unittest.TestCase):
         self.assertTrue(any(l.startswith('FAIL ') and ': record' in l for l in lines), lines)
 
     def test_an_acceptance_line_still_fails_beside_a_recognised_record(self):
-        text = _log_with_violation().decode('utf-8') + '{"type":"decision.acceptance","seq":16,"payload":{"record_id":"r"}}\n'
+        text = _log_with_violation().decode('utf-8') + '{"payload":{"record_id":"r"},"seq":16,"type":"decision.acceptance"}\n'
         rc, lines = self.entry(text, detail=lambda *a, **k: ([], []))
         self.assertEqual(rc, 1)
         self.assertTrue(any(l.startswith('NOT REPLAYED: decision.acceptance') for l in lines))
@@ -738,6 +738,97 @@ class SourceTests(unittest.TestCase):
         self.assertEqual(ok, False)
         self.assertTrue(found and found[0].startswith('engine: no engine was given'))
         imp.assert_not_called()
+
+
+def _reordered(line):
+    """The same object with its keys in the reverse order: equal values, other bytes."""
+    event = json.loads(line.decode('utf-8'))
+    return json.dumps(dict(reversed(list(event.items()))), separators=(',', ':')).encode('utf-8')
+
+
+class _Report:
+    """A stand-in report of records.check_log with no finding, whose line ``duplicate`` repeats line ``first``."""
+
+    class Line:
+        def __init__(self, first):
+            self.duplicate_of = first
+
+    def __init__(self, count, duplicate, first):
+        self.lines = [self.Line(first if n == duplicate else None) for n in range(1, count + 1)]
+
+    def findings(self):
+        return []
+
+
+NOT_WRITTEN = 'log: the file is not in the form the writer writes'
+NO_LF = 'log: the log does not end with LF'
+
+
+class FormOfTheLogTests(unittest.TestCase):
+    """TASK-168 AC2 to AC4 and AC10: a form the writer never writes."""
+
+    def forms(self):
+        # (what, the bytes made from the record at line 13, the findings)
+        lines = LOG13.split(b'\n')[:-1]
+        repeated = json.loads(lines[12].decode('utf-8'))
+        repeated['seq'] = 14
+        return (
+            ('no final LF', LOG13[:-1], [NO_LF]),
+            ('keys reordered', b'\n'.join(lines[:12] + [_reordered(lines[12])]) + b'\n',
+             ['log: line 13 is not in the form the writer writes']),
+            ('a repeated line', LOG13 + _line(repeated) + b'\n',
+             ['log: line 14 is an ignored duplicate of line 13, which the writer never writes']),
+        )
+
+    def test_the_replay_of_one_execution_line_refuses_each_form(self):
+        for what, log, findings in self.forms():
+            with self.subTest(what):
+                self.assertEqual(replay(log=log), (False, findings))
+
+    def test_the_entry_counts_no_execution_line_of_such_a_file_as_passed(self):
+        for what, log, findings in self.forms():
+            with self.subTest(what):
+                rc, lines = MainTests.run_main(self, [str(ROOT), PIN], files=log.decode('utf-8'),
+                                               detail=lambda *a, **k: ([], []))
+                self.assertEqual(rc, 1, lines)
+                for finding in findings:
+                    self.assertIn('FAIL: .aieos/events.jsonl: ' + finding, lines)
+                self.assertTrue(any(l.startswith('FAIL ') and l.endswith(': ' + NOT_WRITTEN) for l in lines), lines)
+                self.assertFalse(any(l.startswith('REPLAYED ') for l in lines), lines)
+                self.assertIn('replayed and passed: 0,', lines[-1])
+
+    def test_the_entry_fails_a_violation_path_record_of_such_a_file(self):
+        base = _log_with_violation()
+        lines = base.split(b'\n')[:-1]
+        cases = (
+            ('no final LF', base[:-1], NoFindings(), NO_LF),
+            ('keys reordered', b'\n'.join(lines[:14] + [_reordered(lines[14])]) + b'\n', NoFindings(),
+             'log: line 15 is not in the form the writer writes'),
+            ('a repeated line', base, _Report(15, 15, 14),
+             'log: line 15 is an ignored duplicate of line 14, which the writer never writes'),
+        )
+        for what, log, report, finding in cases:
+            with self.subTest(what):
+                out = []
+
+                def read_file(repo, commit, path, read=None):
+                    return ({'blob': 'b', 'text': ENGINE_TEXT if path == decision_replay.ENGINE_PATH
+                             else log.decode('utf-8')}, None)
+                with mock.patch.object(decision_replay.base_files, 'list_paths',
+                                       return_value=(['.aieos/events.jsonl'], None)), \
+                        mock.patch.object(decision_replay.base_files, 'read_file', side_effect=read_file), \
+                        mock.patch.object(decision_replay.records, 'check_log', return_value=report), \
+                        mock.patch.object(decision_replay, 'replay_detail', lambda *a, **k: ([], [])):
+                    rc = decision_replay.main([str(ROOT), PIN], read=clean_read, out=out.append, engine=Engine())
+                self.assertEqual(rc, 1, out)
+                self.assertIn('FAIL: .aieos/events.jsonl: ' + finding, out)
+                self.assertFalse(any(l.startswith('NOT REPLAYED: violation-path record') for l in out), out)
+                self.assertIn('replayed and passed: 0,', out[-1])
+                self.assertIn('not replayed (violation path): 0', out[-1])
+
+    def test_an_empty_log_has_no_finding_of_form(self):
+        rc, lines = MainTests.run_main(self, [str(ROOT), PIN], files='')
+        self.assertEqual(rc, 0, lines)
 
 
 if __name__ == '__main__':

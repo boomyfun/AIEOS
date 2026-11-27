@@ -74,6 +74,58 @@ OTHER_RECORD = {'record_id': 'rec-x', 'fact_kind': 'observation', 'source_class'
                 'recorder': 'x', 'subject': 'TASK-900'}
 GATED = ('aieos_bootstrap.governor', 'aieos_bootstrap.evaluation_sources', 'aieos_bootstrap.evaluation')
 
+# TASK-168: the manifest record that aieos evaluate appends before its decision. The literal ids below are typed here from
+# a separate script that imports none of the code under test.
+MANIFEST_RECORDER = 'tests'
+MANIFEST_SHA = '3a8aac405695f65336c3a099fe17d3ed21177bee427ac4c7d4c83d139cd90ff6'
+MANIFEST_ID = '102dca4299bbe5bd1986bbf4ad686c5fbf9b2b8a9391c78b9b19eade8ae34ff5'
+MANIFEST_EVENT = 'dd87d82f496f74d68334e54305933fc3a8f4cf9abdaea4d1ec489d95eb6c1b57'
+RECORD_ID_M = 'decision-b3b1b9a86951ce5c593276d4390a005c047702a141f9c8aa0dffe09e5527efeb'
+EVENT_ID_M = 'a7e56a5e99fd1230bd75fc350f2801327efdf073a8047c473ba2dd03c5117535'
+RECORD_ID_NOTED_M = 'decision-260c04c8cf1e81dd5898105c2e11b867b9d55783683ec27bc0f6de9efefe5293'
+EVENT_ID_NOTED_M = '1fa86502877fd45bfd24dbd113aefa23691540173cedc14c68c2115c622c8979'
+NO_MANIFEST = 'manifest: no manifest record of the log before the line matches'
+
+
+def read_entry(path, commit, text):
+    data = text.encode('utf-8')
+    return {'path': path, 'commit': commit, 'blob': gid('blob', data), 'sha256': hashlib.sha256(data).hexdigest()}
+
+
+def held():
+    """The values of the manifest of the default world, as the command writes them with one saved CI run."""
+    return {
+        'task_id': TASK, 'evaluated_commit': E, 'policy_ref': P, 'contract_sha256': CONTRACT_SHA,
+        'provenance': [
+            read_entry(POLICY_PATH, P, POLICY_TEXT),
+            read_entry('docs/specs/risk-rules-gov-aieos.md', P, RISK_TEXT),
+            read_entry(GOVERNOR_PATH, P, GOVERNOR_TEXT),
+            {'pin': 'ci_log', 'value': PIN, 'logs': 1},
+            {'contract': CONTRACT_SHA, 'commit': E},
+            read_entry('docs/pre-genesis/decision-matrix.md', P, DM_TEXT),
+            read_entry('docs/a.md', P, A_TEXT),
+            {'source': 'intent_versions', 'state': 'mapped', 'versions': {'docs/a.md': 'v3'}}],
+        'ci': {'head_sha': E, 'workflow_path': '.github/workflows/aieos-checks.yml',
+               'detect_line': 'G0 detect: task TASK-900 contract commit %s base %s' % (P, P),
+               'contract_sha256': CONTRACT_SHA,
+               'runs': [{'run_id': 1, 'attempt': 1, 'log_sha256': 'a' * 64}]},
+        'files': [{'name': 'api-1-1.json', 'sha256': 'b' * 64}]}
+
+
+def manifest_of(values, event_id=None, **changes):
+    """(the record.added payload, its event id) of a manifest over values; changes replace keys of the payload."""
+    text = json.dumps(values, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+    digest = hashlib.sha256(text.encode('utf-8')).hexdigest()
+    record_id = hashlib.sha256('\n'.join(('evaluation-manifest', values['task_id'], values['evaluated_commit'],
+                                          digest)).encode('utf-8')).hexdigest()
+    payload = {'record_id': record_id, 'fact_kind': 'observation', 'source_class': 'deterministic_tool_local',
+               'recorder': MANIFEST_RECORDER, 'subject': TASK, 'evidence_type': 'evaluation_manifest',
+               'commit': values['evaluated_commit'], 'refers_to': digest, 'basis': [text]}
+    payload.update(changes)
+    if event_id is None:
+        event_id = hashlib.sha256('\n'.join(('evaluation-record', TASK, payload['record_id'])).encode('utf-8')).hexdigest()
+    return payload, event_id
+
 
 def ok(out):
     return {'exit': 0, 'out': out, 'err': b'', 'error': None}
@@ -151,7 +203,7 @@ class World:
 
     def __init__(self, policy_text=POLICY_TEXT, governor_at_policy=GOVERNOR_TEXT, governor_checked=GOVERNOR_TEXT,
                  changed=('docs/b.md', 'docs/c.md'), records=(), payload=PAYLOAD, event_id=EVENT_ID,
-                 resume_text=RESUME_TEXT, contract_form=CONTRACT_FORM):
+                 resume_text=RESUME_TEXT, contract_form=CONTRACT_FORM, manifest=(), mutate=None):
         g = self.git = Git()
         base = {POLICY_PATH: policy_text, 'docs/specs/risk-rules-gov-aieos.md': RISK_TEXT,
                 GOVERNOR_PATH: governor_at_policy, 'docs/pre-genesis/decision-matrix.md': DM_TEXT, 'docs/a.md': A_TEXT,
@@ -169,8 +221,12 @@ class World:
                           fencing_token=FENCE, lease=lease)
         for n, record in enumerate(records, 1):
             log = self.append(log, 'record.added', record, 'r%d' % n)
+        for record, record_event in manifest:
+            log = self.append(log, 'record.added', copy.deepcopy(record), record_event)
         self.index = log.count(b'\n')
         self.log = self.append(log, 'decision.acceptance', copy.deepcopy(payload), event_id)
+        if mutate is not None:
+            self.log = mutate(self.log)
         checked = dict(base, **{GOVERNOR_PATH: governor_checked, LOG_PATH: self.log.decode('utf-8')})
         self.checked = g.commit(g.tree_of(checked), parents=(self.evaluated,), message='state\n')
 
@@ -194,6 +250,17 @@ class World:
                                                   self.git)
 
 
+def with_manifest(noted=False):
+    """The keywords of a world whose log holds the manifest record and whose decision counts it."""
+    mid = MANIFEST_ID + ': not used: no commit binding'
+    payload = copy.deepcopy(PAYLOAD)
+    notes = (['rec-x: not used: no evidence type or gate'] if noted else []) + [mid]
+    payload['uncovered'] = payload['uncovered'] + notes
+    payload['record_id'] = RECORD_ID_NOTED_M if noted else RECORD_ID_M
+    return {'manifest': [manifest_of(held())], 'payload': payload,
+            'event_id': EVENT_ID_NOTED_M if noted else EVENT_ID_M}
+
+
 class TheFixture(unittest.TestCase):
     def test_the_fixture_gives_the_literal_ids(self):
         w = World()
@@ -207,14 +274,14 @@ class TheFixture(unittest.TestCase):
 class TheReplay(unittest.TestCase):
     def test_the_literal_record_replays(self):
         """TASK-167 AC6, AC7 and AC10."""
-        w = World()
+        w = World(**with_manifest())
         self.assertEqual(w.replay(), [])
         diffs = [c for c in w.git.calls if c[0] == 'diff-tree']
         self.assertTrue(diffs)
         self.assertTrue(all('--no-renames' in c for c in diffs))
 
     def test_a_changed_payload_value_fails_and_is_named(self):
-        w = World()
+        w = World(**with_manifest())
         log = w.changed_line(lambda e: e['payload'].update(policy_version='v8'))
         self.assertEqual(w.replay(log), ['record: the recomputed record differs from the logged one at: policy_version'])
 
@@ -225,12 +292,12 @@ class TheReplay(unittest.TestCase):
                                  "do not name"])
 
     def test_a_removed_key_fails_and_is_named(self):
-        w = World()
+        w = World(**with_manifest())
         found = w.replay(w.changed_line(lambda e: e['payload'].pop('scenario_set_hash')))
         self.assertEqual(found, ['record: the recomputed record differs from the logged one at: scenario_set_hash'])
 
     def test_a_changed_event_id_fails_and_is_named(self):
-        w = World()
+        w = World(**with_manifest())
         log = w.changed_line(lambda e: e.update(event_id='another'))
         self.assertEqual(w.replay(log), ['record: the recomputed record differs from the logged one at: event_id'])
 
@@ -273,10 +340,7 @@ class TheReplay(unittest.TestCase):
 
     def test_a_repeated_record_id_is_left_out_as_the_evaluation_leaves_it(self):
         """TASK-167 AC10 and the repeated record id of DEF-0152: the second record is left out, the replay passes."""
-        payload = copy.deepcopy(PAYLOAD)
-        payload['uncovered'] = payload['uncovered'] + ['rec-x: not used: no evidence type or gate']
-        payload['record_id'] = RECORD_ID_NOTED
-        w = World(records=(OTHER_RECORD, OTHER_RECORD), payload=payload, event_id=EVENT_ID_NOTED)
+        w = World(records=(OTHER_RECORD, OTHER_RECORD), **with_manifest(noted=True))
         self.assertEqual(w.replay(), [])
 
     def test_a_nan_in_a_line_is_refused_by_the_log_check(self):
@@ -290,7 +354,7 @@ class TheReplay(unittest.TestCase):
         """TASK-167 AC10 and the rename duty of DEF-0152: the diff lists the old and the new path, both reach the values
         of the evaluation, and the replay passes."""
         from aieos_bootstrap import evaluation
-        w = World(changed=('docs/old.md', 'docs/c.md'))
+        w = World(changed=('docs/old.md', 'docs/c.md'), **with_manifest())
         seen = []
         real = evaluation.evaluate_task
 
@@ -376,6 +440,166 @@ class TheLineItself(unittest.TestCase):
                 self.assertEqual(w.replay(), ['inputs: argument: ' + text])
 
 
+def changed_held(change):
+    values = held()
+    change(values)
+    return values
+
+
+class TheManifest(unittest.TestCase):
+    """TASK-168 AC5 and AC10: the manifest record that the command writes before its decision."""
+
+    def finding(self, manifests, **keywords):
+        from aieos_bootstrap import evaluation
+        world = with_manifest()
+        world['manifest'] = manifests
+        world.update(keywords)
+        w = World(**world)
+        with mock.patch.object(evaluation, 'evaluate_task', side_effect=AssertionError('the evaluation was called')):
+            return w.replay()
+
+    def test_the_fixture_gives_the_literal_manifest(self):
+        payload, event_id = manifest_of(held())
+        self.assertEqual(payload['refers_to'], MANIFEST_SHA)
+        self.assertEqual(payload['record_id'], MANIFEST_ID)
+        self.assertEqual(event_id, MANIFEST_EVENT)
+
+    def test_a_log_with_no_manifest_record_fails_and_the_evaluation_is_not_called(self):
+        self.assertEqual(self.finding([]), [NO_MANIFEST])
+
+    def test_a_manifest_that_names_something_else_fails(self):
+        def pin(values):
+            values['provenance'][3]['value'] = 'f' * 64
+
+        cases = (
+            ('another commit', changed_held(lambda v: v.update(evaluated_commit=P))),
+            ('another task', changed_held(lambda v: v.update(task_id='TASK-901'))),
+            ('another contract hash', changed_held(lambda v: v.update(contract_sha256='c' * 64))),
+            ('another policy_ref', changed_held(lambda v: v.update(policy_ref=E))),
+            ('another governor pin', changed_held(pin)),
+        )
+        for what, values in cases:
+            with self.subTest(what):
+                self.assertEqual(self.finding([manifest_of(values)]), [NO_MANIFEST])
+
+    def test_a_changed_basis_text_and_two_basis_texts_fail(self):
+        payload, _ = manifest_of(held())
+        text = payload['basis'][0]
+        for what, basis in (('a changed text', [text + ' ']), ('two texts', [text, text])):
+            with self.subTest(what):
+                self.assertEqual(self.finding([manifest_of(held(), basis=basis)]), [NO_MANIFEST])
+
+    def test_a_pin_mapping_of_another_form_or_another_logs_count_fails(self):
+        cases = (
+            ('the mapping the replay itself holds', {'pin': 'given', 'value': PIN}),
+            ('an added key', {'pin': 'ci_log', 'value': PIN, 'logs': 1, 'more': 1}),
+            ('no logs key', {'pin': 'ci_log', 'value': PIN}),
+            ('two logs and one run', {'pin': 'ci_log', 'value': PIN, 'logs': 2}),
+            ('logs as true', {'pin': 'ci_log', 'value': PIN, 'logs': True}),
+        )
+        for what, mapping in cases:
+            with self.subTest(what):
+                values = held()
+                values['provenance'][3] = mapping
+                self.assertEqual(self.finding([manifest_of(values)]), [NO_MANIFEST])
+
+    def test_each_wrong_key_of_ci_fails(self):
+        run = {'run_id': 1, 'attempt': 1, 'log_sha256': 'a' * 64}
+        later = {'run_id': 2, 'attempt': 1, 'log_sha256': 'a' * 64}
+        cases = (
+            ('head_sha', {'head_sha': P}, 1),
+            ('contract_sha256', {'contract_sha256': 'c' * 64}, 1),
+            ('workflow_path', {'workflow_path': '.github/workflows/other.yml'}, 1),
+            ('a detect line out of form', {'detect_line': 'G0 detect: no task'}, 1),
+            ('a detect line of another task',
+             {'detect_line': 'G0 detect: task TASK-901 contract commit %s base %s' % (P, P)}, 1),
+            ('an added key', {'more': 1}, 1),
+            ('no runs', {'runs': []}, 0),
+            ('runs out of order', {'runs': [later, run]}, 2),
+            ('a run twice', {'runs': [run, run]}, 2),
+            ('an attempt of zero', {'runs': [dict(run, attempt=0)]}, 1),
+            ('a run_id as true', {'runs': [dict(run, run_id=True)]}, 1),
+            ('a log hash out of form', {'runs': [dict(run, log_sha256='A' * 64)]}, 1),
+            ('a run with an added key', {'runs': [dict(run, more=1)]}, 1),
+        )
+        for what, change, logs in cases:
+            with self.subTest(what):
+                values = held()
+                values['ci'].update(change)
+                values['provenance'][3] = {'pin': 'ci_log', 'value': PIN, 'logs': logs}
+                self.assertEqual(self.finding([manifest_of(values)]), [NO_MANIFEST])
+
+    def test_two_runs_in_order_with_two_logs_pass_the_manifest_check(self):
+        values = held()
+        values['ci']['runs'] = [{'run_id': 1, 'attempt': 1, 'log_sha256': 'a' * 64},
+                                {'run_id': 1, 'attempt': 2, 'log_sha256': 'a' * 64}]
+        values['provenance'][3] = {'pin': 'ci_log', 'value': PIN, 'logs': 2}
+        found = World(**dict(with_manifest(), manifest=[manifest_of(values)])).replay()
+        self.assertEqual(len(found), 1, found)
+        self.assertTrue(found[0].startswith('record: the recomputed record differs from the logged one at: '), found)
+
+    def test_a_manifest_on_a_line_with_another_event_id_fails(self):
+        self.assertEqual(self.finding([manifest_of(held(), event_id='another')]), [NO_MANIFEST])
+
+    def test_another_payload_under_the_manifests_record_id_fails(self):
+        payload, event_id = manifest_of(held())
+        other = dict(payload, basis=[payload['basis'][0], 'more'])
+        for what, manifests in (('after', [(payload, event_id), (other, 'x2')]),
+                                ('before', [(other, 'x2'), (payload, event_id)])):
+            with self.subTest(what):
+                self.assertEqual(self.finding(manifests),
+                                 ['manifest: the log holds another record under the record_id ' + MANIFEST_ID])
+
+
+class TheEarlierLines(unittest.TestCase):
+    """TASK-168 AC2, AC4 and AC10: the lines before the acceptance line, and the entry over a log of such a form."""
+
+    @staticmethod
+    def repeated_first(log):
+        events = [json.loads(line.decode('utf-8')) for line in log.split(b'\n')[:-1]]
+        events.insert(1, copy.deepcopy(events[0]))
+        for n, event in enumerate(events, 1):
+            event['seq'] = n
+        return b''.join(compact(event) + b'\n' for event in events)
+
+    @staticmethod
+    def reordered(index):
+        def change(log):
+            lines = log.split(b'\n')[:-1]
+            event = json.loads(lines[index].decode('utf-8'))
+            lines[index] = json.dumps(dict(reversed(list(event.items()))), separators=(',', ':')).encode('utf-8')
+            return b'\n'.join(lines) + b'\n'
+        return change
+
+    def test_an_earlier_line_repeated_fails_the_acceptance_replay(self):
+        w = World(mutate=self.repeated_first, **with_manifest())
+        self.assertEqual(
+            decision_replay._replay_acceptance(ROOT, w.log, w.index + 1, PIN, w.checked, w.git),
+            ['log: line 2 is an ignored duplicate of line 1, which the writer never writes'])
+
+    def test_an_earlier_line_with_reordered_keys_fails_the_acceptance_replay(self):
+        w = World(mutate=self.reordered(0), **with_manifest())
+        self.assertEqual(w.replay(), ['log: line 1 is not in the form the writer writes'])
+
+    def test_the_entry_counts_no_acceptance_line_of_such_a_file_as_passed(self):
+        cases = (
+            ('no final LF', lambda log: log[:-1], 'log: the log does not end with LF'),
+            ('keys reordered', self.reordered(3), 'log: line 4 is not in the form the writer writes'),
+            ('a repeated line', lambda log: log + compact(dict(json.loads(log.split(b'\n')[-2].decode('utf-8')),
+                                                             seq=5)) + b'\n',
+             'log: line 5 is an ignored duplicate of line 4, which the writer never writes'),
+        )
+        for what, change, finding in cases:
+            with self.subTest(what):
+                code, lines = entry(World(mutate=change, **with_manifest()), [ROOT, '--governor-pin', PIN, RESUME_PIN])
+                self.assertEqual(code, 1, lines)
+                self.assertIn('FAIL: ' + LOG_PATH + ': ' + finding, lines)
+                self.assertTrue(any(l.startswith('FAIL ')
+                                    and l.endswith(': log: the file is not in the form the writer writes')
+                                    for l in lines), lines)
+                self.assertIn('replayed and passed: 0,', lines[-1])
+
+
 class TheGates(unittest.TestCase):
     def without_the_governor(self, call):
         """Run call with the gated modules taken out of the interpreter; give its answer and the names loaded after.
@@ -434,7 +658,8 @@ class TheGates(unittest.TestCase):
 
     def test_an_engine_with_the_governor_pins_hash_and_no_flag_replays_nothing(self):
         """TASK-167 erratum E2.6: the engine file at HEAD holds the governor's text and that hash is given as an
-        accepted engine, with no --governor-pin: the engine gate passes and the hash is not read as a governor pin."""
+        accepted engine, with no --governor-pin: the line is not replayed and the hash is not read as a governor pin.
+        The test does not show whether the engine gate passes, because the missing flag is answered before that gate."""
         w = World(resume_text=GOVERNOR_TEXT)
         (code, lines), loaded = self.without_the_governor(lambda: entry(w, [ROOT, PIN]))
         self.assertEqual(code, 1, lines)
@@ -479,9 +704,9 @@ def entry(w, argv):
 
 class TheEntry(unittest.TestCase):
     def test_the_literal_record_passes_through_the_entry(self):
-        code, lines = entry(World(), [ROOT, '--governor-pin', PIN, RESUME_PIN])
+        code, lines = entry(World(**with_manifest()), [ROOT, '--governor-pin', PIN, RESUME_PIN])
         self.assertEqual(code, 0, lines)
-        self.assertTrue(any(l.startswith('REPLAYED ' + RECORD_ID + ' ') and l.endswith(' ok') for l in lines), lines)
+        self.assertTrue(any(l.startswith('REPLAYED ' + RECORD_ID_M + ' ') and l.endswith(' ok') for l in lines), lines)
         self.assertIn('decision records: 1, replayed and passed: 1, failed: 0', lines[-1])
 
     def test_without_the_flag_the_line_is_not_replayed_and_fails(self):
