@@ -354,7 +354,8 @@ class Purity(unittest.TestCase):
                       'supersedes the form-by-form rules F5 to F8', 'no quoted argument at all', 'case-sensitively',
                       'reserved device names', 'redaction', 'A blank command is "uncovered"', 'an alternate data stream',
                       'D-1228 F10', 'A text of separators only', 'in any letter case', 'their meanings differ',
-                      'entry holding a character outside the set never', 'help.autocorrect'):
+                      'entry holding a character outside the set never', 'help.autocorrect',
+                      'get_work_order and query are not in the observed read-set'):
             self.assertIn(words, doc, words)
         self.assertNotIn('.aieos', text)
 
@@ -388,6 +389,21 @@ class McpTools(unittest.TestCase):
                 r = call(tool, inp)
                 self.assertEqual(r, {'verdict': 'allow', 'concern': 'mcp', 'reason': 'mcp', 'findings': [], 'record': None}, tool)
         self.assertIn('mcp', claude_code.REASONS)
+
+    def test_a_wrong_argument_is_refused_before_the_name(self):
+        """TASK-061 AC1 (task TASK-171, DEF-0135 finding 1): a name of the server with a wrong argument of the judge
+        is refused for the argument, so the argument findings come before the allow of the names."""
+        for kw in (dict(root='relative\\root'), dict(task='TASK-x'), dict(ws=[])):
+            r = call(claude_code.MCP_TOOLS[0], {}, **kw)
+            self.assertEqual((r['verdict'], r['reason'], r['record']), ('refuse', 'argument', None), kw)
+
+    def test_the_names_are_those_of_the_tools_list(self):
+        """TASK-061 AC2 (task TASK-171, DEF-0135 finding 3): the names of the server's tools/list answer, prefixed,
+        are the names of claude_code.MCP_TOOLS."""
+        from aieos_bootstrap import mcp_server
+        answer = mcp_server.handle('{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}', {}, lambda: None)
+        names = tuple('mcp__aieos__' + t['name'] for t in answer['result']['tools'])
+        self.assertEqual(names, claude_code.MCP_TOOLS)
 
     def test_near_misses_stay_uncovered(self):
         """TASK-061 AC2, amended by the contract of TASK-135 (its AC2): another server, another case, a suffix, a

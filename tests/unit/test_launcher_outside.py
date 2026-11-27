@@ -47,6 +47,24 @@ def row(task, expires=LATER):
     return {'task_id': task, 'fencing_token': {'token': task}, 'expires_at': expires}
 
 
+class RaisingResult:
+    """An end_session answer whose result cannot be read."""
+
+    @property
+    def result(self):
+        raise RuntimeError('result')
+
+
+class RaisingFindings:
+    """A refused answer whose findings cannot be read."""
+
+    result = 'refused'
+
+    @property
+    def findings(self):
+        raise RuntimeError('findings')
+
+
 class World:
     """The five callees as recording stand-ins, each answer settable, each raise settable by name."""
 
@@ -229,8 +247,7 @@ class TASK092AC2Order(unittest.TestCase):
         world.removed['TASK-1'] = R('refused', reason='no_store', findings=['no store'])
         result = outside(world)
         self.assertEqual(result['records'], ['TASK-1: record written, reads not removed'])
-        self.assertEqual(result['findings'], ["TASK-1: remove_reads: remove_reads gave 'refused' ('no_store')",
-                                              'no store'])
+        self.assertEqual(result['findings'], ['TASK-1: remove_reads: remove_reads did not give done', 'no store'])
 
     def test_done_released(self):
         """TASK-092 AC2: "done" from end_session gives "done", reason None and released its task ids in order."""
@@ -277,7 +294,7 @@ class TASK092AC3FailingClosed(unittest.TestCase):
         world.leases = R('refused', reason='session', findings=["the session 'x' was never started"])
         result = outside(world)
         self.assert_closed(result, 'lease_rows', world)
-        self.assertEqual(result['findings'], ["lease_rows: session_leases gave 'refused' ('session')",
+        self.assertEqual(result['findings'], ['lease_rows: session_leases did not give done',
                                               "the session 'x' was never started"])
 
     def test_lease_rows_out_of_form(self):
@@ -311,8 +328,7 @@ class TASK092AC3FailingClosed(unittest.TestCase):
         result = outside(world)
         self.assert_closed(result, 'stored_reads', world)
         self.assertEqual(result['records'], ['TASK-1: record written, 1 reads removed'])
-        self.assertEqual(result['findings'], ["TASK-2: stored_reads: stored_reads gave 'refused' ('no_store')",
-                                              'no store'])
+        self.assertEqual(result['findings'], ['TASK-2: stored_reads: stored_reads did not give done', 'no store'])
         self.assertNotIn('stored_reads TASK-3', world.names())
         world = World()
         world.stored['TASK-1'] = R('done', ('a',))
@@ -377,7 +393,7 @@ class TASK092AC3FailingClosed(unittest.TestCase):
         world.ended = R('refused', reason='ended', findings=["the session 'x' was already ended"])
         result = outside(world)
         self.assertEqual((result['result'], result['reason'], result['released']), ('refused', 'end', []))
-        self.assertEqual(result['findings'], ["end: end_session gave 'refused' ('ended')",
+        self.assertEqual(result['findings'], ['end: end_session did not give done',
                                               "the session 'x' was already ended"])
         self.assertEqual(result['records'], ['TASK-1: record written, 1 reads removed'])
 
@@ -388,6 +404,41 @@ class TASK092AC3FailingClosed(unittest.TestCase):
         result = outside(world)
         self.assertEqual((result['result'], result['reason']), ('refused', 'end'))
         self.assertEqual(result['findings'], ['end: a step raised ValueError; the session may be ended'])
+
+    def test_a_raise_after_end_session_says_may_be_ended(self):
+        """TASK-092 AC3 (TASK-171 AC2): a raise after end_session's return, in reading its answer or in building its
+        refusal's findings, also says that the session may be ended."""
+        for answer in (RaisingResult(), RaisingFindings()):
+            with self.subTest(answer=type(answer).__name__):
+                world = World()
+                world.ended = answer
+                result = outside(world)
+                self.assertEqual((result['result'], result['reason']), ('refused', 'end'))
+                self.assertEqual(result['findings'], ['end: a step raised RuntimeError; the session may be ended'])
+                self.assertEqual(result['records'], ['TASK-1: record written, 1 reads removed'])
+
+    def test_a_refusal_quotes_nothing_from_the_callee(self):
+        """TASK-092 AC3 (TASK-171 AC2): no own finding holds the root that a callee gave as its result or reason."""
+        refusal = R(ROOT, reason=ROOT)
+        for name in ('leases', 'stored', 'removed', 'ended'):
+            with self.subTest(callee=name):
+                world = World()
+                if name in ('stored', 'removed'):
+                    getattr(world, name)['TASK-1'] = refusal
+                else:
+                    setattr(world, name, refusal)
+                result = outside(world)
+                self.assertTrue(result['findings'], name)
+                self.assertFalse([f for f in result['findings'] if ROOT in f], result)
+
+    def test_a_released_id_out_of_form(self):
+        """TASK-092 AC3 (TASK-171 AC2): a released lease whose task_id is not TASK- followed by digits makes the value
+        out of form, so no own finding names it."""
+        world = World()
+        world.ended = R('done', [{'task_id': ROOT}])
+        result = outside(world)
+        self.assertEqual((result['result'], result['released']), ('done', []))
+        self.assertEqual(result['findings'], ["end: end_session's value is out of form"])
 
     def test_no_own_finding_holds_the_root(self):
         """TASK-092 AC3: no finding end_outside makes itself holds the root."""

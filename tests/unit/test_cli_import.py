@@ -610,8 +610,8 @@ class TASK097AC5Modules(unittest.TestCase):
 
     def test_this_test_file(self):
         """TASK-097 AC5: this file imports no tempfile, sqlite3, shutil or subprocess, names no open, has no string
-        constant that starts with 'C:/' and is longer than it other than the root 'C:/import-root-97' (the POSIX root
-        '/import-root-104' and the root forms of the AC2 tests are not collected by this pin), and has no
+        constant that starts with 'C:/' and is longer than 3 characters other than the root 'C:/import-root-97' (the
+        POSIX root '/import-root-104' and the root forms of the AC2 tests are not collected by this pin), and has no
         one-argument .replace() and no .replace(target=...)."""
         tree = ast.parse(HERE.read_bytes().decode('utf-8'))
         imported = set()

@@ -333,6 +333,18 @@ class R5Derivation(Base):
         self.assertEqual(result, conformance.NOT_RUN)
         self.assertIn('the derivation raised ValueError', reason)
 
+    def test_the_reason_names_the_type_only(self):
+        """TASK-171 AC4 (DEF-0043 c): the reason for a raising derivation does not hold the error's message."""
+        files = real_files()
+        put_fixture(files, fixture(files))
+
+        def boom(v):
+            raise ValueError('a made-up message')
+        result, reason, _ = self.result(files, derive=boom)
+        self.assertEqual(result, conformance.NOT_RUN)
+        self.assertNotIn('a made-up message', reason)
+        self.assertTrue(reason.endswith('the derivation raised ValueError'), reason)
+
     def test_fail_before_not_run(self):
         files = real_files()
         put_fixture(files, fixture(files, [risk_case(files), risk_case(files)]))

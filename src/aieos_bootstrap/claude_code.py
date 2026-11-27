@@ -13,7 +13,9 @@ Two pure functions over one hook-input mapping, the object Claude Code gives a h
      allowlist (AC6), which is the caller's (specification 5 section 11 point 6), never a default of this module;
    - read (Read, Grep and Glob): nothing is judged; the observed read-set record is part CC-2's;
    - mcp (task TASK-135): exactly the seven names of MCP_TOOLS, "mcp__aieos__" followed by a tool of the server "aieos",
-     compared by exact string equality, are allowed, concern "mcp", reason "mcp", whatever tool_input holds;
+     compared by exact string equality, are allowed, concern "mcp", reason "mcp", whatever tool_input holds; the
+     reads of the tools get_work_order and query are not in the observed read-set (claude_code_reads.py skips every
+     name beginning "mcp__");
    - schema (task TASK-140): the tool ToolSearch, only when tool_input holds a "query" string that is "select:" followed by one or more
      of the seven names of MCP_TOOLS separated by commas (exact string equality, no space, a name may repeat), is allowed, concern
      "schema", reason "schema", whatever else tool_input holds; the shape of tool_input (a "query" string) is taken from the tool's own

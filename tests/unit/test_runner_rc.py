@@ -612,6 +612,74 @@ class R6RunRecord(Isolated):
         self.assertEqual((r.results['RC-01'], r.record['outcome']), (conformance.NOT_RUN, 'fail'))
 
 
+RUNNER_LINE = 'the running runner is not the root\'s (reading)'
+
+
+def blocked_files():
+    """with_rc() whose runner bytes differ from the running runner (a blocking problem) and with a Resume Check file;
+    the Capability Boundaries entries carry no fixture, so its load, whose imports depend on what the process has
+    already loaded, takes no part."""
+    files = with_rc(real_files())
+    files[conformance.RUNNER_PATH] = b'# another runner\n'
+    files[conformance.RESUME_CHECK_PATH] = b'# the Resume Check at the root\n'
+    value = set_value(files)
+    for entry in value['scenarios']:
+        if entry['capability'] == 'Capability Boundaries':
+            entry['fixture'] = None
+    put_set(files, value)
+    return files
+
+
+class RunnerOpenPoints(Isolated):
+    """TASK-171 AC4 (d) and AC5."""
+
+    def test_a_blocking_problem_skips_the_import(self):
+        """TASK-171 AC5 (DEF-0029 R3-1, R5-4): with a blocking problem the Resume Check is not searched for."""
+        watch = Watching()
+        sys.meta_path.insert(0, watch)
+        r = go(blocked_files())
+        self.assertEqual(watch.asked, 0)
+        self.assertEqual(r.problems, [RUNNER_LINE])
+
+    def test_a_blocking_problem_keeps_the_results_and_the_record(self):
+        """TASK-171 AC5: with a blocking problem the record, the results and the reasons are the same for an absent, a
+        failing and a loadable Resume Check, and the failed-load line is the only problem line that goes."""
+        want = 'the run does not count: ' + RUNNER_LINE
+        runs = [go(blocked_files())]
+        sys.meta_path.insert(0, Failing(ImportError('broken')))
+        runs.append(go(blocked_files()))
+        sys.meta_path.pop(0)
+        self.install(check=stand_in())
+        runs.append(go(blocked_files()))
+        for r in runs:
+            self.assertEqual(r.problems, [RUNNER_LINE])
+            self.assertEqual(set(r.reasons.values()), {want})
+            self.assertEqual(set(r.results.values()), {conformance.NOT_RUN})
+            self.assertEqual(r.value['resume_check'], {'path': conformance.RESUME_CHECK_PATH, 'sha256':
+                                                       conformance.sha256(b'# the Resume Check at the root\n')})
+            self.assertEqual((r.text, r.record), (runs[0].text, runs[0].record))
+
+    def test_a_stand_in_governor_does_not_block_the_load(self):
+        """TASK-171 AC5: a stand-in governor is no blocking problem, so the Resume Check is loaded as before."""
+        self.install(check=stand_in())
+        files = with_rc(real_files(), ['RC-01'])
+        files[conformance.RESUME_CHECK_PATH] = b'# the Resume Check at the root\n'
+        r = go(files, evaluate=lambda *args: None)
+        self.assertEqual((r.results['RC-01'], r.reasons['RC-01']), (conformance.PASS, ''))
+        self.assertEqual(r.problems, ['a stand-in governor (reading)'])
+        self.assertEqual(r.value['resume_check']['sha256'],
+                         conformance.sha256(b'# the Resume Check at the root\n'))
+
+    def test_a_list_record_id_in_a_verification_fixture_gives_errors(self):
+        """TASK-171 AC4 (DEF-0043 d): a case record whose record_id is a list gives errors and no exception."""
+        path = conformance.module_path('ACC-01')
+        value = conformance.unwrap((ROOT / path).read_bytes())
+        entry = next(e for e in set_value(real_files())['scenarios'] if e['id'] == 'ACC-01')
+        self.assertEqual(conformance.check_fixture(value, entry), [])
+        value['cases'][0]['records'][0]['record_id'] = ['a']
+        self.assertIn('case 1: a record with a check_record finding', conformance.check_fixture(value, entry))
+
+
 class FixedSetValue(unittest.TestCase):
     """The fixed set value of TASK-013 (contract AC2): the set file at 1659a8cb, approved by TASK-002's freeze record.
     Limits (contract AC9): until TASK-014 lands, the present state is run only by a scratch simulation; if TASK-014

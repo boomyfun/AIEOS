@@ -530,7 +530,7 @@ def _check_expected(exp, case_records):
             errors.append('expected %s is not either present or in not_fixed' % key)
     if set(exp) - set(EXPECTED_KEYS) - {'not_fixed'}:
         errors.append('expected has a key that section 4 does not name')
-    ids = {r.get('record_id'): r for r in case_records if isinstance(r, dict)}
+    ids = {r['record_id']: r for r in case_records if isinstance(r, dict) and isinstance(r.get('record_id'), str)}
     if 'decision' in exp and not (isinstance(exp['decision'], list) and exp['decision']
                                   and all(d in ACCEPTANCE for d in exp['decision'])):
         errors.append('expected decision')
@@ -584,10 +584,12 @@ def check_fixture(value, entry):
         for rec in case_records:
             if records.check_record(rec):
                 errors.append(where + 'a record with a check_record finding')
+            # A record id that is not a string is a check_record finding already; only strings are compared.
             rid = rec.get('record_id') if isinstance(rec, dict) else None
-            if rid in seen:
-                errors.append(where + 'a repeated record id')
-            seen.add(rid)
+            if isinstance(rid, str):
+                if rid in seen:
+                    errors.append(where + 'a repeated record id')
+                seen.add(rid)
         errors.extend(where + e for e in _check_expected(case['expected'], case_records))
     return errors
 
@@ -1063,7 +1065,7 @@ def _run_risk_cases(value, entry, derive, evaluate):
         try:
             derived = derive(copy.deepcopy(case['values']))
         except Exception as exc:
-            not_run = not_run or 'case %d: the derivation raised %s: %s' % (n, type(exc).__name__, exc)
+            not_run = not_run or 'case %d: the derivation raised %s' % (n, type(exc).__name__)
             continue
         problem = derived_problem(derived, case['expected'])
         if problem:
@@ -1558,15 +1560,15 @@ def run(root, commit, task, read=None, listing=None, evaluate=None, check=None, 
     if status == STAND_IN:
         problems.append('a stand-in governor (reading)')
 
-    # TASK-006 AC4, AC7: the Resume Check entry is loaded, and the run record gains resume_check, only when at least
-    # one Resume Check entry of the set file has a fixture.
+    # TASK-006 AC4, AC7: the run record gains resume_check only when at least one Resume Check entry of the set file
+    # has a fixture; the Resume Check entry is loaded only when such a fixture exists and the list blocking is empty.
     rc_used = set_value is not None and any(e['capability'] == RESUME_CHECK and e['fixture'] is not None
                                             for e in set_value['scenarios'])
     rc_status, rc_record = None, None
     if check is not None:
         rc_status = STAND_IN
         problems.append('a stand-in Resume Check (reading)')
-    elif rc_used:
+    elif rc_used and not blocking:
         check, rc_status = load_resume_check(root)
         if rc_status == LOADED and tree.read(RESUME_CHECK_PATH) is None:
             check, rc_status = None, FAILED

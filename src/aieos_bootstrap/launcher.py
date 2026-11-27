@@ -286,7 +286,8 @@ after the contract was written is closed. Stated limits of that check: the check
 check sees the bytes read at step "log", so a race can still end in eventlog's "conflict" refusal after the write (seen
 as reason "append"); the Windows-only roots of end, launch_outside and approval_act stay; the reader of the tasks folder
 of the project-state directory (link 1 of DEF-0105) stays open; the second person's statement of the same intent is not
-recorded, because run_task takes the first claim of the record_id and the refused statement leaves no trace in the log.
+recorded, because run_task takes the intent id from the first claim of the record_id in the log, and a refused statement
+appends nothing.
 """
 
 import datetime
@@ -916,10 +917,11 @@ def _outside_argument_findings(root, session_id, now, recorder, callees):
 
 
 def _outside_store(head, name, answer):
-    """A store refusal's findings: the own line "<head><name> gave <result> (<reason>)", then the callee's own."""
+    """A store refusal's findings: the own line "<head><name> did not give done", which quotes nothing the callee gave,
+    then the callee's own str findings."""
     given = getattr(answer, 'findings', None)
     more = [f for f in given if isinstance(f, str)] if isinstance(given, (list, tuple)) else []
-    return ['%s%s gave %r (%r)' % (head, name, getattr(answer, 'result', None), getattr(answer, 'reason', None))] + more
+    return ['%s%s did not give done' % (head, name)] + more
 
 
 def _outside_rows(answer):
@@ -940,14 +942,15 @@ def _outside_rows(answer):
 
 
 def _outside_released(value):
-    """Step 4: the released leases' task ids, or None when the value is out of form."""
+    """Step 4: the released leases' task ids, each TASK- followed by digits, or None when the value is out of form."""
     if not isinstance(value, list):
         return None
     ids = []
     for lease in value:
-        if not (isinstance(lease, dict) and isinstance(lease.get('task_id'), str)):
+        if not (isinstance(lease, dict) and isinstance(lease.get('task_id'), str)
+                and _TASK.fullmatch(lease['task_id']) is not None):
             return None
-        ids.append(lease['task_id'])
+        ids.append(str.__str__(lease['task_id']))
     return ids
 
 
@@ -1028,6 +1031,8 @@ def end_outside(root, session_id, now, recorder, session_leases=None, stored_rea
         return _outside_result('done', None, findings, records, released)
     except Exception as exc:  # AC3: a raise names its step and keeps the records lines already made
         text = '%s%s: a step raised %s' % (head, step, type(exc).__name__)
+        if step == 'end':  # end_session was called: it may have committed before the raise
+            text += '; the session may be ended'
         try:
             return _outside_result('refused', step, findings + [text], records)
         except Exception:  # the result's building raised: the step and its line only
@@ -1770,7 +1775,9 @@ def import_task(root, task_id, clock, read=None, read_log=None, write_contract=N
     exactly IMPORT_KEYS; it never raises an Exception. Its steps, each step's name being the reason of a refusal or a
     raise at it: argument; clock; head (start's own reader, _head, 40 lowercase hex); log (read_log, then
     records.check_log); exists (any event of the task in the log); the template; write (write_contract, whose
-    "exists" and "layout" pass through); append (task.drafted with the text's hash, no fencing token)."""
+    "exists" and "layout" pass through); append (task.drafted with the text's hash, no fencing token). A raise gives
+    the reason of the step last entered: "log" for a raise in the exists check, and "exists" for a raise while the
+    template is built."""
     callees = (read, read_log, write_contract, append)
     step = 'argument'
     path = contract_hash = event_id = None
@@ -2103,8 +2110,10 @@ def _run_conflict(report, log, record, claim_event, moment):
     payload = event.get('payload') if isinstance(event, dict) else None
     payload = payload if isinstance(payload, dict) else {}
     named = [v if isinstance(v, str) else 'not a string' for v in (payload.get('subject'), payload.get('recorder'))]
+    # %r keeps a stored value with a line feed on one line; the subject is a cause only of a claim of this record_id
+    hint = '; the subject alone can cause this' if payload.get('record_id') == record['record_id'] else ''
     return ['intent: the log already holds, under this intent\'s claim event id, a claim that differs from this '
-            'one (intent %s, recorder %s); the subject alone can cause this' % tuple(named)]
+            'one (intent %r, recorder %r)%s' % (named[0], named[1], hint)]
 
 
 def _run_contract(kind, task_id, head, intent_id, write, owner_kept_act=None, versions=()):
@@ -2151,7 +2160,10 @@ def run_task(root, task_id, intent, source_class, who, write, clock, read=None, 
     "conflict" is refused before anything is written, TASK-104); the kind; trace (only with a trace, TASK-163: each
     entry read at the head); the kind's template; write (write_contract,
     before any append, whose "exists" and "layout" pass through); append (the intent's claim with its record's
-    recorder, then task.drafted with RUN_RECORDER, no fencing token)."""
+    recorder, then task.drafted with RUN_RECORDER, no fencing token). A raise gives the reason of the step last
+    entered: "log" for a raise in the exists check, the intent's id and claim, the dry run of eventlog.append and the
+    kind (the class raises no Exception: its failures give "class: ..." findings and the run goes on); for a raise
+    while the kind's template is filled, "log" without a trace and "trace" after a trace was read."""
     callees = (read, read_log, read_base, write_contract, append)
     step = 'argument'
     found = []

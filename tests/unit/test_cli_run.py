@@ -729,6 +729,27 @@ class TASK098AC2IntentRefusals(unittest.TestCase):
         self.assertEqual(written(w), [])
         self.assertNotIn('append', w.names())
 
+    def test_the_subject_is_named_a_cause_only_for_the_same_record_id(self):
+        """TASK-098 AC2 (TASK-171 AC3): the finding says that the subject alone can cause the refusal only when the
+        line under the claim event id holds the record_id of the new claim."""
+        same = dict(record_of(), recorder='someone else, as stated to aieos cli run (not checked)')
+        other = dict(same, record_id='intent/' + '0' * 64)
+        for payload, named in ((same, True), (other, False)):
+            with self.subTest(named=named):
+                found = self.refused(go(World(log=log_with((payload, CEID)))), 'intent')
+                self.assertEqual(len(found), 1)
+                self.assertEqual(found[0].endswith('; the subject alone can cause this'), named, found[0])
+                self.assertEqual('the subject alone' in found[0], named, found[0])
+
+    def test_a_recorder_with_a_line_feed_stays_on_one_line(self):
+        """TASK-098 AC2 (TASK-171 AC3): the finding shows the stored intent id and recorder by %r, so a recorder with
+        a line feed gives one line."""
+        other = dict(record_of(), recorder='first line\nsecond line')
+        found = self.refused(go(World(log=log_with((other, CEID)))), 'intent')
+        self.assertEqual(len(found), 1)
+        self.assertNotIn('\n', found[0])
+        self.assertIn("recorder 'first line\\nsecond line'", found[0])
+
     def test_a_raise_in_the_dry_run_gives_log(self):
         """TASK-098 AC2: a raise inside the dry run of eventlog.append keeps the reason "log" (the step variable is
         not changed): nothing is written and nothing is appended."""

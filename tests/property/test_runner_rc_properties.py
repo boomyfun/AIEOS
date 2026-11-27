@@ -8,6 +8,8 @@ that scenario PASS; a capability other than the bound file's never gives PASS; a
 to: INV-005, every Resume Check result is PASS, FAIL or NOT_RUN and a returned string is never an execution decision
 record; INV-006, with no Resume Check no Resume Check scenario is PASS; INV-007, a fixture whose bytes differ from its
 set entry's hash is never run; INV-008, a stand-in Resume Check never makes a run count.
+
+The one-byte property rests largely on the stand-in answering by exact inputs.
 """
 import json
 import pathlib
