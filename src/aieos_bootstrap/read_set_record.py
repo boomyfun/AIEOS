@@ -170,9 +170,11 @@ def build(task_id, session_id, read_paths, recorder):
 
 
 def _core(w):
-    found = getattr(w, 'findings', ()) or ()
+    found = getattr(w, 'findings', ())
+    if not isinstance(found, (list, tuple)):
+        found = ()
     return {'result': getattr(w, 'result', None), 'reason': getattr(w, 'reason', None), 'seq': getattr(w, 'seq', None),
-            'findings': [str(x) for x in found]}
+            'findings': [x for x in found if isinstance(x, str)]}
 
 
 def _observe(context, read_paths, now, append, state):

@@ -7,7 +7,8 @@ recovery appends, the events it built, the leases whose expiry has passed, and f
 - Step 1: for every commit whose trailer names a task and that no task.submitted event names, a compensating
   task.submitted when a lease counts (AC3), else a record.added event with the observation of an unfenced write. A commit
   whose message names AIEOS-Task or AIEOS-Fence outside the last paragraph, in another letter case, or twice gives
-  findings and no event (AC2; decision D-393 C2).
+  findings and no event (AC2; decision D-393 C2). A malformed value (an AIEOS-Task value that is not TASK- followed
+  by digits, or an AIEOS-Fence value that is not <epoch>:<counter>) gives a finding, and that value is not used.
 - Step 2: a task.submitted event whose commit is not among the given commits is reported; Git wins, and the log is
   never rewritten (AC4).
 - Step 3 (an intent file against a projection) has nothing to act on: no projection exists in the bootstrap (AC10).
@@ -21,6 +22,17 @@ Departure from a proposed sentence (decision D-390, reading (t1); stated in the 
 section 7 step 1 counts "a lease on that task which the local store still holds (this step runs before step 5)";
 here a lease counts only when its expiry is after the recovery time, as section 8 and concept line 849 say, so a
 commit made under a lease past its expiry gives the observation, never a compensating submission.
+
+Recorded behaviours of the trailer reading and of the checks:
+- A message with CR LF line ends is read as one paragraph, since an empty line of CR LF does not separate
+  paragraphs here.
+- A line with text before a key is not read as a trailer; a line whose key has only leading spaces before it is
+  read, with the finding that it "is not at the start of its line". The CI's line-anchored trailer rule reads
+  neither.
+- Findings echo message text with %r.
+- The import check of tests/unit/test_recovery.py (ImportsTest) needs Python 3.10 or later
+  (sys.stdlib_module_names).
+- The purity limits below (AC10) rest on the code check; no unit test asserts them.
 
 Limits (AC10):
 - It reads nothing and writes nothing: it opens, writes and removes no file, reads no clock (the recovery time is

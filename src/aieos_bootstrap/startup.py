@@ -239,6 +239,14 @@ def _submissions(log):
     return out
 
 
+def _task_text(task_id):
+    """A held lease's task_id as a finding shows it; it raises nothing (DEF-0054 M7)."""
+    try:
+        return '%s' % (task_id,)
+    except Exception:  # noqa: BLE001 - AC10: a task_id whose text form raises
+        return 'a task whose id cannot be shown'
+
+
 def recover(root, repo, recorder, now, head=None, max_commits=DEFAULT_MAX_COMMITS, read=None, read_log=None,
             append=None, leases=None, release=None, expire=None):
     """Run recovery at start (TASK-026 AC1 to AC10); returns a mapping with RESULT_KEYS."""
@@ -280,6 +288,8 @@ def recover(root, repo, recorder, now, head=None, max_commits=DEFAULT_MAX_COMMIT
     try:
         given = read_log(root)
         held = leases(root)
+        if isinstance(held, list):
+            held = list(held)  # one list for reconcile and the release step (DEF-0054 M1)
     except Exception as exc:  # AC10
         return ended('refused', 'store', ['store: reading the log or the leases raised %s' % type(exc).__name__])
     try:
@@ -343,11 +353,12 @@ def recover(root, repo, recorder, now, head=None, max_commits=DEFAULT_MAX_COMMIT
             value = getattr(rel, 'value', None) if done else None
         except Exception as exc:  # AC10
             out['findings'].append('store: the release of %s raised %s; it expires by its own expiry'
-                                   % (task_id, type(exc).__name__))
+                                   % (_task_text(task_id), type(exc).__name__))
             continue
         if not done:
             shown = state if type(state) is str else type(state).__name__
-            out['findings'].append('store: the release of %s gave %r; it expires by its own expiry' % (task_id, shown))
+            out['findings'].append('store: the release of %s gave %r; it expires by its own expiry'
+                                   % (_task_text(task_id), shown))
             continue
         out['released'].append(value)
 

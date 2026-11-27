@@ -154,6 +154,10 @@ def append(log, event_type, payload, event_id, appended_at, task_id=None, fencin
     those of the refusal's record if the event is refused by the fence (AC7); they are looked at only then, after the
     log and event_id checks (TASK-015 AC1, AC2), and their absence never raises: a fence refusal without them, or for
     an event that names no task_id, carries no record and a finding that says why (TASK-015 AC3, choice (r1)).
+
+    The re-check of the result before it is returned (AC5: the given bytes are an exact prefix, followed by exactly
+    one line) cannot fail as built: the new log is the given bytes followed by the new line's bytes by construction,
+    and those bytes are one canonical JSON text, in which a line feed is always escaped, followed by one line feed.
     """
     if not isinstance(log, (bytes, bytearray)):
         raise TypeError('the log is given as bytes, not %s' % type(log).__name__)
@@ -224,8 +228,11 @@ def append(log, event_type, payload, event_id, appended_at, task_id=None, fencin
             if task_id is None:
                 return _refused('fence', fence + ['fence: no refusal record, the event names no task_id'])
             if not (records._is_str(recorder) and records._is_str(record_id)):
-                return _refused('fence', fence + ['fence: no refusal record, recorder and record_id are not both '
-                                                  'non-empty strings'])
+                missing = [name for name, value in (('recorder', recorder), ('record_id', record_id))
+                           if not records._is_str(value)]
+                what = ('%s is not a non-empty string' % missing[0] if len(missing) == 1
+                        else 'recorder and record_id are not non-empty strings')
+                return _refused('fence', fence + ['fence: no refusal record, ' + what])
             return _refused('fence', fence, record=refusal_record(event_id, task_id, recorder, record_id))
 
     # AC4: the whole log after the append.

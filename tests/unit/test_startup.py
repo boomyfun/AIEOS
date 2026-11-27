@@ -676,6 +676,69 @@ class R10Result(unittest.TestCase):
         self.assertEqual(store.appends(), [])
 
 
+class OncePassList(list):
+    """A list whose iterations after the first ``passes`` raise."""
+
+    def __init__(self, items, passes=1):
+        super().__init__(items)
+        self.left = passes
+
+    def __iter__(self):
+        if self.left < 1:
+            raise RuntimeError('iterated again')
+        self.left -= 1
+        return super().__iter__()
+
+
+class NoText(str):
+    """A task_id equal to its text whose text form raises."""
+
+    def __str__(self):
+        raise RuntimeError('no text form')
+
+
+class HeldLeases(unittest.TestCase):
+    """TASK-170 AC4 (DEF-0054)."""
+
+    def recover_with(self, held, **kw):
+        table, head = line_history(PLAIN, FENCED)
+        store = Store(leases=[LEASE], **kw)
+        store.held = held
+        r, _ = run(table, head, store)
+        return r, store
+
+    def test_a_lease_list_is_iterated_once_by_recover(self):
+        """TASK-170 AC4 (M1): recover copies the list the reader returns, so a list that can be iterated only once
+        gives "recovered" and its lease is released."""
+        r, _ = self.recover_with(lambda root: OncePassList([dict(LEASE)]))
+        self.assertEqual((r['result'], r['released']), ('recovered', [LEASE]))
+
+    def test_a_list_that_cannot_be_iterated_is_refused_at_the_read(self):
+        """TASK-170 AC4: a list whose copy raises is refused with the read's finding."""
+        r, store = self.recover_with(lambda root: OncePassList([dict(LEASE)], passes=0))
+        self.assertEqual((r['result'], r['reason']), ('refused', 'store'))
+        self.assertEqual(r['findings'][-1], 'store: reading the log or the leases raised RuntimeError')
+        self.assertEqual(store.appends(), [])
+
+    def test_a_tuple_of_leases_is_still_refused(self):
+        """TASK-170 AC4: only a list is copied; a tuple reaches reconcile, which refuses it."""
+        r, store = self.recover_with(lambda root: (dict(LEASE),))
+        self.assertEqual((r['result'], r['reason']), ('refused', 'store'))
+        self.assertEqual(store.appends(), [])
+
+    def test_a_task_id_without_a_text_form_does_not_escape(self):
+        """TASK-170 AC4 (M7): a refused or raising release of a lease whose task_id has no text form gives the
+        finding, and no exception escapes."""
+        lease = dict(LEASE, task_id=NoText(TASK))
+        for kw in ({'release_gives': Refused('token')}, {'release_raises': OSError('locked')}):
+            with self.subTest(kw=sorted(kw)):
+                r, store = self.recover_with(lambda root: [dict(lease)], **kw)
+                self.assertEqual((r['result'], r['released']), ('recovered', []))
+                self.assertTrue(any('release of a task whose id cannot be shown' in f for f in r['findings']),
+                                r['findings'])
+                self.assertIn('expire', store.names())
+
+
 class R11ReadLog(unittest.TestCase):
     """TASK-026's R11: AC11, as far as startup uses it (its own test is in tests/unit/test_writer.py)."""
 

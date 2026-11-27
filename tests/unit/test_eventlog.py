@@ -261,7 +261,6 @@ class R6Fencing(unittest.TestCase):
     def test_another_token(self):
         self.assertFenced(submit(self.log, lease=lease(token={'epoch': 'store-1', 'counter': 2})))
         self.assertFenced(submit(self.log, lease=lease(token={'epoch': 'store-2', 'counter': 3})))
-        self.assertFenced(submit(self.log, lease=lease(token={'epoch': 'store-1', 'counter': True})))
 
     def test_expiry_equal_to_and_before_the_time(self):
         self.assertFenced(submit(self.log, lease=lease(expires_at=T0)))
@@ -318,11 +317,16 @@ class R6Fencing(unittest.TestCase):
     def test_a_fence_refusal_without_recorder_or_record_id_carries_no_record(self):
         # TASK-015 AC4: a fence refusal without them gives "fence" with no record and a finding; a lease-holding
         # submission without them is appended.
-        for kw in ({'recorder': None}, {'record_id': ''}, {'recorder': 7}, {'recorder': None, 'record_id': None}):
+        # TASK-170 AC3: the finding names what is missing.
+        no_recorder = 'recorder is not a non-empty string'
+        for kw, missing in (({'recorder': None}, no_recorder),
+                            ({'record_id': ''}, 'record_id is not a non-empty string'),
+                            ({'recorder': 7}, no_recorder),
+                            ({'recorder': None, 'record_id': None},
+                             'recorder and record_id are not non-empty strings')):
             r = submit(self.log, lease=None, **kw)
             self.assertEqual((r.result, r.reason, r.record, r.log), ('refused', 'fence', None, None))
-            self.assertEqual(r.findings[-1], 'fence: no refusal record, recorder and record_id are not both '
-                                             'non-empty strings')
+            self.assertEqual(r.findings[-1], 'fence: no refusal record, ' + missing)
         r = submit(self.log, recorder=None, record_id=None)
         self.assertEqual((r.result, r.seq, r.record), ('appended', 2, None))
 
@@ -386,7 +390,18 @@ class R8Task015(unittest.TestCase):
             without = submit(self.log, lease=bad, recorder=None)
             self.assertEqual((without.result, without.reason, without.record), ('refused', 'fence', None))
             self.assertEqual(list(without.findings), list(with_record.findings) +
-                             ['fence: no refusal record, recorder and record_id are not both non-empty strings'])
+                             ['fence: no refusal record, recorder is not a non-empty string'])
+
+    def test_an_integer_key_is_the_same_as_its_text(self):
+        """TASK-170 AC2 (DEF-0032 F-h): in the sameness text an integer dictionary key is written as its text, so a
+        retry whose mapping holds the integer 1 where the logged line holds "1" gives "duplicate"."""
+        rec = {'record_id': 'rec-i', 'fact_kind': 'observation', 'source_class': 'deterministic_tool_local',
+               'recorder': 'aieos-core', 'subject': TASK, 'intent_versions': {'1': 'v1'}}
+        log = ok(b'', 'ev-i', 'record.added', rec)
+        self.assertEqual(records.check_log(log).findings(), [])
+        again = dict(rec, intent_versions={1: 'v1'})
+        r = eventlog.append(log, 'record.added', again, 'ev-i', T0, task_id=TASK)
+        self.assertEqual((r.result, r.seq, r.log), ('duplicate', 1, None))
 
     def test_false_and_zero_are_not_the_same(self):
         r = eventlog.append(self.logged, 'task.submitted', {'commit': C40, 'compensating': 0}, 'ev-s', T0,

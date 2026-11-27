@@ -145,6 +145,18 @@ class Observe(unittest.TestCase):
             self.assertIn('made-up finding', result['findings'])
             self.assertEqual(len(store.calls), 1)
 
+    def test_only_the_text_items_of_a_findings_list_are_kept(self):
+        """TASK-170 AC5 (DEF-0102): a writer answer whose findings is not a list or tuple gives no core findings,
+        and of a list only the str items are kept."""
+        own = 'append did not give "appended" or "duplicate"'
+        for given, kept in (('abc', []), (7, []), ({'a': 1}, []), (['kept', 3, None], ['kept'])):
+            with self.subTest(given=repr(given)):
+                result, _ = observe(store=Store('refused', 'conflict', findings=given))
+                self.assertEqual((result['result'], result['reason'], result['core']['reason']),
+                                 ('refused', 'core', 'conflict'))
+                self.assertEqual(result['core']['findings'], kept)
+                self.assertEqual(result['findings'], [own] + kept)
+
     def test_observe_leaves_the_given_list(self):
         """TASK-169 AC6: observe, like build, never changes the list it is given."""
         given = ['z.py', 'a.py', 'z.py', 'A.py']
