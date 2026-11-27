@@ -1,6 +1,6 @@
 # DEF-0136: no maker records a gate result that the governor counts for a run-made task (gates G0 to G3), so the correct change of the first real run cannot reach NEEDS_REVIEW and master-plan.md :117 is not met by that run
 
-- Status: open
+- Status: done
 - Opened: 2026-11-15 (docs/runs/first-real-run-pre-run-record.md, A3 (iii))
 - Deferred by: decision agent (A41, A51), D-6281 (the change list of the one rewrite of the pre-run record: the missing G3 maker is opened as a deferred item, D-6239 (1)(i))
 - Decision group: A (scheduling)
@@ -21,3 +21,4 @@ The result of the first real run (the pre-run record, A3); DEF-0115 (a task's co
 
 ## Log
 - 2026-11-15: opened (session 26136a0a; decisions D-6239, D-6281, D-6283).
+- 2026-11-27 (TASK-164, accepted at D-7474; session 228f426b): closed as done on its cause, the gate results: gate records that the governor counts now exist for G0 to G3 of a run-made low plan (the test test_a_run_made_low_plan_has_no_missing_gate_and_its_profile_is_not_met asserts no missing gate; task commit 21bb1e257ad7854ca3c75765cc6670e401b00fdd). A run-made task still does not reach NEEDS_REVIEW: no code produces the records of its evidence profile, which DEF-0159 carries, with master-plan.md :117.

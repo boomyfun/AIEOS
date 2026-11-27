@@ -24,3 +24,4 @@ TASK-138 does not depend on it but waits for a green main (D-6309 C6); DEF-0136 
 ## Log
 - 2026-11-15: opened (session 26136a0a; decisions D-6310, D-6312, D-6313, D-6314).
 - 2026-11-27 (session 228f426b; closure pass 1 of the deferred items, D-7443, D-7444; decided by: decision agent (A41, A51), D-7444): narrowed, stays open. Done: the replay of decision.execution records (TASK-139, TASK-141). Open: decision.acceptance is not replayed (src/aieos_bootstrap/decision_replay.py :40, :57, :493-:495, "NOT REPLAYED: decision.acceptance"). Scheduled in is changed to name that event.
+- 2026-11-27 (TASK-164, accepted at D-7474; session 228f426b): since TASK-164 the failure of the INV-010 step on any decision.acceptance record also fails the G3 constitution gate of every plan, run-made plans included, because the default check map holds that step. Status and schedule unchanged.
