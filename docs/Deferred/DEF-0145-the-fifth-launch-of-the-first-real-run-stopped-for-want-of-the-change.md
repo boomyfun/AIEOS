@@ -39,3 +39,4 @@ Figures in this record that no decision file carries and that no script re-check
 ## Log
 
 - 2026-11-27 (session 228f426b; closure pass 1 of the deferred items, D-7443, D-7444; decided by: decision agent (A41, A51), D-7444): narrowed, stays open. Done: fix (a) (the change text is in the contract; the sixth session made the right edit, DEF-0146, title). Open: the src intent layer: a Work Order carries no text of the intent a task refers to. The second half of the Resume-when ("when the first real run is closed") is met, so a schedule is given.
+- 2026-11-28 (session 228f426b; BT4, the pre-run record of the second real run, D-7773 and D-7774; decided by: decision agent (A41, A51), D-7773): the second run gives each session its change by a traced task document (A2; D-7774), and the run's result states whether each session made the change asked (B4). The src intent layer stays open. The record is docs/runs/second-real-run-pre-run-record.md. Status unchanged.

@@ -40,3 +40,4 @@ TASK-138 does not depend on it but waits for a green main (D-6309 C6); DEF-0136 
   6. Not read by the reviewer: whether importing the governor modules for an acceptance line can change a later execution
      verdict.
   7. A fetch of a pattern matching no branch: the rehearsal's case A (no task branch) exited 0 with the local Git.
+- 2026-11-28 (session 228f426b; BT4, the pre-run record of the second real run, D-7773 and D-7774; decided by: decision agent (A41, A51), D-7773): the record states what is kept with the second run and that no decision.acceptance record of it is relied upon until the refusals of aieos evaluate that need the saved CI data or the reviews text, the violation.detected point included, are repeated, by a task or a stop-gap that the decision agent rules (A8; D-7773 R3). Not an accepted limit. The record is docs/runs/second-real-run-pre-run-record.md. Status unchanged.

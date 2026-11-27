@@ -20,7 +20,7 @@ A session that runs to its full timeout followed by a slow disk or a slow git ca
 The figures are the contract's (AC9 (14)) and the constants of the files; no launch with the step has run. How long the ten git calls take on the owner's disk is not measured.
 
 ## Resume when
-Before the second real run, or when a launch ends with the reason "capture" and a finding that the submission was refused for an expired lease.
+When a launch ends with the reason "capture" and a finding that the submission was refused for an expired lease.
 
 ## Depends on
 TASK-148 (the step; docs/runs/TASK-148-acceptance.md), TASK-147 (task_capture.py), D-6737 (v), D-6608 M2.
@@ -28,3 +28,4 @@ TASK-148 (the step; docs/runs/TASK-148-acceptance.md), TASK-147 (task_capture.py
 ## Log
 - 2026-11-20: opened (session dc7cf6ca; decisions D-6737, D-6608, D-6756).
 - 2026-11-27 (session 228f426b; closure pass 1 of the deferred items, D-7443, D-7444; decided by: decision agent (A41, A51), D-7444): scheduled.
+- 2026-11-28 (session 228f426b; BT4, the pre-run record of the second real run, D-7773 and D-7774; decided by: decision agent (A41, A51), D-7773): ruled option (c) for the second run (D-7773 R2): the lease margin is a stated limit (A12); the refusal fails closed and the run's tasks are one-line edits. Resume when is narrowed to its second trigger. The record is docs/runs/second-real-run-pre-run-record.md. Status unchanged.

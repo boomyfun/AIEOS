@@ -27,3 +27,4 @@ Figures in this record that no decision file carries and that no script re-check
 ## Log
 
 - 2026-11-27 (session 228f426b; closure pass 1 of the deferred items, D-7443, D-7444; decided by: decision agent (A41, A51), D-7444): scheduled.
+- 2026-11-28 (session 228f426b; BT4, the pre-run record of the second real run, D-7773 and D-7774; decided by: decision agent (A41, A51), D-7773): the record states the one-shot procedure for the second run: each run contract approved exactly as created and never revised, and the launch refused on a SHA-256 that differs from the creating commit's blob (A9; D-6606 C4, D-7773 R4). The CI step is unchanged; open with this limit. The record is docs/runs/second-real-run-pre-run-record.md. Status unchanged.
