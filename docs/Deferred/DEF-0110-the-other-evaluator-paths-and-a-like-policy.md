@@ -1,6 +1,6 @@
 # DEF-0110: the other evaluator paths and a like policy
 
-- Status: open
+- Status: done
 - Opened: 2026-10-30 (session 9dbe9c67; DEF-0107's stated policy, decisions D-3737, D-3740)
 - Deferred by: decision agent (A41, A51), D-3737 (Q4 of the haiku review of the policy draft)
 - Decision group: A
@@ -19,6 +19,34 @@ A self-build task changes one of those paths, or DEF-0107's build task is planne
 ## Depends on
 DEF-0107.
 
+## The stated policy (decision D-7737; the decision that approves this change)
+Quotations, byte for byte from the source files at 1fb3b859 (the script that made this section checks each):
+
+GOV-003, docs/pre-genesis/constitution.md lines 92-95:
+```
+### GOV-003 · governance · The evaluator is not taken from the change it judges
+- Rule: the evaluator and its inputs, as A29 lists them, are taken from the base or a pinned ref, never from the change under evaluation. Source: A29, a target for gov-AIEOS (A51 item (7)); B17 (1) (proposed; not claimed sufficient, B17).
+- Check: partial. Tool (way 1): CI rule, the evaluator paths and their inputs are read from the base ref, from a pinned list of paths; the list is itself one of those paths; and a path rule, a change that touches a listed path is marked as an evaluator change, which is judged by the base version and never auto-accepted (governor-spec.md §8, assurance-model.md §6, proposed). Review: the whole rule except what the tool part decides, in particular whether the pinned list covers every input A29 names. evidence_required: [ai_review].
+- Severity: blocking. Scope: the evaluator paths. Applicability: all task types. Enforcement: blocking, ci_rule, cheap.
+```
+
+DM A29, docs/pre-genesis/decision-matrix.md line 90 (the cell):
+```
+**Composition invariant (C13).** *No execution path may exist in which the same authority domain can both change the evaluator or any input of the evaluator, and produce the evidence that evaluator uses to justify acceptance of that change.* **Authority domain** = every identity and channel that shares control; the agent's domain includes the agent account, everything in the agent's execution environment, and **every CI job that executes agent-modified code**. **Evaluator** = validators, fixtures, scenarios, workflows, runner version, governor, the dependencies and lockfiles they use, configuration they read from the change under evaluation, and the acceptance verifier itself. **[2026-10-07 (revision 21): for the AIEOS self-build, see A51.]**
+```
+
+DM A51 item (7), docs/pre-genesis/decision-matrix.md line 112, with its markers:
+```
+(7) A29 stays a target, unmet by design for the self-build, like C13. Recorded under decision agent decision D-073 (A41). **[2026-10-07 (revision 23): see A52.]** **[2026-10-07 (revision 25): see A54, points 1 and 2.]** **[2026-10-30: launching, connecting, measuring and approving findings, settings, publishing and sending messages, history rewrite and deletion on GitHub move to the decision agent for the self-build: see A73.]**
+```
+
+1. Scope: the AIEOS self-build only. It covers every evaluator path of A29 and of the workflow's list except tests/, which DEF-0107's stated policy covers. The native, bench and Go governor forms that DEF-0107 point 7 handles as evaluator paths get the same handling, and a reading that leaves any of them outside A29's evaluator narrows A29 and goes to the owner. It changes neither GOV-003, A29 nor A51 (7).
+2. No "holds" is ever claimed for any of those paths. GOV-003's article review is recorded as it falls.
+3. Acceptance of a task that changes such a path is a stated departure from the advisory governor, per task, in the form of D-3706 and D-3707. It is named in the acceptance text from the start and is never automatic.
+4. Required compensating controls (same-lineage evidence, not independent): (i) the base's tests run against the change, their raw output recorded (for a change under src/, as DEF-0107 point 4 (i) says); (ii) a review of the whole evaluator-path diff, not only the test diff, by a reviewer whose model differs from every model that did task work (L-0038). Control (ii) is required for every such path; where it cannot be had, the task is not accepted. Where no test runs against a changed path, so that control (i) cannot apply to it, the acceptance says so for that path.
+5. Each path keeps its own change class: a change under .github/ keeps its own decision under DM A66 and constitution SEC-003; a governor change keeps the class of governor-spec.md section 8 point 2 (critical_cr until its identity is bound, then a genesis_amendment, as proposed there) and, as section 8 point 4 proposes, is never auto-accepted; the constitution and the other bound files stay Genesis amendments.
+6. The deeper gap of DEF-0107 point 5 stays stated, not closed: src/aieos_bootstrap/** is itself an evaluator path, so a change to the governor is judged by the changed governor.
+
 ## Log
 - 2026-10-30: opened with DEF-0107's stated policy (session 9dbe9c67).
 - 2026-10-30: its resume condition was met by TASK-103, which changes .github/workflows/aieos-checks.yml; handled per task as a stated departure (GOV-003 recorded as fail by the way-2 review R3w for the workflow's own text; acceptance in the form of D-3706 and D-3707); the general policy stays open, so the status stays open.
@@ -35,3 +63,4 @@ DEF-0107.
 - 2026-11-27 (session 228f426b; TASK-169, accepted at D-7656, commit 4ab991255a52665ef4f9aa85465967f7afcd77e4, docs/runs/TASK-169-acceptance.md; main CI runs 46016796194 and 46016796177 success): the Resume-when event is met again (this task changed six evaluator paths, handled as a stated departure); the clean-up series asks the policy decision in task D as its own decision (D-7630, Q9). Status and schedule unchanged.
 - 2026-11-27 (session 228f426b; TASK-170, accepted at D-7691, commit 774dfe2131cf4d8e782a2f96e47ff32de5376c86, docs/runs/TASK-170-acceptance.md; main CI runs 46035776931 and 46035777090 success): the Resume-when event is met again (this task changed seven evaluator paths, handled as a stated departure); the clean-up series asks the policy decision in task D as its own decision (D-7630, Q9). Status and schedule unchanged.
 - 2026-11-28 (session 228f426b; TASK-171, accepted at D-7727, commit a2c808305d3f28df413e2771bfc247b4d3559a5a, docs/runs/TASK-171-acceptance.md; main CI runs 46058827716 and 46058827710 success): the Resume-when event is met again (this task changed ten evaluator paths, the conformance runner among them, handled as a stated departure); the clean-up series asks the policy decision in task D as its own decision (D-7630, Q9). Status and schedule unchanged.
+- 2026-11-28 (session 228f426b; the batch 1 clean-up, task D, D-7737; decided by: decision agent (A41, A51), the decision that approves this change): closed, done. The general policy for the evaluator paths other than tests/ is the section "The stated policy" above; DEF-0107 point 5's deeper gap stays stated there. The item's "What" point is decided; no code or workflow changes.
