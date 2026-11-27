@@ -4,6 +4,9 @@ Every input is built in memory from the repository's own files and given to the 
 records listing; no file is written. The frozen Resume Check fixtures under tests/conformance/fixtures_rc are read
 only as bytes. Stand-in Resume Checks are test seams (AC4). Each test starts with the governor and the Resume Check
 absent (finders on sys.meta_path), restored after the test, unless it installs a fake module; no importlib is used.
+
+aieos_bootstrap.evaluation is imported here, before any test hides the governor: it imports the governor at module
+level, and the runner's Capability Boundaries entry imports it, so without this the file run alone fails (DEF-0134).
 """
 import copy
 import json
@@ -13,6 +16,7 @@ import types
 import unittest
 
 from aieos_bootstrap import conformance
+from aieos_bootstrap import evaluation
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 COMMIT = 'a' * 40
@@ -351,6 +355,11 @@ class R2EntryAndPath(Isolated):
 
 
 class R3EntryPoint(Isolated):
+    def test_the_evaluation_module_is_loaded_first(self):
+        """TASK-169 AC2: the module imported at the top stays loaded while the governor is hidden."""
+        self.assertIs(sys.modules[evaluation.__name__], evaluation)
+        self.assertNotIn(conformance.GOVERNOR_MODULE, sys.modules)
+
     def test_absent(self):
         r = go(with_rc(real_files()))
         for sid in RC_IDS:

@@ -145,6 +145,15 @@ class Observe(unittest.TestCase):
             self.assertIn('made-up finding', result['findings'])
             self.assertEqual(len(store.calls), 1)
 
+    def test_observe_leaves_the_given_list(self):
+        """TASK-169 AC6: observe, like build, never changes the list it is given."""
+        given = ['z.py', 'a.py', 'z.py', 'A.py']
+        kept = list(given)
+        result, store = observe(paths=given)
+        self.assertEqual(result['result'], 'written')
+        self.assertEqual(given, kept)
+        self.assertEqual(store.calls[0][2]['read_paths'], ['z.py', 'a.py', 'A.py'])
+
     def test_order_of_checks(self):
         """TASK-064 AC5: context, then now, then session_id, then read_paths; append is not called for any of them."""
         cases = ((context(task_id='bad'), ['a'], NOW, 'context'),

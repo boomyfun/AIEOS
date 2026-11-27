@@ -5,7 +5,9 @@ the bound scenario file and the risk rules.
 The helpers below are repeated in the three test modules of TASK-018, because each CI test folder is discovered on its
 own and an import between them is not allowed. Files are read as bytes with pathlib's read_bytes; the fixture module is
 never imported or executed. The checks here are the tests' own: they import only the standard library, never the
-conformance runner, the governor or the records module.
+conformance runner, the governor or the records module; from TASK-169 on, which supersedes that sentence of TASK-018's
+AC8 for this module, one test also checks each record with aieos_bootstrap.records.check_record and each request with
+the governor's request check.
 """
 import copy
 import hashlib
@@ -13,6 +15,9 @@ import json
 import pathlib
 import re
 import unittest
+
+from aieos_bootstrap import governor
+from aieos_bootstrap import records
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCENARIO_FILE = 'docs/pre-genesis/conformance-scenarios-initial.md'
@@ -481,6 +486,22 @@ class Ac3FaithfulnessTest(unittest.TestCase):
         self.assertEqual(cells[4], EXPECTED_CELL)
         self.assertEqual(cells[2], 'a change that matches no risk rule')
         self.assertEqual(len(cells), 6)
+
+    def test_the_other_cells_are_the_bound_ones(self):
+        """TASK-169 AC4: the Covers, When and Source cells of RISK-01's row, as the bound scenario file holds them."""
+        _, cells = risk_row()
+        self.assertEqual([cells[1], cells[3], cells[5]], ['rule: fail-closed classification',
+                                                          'its risk is classified', 'A35; lines 592, 595-602'])
+
+    def test_the_records_and_requests_pass_the_core_checks(self):
+        """TASK-169 AC4: records.check_record finds nothing in any record, and the governor's request check nothing
+        in any request, of the fixture."""
+        recs = [rec for case in self.value['cases'] for rec in case['records']]
+        self.assertTrue(recs)
+        for rec in recs:
+            self.assertEqual(records.check_record(rec), [], rec['record_id'])
+        for case in self.value['cases']:
+            self.assertEqual(governor._request_errors(case['request']), [])
 
     def test_expected_comes_only_from_the_cell(self):
         self.assertEqual(faithfulness_problems(self.value), [])

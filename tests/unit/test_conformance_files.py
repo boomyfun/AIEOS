@@ -621,7 +621,6 @@ class SetFileTest(unittest.TestCase):
             'a row hash': lambda v: v['scenarios'][0].update(row_hash='0' * 64),
             'a capability': lambda v: v['scenarios'][0].update(capability='Resume Check'),
             'a fixture hash': lambda v: v['scenarios'][first]['fixture'].update(sha256='0' * 64),
-            'a fixture path': lambda v: v['scenarios'][first]['fixture'].update(path='tests/conformance/x.py'),
             'a fixture dropped': lambda v: v['scenarios'][first].update(fixture=None),
             'a Verification fixture given to RISK-01': lambda v: v['scenarios'][17].update(
                 fixture=dict(v['scenarios'][first]['fixture'])),
@@ -660,7 +659,9 @@ class SetFileTest(unittest.TestCase):
         value, files, rows = load_tree()
         first = next(i for i, e in enumerate(value['scenarios']) if e['fixture'])
         rc = next(i for i, e in enumerate(value['scenarios']) if e['capability'] == 'Resume Check')
-        for index, new in ((rc, FIXTURE_DIR + '/rc_01.py'), (first, RC_FIXTURE_DIR + '/acc_01.py')):
+        # TASK-169 AC3: the third case is the former base case 'a fixture path', now with its bytes moved too.
+        for index, new in ((rc, FIXTURE_DIR + '/rc_01.py'), (first, RC_FIXTURE_DIR + '/acc_01.py'),
+                           (first, 'tests/conformance/x.py')):
             entry = value['scenarios'][index]
             v = json.loads(json.dumps(value))
             v['scenarios'][index]['fixture']['path'] = new

@@ -56,6 +56,13 @@ class FitWithTheCore(unittest.TestCase):
         self.assertEqual(len(store.calls), 1)
         self.assertEqual(store.calls[0][1]['read_paths'], ['docs/notes/x.md'])
 
+    def test_a_read_gives_exactly_the_one_path(self):
+        """TASK-169 AC7 (TASK-065 AC5): a "read" result's read_paths is exactly the input path, mixed case and
+        forward slashes kept, with no second entry."""
+        for path in ('C:/Proj/Repo/Src/A.py', 'Docs/Notes/X.md', 'C:\\proj\\repo\\src\\a.py'):
+            r = cr.read_paths(hook('Read', {'file_path': path}))
+            self.assertEqual((r['result'], r['read_paths']), ('read', [path]), path)
+
     def test_several_results_joined(self):
         """TASK-065 AC5: results joined in call order give a record holding each distinct path once, first order kept;
         uncovered results add nothing."""

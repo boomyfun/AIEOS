@@ -161,6 +161,42 @@ class PathRedaction(unittest.TestCase):
                              ch.REDACTED['write_outside_write_set'], p)
 
 
+def _copy_without(text, backslash=True, slash=True, empty=True, segments=True):
+    """A copy of claude_code_channel._root_relative as it stands at TASK-169's base commit, with the named checks
+    left out (TASK-169 AC5)."""
+    if empty and not text:
+        return False
+    if ':' in text or (backslash and '\\' in text) or (slash and text.startswith('/')):
+        return False
+    if not segments:
+        return True
+    return all(segment not in ('', '.', '..') for segment in text.split('/'))
+
+
+class PathChecksOneByOne(unittest.TestCase):
+    def test_the_whole_copy_agrees_with_the_module(self):
+        """TASK-169 AC5: the copy with every check agrees with the module's check."""
+        for p in ('docs/a.md', 'a', 'a\\b', '/etc/x', '', 'C:/x', 'a//b', 'a/..', 'a/'):
+            self.assertIs(_copy_without(p), ch._root_relative(p), p)
+
+    def test_without_the_backslash_check(self):
+        """TASK-169 AC5: only the backslash check refuses a path with a backslash."""
+        self.assertFalse(ch._root_relative('a\\b'))
+        self.assertTrue(_copy_without('a\\b', backslash=False))
+
+    def test_without_the_leading_slash_check(self):
+        """TASK-169 AC5: without the leading-slash check, the empty-segment check still refuses; without both, the
+        path is accepted."""
+        self.assertFalse(_copy_without('/etc/x', slash=False))
+        self.assertTrue(_copy_without('/etc/x', slash=False, segments=False))
+
+    def test_without_the_empty_text_check(self):
+        """TASK-169 AC5: without the empty-text check, the empty-segment check still refuses; without both, the empty
+        text is accepted."""
+        self.assertFalse(_copy_without('', empty=False))
+        self.assertTrue(_copy_without('', empty=False, segments=False))
+
+
 class Deliver(unittest.TestCase):
     def test_written_once_with_the_exact_arguments(self):
         """TASK-063 AC5: a well-formed matching refusal is redacted and passed once to adapter.violation with the
