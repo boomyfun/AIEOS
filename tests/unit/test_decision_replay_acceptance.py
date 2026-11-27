@@ -151,13 +151,13 @@ class World:
 
     def __init__(self, policy_text=POLICY_TEXT, governor_at_policy=GOVERNOR_TEXT, governor_checked=GOVERNOR_TEXT,
                  changed=('docs/b.md', 'docs/c.md'), records=(), payload=PAYLOAD, event_id=EVENT_ID,
-                 resume_text=RESUME_TEXT):
+                 resume_text=RESUME_TEXT, contract_form=CONTRACT_FORM):
         g = self.git = Git()
         base = {POLICY_PATH: policy_text, 'docs/specs/risk-rules-gov-aieos.md': RISK_TEXT,
                 GOVERNOR_PATH: governor_at_policy, 'docs/pre-genesis/decision-matrix.md': DM_TEXT, 'docs/a.md': A_TEXT,
                 RESUME_PATH: resume_text}
         self.policy = g.commit(g.tree_of(base), message='policy\n')
-        self.contract = CONTRACT_FORM % (self.policy, A_SHA)
+        self.contract = contract_form % (self.policy, A_SHA)
         self.evaluated = g.commit(g.tree_of(dict(base, **{CONTRACT_PATH: self.contract})), parents=(self.policy,),
                                   message='work\n\nAIEOS-Task: TASK-900\n')
         g.diffs[self.evaluated] = b''.join(name.encode('utf-8') + b'\x00' for name in changed)
@@ -334,17 +334,59 @@ class TheReplay(unittest.TestCase):
                          ['record: line 1 is not a decision.acceptance event'])
 
 
+class TheLineItself(unittest.TestCase):
+    """TASK-167 erratum E2.6: a line that the writer never writes, and arguments that the command refuses."""
+
+    def test_an_ignored_duplicate_line_fails(self):
+        w = World()
+        event = json.loads(w.log.split(b'\n')[w.index].decode('utf-8'))
+        event['seq'] += 1
+        log = w.log + compact(event) + b'\n'
+        self.assertEqual(
+            decision_replay._replay_acceptance(ROOT, log, w.index + 1, PIN, w.checked, w.git),
+            ['record: line 4 is an ignored duplicate of line 3, which the writer never writes'])
+
+    def test_a_line_that_is_not_in_the_writers_form_fails(self):
+        w = World()
+        lines = w.log.split(b'\n')[:-1]
+        event = json.loads(lines[w.index].decode('utf-8'))
+        reordered = json.dumps(dict(reversed(list(event.items()))), separators=(',', ':')).encode('utf-8')
+        spaced = lines[w.index].replace(b'"task_id":', b'"task_id": ', 1)
+        for what, line in (('keys reordered', reordered), ('a space after a colon', spaced)):
+            with self.subTest(what):
+                self.assertNotEqual(line, lines[w.index])
+                self.assertEqual(json.loads(line.decode('utf-8')), event)
+                log = b'\n'.join(lines[:w.index] + [line]) + b'\n'
+                self.assertEqual(w.replay(log), ['record: line 3 is not in the form the writer writes'])
+
+    def test_a_log_that_does_not_end_with_lf_fails(self):
+        w = World()
+        self.assertEqual(w.replay(w.log[:-1]), ['log: the log does not end with LF'])
+
+    def test_a_contract_that_the_commands_argument_checks_refuse_fails(self):
+        cases = (
+            ('risk: low\n', 'risk: Low\n', 'contract has no risk of low, medium, high or critical'),
+            ('owner_kept_act: false\n', 'owner_kept_act: yes\n',
+             'contract has no owner_kept_act that is the text true or false'),
+        )
+        for old, new, text in cases:
+            with self.subTest(new.strip()):
+                self.assertIn(old, CONTRACT_FORM)
+                w = World(contract_form=CONTRACT_FORM.replace(old, new))
+                self.assertEqual(w.replay(), ['inputs: argument: ' + text])
+
+
 class TheGates(unittest.TestCase):
     def without_the_governor(self, call):
-        """Run call with the gated modules taken out of the interpreter; give its answer and the names loaded after."""
-        names = [n for n in list(sys.modules) if n in GATED + ('aieos_bootstrap.eval_inputs',
-                                                              'aieos_bootstrap.evaluate_command')]
+        """Run call with the gated modules taken out of the interpreter; give its answer and the names loaded after.
+        Every name taken out is recorded, and afterwards each is restored, or deleted when it was not there before."""
+        taken = GATED + ('aieos_bootstrap.eval_inputs', 'aieos_bootstrap.evaluate_command')
+        shorts = [full.rsplit('.', 1)[1] for full in taken]
         held = {}
         with mock.patch.dict(sys.modules):
-            for full in names:
-                del sys.modules[full]
-            for full in GATED + ('aieos_bootstrap.eval_inputs', 'aieos_bootstrap.evaluate_command'):
-                short = full.rsplit('.', 1)[1]
+            for full in taken:
+                sys.modules.pop(full, None)
+            for short in shorts:
                 if short in vars(aieos_bootstrap):
                     held[short] = vars(aieos_bootstrap)[short]
                     delattr(aieos_bootstrap, short)
@@ -352,8 +394,11 @@ class TheGates(unittest.TestCase):
                 answer = call()
                 loaded = [n for n in GATED if n in sys.modules]
             finally:
-                for short, module in held.items():
-                    setattr(aieos_bootstrap, short, module)
+                for short in shorts:
+                    if short in held:
+                        setattr(aieos_bootstrap, short, held[short])
+                    elif short in vars(aieos_bootstrap):
+                        delattr(aieos_bootstrap, short)
         return answer, loaded
 
     def test_no_module_that_imports_the_governor_is_loaded_when_a_gate_fails(self):
@@ -385,6 +430,25 @@ class TheGates(unittest.TestCase):
         w = World()
         (code, lines), loaded = self.without_the_governor(lambda: entry(w, [ROOT, RESUME_PIN]))
         self.assertEqual(code, 1, lines)
+        self.assertEqual(loaded, [])
+
+    def test_an_engine_with_the_governor_pins_hash_and_no_flag_replays_nothing(self):
+        """TASK-167 erratum E2.6: the engine file at HEAD holds the governor's text and that hash is given as an
+        accepted engine, with no --governor-pin: the engine gate passes and the hash is not read as a governor pin."""
+        w = World(resume_text=GOVERNOR_TEXT)
+        (code, lines), loaded = self.without_the_governor(lambda: entry(w, [ROOT, PIN]))
+        self.assertEqual(code, 1, lines)
+        self.assertTrue(any(l.startswith('NOT REPLAYED: decision.acceptance ')
+                            and l.endswith(': no governor pin was given') for l in lines), lines)
+        self.assertEqual(loaded, [])
+
+    def test_none_of_them_is_loaded_when_the_engine_gate_passes_and_the_governor_gate_fails(self):
+        """TASK-167 erratum E2.6, at the entry."""
+        w = World(governor_checked=OTHER_GOVERNOR)
+        (code, lines), loaded = self.without_the_governor(
+            lambda: entry(w, [ROOT, '--governor-pin', PIN, RESUME_PIN]))
+        self.assertEqual(code, 1, lines)
+        self.assertTrue(any(l.startswith('FAIL ') and 'is not the pinned one' in l for l in lines), lines)
         self.assertEqual(loaded, [])
 
 
@@ -442,6 +506,7 @@ class TheEntry(unittest.TestCase):
         code, lines = entry(World(), [ROOT, '--governor-pin', PIN])
         self.assertEqual(code, 1, lines)
         self.assertTrue(any(l.startswith('FAIL ') and 'not an accepted engine (0 accepted)' in l for l in lines), lines)
+        self.assertIn('replayed and passed: 0, failed: 1', lines[-1])
 
     def test_the_governor_pin_given_alone_does_not_pass_the_engine_gate_even_when_it_is_the_engines_hash(self):
         """TASK-167 erratum E1.5: here the engine file holds the governor's text, so its hash is the governor pin."""
