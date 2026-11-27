@@ -1,0 +1,477 @@
+# Task contract TASK-170 (task B of the batch 1 clean-up, master plan section 6 point (6) (c), revision 12; session
+# 228f426b, 2026-11-27; decisions D-7630 (Q2, Q4, R1, R6), D-7638 (B1), D-7671 (C3), D-7672, D-7674). Drafted by script
+# fill_contract_170.py: base_commit, intent_versions and forbidden are computed; the rest is the worker's text. Whether
+# it is approved is recorded in the decision files, not here.
+# The items were verified at cd312d0d425852a6c58ffd09c7af81c257e65377 (D-7625 C4); this draft cites them at base
+# 556206ed, the current main, which differs by TASK-169 and its records (D-7671 C3, D-7672 C2). Line numbers below are
+# those of base_commit.
+# The touch list (master plan section 6 point (6) (b)): the open items that name a path of the write set by file name, at
+# base_commit: DEF-0032, DEF-0038, DEF-0040, DEF-0054 and DEF-0102 (closed by this task), and DEF-0030, DEF-0052,
+# DEF-0063, DEF-0067, DEF-0100 and DEF-0101, and, beyond the items that name a path, DEF-0041 (its 'Scheduled in' names
+# eventlog, recovery and startup) and DEF-0114 (names test_startup as a candidate module); none of these is this task's,
+# and the acceptance says why each is not done.
+task: TASK-170
+contract_version: v1
+task_type: implementation
+objective: >-
+  Finish the open points of DEF-0032, DEF-0038, DEF-0040, DEF-0054 and DEF-0102, by tests, docstrings, small changes of
+  four state and record modules and dated errata, so that each can be closed as done with cited evidence.
+traces_to:
+  - docs/Deferred/DEF-0032-task-007-review-findings.md
+  - docs/Deferred/DEF-0038-the-review-findings-carried-from-task-009.md
+  - docs/Deferred/DEF-0040-the-review-findings-carried-from-task-015.md
+  - docs/Deferred/DEF-0054-the-review-findings-carried-from-task-026.md
+  - docs/Deferred/DEF-0102-the-launchers-findings-values-taken-without-a-list-check.md
+  - docs/plan/master-plan.md
+input_state:
+  base_commit: 556206ed0965b5c7694315b5b61fe8b94e3136c7
+  depends_on: [TASK-169]
+  intent_versions:
+    src/aieos_bootstrap/eventlog.py: ff57acd39f1e48b909dc96e4564fa3aad09e8f73f39a6d113b2dfa3ac7b66429
+    src/aieos_bootstrap/recovery.py: e062787b7b78c1ec08a728399fdefe098e122fbdba36dcf064c596685799680e
+    src/aieos_bootstrap/startup.py: e51d54cef52aa30b0987600e97eb397195b2fd7148441ae1100943e2943fa991
+    src/aieos_bootstrap/read_set_record.py: de392623846380712ffb2682c5e7b7f1de24fdb729664b344875d26c34be7095
+    tests/unit/test_eventlog.py: 9bce1efdb364f2cfd9708289f84b12f4d7a341cadb086fc542a9c80752520913
+    tests/unit/test_startup.py: 25f98953c64061b0383920792cd41351cf282ddf5a9445e39eaadd10ab79130c
+    tests/unit/test_read_set_record.py: b1a974f93c3b686f144e1f4450b57fd13d44c3ab54afe1eaa7c2442c736ae959
+    src/aieos_bootstrap/records.py: 2b7b456b1ef9fecde0c8b84eaf75b1fd85b7ac2e8f40e9e329a7dea3b7b31297
+    src/aieos_bootstrap/writer.py: 55668d33627559759cee3de0103b1ce990539338978302ecf600d499f8155c9b
+    src/aieos_bootstrap/claude_code_channel.py: c1f4a3773f0beec75a74f0a2a0097eed2325215fdd8e68ca903dc49260c0e814
+    tests/unit/test_recovery.py: 9887512e5eefa17a02be274ff7d0ff23bc518dcc70dd96324339f2e5792351f0
+    tests/property/test_recovery_properties.py: f4ac913ddcdb20e98181a9d8262dcd42764d31777a978b84ccd2cbfc1196a0af
+    tests/unit/test_export_round2.py: 6fd0c9d2109344a131cf782135ef81a2a24d49d478dc07a955abb0e44b75f6bd
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/decision-matrix.md: d1ed86ade033617540ba8f9969afe22420f90e1dc9d179421de1903a0f721656
+    docs/plan/master-plan.md: 51c45f7601d83523a7450c7d644cb8dbb8d9953261f73b98b92bf771d8086bfe
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/specs/evaluation-policy-gov-aieos.md: 0777508cafbc5c0c09fb1718bebbf2f8233c492b0569849137d76da14aef8ddb
+    docs/tasks/TASK-007.yaml: 453717fa8363d132765a3f64d4b6cfec52612fb3031e119e0f0f2b7dd5e2ec31
+    docs/tasks/TASK-009.yaml: b002edc8ecca356cb1bc4a37e0b5adc0eff9ad71b59bf67b617c4308758e448c
+    docs/tasks/TASK-015.yaml: a83c290ebb66caf760720443d4dbc0bb9ce3c7981f8efc7962fa37967d4ee7ca
+    docs/tasks/TASK-026.yaml: 3214886e13d348d83ca886d4e53773629879a4b4edf692525ae2da759882f21b
+    docs/tasks/TASK-064.yaml: c04a8b389d4443a3e7c7aa2381366dfc37042f8edf4e51650c2affd4b4264262
+    docs/Deferred/DEF-0032-task-007-review-findings.md: ebe8f041d79088436832bbbc3ee98c0409f611ff77d53df5b6d2c42d0533aa0f
+    docs/Deferred/DEF-0038-the-review-findings-carried-from-task-009.md: d1e9cb1a02c4aea8cf0315874c34f7c495a5057325d00ba1789ee262962bffd6
+    docs/Deferred/DEF-0040-the-review-findings-carried-from-task-015.md: 00a4c88ccc3d9b207d14bd75ff7b16ed686983deb5688a0b6d2daabf84808706
+    docs/Deferred/DEF-0054-the-review-findings-carried-from-task-026.md: 0bea7cd6cce3ecb9319dde42795c315130b951db3f6e0a02159fde69d06c2a45
+    docs/Deferred/DEF-0102-the-launchers-findings-values-taken-without-a-list-check.md: 35b21c7dcf07aba14deabc88809e55db644bd409b8e083bb814165afc917ee81
+write_set:
+  paths:
+    - src/aieos_bootstrap/eventlog.py
+    - src/aieos_bootstrap/recovery.py
+    - src/aieos_bootstrap/startup.py
+    - src/aieos_bootstrap/read_set_record.py
+    - tests/unit/test_eventlog.py
+    - tests/unit/test_startup.py
+    - tests/unit/test_read_set_record.py
+read_set:
+  paths:
+    - src/aieos_bootstrap/eventlog.py
+    - src/aieos_bootstrap/recovery.py
+    - src/aieos_bootstrap/startup.py
+    - src/aieos_bootstrap/read_set_record.py
+    - tests/unit/test_eventlog.py
+    - tests/unit/test_startup.py
+    - tests/unit/test_read_set_record.py
+    - src/aieos_bootstrap/records.py
+    - src/aieos_bootstrap/writer.py
+    - src/aieos_bootstrap/claude_code_channel.py
+    - tests/unit/test_recovery.py
+    - tests/property/test_recovery_properties.py
+    - tests/unit/test_export_round2.py
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/decision-matrix.md
+    - docs/plan/master-plan.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/specs/evaluation-policy-gov-aieos.md
+    - docs/tasks/TASK-007.yaml
+    - docs/tasks/TASK-009.yaml
+    - docs/tasks/TASK-015.yaml
+    - docs/tasks/TASK-026.yaml
+    - docs/tasks/TASK-064.yaml
+    - docs/Deferred/DEF-0032-task-007-review-findings.md
+    - docs/Deferred/DEF-0038-the-review-findings-carried-from-task-009.md
+    - docs/Deferred/DEF-0040-the-review-findings-carried-from-task-015.md
+    - docs/Deferred/DEF-0054-the-review-findings-carried-from-task-026.md
+    - docs/Deferred/DEF-0102-the-launchers-findings-values-taken-without-a-list-check.md
+    - docs/Deferred/DEF-0041-the-review-findings-carried-from-task-016.md
+    - docs/Deferred/DEF-0114-the-order-dependence-of-two-runner-test-modules.md
+    - docs/Deferred/DEF-0030-event-log-writer-and-workflow-revision-6.md
+    - docs/Deferred/DEF-0052-the-review-findings-carried-from-task-024.md
+    - docs/Deferred/DEF-0063-the-stack-benchmarks-route-after-task-040.md
+    - docs/Deferred/DEF-0067-the-review-findings-and-limits-carried-from-task-052.md
+    - docs/Deferred/DEF-0100-the-resume-check-inputs-with-no-full-source.md
+    - docs/Deferred/DEF-0101-the-launchers-open-requirements-before-a-runtime-is-launched.md
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+# forbidden governs writes; reading a forbidden path that the read_set lists is allowed.
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - docs/**
+  - tests/conformance/**
+  - tests/run_tests.py
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/adapter_declaration.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/capture_submit.py
+  - src/aieos_bootstrap/ci_evidence.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/cli.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/contract_path.py
+  - src/aieos_bootstrap/decision_replay.py
+  - src/aieos_bootstrap/done.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/eval_inputs.py
+  - src/aieos_bootstrap/evaluate_command.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/evaluation_derive.py
+  - src/aieos_bootstrap/evaluation_intake.py
+  - src/aieos_bootstrap/evaluation_policy.py
+  - src/aieos_bootstrap/evaluation_sources.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gate_records.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/handoff_file.py
+  - src/aieos_bootstrap/intent_map.py
+  - src/aieos_bootstrap/launcher.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/metrics_report.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/resume_log_inputs.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - src/aieos_runtime/__init__.py
+  - src/aieos_runtime/claude_starter.py
+  - src/aieos_runtime/task_capture.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_base_files_repo.py
+  - tests/integration/test_base_inputs_repo.py
+  - tests/integration/test_ci_lint_step.py
+  - tests/integration/test_ci_resume_pin_logic.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_decision_replay_real_record.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_g0_detect_copies.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_launcher_repo.py
+  - tests/integration/test_mcp_server_work_order_repo.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_resume_inputs_repo.py
+  - tests/integration/test_resume_log_inputs_repo.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_base_files_properties.py
+  - tests/property/test_base_inputs_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_claude_starter_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_context_compiler_properties.py
+  - tests/property/test_contract_path_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_mcp_server_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_adapter_declaration.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_base_files.py
+  - tests/unit/test_base_inputs.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_capture_submit.py
+  - tests/unit/test_ci_evidence.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_claude_starter.py
+  - tests/unit/test_cli.py
+  - tests/unit/test_cli_approve.py
+  - tests/unit/test_cli_evaluate.py
+  - tests/unit/test_cli_import.py
+  - tests/unit/test_cli_init.py
+  - tests/unit/test_cli_launch.py
+  - tests/unit/test_cli_run.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_contract_path.py
+  - tests/unit/test_decision_replay.py
+  - tests/unit/test_decision_replay_acceptance.py
+  - tests/unit/test_done.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_eval_inputs.py
+  - tests/unit/test_evaluate_command.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_derive.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_intake.py
+  - tests/unit/test_evaluation_policy.py
+  - tests/unit/test_evaluation_policy_file.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_sources.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_evaluator_covers_evidence_paths.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_execution_list_tasks.py
+  - tests/unit/test_execution_status.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_governor.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_resume.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gate_records.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_handoff_file.py
+  - tests/unit/test_intent_map.py
+  - tests/unit/test_launcher.py
+  - tests/unit/test_launcher_end.py
+  - tests/unit/test_launcher_gone.py
+  - tests/unit/test_launcher_outside.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_mcp_server_work_order.py
+  - tests/unit/test_metrics_report.py
+  - tests/unit/test_native_isolation.py
+  - tests/unit/test_read_set_gone.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_resume_inputs.py
+  - tests/unit/test_resume_log_inputs.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_capture.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, INV-007, INV-008, INV-009, INV-010, INV-011, GOV-001, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      Scope. The task commits change only the seven files of the write set (four modules under src/aieos_bootstrap/ and
+      three test modules). No module changes behaviour except as AC3, AC4 and AC5 say. Existing tests pass unchanged except
+      the altered cases named in AC3; other assertions are only added to or made stricter. No test writes a file, starts a
+      process or imports a module that the workflow's deterministic_rule step refuses; no exec, eval, compile,
+      __import__ or importlib is used; the only imports added are of the own package. No public name is added to or removed
+      from a module.
+  - AC2: >-
+      DEF-0032 (F-h; D-7630 Q2; DEF-0032:18, open per its Log :34-:35; code src/aieos_bootstrap/eventlog.py:79-:90, :172-:184 and :237-:239). A test in tests/unit/test_eventlog.py shows the integer-key sameness case: a record.added event whose
+      payload's intent_versions mapping holds the key "1" is logged (the logged line passes records.check_log; if it does
+      not, that is a spec_conflict), and a retry whose mapping holds the integer key 1 gives "duplicate" (the keys
+      serialise alike in the sameness text of eventlog's _canonical and _same_text; the sameness check at :176-:184 comes
+      before the form check). A sentence in the docstring of eventlog.append states that the AC5 re-check cannot fail as
+      built, and why. No behaviour of eventlog changes for this item.
+  - AC3: >-
+      DEF-0040 (the points of DEF-0040:13 to :15, open per its Log :28-:29; code and tests: src/aieos_bootstrap/eventlog.py:226-:228, tests/unit/test_eventlog.py:264 in test_another_token (:261), :397-:400, the pins at :324 (in the test at :318) and :389 (in the test at :379), and the existing conflict test test_a_retried_submission_with_another_payload_is_a_conflict at :374-:377). In tests/unit/test_eventlog.py the duplicated True case of a lease token is removed: the line in the
+      lease-token test that repeats test_true_and_one_in_a_lease_token (an altered case; the remaining test asserts the
+      same refusal and its reason). In src/aieos_bootstrap/eventlog.py the finding for a fence refusal without a record
+      names what is missing, with exactly one of these texts: "fence: no refusal record, recorder is not a non-empty
+      string"; "fence: no refusal record, record_id is not a non-empty string"; "fence: no refusal record, recorder and
+      record_id are not non-empty strings". The text is chosen by which of the two is not a non-empty string: recorder only, the recorder text;
+      record_id only, the record_id text; both, the third text. The tests that pin the old text assert the new ones
+      instead (altered cases), asserting the text per input (recorder None or 7: the recorder text; record_id '': the
+      record_id text; both None: the third), so that each of the three texts has a test. Nothing else of the refusal changes. The point "a conflict without recorder
+      is untested" is closed by citing the existing test of tests/unit/test_eventlog.py that appends another payload under
+      a logged event_id without recorder and record_id; the review confirms that it is such a test. This supersedes the
+      finding text of TASK-015's AC3 (erratum (b) of AC8).
+  - AC4: >-
+      DEF-0054 (M1 at DEF-0054:11 and M7 at :13, open per its Log :27; code src/aieos_bootstrap/startup.py:280-:284 (the read), :286 (reconcile), :330 (the second iteration) and :345-:350 (the findings that format task_id)). In src/aieos_bootstrap/startup.py: M1, inside the try that reads the leases, when the value the reader
+      returns is a list, recover takes a list copy of it and uses the copy afterwards; any other value passes unchanged to
+      reconcile, which refuses it as today. A test with a lease reader that returns a list subclass whose second iteration
+      raises shows that recover returns the result "recovered" (at base_commit the second iteration, inside reconcile,
+      gives "refused" with reason store); a test shows that a reader returning a tuple is still refused with reason store.
+      A list whose iteration raises at the copy is refused with reason store and the read's finding text; that is the only
+      change of an existing finding text of recover. M7, a finding text built from a lease's task_id cannot raise: a test
+      with a held lease whose task_id equals a logged submission's but raises from __str__, and a release stand-in that
+      raises or returns a state other than "done", shows that recover returns a result with the finding and raises
+      nothing. The M1 "recovered" test and the M7 test fail at base_commit. No other behaviour of recover changes.
+  - AC5: >-
+      DEF-0102 (DEF-0102:21-:22, its Resume when :32-:34, open per its Log :43; code src/aieos_bootstrap/read_set_record.py:172-:175). read_set_record's _core keeps only the str items of a findings value that is a list or a tuple, and an
+      empty list otherwise; tests with a writer stand-in whose findings is a string, a number or a mapping assert that the core
+      findings are empty (observe's own finding of a refused result stays), and with a list holding a non-str item that
+      only its str items are kept; the result and reason are those the writer's result gives. Each such test fails at
+      base_commit.
+  - AC6: >-
+      DEF-0038 (D-7630 Q4; DEF-0038:15 and :16, open per its Log :29-:30; code src/aieos_bootstrap/recovery.py:7-:10 (the step 1 summary), :100 (the paragraph split), :113-:120 (the key checks), :109-:136 (the %r findings), :130 and :136 (the malformed values); tests/unit/test_recovery.py:333 and :343 (the import check); docs/tasks/TASK-009.yaml:259 (AC10)). The module docstring of src/aieos_bootstrap/recovery.py states each behaviour on the item's
+      recorded-only line (a CRLF message is read as one paragraph; a line with text before a key is not read as a trailer,
+      while a line whose key has only leading spaces before it is read, with the finding "is not at the start of its line";
+      the CI's line-anchored trailer rule reads neither; findings echo message text with %r; the
+      import check of the test module needs Python 3.10 or later; AC10's purity limits rest on the code check, not a unit
+      test), or an existing test shows it and the docstring cites the test; and it names the findings that a malformed AIEOS-Task or
+      AIEOS-Fence value gives. Each statement is checked against the code or test at the task commit; a statement the code
+      does not bear out is a spec_conflict, not reworded silently. No code of recovery.py changes.
+  - AC7: >-
+      Before the first task commit the worker runs the base tests against the changed modules outside the repository and
+      records which fail. The prediction: exactly the two base cases of tests/unit/test_eventlog.py that pin the old
+      finding text fail. A different failing set is brought to the decision agent before the commit.
+  - AC8: >-
+      Errata (D-7623 R1). The acceptance text, committed by the records commit of AC11, carries one dated erratum for each
+      text that cannot change, quoting it (the commit message from git's unedited output) and stating the correct
+      reading: (a) the message of TASK-009's task commit 1bb63b93ef3f725b6759801891372db5ea8159b0, whose lines on recovery's findings and on
+      trailers omit the malformed-trailer finding that DEF-0038 names; (b) docs/tasks/TASK-015.yaml:212 and :243, the finding text of its AC3 and the sentence that quotes it: from
+      this task on the texts are those of AC3 above. Each correct reading is checked against the code or the text at
+      base_commit or the task commit before it is written.
+  - AC9: >-
+      Checks. unit_test, integration_test and property_test pass in CI on the task commit; deterministic_rule, OPS-003,
+      SEC-001, SEC-002, static_security_analysis and lint report no finding; before each commit the added text is scanned
+      with the workflow's SEC-001, SEC-002 and OPS-003 patterns and each count is 0.
+  - AC10: >-
+      GOV-003 (a stated departure for this task, DEF-0107's form; DEF-0110 gives these paths no other policy yet): every
+      changed path is an evaluator path. The acceptance text states the departure, gives the base-tests step's printed
+      line with every failing name, and a review of the diff by a model other than the implementer's.
+  - AC11: >-
+      Records, in the records commit (made by the worker under its own decision, no AIEOS-Task trailer, pushed only after
+      the task commits are on main; not a task commit, so the task's capabilities do not cover it; its paths are under
+      docs/runs, docs/Deferred, docs/records and docs/History): a dated line on each of DEF-0032, DEF-0038, DEF-0040,
+      DEF-0054 and DEF-0102 saying point by point what closed it, with file and line, and the state done only where every
+      open point is met; a point not met stays open and the item counts nothing; for each other item of the touch list, why
+      it is not done; the counts and accepted limits of master plan section 6 point (6); the number of items this task
+      closed as done toward the 36 of point (6) (c) and the cumulative number of the series; the series' cap stated openly
+      (at most 16 after three tasks on the plan of decision D-7638, and the stop rule of D-7623 C4); a history page.
+  - AC12: >-
+      Limits. The stack benchmark's ports under bench/ keep eventlog's old finding text and are not changed (DEF-0063
+      carries the ports' gaps; the round-2 export's inputs give every append a recorder and a record_id, so its pinned
+      documents do not hold that text, and tests/unit/test_export_round2.py passes unchanged). The base-test prediction
+      run and the added-text scans are the worker's own runs outside the task's shell capability. The errata correct
+      readings; they change no accepted task's contract, record or commit.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [src/aieos_bootstrap/eventlog.py, src/aieos_bootstrap/recovery.py, src/aieos_bootstrap/startup.py, src/aieos_bootstrap/read_set_record.py, tests/unit/test_eventlog.py, tests/unit/test_startup.py, tests/unit/test_read_set_record.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+# Risk: src/** and tests/**: risk-rules-gov-aieos.md R2 raised by R3, unevaluable and therefore matching (:18); re-checked at the contract commit. The records commit lies outside the task (AC11).
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 900k, wall_time: 6h, retries: 3, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC9]}
+  - {gate: G3, check: constitution, args: [AC8, AC10, AC11, AC12, INV-001, INV-002, INV-003, INV-004, INV-007, INV-008, INV-009, INV-010, INV-011, GOV-001, GOV-002, GOV-003, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of risk high is satisfied (an other_model_review and a separate decision_agent_review, both bound to the evaluated commit, the contract and the pins, before any fast-forward of main) AND the task acceptance by the decision agent before any landing step AND the aieos-checks run of the accepted commit succeeds
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
