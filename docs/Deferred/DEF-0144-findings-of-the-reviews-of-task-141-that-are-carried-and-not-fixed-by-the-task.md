@@ -43,3 +43,7 @@ The contract TASK-141; the decisions D-6424 to D-6433; DEF-0139 (item 8); DEF-01
 File names written aj/... or S1\aj\... in this record are kept in the lasting copies under C:\Users\Admin\AIEOS-REG0-lite\sessions\26136a0a-b135-4cb1-9db0-95258ca6f5b5\scratchpad-evidence (the folder stretch-D6445-D6469 and the folders TASK-140, TASK-140-ci, TASK-141 and TASK-141-ci) or under C:\Users\Admin\AIEOS-REG0-lite\sessions\c0dc5bcc-c58f-46fa-a52d-d27469300fc7\scratchpad-evidence\def-sources (aj/launch5b, aj/launch5c, aj/ao8_compile.py, aj/ao8_out.txt, aj/make_drafts.py); the prefix aj/ names the old scratch folder, which no longer exists.
 
 Figures in this record that no decision file carries and that no script re-checked against a lasting copy (run times, byte counts, tool-call counts) are the worker's measurements and are not re-verified.
+
+## Log
+
+- 2026-11-27 (session 228f426b; TASK-167, accepted at D-7586, commit 837f17bfdfb912553b2a0a1cada3f2bf90165666, docs/runs/TASK-167-acceptance.md; main CI runs 45970100776 and 45970100753 success): done by AC8 of TASK-167: items 1, 2, 3, 11 and 16, read by reviewer A of the second review round on lines the third commit did not change; tests/unit/test_decision_replay.py is not touched by it. Not done: item 4 (needs a Resume Check fixture, a later task), item 12 (a bounded scan, unchanged), item 13 (a test of source text, unchanged), item 15 (AC1 (h) through the entry, not added); item 5 stays with the next A66 revision of the workflow; items 6 to 10, 14 and 17 are record notes of TASK-141. Status unchanged.

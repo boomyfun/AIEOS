@@ -30,3 +30,4 @@ DEF-0137 (the INV-010 step; its status is its own decision).
 
 ## Log
 - 2026-11-15: opened (session 26136a0a; decisions D-6335, D-6336, D-6340, D-6342).
+- 2026-11-27 (session 228f426b; TASK-167, accepted at D-7586, commit 837f17bfdfb912553b2a0a1cada3f2bf90165666, docs/runs/TASK-167-acceptance.md; main CI runs 45970100776 and 45970100753 success): done by AC8 of TASK-167: items 1, 5 and 6, and item 2, which was already true at the base (D-7559 C4) and is listed in AC8; read by reviewer A of the second review round on lines the third commit did not change. Item 9: the replay of decision.acceptance records is done in code; the workflow passes no governor pin yet (DEF-0137). Items 3 and 8 were closed before. Open: item 4 (a brief naming the errata E1.1 to E1.7 of TASK-139) and item 7 (a stated limit). Status unchanged.
