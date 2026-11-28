@@ -127,6 +127,14 @@ class R2Forms(unittest.TestCase):
             p['checks'] = value
             self.assertIn('6.4:checks', rules('decision.execution', p), value)
 
+    def test_a_fired_check_never_carries_continue(self):
+        """TASK-176 AC1: a fired check with the outcome CONTINUE gives a "6.4:checks" finding; each value of
+        EXECUTION_ORDER on a fired check gives no finding."""
+        self.assertIn('6.4:checks', rules('decision.execution', execution(checks=checks({4: 'CONTINUE'}))))
+        for outcome in records.EXECUTION_ORDER:
+            p = execution(decision=outcome, outcomes_fired=[outcome], checks=checks({4: outcome}))
+            self.assertEqual(rules('decision.execution', p), [], outcome)
+
     def test_outcomes_fired_order_and_first_value(self):
         good = execution(decision='STOP: scope invalid', outcomes_fired=['STOP: scope invalid', 'ESCALATE', 'REPLAN'])
         self.assertEqual(rules('decision.execution', good), [])

@@ -271,6 +271,36 @@ class TheProcess(unittest.TestCase):
         unc = '\\\\server\\share\\bin'
         self.assertEqual(gitread.path_error(unc), None if os.name == 'nt' else refused)
 
+    def test_a_path_holding_a_nul_is_refused(self):
+        """TASK-176 AC2 and TASK-176 AC3: path_error refuses a PATH holding a NUL byte; run, with environment() giving
+        such a PATH, returns the refusal and starts no process; a repository path holding a NUL is not an existing
+        directory."""
+        path = GOODPATH + os.pathsep + str(ROOT) + '\0'
+        self.assertEqual(gitread.path_error(path), 'PATH holds a NUL byte')
+        bad = dict(gitread.environment(), PATH=path)
+        with mock.patch.object(gitread, 'environment', return_value=bad):
+            r, s = call(FORMS[2], own_path=False)
+        self.assertEqual(s.calls, [])
+        self.assertEqual(r, {'exit': None, 'out': b'', 'err': b'', 'error': 'PATH holds a NUL byte'})
+        self.assertEqual(gitread.form_error(REPO + '\0', FORMS[2], 30), 'repo is not an existing directory')
+
+    def test_the_path_is_split_on_the_platform_separator(self):
+        """TASK-176 AC3: with os.pathsep patched to ";", two absolute entries joined by ";" pass, and an absolute entry,
+        ";" and a relative entry are refused."""
+        with mock.patch.object(gitread.os, 'pathsep', ';'):
+            self.assertIsNone(gitread.path_error(';'.join([str(ROOT), str(SRC)])))
+            self.assertEqual(gitread.path_error(str(ROOT) + ';bin'), 'PATH has an empty or relative entry')
+
+    def test_a_repo_beginning_with_two_separators_is_refused(self):
+        """TASK-176 AC4: each of the four two-separator starts is refused with its own text, no process starts and
+        os.path.isdir is not called."""
+        for repo in ('\\\\server\\share', '//server/share', '\\/server', '/\\server'):
+            with mock.patch.object(gitread.os.path, 'isabs', return_value=True):
+                with mock.patch.object(gitread.os.path, 'isdir', side_effect=AssertionError('isdir called')):
+                    r, s = call(FORMS[2], repo=repo)
+            self.assertEqual(r['error'], 'repo begins with two separators', repo)
+            self.assertEqual(s.calls, [], repo)
+
     def test_diff_tree_carries_its_closing_options(self):
         """TASK-024 AC1 and TASK-024 AC2: diff-tree's fixed form carries --no-ext-diff and --no-textconv, and the call
         carries --no-pager, core.pager=cat, core.fsmonitor=false, core.hooksPath and an empty diff.external."""
@@ -614,17 +644,19 @@ class SingleWrapper(unittest.TestCase):
                                  'src/aieos_runtime/task_capture.py'])
 
     def test_the_three_modules_name_their_criteria(self):
-        """TASK-024 AC11 and TASK-024 AC12: every test function of the three test modules names "TASK-024 ACn" in its
-        own docstring and no other task's criterion in qualified form; the check finds a test without one."""
+        """TASK-024 AC11, TASK-024 AC12 and TASK-176 AC6: every test function of the three test modules names
+        "TASK-024 ACn" or "TASK-176 ACn" in its own docstring and no other task's criterion in qualified form; the check
+        finds a test without one."""
         def problems(text):
             out = []
             for node in ast.parse(text).body:
                 for f in [node] + (list(node.body) if isinstance(node, ast.ClassDef) else []):
                     if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef)) and f.name.startswith('test'):
                         doc = ast.get_docstring(f) or ''
-                        if 'TASK-024 AC' not in doc:
+                        if 'TASK-024 AC' not in doc and 'TASK-176 AC' not in doc:
                             out.append(f.name)
-                        out.extend(f.name for part in doc.split('TASK-')[1:] if part[3:6] == ' AC' and part[:3] != '024')
+                        out.extend(f.name for part in doc.split('TASK-')[1:]
+                                   if part[3:6] == ' AC' and part[:3] not in ('024', '176'))
             return out
         for group, name in (('unit', 'test_gitread.py'), ('property', 'test_gitread_properties.py'),
                             ('integration', 'test_gitread_repo.py')):

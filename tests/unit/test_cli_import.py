@@ -325,8 +325,9 @@ class TASK097AC2Refusals(unittest.TestCase):
             self.assertEqual(w.calls, [], root)
 
     def test_the_root_forms(self):
-        """TASK-097 AC2: the root is an absolute Windows or POSIX path, as run's is; '//host/share' and '/x' are
-        accepted as run accepts them, and a refused root gives the finding of the Windows or POSIX form."""
+        """TASK-097 AC2: the root is an absolute Windows or POSIX path; '//host/share' and '/x' pass the argument check
+        here, with a stand-in read (since TASK-176 the real run refuses '//host/share', which begins with two
+        separators), and a refused root gives the finding of the Windows or POSIX form."""
         for root in (ROOT, POSIX_ROOT, '//host/share', '/x'):
             out = launcher.import_task(root, TASK, lambda: NOW, **World().kw())
             self.assertEqual((out['result'], out['reason']), ('done', None), (root, out))

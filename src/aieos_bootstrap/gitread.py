@@ -28,7 +28,10 @@ PATH, SYSTEMROOT (only when present, for Windows), GIT_CONFIG_NOSYSTEM, GIT_CONF
 GIT_TERMINAL_PROMPT, GIT_OPTIONAL_LOCKS ("0", so git refreshes no index), GIT_NO_LAZY_FETCH ("1", so a partial clone
 starts no fetch) and LC_ALL. It refuses, before any process starts, when the PATH it would pass is empty or, split by
 os.pathsep, has an entry that is empty or not an absolute path, since on POSIX git would then be looked up relative
-to the repository (erratum E1 of the contract, decision D-580). It returns the exit code and the output as bytes,
+to the repository (erratum E1 of the contract, decision D-580). Since TASK-176 it also
+refuses a PATH that holds a NUL byte, and a repository path that begins with two separators (a UNC or device path),
+before the file system is looked at; a mapped network drive letter still passes. It
+returns the exit code and the output as bytes,
 and raises nothing for a refused form, a timeout or a git that cannot be started.
 
 ``parse_commit(data)`` and ``parse_paths(data)`` are pure: they turn the bytes of "cat-file -p" of a commit and of the
@@ -146,10 +149,14 @@ def _is_branch_ref(s):
 
 
 def form_error(repo, args, timeout):
-    """Why repo, args and timeout are not a pinned form, or None when they are one (TASK-024 AC1)."""
+    """Why repo, args and timeout are not a pinned form, or None when they are one (TASK-024 AC1). A repo that begins
+    with two separators (backslash or slash, in any combination) is refused before the file system is looked at, so no
+    network or device path is looked up; a mapped network drive letter still passes (TASK-176 AC4)."""
     # exact types, not subclasses: a subclass of list or str could compare or iterate otherwise than it indexes
     if type(repo) is not str or not os.path.isabs(repo):
         return 'repo is not an absolute path'
+    if repo[:2] in ('\\\\', '//', '\\/', '/\\'):
+        return 'repo begins with two separators'
     if not os.path.isdir(repo):
         return 'repo is not an existing directory'
     if type(timeout) not in (int, float) or not 0 < timeout <= MAX_TIMEOUT:
@@ -194,7 +201,12 @@ def environment():
 
 
 def path_error(path):
-    """Why the PATH git would get is refused, or None (erratum E1): it must be non-empty and every entry absolute."""
+    """Why the PATH git would get is refused, or None (erratum E1; TASK-176 AC2): it must hold no NUL byte, be non-empty
+    and have every entry absolute. No pinned args form can hold a NUL: each argument is a literal or passes a full match
+    (an object id, is_base_name through the branch ref, is_state_name), and a repo path holding a NUL is refused as not
+    an existing directory."""
+    if '\0' in path:
+        return 'PATH holds a NUL byte'
     entries = path.split(os.pathsep)
     if not path or any(not e or not os.path.isabs(e) for e in entries):
         return 'PATH has an empty or relative entry'
@@ -224,7 +236,9 @@ def _commit_error(why):
 
 
 def trailers(message):
-    """The [key, value] pairs of the message's last paragraph when every line of it is "<key>: <value>", else []."""
+    """The [key, value] pairs of the message's last paragraph when every line of it is "<key>: <value>", else [].
+    A value may be empty ("<key>: "); the one reader of these pairs, scope_reconcile, refuses an empty AIEOS-Task value
+    as out of form (TASK-176 AC5)."""
     paragraphs = [p for p in message.strip('\n').split('\n\n') if p.strip('\n')]
     if not paragraphs:
         return []

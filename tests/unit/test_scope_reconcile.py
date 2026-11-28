@@ -226,6 +226,15 @@ class TheCommit(unittest.TestCase):
         self.assertNotIn({'ref': c2, 'detail': 'trailer out of form'}, out2['uncovered'])
         self.assertEqual(mem2.calls[0][1]['entities'], ['TASK-090'])
 
+    def test_an_empty_task_trailer_value_passes_no_trailer_task(self):
+        """TASK-176 AC5: a last paragraph "AIEOS-Task: " (an empty value) gives "trailer out of form" and passes no
+        trailer task."""
+        repo, p, c = world(['src/x.py'], trailer='AIEOS-Task: ')
+        out, mem = run(repo, c)
+        self.assertIn({'ref': c, 'detail': 'trailer out of form'}, out['uncovered'])
+        self.assertTrue(out['detected'])
+        self.assertEqual(mem.calls[0][1]['entities'], [])
+
 
 class BaseRead(unittest.TestCase):
     def test_the_files_are_read_at_the_first_parent_never_at_the_commit(self):
@@ -761,8 +770,9 @@ class Hardening(unittest.TestCase):
 
 class Naming(unittest.TestCase):
     def test_every_test_names_its_criteria(self):
-        """TASK-034 AC14 and TASK-035 AC7: every test function of this module names "TASK-034 ACn" or "TASK-035 ACn"
-        (at least one) in its own docstring, and no other task's AC in qualified form."""
+        """TASK-034 AC14, TASK-035 AC7 and TASK-176 AC6: every test function of this module names "TASK-034 ACn",
+        "TASK-035 ACn" or "TASK-176 ACn" (at least one) in its own docstring, and no other task's AC in qualified
+        form."""
         # The loaded classes' docstrings are read, not this file (TASK-034 AC14: the tests open only package sources).
         tests = [(cls.__name__, name, getattr(cls, name).__doc__ or '') for cls in list(globals().values())
                  if isinstance(cls, type) and issubclass(cls, unittest.TestCase) for name in vars(cls)
@@ -771,7 +781,7 @@ class Naming(unittest.TestCase):
         for cls_name, name, doc in tests:
             named = set(re.findall(r'(TASK-\d+) AC', doc))
             self.assertTrue(named, (cls_name, name))
-            self.assertLessEqual(named, {'TASK-034', 'TASK-035'}, (cls_name, name))
+            self.assertLessEqual(named, {'TASK-034', 'TASK-035', 'TASK-176'}, (cls_name, name))
 
 
 if __name__ == '__main__':

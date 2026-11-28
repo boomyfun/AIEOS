@@ -25,8 +25,9 @@ Limits (TASK-001 AC7):
     boolean; contract_hash 64 lowercase hex digits; contract_version v followed by digits;
   - engine_identity an object with exactly code_sha256 (null or 64 lowercase hex digits) and python ("X.Y.Z", digits);
   - checks a list of exactly eight objects with exactly the keys check, status, outcome and detail: check the integers
-    1 to 8 (not booleans), each once; status one of passed, fired, skipped and not_run; outcome an execution decision
-    value when status is fired and null otherwise; detail a string;
+    1 to 8 (not booleans), each once; status one of passed, fired, skipped and not_run; outcome a value of
+    EXECUTION_ORDER (an execution decision value other than CONTINUE) when status is fired and null otherwise; detail a
+    string;
   - outcomes_fired a list of the fired values of specification 3 section 7 (STOP: violation, STOP: scope invalid,
     STOP: runtime insufficient, ESCALATE, BLOCKED, REPLAN, CONTINUE_WITH; CONTINUE is not one of them), without
     repeats and in that order; when decision is not null, decision must equal its first value, or CONTINUE when it is
@@ -574,8 +575,9 @@ _EXECUTION_OBJECTS = ('read_set', 'dependencies', 'constitution', 'runtime', 'bu
 
 
 def _is_checks(value):
-    """Eight objects with exactly check, status, outcome and detail; check 1 to 8 each once; outcome an execution
-    value exactly when status is fired, else null; detail a string (TASK-011 AC2)."""
+    """Eight objects with exactly check, status, outcome and detail; check 1 to 8 each once; outcome a value of
+    EXECUTION_ORDER (never CONTINUE) exactly when status is fired, else null; detail a string (TASK-011 AC2,
+    TASK-176 AC1)."""
     if not (isinstance(value, list) and len(value) == 8):
         return False
     seen = []
@@ -585,7 +587,7 @@ def _is_checks(value):
         if not _is_int(item['check'], 1) or item['check'] > 8 or not _in(CHECK_STATUSES, item['status']):
             return False
         if item['status'] == 'fired':
-            if not _in(EXECUTION_DECISIONS, item['outcome']):
+            if not _in(frozenset(EXECUTION_ORDER), item['outcome']):
                 return False
         elif item['outcome'] is not None:
             return False
