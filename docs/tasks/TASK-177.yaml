@@ -1,0 +1,265 @@
+# Task contract TASK-177 (DEF-0132 step 1 of 3: the governor transition value in the CI; D-7915, D-7916; session
+# 228f426b, 2026-11-28). Draft v3, made by revise_v3_177.py (the contract review's findings) from v2 of
+# revise_v2_177.py (D-7917 C2) and v1 of fill_contract_177.py: base_commit, intent_versions, forbidden and the touch
+# list are computed; the rest is the worker's text. Whether it is approved is recorded in the decision files, not here.
+# Line numbers below are those of base_commit. The touch list (master plan section 6 point (6) (b)), the open items
+# that name a file of the write set by file name at base_commit: DEF-0024 (aieos-checks.yml); DEF-0030 (aieos-checks.yml); DEF-0031 (aieos-checks.yml); DEF-0041 (aieos-checks.yml); DEF-0101 (aieos-checks.yml); DEF-0111 (aieos-checks.yml); DEF-0115 (aieos-checks.yml); DEF-0121 (aieos-checks.yml); DEF-0127 (aieos-checks.yml); DEF-0128 (aieos-checks.yml); DEF-0130 (aieos-checks.yml); DEF-0137 (aieos-checks.yml); DEF-0139 (aieos-checks.yml); DEF-0144 (aieos-checks.yml); DEF-0148 (aieos-checks.yml); DEF-0152 (aieos-checks.yml); DEF-0154 (aieos-checks.yml); DEF-0155 (aieos-checks.yml).
+task: TASK-177
+contract_version: v1
+task_type: implementation
+objective: >-
+  Let a second version of src/aieos_bootstrap/governor.py land later with the governor pin never empty: add the job env
+  value AIEOS_PINNED_GOVERNOR_PREVIOUS (empty means off) and, in both conformance steps, accept in the base run the
+  previous version as the base's governor when, and only when, the previous value is 64 lowercase hex digits, the base's
+  governor file and the run's governor identity equal it, and the pushed head's governor file equals
+  AIEOS_PINNED_GOVERNOR. The values are read from the pushed commit's own workflow, which is trusted as at
+  base_commit (AC3 states the bound). No pin value changes in this task. A text test holds the new lines and a model
+  of the rule.
+traces_to:
+  - docs/Deferred/DEF-0132-autonomy-l2-as-a-product-feature-the-auto-accept-function-has-no-caller.md
+  - docs/plan/master-plan.md
+  - docs/pre-genesis/governor-spec.md
+input_state:
+  base_commit: 8e5966a6b508c29306126ea24f17dd0952808f49
+  depends_on: [TASK-176]
+  intent_versions:
+    tests/integration/test_ci_resume_pin_logic.py: 85970904e95383e92ed4c6b3eedb2648de04f6cf2180279745d565530c417f66
+    src/aieos_bootstrap/governor.py: 2f2dcd7525bcc39dcb3539ada93daff428a624cf2c47876c2d17599cf7ec022f
+    src/aieos_bootstrap/evaluation_sources.py: de0b8d28004390c70c5f3b9f5c62987838f7a9e15af03b753fd2008eca837d3b
+    tests/unit/test_evaluation_sources.py: 4daafcacea7aae760f408fe50e40e78cca07f53bfc9f3d7d207bf3741a86002f
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/pre-genesis/decision-matrix.md: 4c7f7dcf43e4521f059df5f6a82c16fe08c54eef70ae58b771eef7b3f2a58625
+    docs/pre-genesis/governor-spec.md: 423a1f3743b124bab7e672f7be5615e18f2a178d9b9991587d5aaa9f6ea37cea
+    docs/plan/master-plan.md: cbc29ecedc177f8d4e77de946816edebe1550a6722f8f98aa2e87d3b52e82d37
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/runs/TASK-176-acceptance.md: 948bb153371d2f64b0d88efa08fd5f17cd04afee37fabd248b043185350b339a
+    docs/tasks/TASK-176.yaml: c48dfbca07ff05a5ba18d44fb8644d6f73c92f42ff871894705023777f02be3c
+    docs/tasks/TASK-121.yaml: 823926a8a16995971c2c5be4276f6a53fc99a37962cc55c01fb925d8944b9100
+    docs/Deferred/DEF-0137-the-ci-inv-010-step-fails-on-every-decision-record-until-a-replay-recomputes-it.md: d6a7c1bcf676ce756e24745698c100364865d656a87b5543b862be9134e932ae
+    docs/Deferred/DEF-0132-autonomy-l2-as-a-product-feature-the-auto-accept-function-has-no-caller.md: 192c9df551c72cad3c61bce20b09dc3dc681e9ae0735fdc1985e423971839d91
+  # .github/workflows/aieos-checks.yml at base_commit (a key beginning with "." is out of the reader's subset): sha256 feebaa3ea20dbf702557862b9514d139621bda78d69df35714e54a761d018ed5
+write_set:
+  paths:
+    - .github/workflows/aieos-checks.yml
+    - tests/integration/test_ci_governor_pin_logic.py
+read_set:
+  paths:
+    - .github/workflows/aieos-checks.yml
+    - tests/integration/test_ci_resume_pin_logic.py
+    - src/aieos_bootstrap/governor.py
+    - src/aieos_bootstrap/evaluation_sources.py
+    - tests/unit/test_evaluation_sources.py
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/decision-matrix.md
+    - docs/pre-genesis/governor-spec.md
+    - docs/plan/master-plan.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/runs/TASK-176-acceptance.md
+    - docs/tasks/TASK-176.yaml
+    - docs/tasks/TASK-121.yaml
+    - docs/Deferred/DEF-0137-the-ci-inv-010-step-fails-on-every-decision-record-until-a-replay-recomputes-it.md
+    - docs/Deferred/DEF-0132-autonomy-l2-as-a-product-feature-the-auto-accept-function-has-no-caller.md
+    - docs/Deferred/DEF-0024-ci-workflow-next-revision-and-task-001-follow-ups.md
+    - docs/Deferred/DEF-0030-event-log-writer-and-workflow-revision-6.md
+    - docs/Deferred/DEF-0031-texts-that-keep-github-changes-with-the-owner.md
+    - docs/Deferred/DEF-0041-the-review-findings-carried-from-task-016.md
+    - docs/Deferred/DEF-0101-the-launchers-open-requirements-before-a-runtime-is-launched.md
+    - docs/Deferred/DEF-0111-the-lists-equal-step-runs-inside-the-workflow-it-checks.md
+    - docs/Deferred/DEF-0115-a-task-commit-pushed-straight-to-main-makes-the-task-gated-ci-steps-hollow.md
+    - docs/Deferred/DEF-0121-the-policy-file-must-join-the-gov-003-evaluator-list-before-any-measurement-resolves.md
+    - docs/Deferred/DEF-0127-pip-s-version-check-is-not-disabled-in-the-bandit-and-lint-steps.md
+    - docs/Deferred/DEF-0128-stale-line-citations-and-comments-after-the-pin-upgrade-of-resume-check-py.md
+    - docs/Deferred/DEF-0130-the-word-blocking-in-the-workflow-header-carries-no-advisory-label.md
+    - docs/Deferred/DEF-0139-the-known-findings-of-task-138-carried-at-its-acceptance-d-6378.md
+    - docs/Deferred/DEF-0144-findings-of-the-reviews-of-task-141-that-are-carried-and-not-fixed-by-the-task.md
+    - docs/Deferred/DEF-0148-the-g0-detect-step-of-the-ci-prints-the-contracts-hash-read-at-the-contract-commit.md
+    - docs/Deferred/DEF-0152-the-caller-of-the-gate-maker-must-bind-the-steps-to-the-task-and-the-commit-and-give-plain-data.md
+    - docs/Deferred/DEF-0154-the-evaluator-inputs-outside-the-pinned-lists-and-evidence-defining-paths.md
+    - docs/Deferred/DEF-0155-the-inv-004-rule-of-the-ci-sees-single-string-constants-only-so-a-constructed-spelling-passes.md
+    - tests/run_tests.py
+  interfaces: []
+  schemas: []
+# forbidden governs writes; reading a forbidden path that the read_set lists is allowed.
+forbidden:
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - docs/**
+  - src/**
+  - tests/unit/**
+  - tests/property/**
+  - tests/conformance/**
+  - tests/run_tests.py
+  - .github/workflows/aieos-bench.yml
+  - .github/workflows/aieos-native.yml
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_base_files_repo.py
+  - tests/integration/test_base_inputs_repo.py
+  - tests/integration/test_ci_lint_step.py
+  - tests/integration/test_ci_resume_pin_logic.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_decision_replay_real_record.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_g0_detect_copies.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_launcher_repo.py
+  - tests/integration/test_mcp_server_work_order_repo.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_resume_inputs_repo.py
+  - tests/integration/test_resume_log_inputs_repo.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-001, GOV-002, GOV-003, GOV-004, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The env value. The diff of the workflow adds, directly after the line AIEOS_PINNED_RESUME_CHECK_PREVIOUS: ''
+      (:229), one comment block (each line six spaces and "# ") and the line "      AIEOS_PINNED_GOVERNOR_PREVIOUS: ''"
+      (single quotes, empty). The comment begins "      # AIEOS_PINNED_GOVERNOR_PREVIOUS qualifies the "Pinned:" sentence
+      of AIEOS_PINNED_GOVERNOR above. Empty means off." It names its revision, "revision 34 (TASK-177)", the next
+      after the highest revision in the file (the newest header is revision 31, :190; revisions 32 and 33 are named at
+      :162), and says: the value holds the version that a landing of a new
+      governor version leaves; it is accepted only under the rule of AC3; changing it is a change under .github/, its own
+      decision (DM A66; D-317); setting it does not accept a governor version; it is emptied by the next such step after
+      the new version is accepted. The lines :204-:229 stay byte for byte.
+  - AC2: >-
+      The code, in both conformance steps (the copies whose PINNED line is :956 and :1298). Each step gets exactly these
+      lines and no other change. (a) Directly after "PINNED = os.environ.get('AIEOS_PINNED_GOVERNOR', '')" (10 spaces),
+      one line (10 spaces): PREV_GOV = os.environ.get('AIEOS_PINNED_GOVERNOR_PREVIOUS', ''). (b) Directly after
+      "rc_ok.add(PREV_RC)" (:1140, :1482), two lines (14 spaces): head_pin = blob(head, GOVERNOR_FILES[0]) and
+      head_pin_sha = hashlib.sha256(head_pin).hexdigest() if head_pin is not None else 'absent'. (c) Directly after the
+      lines "if report_only:" and "return 0" (:1207-:1208, :1549-:1550) and before the line "if gov_sha != PINNED or
+      value['governor_identity'] != PINNED:", these lines: (14 spaces) if HEX.fullmatch(PREV_GOV) and gov_sha ==
+      PREV_GOV and head_pin_sha == PINNED and value['governor_identity'] == PREV_GOV: ; (18 spaces) if
+      record['outcome'] != 'pass': ; (22 spaces) return fail(title, 'outcome %s with the previous pinned governor' %
+      record['outcome']) ; (18 spaces) print('%s: pass with the previous pinned governor %s' % (title, PREV_GOV)) ;
+      (18 spaces) return 0. (d) Directly after the step comment line ending "pass. This step runs before any step that
+      runs code from the pushed commits." (:910, :1252), exactly this one comment line, with the indentation of the
+      lines before it: "#              From revision 34, with AIEOS_PINNED_GOVERNOR_PREVIOUS set, the base run also
+      accepts that version under the rule of the job's comment." (ten spaces before "#", one line in the file).
+  - AC3: >-
+      The rule of the base run, with pin P, previous Q, base governor file hash b, the run's governor identity n and the
+      head's governor file hash h, a run record whose outcome is pass: accepted if and only if P is empty, or b == P and
+      n == P, or Q is 64 lowercase hex digits and b == Q and n == Q and h == P. A run record whose outcome is not pass is
+      refused as at base_commit whenever P is set. With Q empty the rule equals base_commit's for every input; with
+      Q == P the accepted set equals base_commit's. Unchanged and still applied first: the checks of :1202-:1206 (a PASS
+      with no governor in the base; the Resume Check's accepted versions), the main-push check that a touched governor
+      file equals P (:1113-:1114, :1455-:1456), the candidate run (report only) and every other line. The bound, stated
+      plainly: P and Q are read from the pushed commit's own workflow and the code cannot tell whether they are
+      accepted versions, so a push that sets both values and replaces the governor file passes the base run, a return
+      to an older version among them (at base_commit a pushed workflow with the pin emptied, which is the owner's act,
+      already passed any replacement). What guards the values is the A66 decision on the exact diff and the exact
+      values, which accepts no governor version. Who accepts a new governor version is not decided here (DM A64, A65;
+      D-7916 Q2, answered by the owner, D-7918; its matrix row follows this task).
+  - AC4: >-
+      tests/integration/test_ci_resume_pin_logic.py is not changed and all of its tests pass on the task tree, its
+      AC4 pins of the governor lines (:31-:34) among them. AIEOS_PINNED_GOVERNOR, AIEOS_PINNED_RESUME_CHECK and
+      AIEOS_PINNED_RESUME_CHECK_PREVIOUS keep their values. The INV-010 replay step (:658-:695) is not changed: it gives
+      the entry AIEOS_PINNED_GOVERNOR as its governor pin (:690-:691), so after a later pin change a decision.acceptance record made under the old
+      version would fail closed (DEF-0137); at base_commit no tracked events.jsonl holds a decision.acceptance line, and
+      the contract of the step that changes the pin refuses it if one exists then (D-7916 C2); nothing in this task
+      enforces that.
+  - AC5: >-
+      The text test tests/integration/test_ci_governor_pin_logic.py (standard library only; no subprocess, tempfile,
+      exec, compile, open or eval; it reads the workflow with pathlib read_bytes; each test names "TASK-177 ACn" in its
+      docstring and no other task's criterion) checks: (i) the comment's first line, the value line (empty) and their
+      place after the Resume Check's previous value; (ii) the text cut into the two steps at the two PINNED lines, and in
+      each step each exact line of AC2 exactly once, (a) after the PINNED line, (b) after rc_ok.add(PREV_RC), (c) as one
+      contiguous block between "return 0" of report_only and the unchanged governor condition; (iii) the unchanged
+      governor lines of the push check and the base check, once per step, and the comment line of AC2 (d), whole,
+      once per step directly after its anchor line; (iv) that no added line holds a word of the
+      forbidden list of test_ci_resume_pin_logic.py; and it holds a pure-Python reference function written for AC3 (it
+      takes the outcome too; it is not base_run_accepts of the Resume Check's test) with a truth
+      table that covers: a landing that moves b == Q to h == P passes, as a main push and as a branch run; h other than P
+      fails; b outside P and Q fails; n other than the accepted value fails (n == P with b == Q, n == Q with b == P,
+      'none', 'not used', empty); a Q that is not 64 lowercase hex digits is never accepted; an empty Q equals
+      base_commit's rule for every input; an empty P accepts; Q == P equals base_commit's rule; a non-pass outcome is
+      refused whenever P is set; and a wrong model (one that accepts Q whenever Q is non-empty) is told apart. Plainly:
+      the table checks a model, not the workflow; the workflow is tied to the model only by the literal line pins and by
+      the decision agent's reading of the exact diff.
+  - AC6: >-
+      Limits. No write access, secret, token, repository or security setting is added or changed (no permissions change;
+      no secrets., GITHUB_TOKEN, uses:, continue-on-error, curl, wget in any added line). No file of src, bench or native
+      changes. The new acceptance path is not exercised by this task's CI runs (the value is empty); its first real
+      exercise is the branch run of the later governor task. The task runs neither a hook, the runtime program nor a
+      launch. The slice runs, the base-test run, the runs on scratch copies of AC7 and the added-text scans are the
+      worker's own runs outside the task's shell and filesystem capabilities.
+  - AC7: >-
+      Checks and evidence. Each new test is shown to fail on a scratch copy of the workflow without the lines it holds,
+      and to pass on the task tree, the output returned unedited. The whole suite passes by the slice method (each slice
+      under timeout 110) on the task tree before the task commit, and the base tests are run on the task tree; before the
+      commit the added lines are scanned with the workflow's SEC-001, SEC-002 and OPS-003 patterns, each 0. Profile of
+      risk critical: unit_test, integration_test, property_test, deterministic_rule, static_security_analysis (CI), an
+      ai_review (cross-model) by a way-2 review of a claude-haiku-5-5 reviewer in its own session (another model of the
+      same vendor; not an independent review), and a separate
+      decision_agent review that stands for human_review, both bound to the evaluated commit, the contract and the pins.
+      The A66 decision, which binds by SHA-256 the built workflow, the base blob, the diff, the test and this contract,
+      precedes the commit. The first run is on refs/heads/task/TASK-177 (its log prints "G0 detect: task TASK-177
+      contract commit"); the commit goes to main only after the acceptance; a push stopped by a safety check goes to the
+      decision agent (DM A71). GOV-003 is a stated departure (the workflow and tests/integration/** are on the evaluator
+      list; DEF-0110); the acceptance gives the base-tests step's printed line. The task commit has exactly one
+      AIEOS-Task trailer line. The pushes are the worker's route under their own decisions, outside the task's
+      capabilities.
+  - AC8: >-
+      Records, in a records commit after the acceptance: not the task commit, without an AIEOS-Task trailer, outside
+      this task's write set, under its own decisions. DEF-0132 stays open with a dated Log line: step 1 done, steps 2 (the governor task) and 3 (the policy
+      chain) not done, with the events that resume them. The acceptance states under master plan section 6 point (6):
+      the touch list with why each item is not done; the counts at the contract commit (79 open, resumed or
+      waiting-owner, 14 'Blocks v0.1: yes') and after; the first batch's running total (21 of 36 at base_commit; this task
+      closes none toward it); batch 3's count from its start of 83 (97 at base_commit), each accepted limit and each
+      entry raising it; and the batch 2 deferral (D-7839). A history page goes into the records commit.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [.github/workflows/aieos-checks.yml, tests/integration/test_ci_governor_pin_logic.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+# Risk: .github/** is critical (risk-rules-gov-aieos.md R9).
+risk: critical
+autonomy:
+  max_level: L1
+  budgets: {tokens: 400k, wall_time: 6h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC4, AC5, AC7]}
+  - {gate: G3, check: constitution, args: [AC3, AC6, AC8, INV-001, INV-002, INV-003, INV-004, GOV-001, GOV-002, GOV-003, GOV-004, SEC-001, SEC-002, SEC-003, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of risk critical is satisfied before any fast-forward of main AND the task acceptance by the decision agent AND the CI runs of the accepted commit succeed
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+# owner_kept_act: false: one change of the CI channel's check code under DM A66 on its exact diff; no write access,
+# secret, token or setting; no pin value changes.
+owner_kept_act: false
