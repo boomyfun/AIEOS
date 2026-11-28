@@ -475,13 +475,15 @@ class SchemaTool(unittest.TestCase):
         """TASK-061 AC2, amended by the contract of TASK-140 (its AC2): a keyword query, a bare "select:", a trailing, a leading and a doubled
         comma, a space around a name, another case of the prefix or of a name, an eighth name, a name of another server, a name without
         its prefix, a name followed by a line feed, a missing, empty or non-string query and a tool_input that is not a mapping give
-        uncovered, reason tool, no record."""
+        uncovered, reason tool, no record; so do (task TASK-174, DEF-0141 item 1) a name with an added suffix, a name with an added
+        prefix and a name followed by a carriage return."""
         a = claude_code.MCP_TOOLS[0]
         b = claude_code.MCP_TOOLS[5]
         queries = ['aieos get work order', 'select:', 'select:' + a + ',', 'select:,' + a, 'select:' + a + ',,' + b, 'select: ' + a,
                    'select:' + a + ', ' + b, 'select:' + a + ' ', 'SELECT:' + a, 'Select:' + a, 'select:' + a.upper(), 'select:mcp__aieos__write',
                    'select:' + a + ',mcp__aieos__write', 'select:mcp__other__status', 'select:status', 'select:' + a + '\n', ' select:' + a,
-                   'select:' + a + ';' + b, 'select:*', 'select:mcp__aieos__', '', a]
+                   'select:' + a + ';' + b, 'select:*', 'select:mcp__aieos__', '', a,
+                   'select:' + a + '_more', 'select:more_' + a, 'select:' + a + '\r']
         for q in queries:
             r = call('ToolSearch', {'query': q})
             self.assertEqual((r['verdict'], r['concern'], r['reason'], r['record']), ('uncovered', None, 'tool', None), repr(q))

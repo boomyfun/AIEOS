@@ -7,6 +7,7 @@ module that reaches the fixtures through another module, or a file of another ki
 
 Files are read as bytes with pathlib; no fixture or set module is ever imported or executed.
 """
+import ast
 import hashlib
 import json
 import pathlib
@@ -51,6 +52,9 @@ OTHERS = ('src/aieos_bootstrap/conformance.py', 'tests/unit/test_runner_rc.py',
           'tests/conformance/set.py', 'tests/unit/test_conformance_files.py',
           'tests/property/test_conformance_properties.py', 'tests/integration/test_conformance_set.py',
           'tests/unit/test_export_fixtures.py', 'tests/unit/test_export_reference.py')
+# TASK-174: the three modules of OTHERS that are allowed as TASK-006's.
+TASK_006_MODULES = ('tests/unit/test_runner_rc.py', 'tests/integration/test_runner_rc_run.py',
+                    'tests/property/test_runner_rc_properties.py')
 
 
 def read(path):
@@ -187,6 +191,15 @@ class RcSetTest(unittest.TestCase):
 
     def test_the_allowed_modules_are_all_allowed(self):
         self.assertEqual(not_allowed(OWN + OTHERS), [])
+
+    def test_the_allowed_task_006_modules_name_task_006(self):
+        """TASK-174 AC5 (DEF-0028 R3-4): each of the three TASK-006 modules is in OTHERS and names TASK-006 in its module
+        docstring; the modules are read and none is changed."""
+        self.assertEqual(len(TASK_006_MODULES), 3)
+        for path in TASK_006_MODULES:
+            with self.subTest(path=path):
+                self.assertIn(path, OTHERS)
+                self.assertIn('TASK-006', ast.get_docstring(ast.parse(read(path).decode('utf-8'))) or '')
 
     def test_the_list_is_sorted_and_an_allowed_name_in_another_folder_is_not_allowed(self):
         """not_allowed returns its paths sorted, and a file name that is allowed in one folder is not allowed in another."""

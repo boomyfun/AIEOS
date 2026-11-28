@@ -41,8 +41,9 @@ never makes a lease that has expired at the clock's reading read as live. The sa
 
 Exit code 0 on every outcome, and the program prints nothing, for every exception inheriting Exception (a
 BaseException that is not an Exception, or a failure before main runs, can give a non-zero exit code and text): a
-PostToolUse hook runs after the read (as documented, unmeasured: C6), so a refusal
-would block nothing; it never asks for an approval and never shows a stop (decision D-1469 ruling 1). An error
+PostToolUse hook runs after the read (as documented, unmeasured: C6; the source is the hooks reference at
+https://code.claude.com/docs/en/hooks as summarised by a web-reading tool on 2026-10-18: a summary, not the page), so
+a refusal would block nothing; it never asks for an approval and never shows a stop (decision D-1469 ruling 1). An error
 inheriting Exception while reading standard input, the environment or the clock gives exit code 0 too, with nothing
 written.
 

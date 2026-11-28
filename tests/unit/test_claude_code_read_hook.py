@@ -620,7 +620,7 @@ class T73Wording(unittest.TestCase):
     def test_every_result_has_the_result_keys(self):
         """TASK-073 AC3: over the 14 bad-argument cases, and over judge's answers "enforce_nothing", "refuse" and
         "tied" with read_paths' "uncovered" and "read" and add_reads' "done", "refused" and an exception, each result's
-        key set is set(hook.RESULT_KEYS)."""
+        key set is set(hook.RESULT_KEYS); TASK-174 AC2: each result's keys in order are RESULT_KEYS."""
         self.assertEqual(len(BAD_ARGUMENTS), 14)
         results = [Flow().run(**kw) for kw in BAD_ARGUMENTS]
         judges = (judged('enforce_nothing', 'no_lease_row'),
@@ -637,6 +637,25 @@ class T73Wording(unittest.TestCase):
         for out in results:
             with self.subTest(out=out):
                 self.assertEqual(set(out), set(hook.RESULT_KEYS))
+                self.assertEqual(tuple(out), hook.RESULT_KEYS)
+
+
+class T174StoreImporters(unittest.TestCase):
+
+    def test_only_the_two_hooks_import_the_store(self):
+        """TASK-174 AC3 (DEF-0089 DA-4 R-3): of the modules of HOOK_SIDE, those whose import statements name
+        claude_code_store are exactly claude_code_read_hook.py and claude_code_pretool_hook.py."""
+        importers = []
+        for name in HOOK_SIDE:
+            named = []
+            for n in ast.walk(ast.parse((SRC / name).read_bytes().decode('utf-8'))):
+                if isinstance(n, ast.Import):
+                    named += [a.name for a in n.names]
+                elif isinstance(n, ast.ImportFrom):
+                    named += [n.module or ''] + [a.name for a in n.names]
+            if any('claude_code_store' in x.split('.') for x in named):
+                importers.append(name)
+        self.assertEqual(importers, ['claude_code_read_hook.py', 'claude_code_pretool_hook.py'])
 
 
 class T73Subclasses(unittest.TestCase):

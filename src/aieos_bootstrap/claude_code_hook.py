@@ -26,8 +26,9 @@ What these functions show, and what they do not (AC7):
   open outside these functions when the hook program does not start, is killed or exits otherwise (unmeasured). The
   entry gives only exit codes 0 and 2 and no standard-output text.
 - The entry is meant for a hook whose matcher names only the judged tools (Write, Edit, Bash, PowerShell, Read, Grep,
-  Glob); under a matcher "*" it would block every other tool's call. The matcher is the owner's to choose when the hook
-  is placed (part CC-3; A51 item (4)); nothing here places a hook or chooses a matcher.
+  Glob, and, as claude_code.judge also answers for them, the seven aieos MCP tool names and ToolSearch with a
+  "select:" query of them); under a matcher "*" it would block every other tool's call. The matcher is the owner's to
+  choose when the hook is placed (part CC-3; A51 item (4)); nothing here places a hook or chooses a matcher.
 - Of the hook input only tool_name and tool_input are read (D-1236 Q2). The root is the caller's argument, never the
   input's cwd (D-1212 F4); session_id, cwd, hook_event_name and every other key are not read, so placed on another hook
   event the entry would judge in the same way. The ids that tie an observation to a session and a lease, and how a
