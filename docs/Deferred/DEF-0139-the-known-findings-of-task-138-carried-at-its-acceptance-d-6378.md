@@ -31,3 +31,7 @@ With the next change to src/aieos_runtime/claude_starter.py (a new build of the 
 
 ## Depends on
 The contract TASK-138 r3 (landed at 508031af); DEF-0138 (the same form of carried findings); the status check of D-6306 C4 (run once at D-6379: loggedIn true, loginExpiresAt 2026-12-14), which shows the stored login and not that a model call is served.
+
+## Log
+
+- 2026-11-28 (session 228f426b; TASK-173, accepted at D-7817, commit c452be60d4b91045a1088dd2e4335a5c32d9af4f, docs/runs/TASK-173-acceptance.md; main CI runs 46113820880 and 46113820845 success): this task is the next change of src/aieos_runtime/claude_starter.py that "Resume when" names; none of items 1 to 11 is done, because the task changes two literal lines (the settings pin and the test line that states it) and no other byte. Items 1, 3 and 7 are text of another task's files; items 2, 4, 5, 6, 10 and 11 are stated limits; item 8 is concept-governed. Item 9 (the pin typed twice): the two literals were changed together and are checked by the test (tests/unit/test_claude_starter.py :249) and by the CI check of the starter; DEF-0141's open point that no unit test checks the typed pin against the settings file stays open. Status and schedule unchanged.
