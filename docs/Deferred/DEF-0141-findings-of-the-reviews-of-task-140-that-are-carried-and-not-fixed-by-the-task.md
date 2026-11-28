@@ -1,6 +1,6 @@
 # DEF-0141: findings of the reviews of TASK-140 that are carried and not fixed by the task
 
-- Status: open
+- Status: done
 - Opened: 2026-11-19 (the History page of the session 26136a0a names the session)
 - Deferred by: decision agent (A41, A51), D-6406 (the dispositions of the findings of the reviews B2 and A3 of TASK-140; A2 is void and its findings are information only) and D-6407 (the acceptance of TASK-140 with these items carried)
 - Decision group: A (scheduling)
@@ -39,3 +39,4 @@ Figures in this record that no decision file carries and that no script re-check
 
 ## Log
 - 2026-11-28 (session 228f426b; TASK-171, accepted at D-7727, commit a2c808305d3f28df413e2771bfc247b4d3559a5a, docs/runs/TASK-171-acceptance.md; main CI runs 46058827716 and 46058827710 success): the Resume-when event is met: TASK-171 was the scheduled next change to src/aieos_bootstrap/claude_code.py; it changed only the module docstring, and the "select:" test cases of item 1 were not in its contract. The item stays open and its test cases stay scheduled with the next change to claude_code.py or claude_code_hook.py. Status unchanged.
+- 2026-11-28 (session 228f426b; TASK-174, accepted at D-7863, commit d80af249da95634cdf70a1e9218c8dfb51eb3488, docs/runs/TASK-174-acceptance.md; main CI runs 46130608472 and 46130608475 success): closed, done, item by item. Item 1: tests/unit/test_claude_code.py:486. Item 8: src/aieos_bootstrap/claude_code_hook.py:28-:31 (a limit of its wording is accepted limit L6 of that acceptance). Item 6: erratum (d) for docs/tasks/TASK-140.yaml:59 and a record note for message_1.txt. Item 3: accepted limit L1. Item 2: carried by DEF-0139 item 8, open. Items 4, 5, 7, 9, 10 and 11: record notes of that acceptance.
