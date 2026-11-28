@@ -1,0 +1,406 @@
+# Task contract TASK-173 (BT5 step 5b of the second real run; master plan section 6 point (6) (c), revision 13: the one
+# product task between the clean-up tasks E and N1; session 228f426b, 2026-11-28; decisions D-7802 (C3), D-7806 (C6),
+# D-7809 (C2); the TASK-145 form). Drafted by script fill_contract_173.py: base_commit, intent_versions, forbidden and
+# the touch list are computed; the rest is the worker's text. Whether it is approved is recorded in the decision files,
+# not here. Line numbers below are those of base_commit.
+# The touch list (master plan section 6 point (6) (b)), the open items that name a file of the write set by file name at
+# base_commit: DEF-0139 (claude_starter.py), DEF-0149 (claude_starter.py), DEF-0151 (claude_starter.py), DEF-0154 (claude_starter.py).
+# The task closes none of them; for each the acceptance says why not.
+task: TASK-173
+contract_version: v1
+task_type: implementation
+objective: >-
+  In src/aieos_runtime/claude_starter.py change line 31 so that SETTINGS_SHA256 is 'c0f2e19246889ac12dcc08e64c0c3edf281ffcdbc318ee2ba05e5be60c0094e1' (it is 'f7f835a2bb07c0ec1bf09ace91ddde488c870133e3ed4e09bbd6d2032325d9ad' now), and in
+  tests/unit/test_claude_starter.py change line 249 (the expected value of claude_starter.SETTINGS_SHA256 in the test of
+  the pinned values) from the same old value to the same new value. Change no other byte of either file. The settings
+  file itself is not part of this task.
+traces_to:
+  - docs/Deferred/DEF-0149-the-loops-submission-path-cannot-be-completed-after-a-session-that-has-no-shell.md
+  - docs/tasks/TASK-145.yaml
+  - docs/plan/master-plan.md
+input_state:
+  base_commit: f7e462acb76e567fb41f4a1bb5c72dd18c225fac
+  depends_on: [TASK-172]
+  intent_versions:
+    src/aieos_runtime/claude_starter.py: ae0a408fad7b72d57c71cc47f9774bde40552a37c3423d1796216cda57e95124
+    tests/unit/test_claude_starter.py: f47afd96bf1f3cf3b3b12c58fe4f9fc3788ef115e5b8500d8f14e2632d9794f8
+    src/aieos_runtime/__init__.py: 4268a888014fb0e640b4fbf6090ed5c64933ceb213dbf143c431230fcb07345a
+    tests/property/test_claude_starter_properties.py: 6ecb867e4ad8dd53cacd84404e45a165ca6b3130f9b8c07fe0a5115e6ebfe3ce
+    docs/pre-genesis/constitution.md: 9b396c3c0f31d3a3fbccf9433cf81eb820b6e0f0a3a7d099e2899043abfe1f5a
+    docs/pre-genesis/assurance-model.md: 945615316968a5c064bf88be71add9271bbb9f95692eaa22582b6020fa69cb85
+    docs/pre-genesis/decision-matrix.md: 4c7f7dcf43e4521f059df5f6a82c16fe08c54eef70ae58b771eef7b3f2a58625
+    docs/plan/master-plan.md: cbc29ecedc177f8d4e77de946816edebe1550a6722f8f98aa2e87d3b52e82d37
+    docs/specs/risk-rules-gov-aieos.md: 9a740f4d882f5519b9d5c28227c89a7a47eeb360416cff81904b37f2c71e205b
+    docs/tasks/TASK-145.yaml: a8f777a96d62da26f47ec552c7e60219c2c7d6c657c250e842fdeebbf19cabfc
+    docs/runs/second-real-run-pre-run-record.md: c6a6d8da5a73fadfb839ea42c48affebaef08af033ab83f36e5900b55881c35e
+    docs/runs/TASK-172-acceptance.md: 93f4e0c6edfbad28d9f31c4444fbc89049e6cc23cb7183d33ff7ddf34a59c73e
+    docs/Deferred/DEF-0149-the-loops-submission-path-cannot-be-completed-after-a-session-that-has-no-shell.md: f31bbf8a44be4f5384b359c3195fc59b729836c48bea9c1f73c9ffadcd79705e
+write_set:
+  paths:
+    - src/aieos_runtime/claude_starter.py
+    - tests/unit/test_claude_starter.py
+read_set:
+  paths:
+    - src/aieos_runtime/claude_starter.py
+    - tests/unit/test_claude_starter.py
+    - src/aieos_runtime/__init__.py
+    - tests/property/test_claude_starter_properties.py
+    - docs/pre-genesis/constitution.md
+    - docs/pre-genesis/assurance-model.md
+    - docs/pre-genesis/decision-matrix.md
+    - docs/plan/master-plan.md
+    - docs/specs/risk-rules-gov-aieos.md
+    - docs/tasks/TASK-145.yaml
+    - docs/runs/second-real-run-pre-run-record.md
+    - docs/runs/TASK-172-acceptance.md
+    - docs/Deferred/DEF-0149-the-loops-submission-path-cannot-be-completed-after-a-session-that-has-no-shell.md
+    - docs/Deferred/DEF-0139-the-known-findings-of-task-138-carried-at-its-acceptance-d-6378.md
+    - docs/Deferred/DEF-0151-the-capture-and-submit-step-of-aieos-launch-has-no-spare-time-in-the-lease-when-a-session-uses-its-whole-timeout.md
+    - docs/Deferred/DEF-0154-the-evaluator-inputs-outside-the-pinned-lists-and-evidence-defining-paths.md
+    - tests/run_tests.py
+    - .github/workflows/aieos-checks.yml
+  interfaces: []
+  schemas: []
+# forbidden governs writes; reading a forbidden path that the read_set lists is allowed.
+forbidden:
+  - .github/**
+  - .aieos/**
+  - .claude/**
+  - CLAUDE.md
+  - AIEOS-concept.md
+  - .gitattributes
+  - .gitignore
+  - bench/**
+  - native/**
+  - docs/**
+  - tests/conformance/**
+  - tests/run_tests.py
+  - src/aieos_bootstrap/__init__.py
+  - src/aieos_bootstrap/ac_coverage.py
+  - src/aieos_bootstrap/ac_tests.py
+  - src/aieos_bootstrap/adapter.py
+  - src/aieos_bootstrap/adapter_declaration.py
+  - src/aieos_bootstrap/autonomy.py
+  - src/aieos_bootstrap/base_files.py
+  - src/aieos_bootstrap/base_inputs.py
+  - src/aieos_bootstrap/capture_submit.py
+  - src/aieos_bootstrap/ci_evidence.py
+  - src/aieos_bootstrap/claude_code.py
+  - src/aieos_bootstrap/claude_code_channel.py
+  - src/aieos_bootstrap/claude_code_hook.py
+  - src/aieos_bootstrap/claude_code_pretool_hook.py
+  - src/aieos_bootstrap/claude_code_read_hook.py
+  - src/aieos_bootstrap/claude_code_reads.py
+  - src/aieos_bootstrap/claude_code_shell_allow.py
+  - src/aieos_bootstrap/claude_code_store.py
+  - src/aieos_bootstrap/cli.py
+  - src/aieos_bootstrap/conformance.py
+  - src/aieos_bootstrap/context_compiler.py
+  - src/aieos_bootstrap/contract_path.py
+  - src/aieos_bootstrap/decision_replay.py
+  - src/aieos_bootstrap/done.py
+  - src/aieos_bootstrap/drift.py
+  - src/aieos_bootstrap/eval_inputs.py
+  - src/aieos_bootstrap/evaluate_command.py
+  - src/aieos_bootstrap/evaluation.py
+  - src/aieos_bootstrap/evaluation_derive.py
+  - src/aieos_bootstrap/evaluation_intake.py
+  - src/aieos_bootstrap/evaluation_policy.py
+  - src/aieos_bootstrap/evaluation_sources.py
+  - src/aieos_bootstrap/eventlog.py
+  - src/aieos_bootstrap/execution.py
+  - src/aieos_bootstrap/gate_records.py
+  - src/aieos_bootstrap/gitread.py
+  - src/aieos_bootstrap/governor.py
+  - src/aieos_bootstrap/handoff_file.py
+  - src/aieos_bootstrap/intent_map.py
+  - src/aieos_bootstrap/launcher.py
+  - src/aieos_bootstrap/mcp_server.py
+  - src/aieos_bootstrap/metrics_report.py
+  - src/aieos_bootstrap/read_set_record.py
+  - src/aieos_bootstrap/reconcile.py
+  - src/aieos_bootstrap/records.py
+  - src/aieos_bootstrap/recovery.py
+  - src/aieos_bootstrap/replay.py
+  - src/aieos_bootstrap/resume_check.py
+  - src/aieos_bootstrap/resume_inputs.py
+  - src/aieos_bootstrap/resume_log_inputs.py
+  - src/aieos_bootstrap/scope_drift.py
+  - src/aieos_bootstrap/scope_reconcile.py
+  - src/aieos_bootstrap/session_violation.py
+  - src/aieos_bootstrap/stale.py
+  - src/aieos_bootstrap/startup.py
+  - src/aieos_bootstrap/submit.py
+  - src/aieos_bootstrap/t0.py
+  - src/aieos_bootstrap/task_contract.py
+  - src/aieos_bootstrap/verification_records.py
+  - src/aieos_bootstrap/violation.py
+  - src/aieos_bootstrap/writer.py
+  - src/aieos_runtime/__init__.py
+  - src/aieos_runtime/task_capture.py
+  - tests/integration/test_ac_coverage_contracts.py
+  - tests/integration/test_ac_tests_tree.py
+  - tests/integration/test_base_files_repo.py
+  - tests/integration/test_base_inputs_repo.py
+  - tests/integration/test_ci_lint_step.py
+  - tests/integration/test_ci_resume_pin_logic.py
+  - tests/integration/test_claude_code_channel_flow.py
+  - tests/integration/test_claude_code_hook_inputs.py
+  - tests/integration/test_claude_code_inputs.py
+  - tests/integration/test_claude_code_reads_inputs.py
+  - tests/integration/test_conformance_cb_set.py
+  - tests/integration/test_conformance_rc_set.py
+  - tests/integration/test_conformance_risk_set.py
+  - tests/integration/test_conformance_set.py
+  - tests/integration/test_decision_replay_real_record.py
+  - tests/integration/test_drift_log.py
+  - tests/integration/test_evaluation_repo.py
+  - tests/integration/test_eventlog_log.py
+  - tests/integration/test_execution_store.py
+  - tests/integration/test_g0_detect_copies.py
+  - tests/integration/test_gitread_repo.py
+  - tests/integration/test_governor_conformance.py
+  - tests/integration/test_launcher_repo.py
+  - tests/integration/test_mcp_server_work_order_repo.py
+  - tests/integration/test_read_set_record_store.py
+  - tests/integration/test_reconcile_log.py
+  - tests/integration/test_records_log.py
+  - tests/integration/test_recovery_log.py
+  - tests/integration/test_resume_check_fixtures.py
+  - tests/integration/test_resume_inputs_repo.py
+  - tests/integration/test_resume_log_inputs_repo.py
+  - tests/integration/test_runner_cb_run.py
+  - tests/integration/test_runner_rc_run.py
+  - tests/integration/test_runner_risk_run.py
+  - tests/integration/test_runner_run.py
+  - tests/integration/test_scope_drift_log.py
+  - tests/integration/test_scope_reconcile_log.py
+  - tests/integration/test_stale_records.py
+  - tests/integration/test_startup_repo.py
+  - tests/integration/test_submit_repo.py
+  - tests/integration/test_t0_session.py
+  - tests/integration/test_task_contract_repo.py
+  - tests/integration/test_writer_files.py
+  - tests/property/test_ac_coverage_properties.py
+  - tests/property/test_ac_tests_properties.py
+  - tests/property/test_autonomy_properties.py
+  - tests/property/test_base_files_properties.py
+  - tests/property/test_base_inputs_properties.py
+  - tests/property/test_claude_code_channel_properties.py
+  - tests/property/test_claude_code_hook_properties.py
+  - tests/property/test_claude_code_pretool_hook_properties.py
+  - tests/property/test_claude_code_properties.py
+  - tests/property/test_claude_code_read_hook_properties.py
+  - tests/property/test_claude_code_reads_properties.py
+  - tests/property/test_claude_code_shell_allow_properties.py
+  - tests/property/test_claude_code_store_properties.py
+  - tests/property/test_claude_starter_properties.py
+  - tests/property/test_conformance_cb_properties.py
+  - tests/property/test_conformance_properties.py
+  - tests/property/test_conformance_rc_properties.py
+  - tests/property/test_conformance_risk_properties.py
+  - tests/property/test_context_compiler_properties.py
+  - tests/property/test_contract_path_properties.py
+  - tests/property/test_drift_properties.py
+  - tests/property/test_evaluation_properties.py
+  - tests/property/test_eventlog_properties.py
+  - tests/property/test_execution_properties.py
+  - tests/property/test_gitread_properties.py
+  - tests/property/test_governor_properties.py
+  - tests/property/test_mcp_server_properties.py
+  - tests/property/test_read_set_record_properties.py
+  - tests/property/test_reconcile_properties.py
+  - tests/property/test_records_execution_properties.py
+  - tests/property/test_records_properties.py
+  - tests/property/test_recovery_properties.py
+  - tests/property/test_resume_check_properties.py
+  - tests/property/test_runner_cb_properties.py
+  - tests/property/test_runner_properties.py
+  - tests/property/test_runner_rc_properties.py
+  - tests/property/test_runner_risk_properties.py
+  - tests/property/test_scope_drift_properties.py
+  - tests/property/test_scope_reconcile_properties.py
+  - tests/property/test_session_violation_properties.py
+  - tests/property/test_stale_properties.py
+  - tests/property/test_startup_properties.py
+  - tests/property/test_submit_properties.py
+  - tests/property/test_t0_properties.py
+  - tests/property/test_task_contract_properties.py
+  - tests/property/test_verification_records_properties.py
+  - tests/property/test_writer_properties.py
+  - tests/unit/test_ac_coverage.py
+  - tests/unit/test_ac_tests.py
+  - tests/unit/test_adapter.py
+  - tests/unit/test_adapter_declaration.py
+  - tests/unit/test_autonomy.py
+  - tests/unit/test_base_files.py
+  - tests/unit/test_base_inputs.py
+  - tests/unit/test_bench_isolation.py
+  - tests/unit/test_capture_submit.py
+  - tests/unit/test_ci_evidence.py
+  - tests/unit/test_claude_code.py
+  - tests/unit/test_claude_code_channel.py
+  - tests/unit/test_claude_code_hook.py
+  - tests/unit/test_claude_code_pretool_hook.py
+  - tests/unit/test_claude_code_read_hook.py
+  - tests/unit/test_claude_code_reads.py
+  - tests/unit/test_claude_code_shell_allow.py
+  - tests/unit/test_claude_code_store.py
+  - tests/unit/test_cli.py
+  - tests/unit/test_cli_approve.py
+  - tests/unit/test_cli_evaluate.py
+  - tests/unit/test_cli_import.py
+  - tests/unit/test_cli_init.py
+  - tests/unit/test_cli_launch.py
+  - tests/unit/test_cli_run.py
+  - tests/unit/test_conformance_cb_files.py
+  - tests/unit/test_conformance_files.py
+  - tests/unit/test_conformance_rc_files.py
+  - tests/unit/test_conformance_risk_files.py
+  - tests/unit/test_context_compiler.py
+  - tests/unit/test_contract_path.py
+  - tests/unit/test_decision_replay.py
+  - tests/unit/test_decision_replay_acceptance.py
+  - tests/unit/test_done.py
+  - tests/unit/test_drift.py
+  - tests/unit/test_eval_inputs.py
+  - tests/unit/test_evaluate_command.py
+  - tests/unit/test_evaluation.py
+  - tests/unit/test_evaluation_derive.py
+  - tests/unit/test_evaluation_failed.py
+  - tests/unit/test_evaluation_intake.py
+  - tests/unit/test_evaluation_policy.py
+  - tests/unit/test_evaluation_policy_file.py
+  - tests/unit/test_evaluation_repeated.py
+  - tests/unit/test_evaluation_sources.py
+  - tests/unit/test_evaluation_violation.py
+  - tests/unit/test_evaluator_covers_evidence_paths.py
+  - tests/unit/test_eventlog.py
+  - tests/unit/test_execution.py
+  - tests/unit/test_execution_list_tasks.py
+  - tests/unit/test_execution_status.py
+  - tests/unit/test_export_fixtures.py
+  - tests/unit/test_export_governor.py
+  - tests/unit/test_export_reference.py
+  - tests/unit/test_export_resume.py
+  - tests/unit/test_export_round2.py
+  - tests/unit/test_gate_records.py
+  - tests/unit/test_gitread.py
+  - tests/unit/test_governor.py
+  - tests/unit/test_handoff_file.py
+  - tests/unit/test_intent_map.py
+  - tests/unit/test_launcher.py
+  - tests/unit/test_launcher_end.py
+  - tests/unit/test_launcher_gone.py
+  - tests/unit/test_launcher_outside.py
+  - tests/unit/test_mcp_server.py
+  - tests/unit/test_mcp_server_work_order.py
+  - tests/unit/test_metrics_report.py
+  - tests/unit/test_native_isolation.py
+  - tests/unit/test_read_set_gone.py
+  - tests/unit/test_read_set_record.py
+  - tests/unit/test_reconcile.py
+  - tests/unit/test_records.py
+  - tests/unit/test_records_audit_copies.py
+  - tests/unit/test_records_execution.py
+  - tests/unit/test_records_read_set.py
+  - tests/unit/test_records_session_claims.py
+  - tests/unit/test_recovery.py
+  - tests/unit/test_replay.py
+  - tests/unit/test_resume_check.py
+  - tests/unit/test_resume_inputs.py
+  - tests/unit/test_resume_log_inputs.py
+  - tests/unit/test_runner.py
+  - tests/unit/test_runner_cb.py
+  - tests/unit/test_runner_rc.py
+  - tests/unit/test_runner_risk.py
+  - tests/unit/test_scope_drift.py
+  - tests/unit/test_scope_reconcile.py
+  - tests/unit/test_session_violation.py
+  - tests/unit/test_session_violation_hardening.py
+  - tests/unit/test_stale.py
+  - tests/unit/test_startup.py
+  - tests/unit/test_submit.py
+  - tests/unit/test_t0.py
+  - tests/unit/test_task_capture.py
+  - tests/unit/test_task_contract.py
+  - tests/unit/test_verification_records.py
+  - tests/unit/test_violation.py
+  - tests/unit/test_writer.py
+constitution: [INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]
+acceptance_criteria:
+  - AC1: >-
+      The pin. In src/aieos_runtime/claude_starter.py exactly one line differs from the base: line 31 reads
+      SETTINGS_SHA256 = 'c0f2e19246889ac12dcc08e64c0c3edf281ffcdbc318ee2ba05e5be60c0094e1'. EXE_PATH, EXE_SHA256, PROMPT, MCP_FILE, MCP_SHA256, SETTINGS_FILE and the
+      ten-element argument list of the one subprocess.run call are byte for byte unchanged (a diff against the base shows
+      one changed line).
+  - AC2: >-
+      The test. In tests/unit/test_claude_starter.py exactly one line differs from the base: line 249, the expected value
+      in the test of the pinned values, is the same new value. No test is added, removed, weakened or skipped. The other
+      places where a test names the settings hash (test_claude_starter.py :118 and
+      tests/property/test_claude_starter_properties.py :96) compute it from test bytes and need no change.
+  - AC3: >-
+      The new value. The new value equals the SHA-256 of the settings variant A of decision D-7802 (1065 bytes: the live
+      file's bytes with the two allow rules Edit(//e/AIEOS/docs/Deferred/DEF-0030-event-log-writer-and-workflow-revision-6.md)
+      and Edit(//e/AIEOS/docs/Deferred/DEF-0058-the-review-findings-and-limits-carried-from-task-031.md), the two write
+      sets of docs/runs/second-real-run-pre-run-record.md), recomputed from those bytes by script before the task commit
+      and cited in the acceptance; if the recomputed value differs, nothing is committed and the task goes to the decision
+      agent. The variant holds the two hooks (PreToolUse and PostToolUse), the seven mcp__aieos__ tools, the two Edit rules
+      and nothing else. The hooks run programs of src/aieos_bootstrap that this pin does not cover.
+  - AC4: >-
+      Checks. The whole suite passes by the slice method (each slice under timeout 110) before the task commit, and
+      tests/unit/test_claude_starter.py passes alone; before the task commit the base test against the changed module
+      fails exactly at the test of the pinned values, and a different failing set is brought to the decision agent
+      before the commit. In CI on the task commit unit_test, integration_test and property_test pass, and
+      deterministic_rule (which runs check_starter, CI revision 32) reports no finding; OPS-003, SEC-001, SEC-002,
+      static_security_analysis and lint report no finding; before the commit the added lines are scanned with the
+      workflow's SEC-001, SEC-002 and OPS-003 patterns and each count is 0. A settings file whose sha256 differs from the
+      pin still raises StarterError.
+  - AC5: >-
+      GOV-003 (a stated departure, the policy of DEF-0110): the test file is an evaluator path; GOV-003 is not claimed to
+      hold. The acceptance states it, gives the base-tests step's printed line with every failing name, and a review of
+      the whole diff by a model other than the implementer's. The push of main's head has exactly one AIEOS-Task trailer
+      line. The pushes are the worker's route under their own decisions, outside the task's capabilities.
+  - AC6: >-
+      Records, in the records commit (made by the worker under its own decision, no AIEOS-Task trailer, pushed only
+      after the task commit is on main; not a task commit; its paths are under docs/runs, docs/Deferred and
+      docs/History): the acceptance text; for each item of the touch list why it is not done; the counts and accepted
+      limits of master plan section 6 point (6) and the running total (D-7754 C6); a dated line on DEF-0149 for CI
+      revision 32 with its review findings not applied (D-7803, D-7804) and for this pin; a dated line on DEF-0139,
+      whose "next change of claude_starter.py" this task is, saying why it is not done (for its item 9: the two typed
+      literals are changed together and checked by the test of line 249 and by the CI check) and naming DEF-0141's open
+      point that no unit test checks the typed pin against the settings file; a history page of the stretch D-7798
+      onward.
+  - AC7: >-
+      Limits. (1) The settings file (C:\Users\Admin\AIEOS-runtime\claude-settings.json) is outside the repository and is
+      not written by this task; its write is step 5c, at the owner's own permission prompt; until it is written the
+      starter refuses to start with the new pin, and no launch is made. (2) This task lands under CI revision 32 (the
+      two-value window); step 5d returns check_starter to the single new value and is an open obligation, its own
+      decision under DM A66; step 5e (the rules removed after the run) is the owner's typed word. (3) The slice runs,
+      the base prediction and the scans are the worker's own runs outside the task's shell capability. (4) The evidence
+      profile is that of risk high (an other_model_review and a separate decision_agent_review). (5) The task enables no
+      launch: it reads and writes nothing under C:\Users\Admin\AIEOS-runtime and runs neither aieos launch, the starter
+      nor the runtime program. The step 5c write is checked against the new value and the content AC3 names before any
+      launch, and the two Edit rules stay in the written file until step 5e.
+capabilities:
+  filesystem: {read: [the repository at base_commit], write: [src/aieos_runtime/claude_starter.py, tests/unit/test_claude_starter.py]}
+  shell: {allow: ["timeout 110 python tests/run_tests.py < /dev/null"]}
+  network: {allow: []}
+  git: {allow: [commit], forbid: [push, "push --force", rebase, "reset --hard", tag]}
+  secrets: deny
+  external_side_effects: deny
+# Risk: src/** and tests/**: risk-rules-gov-aieos.md R3, unevaluable and therefore matching src/** and tests/**; not
+# critical (no docs/specs, no .github, no .claude in the write set); re-checked at the contract commit.
+risk: high
+autonomy:
+  max_level: L1
+  budgets: {tokens: 300k, wall_time: 3h, retries: 2, human_attention: 0m}
+verification_plan:
+  - {gate: G0, check: scope}
+  - {gate: G1, check: build}
+  - {gate: G2, check: tests, args: [AC1, AC2, AC4]}
+  - {gate: G3, check: constitution, args: [AC3, AC5, AC6, AC7, INV-001, INV-002, INV-003, INV-004, GOV-002, GOV-003, SEC-001, SEC-002, OPS-002, OPS-003]}
+exit_conditions:
+  success: all gates pass AND the evidence profile of risk high is satisfied (an other_model_review and a separate decision_agent_review, both bound to the evaluated commit, the contract and the pins, before any fast-forward of main) AND the task acceptance by the decision agent before any landing step AND the aieos-checks run of the accepted commit succeeds
+  escalate: [needs_out_of_scope_change, spec_conflict, budget_exhausted, retries_exceeded, needs_owner_act]
+owner_kept_act: false
