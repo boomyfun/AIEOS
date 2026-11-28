@@ -21,6 +21,10 @@ DETECT_LINES = [
     "allowed = [path] if path == docs_path else sorted([path, '.aieos/events.jsonl'])",
     'if len(parents) != 1 or (changed != [path] and sorted(changed) != allowed):',
     'if len(adds) != 1:',
+    "if subprocess.run(['git', 'merge-base', '--is-ancestor', c, 'refs/remotes/origin/main']).returncode != 0:",
+    "raise SystemExit('G0 FAIL: the contract commit is not on main')",
+    "if k['task'] != tid or k['base_commit'] != parents[0]:",
+    "raise SystemExit('G0 FAIL: the contract names task %s and base %s; expected %s and %s' % (k['task'], k['base_commit'], tid, parents[0]))",
 ]
 
 
@@ -58,7 +62,9 @@ class AC1Copies(unittest.TestCase):
 
     def test_the_copy_holds_the_lines_of_the_two_folders(self):
         """TASK-114 AC2 and TASK-114 AC3: the stripped lines of the copy hold each line that reads the contract at
-        docs/tasks or at .aieos/tasks, refuses the same id in both, and limits the changed paths of the commit."""
+        docs/tasks or at .aieos/tasks, refuses the same id in both, and limits the changed paths of the commit.
+        TASK-175 AC1: also the condition and the refusal of a contract commit that is not on main, and the condition and
+        the refusal of a contract that names another task or base."""
         lines = [ln.strip() for ln in detect_copies(workflow())[0].split('\n')]
         for rule in DETECT_LINES:
             with self.subTest(rule=rule):
@@ -77,15 +83,15 @@ class AC1Copies(unittest.TestCase):
 class OwnTests(unittest.TestCase):
 
     def test_every_test_names_its_criteria(self):
-        """TASK-114 AC3: every test function of this module names "TASK-114 ACn" in its own docstring and no other
-        task's AC in qualified form."""
+        """TASK-114 AC3 and TASK-175 AC2: every test function of this module names "TASK-114 ACn" or "TASK-175 ACn" in
+        its own docstring and no other task's AC in qualified form."""
         tree = ast.parse(pathlib.Path(__file__).read_bytes().decode('utf-8'))
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef) and node.name.startswith('test_'):
                 doc = ast.get_docstring(node) or ''
                 with self.subTest(test=node.name):
-                    self.assertRegex(' '.join(doc.split()), r'TASK-114 AC[0-9]')
-                    self.assertEqual(re.findall(r'TASK-(?!114 )[0-9]+ AC[0-9]+', ' '.join(doc.split())), [])
+                    self.assertRegex(' '.join(doc.split()), r'TASK-(?:114|175) AC[0-9]')
+                    self.assertEqual(re.findall(r'TASK-(?!(?:114|175) )[0-9]+ AC[0-9]+', ' '.join(doc.split())), [])
 
 
 if __name__ == '__main__':
