@@ -227,6 +227,15 @@ jobs:
       # described above. The one place; changing it is the decision agent's, each change its own decision (DM A66;
       # decision D-317).
       AIEOS_PINNED_RESUME_CHECK_PREVIOUS: ''
+      # AIEOS_PINNED_GOVERNOR_PREVIOUS qualifies the "Pinned:" sentence of AIEOS_PINNED_GOVERNOR above. Empty means off.
+      # This is revision 34 (TASK-177). When a new governor version lands, this holds the version that the landing leaves
+      # (the SHA-256 of src/aieos_bootstrap/governor.py before it). The conformance base run then also accepts that
+      # version as the base's governor file and as the run's governor identity, but only when it is 64 lowercase hex
+      # digits, the base's file and the run's identity equal it, the pushed head's file equals AIEOS_PINNED_GOVERNOR and
+      # the run's outcome is pass. Changing it is a change under .github/, its own decision (DM A66; decision D-317);
+      # setting it does not accept a governor version; it is emptied by the next such step after the new version is
+      # accepted.
+      AIEOS_PINNED_GOVERNOR_PREVIOUS: ''
     steps:
       - name: Fetch the pushed commit, its history and main (no third-party action, no token)
         env:
@@ -908,6 +917,7 @@ jobs:
           #              AIEOS_PINNED_GOVERNOR is empty) the step reports and does not fail on the run's outcome; with one pinned,
           #              the base's governor file and the run's governor identity must have that SHA-256 and the outcome must be
           #              pass. This step runs before any step that runs code from the pushed commits.
+          #              From revision 34, with AIEOS_PINNED_GOVERNOR_PREVIOUS set, the base run also accepts that version under the rule of the job's comment.
           #   candidate: on a branch other than main, for a task whose commits change a file of GOVERNOR_FILES, the same base
           #              inputs with only the head's governor files put in their place (../conformance-candidate). It is a
           #              candidate run, advisory (DM A29; governor-spec section 10), never the pinned governor's run; it reports
@@ -954,6 +964,7 @@ jobs:
           RUNNER = 'src/aieos_bootstrap/conformance.py'
           GOVERNOR_FILES = ['src/aieos_bootstrap/governor.py']
           PINNED = os.environ.get('AIEOS_PINNED_GOVERNOR', '')
+          PREV_GOV = os.environ.get('AIEOS_PINNED_GOVERNOR_PREVIOUS', '')
           RESUME_CHECK_FILE = 'src/aieos_bootstrap/resume_check.py'
           PINNED_RC = os.environ.get('AIEOS_PINNED_RESUME_CHECK', '')
           PREV_RC = os.environ.get('AIEOS_PINNED_RESUME_CHECK_PREVIOUS', '')
@@ -1138,6 +1149,8 @@ jobs:
               rc_ok = {PINNED_RC}
               if HEX.fullmatch(PREV_RC) and rc_sha == PREV_RC and head_rc_sha == PINNED_RC:
                   rc_ok.add(PREV_RC)
+              head_pin = blob(head, GOVERNOR_FILES[0])
+              head_pin_sha = hashlib.sha256(head_pin).hexdigest() if head_pin is not None else 'absent'
               if mode == 'base':
                   root, commit, note = os.path.abspath('../conformance-base'), base, 'base %s' % base
                   if on_main:
@@ -1206,6 +1219,11 @@ jobs:
                       rc_sha, rc_named, ', '.join(sorted(rc_ok))))
               if report_only:
                   return 0
+              if HEX.fullmatch(PREV_GOV) and gov_sha == PREV_GOV and head_pin_sha == PINNED and value['governor_identity'] == PREV_GOV:
+                  if record['outcome'] != 'pass':
+                      return fail(title, 'outcome %s with the previous pinned governor' % record['outcome'])
+                  print('%s: pass with the previous pinned governor %s' % (title, PREV_GOV))
+                  return 0
               if gov_sha != PINNED or value['governor_identity'] != PINNED:
                   return fail(title, 'the base governor (file %s, run %s) is not the pinned version %s' % (
                       gov_sha, value['governor_identity'], PINNED))
@@ -1250,6 +1268,7 @@ jobs:
           #              AIEOS_PINNED_GOVERNOR is empty) the step reports and does not fail on the run's outcome; with one pinned,
           #              the base's governor file and the run's governor identity must have that SHA-256 and the outcome must be
           #              pass. This step runs before any step that runs code from the pushed commits.
+          #              From revision 34, with AIEOS_PINNED_GOVERNOR_PREVIOUS set, the base run also accepts that version under the rule of the job's comment.
           #   candidate: on a branch other than main, for a task whose commits change a file of GOVERNOR_FILES, the same base
           #              inputs with only the head's governor files put in their place (../conformance-candidate). It is a
           #              candidate run, advisory (DM A29; governor-spec section 10), never the pinned governor's run; it reports
@@ -1296,6 +1315,7 @@ jobs:
           RUNNER = 'src/aieos_bootstrap/conformance.py'
           GOVERNOR_FILES = ['src/aieos_bootstrap/governor.py']
           PINNED = os.environ.get('AIEOS_PINNED_GOVERNOR', '')
+          PREV_GOV = os.environ.get('AIEOS_PINNED_GOVERNOR_PREVIOUS', '')
           RESUME_CHECK_FILE = 'src/aieos_bootstrap/resume_check.py'
           PINNED_RC = os.environ.get('AIEOS_PINNED_RESUME_CHECK', '')
           PREV_RC = os.environ.get('AIEOS_PINNED_RESUME_CHECK_PREVIOUS', '')
@@ -1480,6 +1500,8 @@ jobs:
               rc_ok = {PINNED_RC}
               if HEX.fullmatch(PREV_RC) and rc_sha == PREV_RC and head_rc_sha == PINNED_RC:
                   rc_ok.add(PREV_RC)
+              head_pin = blob(head, GOVERNOR_FILES[0])
+              head_pin_sha = hashlib.sha256(head_pin).hexdigest() if head_pin is not None else 'absent'
               if mode == 'base':
                   root, commit, note = os.path.abspath('../conformance-base'), base, 'base %s' % base
                   if on_main:
@@ -1547,6 +1569,11 @@ jobs:
                   return fail(title, 'the base Resume Check (file %s, run %s) is not an accepted version (%s)' % (
                       rc_sha, rc_named, ', '.join(sorted(rc_ok))))
               if report_only:
+                  return 0
+              if HEX.fullmatch(PREV_GOV) and gov_sha == PREV_GOV and head_pin_sha == PINNED and value['governor_identity'] == PREV_GOV:
+                  if record['outcome'] != 'pass':
+                      return fail(title, 'outcome %s with the previous pinned governor' % record['outcome'])
+                  print('%s: pass with the previous pinned governor %s' % (title, PREV_GOV))
                   return 0
               if gov_sha != PINNED or value['governor_identity'] != PINNED:
                   return fail(title, 'the base governor (file %s, run %s) is not the pinned version %s' % (
