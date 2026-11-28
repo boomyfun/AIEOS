@@ -246,7 +246,7 @@ class TASK132AC3Arguments(unittest.TestCase):
         self.assertEqual(claude_starter.MCP_SHA256,
                          'cbfc039cd668ca362c5713ad5498a3c18eeca7a59505363756e303c81035f882')
         self.assertEqual(claude_starter.SETTINGS_SHA256,
-                         'f7f835a2bb07c0ec1bf09ace91ddde488c870133e3ed4e09bbd6d2032325d9ad')
+                         'c0f2e19246889ac12dcc08e64c0c3edf281ffcdbc318ee2ba05e5be60c0094e1')
 
     def test_refusals_of_the_runtime_files(self):
         """TASK-134 AC3: a missing, non-regular or hash-differing MCP file or settings file each raises StarterError

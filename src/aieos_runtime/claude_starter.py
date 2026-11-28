@@ -28,7 +28,7 @@ PROMPT = ('Call the AIEOS tool get_work_order of the connected aieos MCP server,
 MCP_FILE = 'C:\\Users\\Admin\\AIEOS-runtime\\claude-mcp.json'
 MCP_SHA256 = 'cbfc039cd668ca362c5713ad5498a3c18eeca7a59505363756e303c81035f882'
 SETTINGS_FILE = 'C:\\Users\\Admin\\AIEOS-runtime\\claude-settings.json'
-SETTINGS_SHA256 = 'f7f835a2bb07c0ec1bf09ace91ddde488c870133e3ed4e09bbd6d2032325d9ad'
+SETTINGS_SHA256 = 'c0f2e19246889ac12dcc08e64c0c3edf281ffcdbc318ee2ba05e5be60c0094e1'
 
 # the environment of the process (AC6): the three variables of the launcher's copy, then the listed variables of the
 # starter's own environment that are present; nothing else is passed
