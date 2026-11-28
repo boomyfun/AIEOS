@@ -546,7 +546,7 @@ def _check_expected(exp, case_records):
     if 'approval' in exp:
         a = exp['approval']
         if a is not None and not (isinstance(a, dict) and set(a) == {'record_id', 'source_class'}
-                                  and a['record_id'] in ids
+                                  and isinstance(a['record_id'], str) and a['record_id'] in ids
                                   and ids[a['record_id']].get('source_class') == a['source_class']):
             errors.append('expected approval')
     if 'ai_approval_shown' in exp and not isinstance(exp['ai_approval_shown'], bool):

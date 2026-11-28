@@ -679,6 +679,23 @@ class RunnerOpenPoints(Isolated):
         value['cases'][0]['records'][0]['record_id'] = ['a']
         self.assertIn('case 1: a record with a check_record finding', conformance.check_fixture(value, entry))
 
+    def expected_approval_findings(self, record_id):
+        """The findings for ACC-14 with the record_id of case 1's expected approval replaced by record_id."""
+        path = conformance.module_path('ACC-14')
+        value = conformance.unwrap((ROOT / path).read_bytes())
+        entry = next(e for e in set_value(real_files())['scenarios'] if e['id'] == 'ACC-14')
+        self.assertEqual(conformance.check_fixture(value, entry), [])
+        value['cases'][0]['expected']['approval']['record_id'] = record_id
+        return conformance.check_fixture(value, entry)
+
+    def test_a_list_record_id_in_an_expected_approval_gives_an_error(self):
+        """TASK-172 AC3 (DEF-0043): an expected approval whose record_id is a list gives an error, no exception."""
+        self.assertEqual(self.expected_approval_findings(['a']), ['case 1: expected approval'])
+
+    def test_a_dict_record_id_in_an_expected_approval_gives_an_error(self):
+        """TASK-172 AC3 (DEF-0043): an expected approval whose record_id is a dict gives an error, no exception."""
+        self.assertEqual(self.expected_approval_findings({'a': 1}), ['case 1: expected approval'])
+
 
 class FixedSetValue(unittest.TestCase):
     """The fixed set value of TASK-013 (contract AC2): the set file at 1659a8cb, approved by TASK-002's freeze record.

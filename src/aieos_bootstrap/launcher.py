@@ -191,11 +191,15 @@ is not changed.
 
 end_outside (task TASK-092; `aieos end <session>`, specification 7 :33, :48; specification 5 :112, :119) ends a
 crashed session from outside the runtime and returns a mapping with exactly OUTSIDE_KEYS; it never raises. Its steps,
-each step's name being the reason of a refusal or a raise at it: argument; lease_rows (the session's rows read once,
+in order: argument; lease_rows (the session's rows read once,
 in _path's form with the task_id checked); ended; then for each distinct task of the rows, in str sorted order,
 stored_reads, record (observe_gone with 'no fencing token given' and the recorder followed by " outside the runtime,
 for session ", the session id and ", its lease row possibly unexpired") and the stored reads' removal, whose failure
-is named and does not stop the steps; then end (writer.end_session, which releases every lease of the session). It is
+is named and does not stop the steps; then end (writer.end_session, which releases every lease of the session). A
+refusal carries the reason of the step that refuses, "ended" among them; the stored reads' removal is no reason of its
+own (its failure, a raise included, is a finding and the steps go on). A raise gives the reason the function's step
+variable holds at that point, one of argument, lease_rows, stored_reads, record and end; "ended" is a refusal's reason
+only. end_outside is
 the record before the release: a refusal or a raise before every task's record is present ends nothing, so no lease
 is released before its record. Its limits: it departs, and so does launch_outside where it calls it (TASK-094,
 below), from specification 5 :125's "a session whose lease row is
@@ -1577,11 +1581,14 @@ def approval_act(root, task_id, act, source_class, who, note, clock, read=None, 
                  contract_at=None, task_states=None):
     """Record an approval, a rejection or an edit note of a task's drafted contract version (task TASK-096; `aieos
     approve`, `aieos edit` and `aieos reject`, specification 1 section 12, specification 7 section 4): a mapping with
-    exactly APPROVAL_KEYS; it never raises an Exception. Its steps, each step's name being the reason of a refusal or
-    a raise at it: argument; clock; head (start's own reader, _head); contract (contract_at at that head); log
-    (read_log, then records.check_log); state (the last state-setting event task.drafted or task.replanned); version
+    exactly APPROVAL_KEYS; it never raises an Exception. Its steps, in order: argument; clock; head (start's own
+    reader, _head); contract (contract_at at that head); log (read_log, then records.check_log); state (the last
+    state-setting event task.drafted or task.replanned); version
     (the contract's hash and contract_version equal to that event's); for approve, dependencies, owner_kept_act and
-    rejected; then the appends through append only: record.added, and for approve task.approved citing the record."""
+    rejected; then the appends through append only: record.added, and for approve task.approved citing the record. A
+    refusal carries the reason of the step that refuses, the appends refusing with "append". A raise gives the reason
+    the function's step variable holds at that point, one of argument, clock, head, contract, log, state, version,
+    dependencies, owner_kept_act, rejected (these three only for approve) and append."""
     callees = (read, read_log, append, contract_at, task_states)
     step = 'argument'
     record_id, event_ids, appends = None, [], []
@@ -1772,12 +1779,13 @@ def _import_write(write_contract, root, task_id, text):
 
 def import_task(root, task_id, clock, read=None, read_log=None, write_contract=None, append=None):
     """Make and record a drafting task (task TASK-097; `aieos import`, specification 7 section 3 :29): a mapping with
-    exactly IMPORT_KEYS; it never raises an Exception. Its steps, each step's name being the reason of a refusal or a
-    raise at it: argument; clock; head (start's own reader, _head, 40 lowercase hex); log (read_log, then
+    exactly IMPORT_KEYS; it never raises an Exception. Its steps, in order: argument; clock; head (start's own reader,
+    _head, 40 lowercase hex); log (read_log, then
     records.check_log); exists (any event of the task in the log); the template; write (write_contract, whose
-    "exists" and "layout" pass through); append (task.drafted with the text's hash, no fencing token). A raise gives
-    the reason of the step last entered: "log" for a raise in the exists check, and "exists" for a raise while the
-    template is built."""
+    "exists" and "layout" pass through); append (task.drafted with the text's hash, no fencing token). A refusal
+    carries the reason of the step that refuses; the template is no reason of its own. A raise gives the reason the
+    function's step variable holds at that point (the step last entered), one of argument, clock, head, log, exists,
+    write and append: "log" for a raise in the exists check, and "exists" for a raise while the template is built."""
     callees = (read, read_log, write_contract, append)
     step = 'argument'
     path = contract_hash = event_id = None
@@ -2152,18 +2160,22 @@ def _run_append(append, root, event_type, payload, event_id, now, recorder, task
 def run_task(root, task_id, intent, source_class, who, write, clock, read=None, read_log=None, read_base=None,
              write_contract=None, append=None, owner_kept_act=None, trace=()):
     """Record an intent and make and record its task (task TASK-098; `aieos run`, specification 7 section 3 :30): a
-    mapping with exactly RUN_KEYS; it never raises an Exception. Its steps, each step's name being the reason of a
-    refusal or a raise at it: argument (who as approval_act checks it, r3; the statement owner_kept_act, None or the
+    mapping with exactly RUN_KEYS; it never raises an Exception. Its steps, in order: argument (who as approval_act
+    checks it, r3; the statement owner_kept_act, None or the
     text false, TASK-115, and the trace's entries, TASK-163); clock; head (start's own reader, _head, 40
     lowercase hex); log (read_log, then records.check_log); exists (any event of the task in the log); the class at the
     base (never a refusal); the intent's id and claim; intent (a dry run of eventlog.append: a claim that would answer
     "conflict" is refused before anything is written, TASK-104); the kind; trace (only with a trace, TASK-163: each
     entry read at the head); the kind's template; write (write_contract,
     before any append, whose "exists" and "layout" pass through); append (the intent's claim with its record's
-    recorder, then task.drafted with RUN_RECORDER, no fencing token). A raise gives the reason of the step last
-    entered: "log" for a raise in the exists check, the intent's id and claim, the dry run of eventlog.append and the
-    kind (the class raises no Exception: its failures give "class: ..." findings and the run goes on); for a raise
-    while the kind's template is filled, "log" without a trace and "trace" after a trace was read."""
+    recorder, then task.drafted with RUN_RECORDER, no fencing token). A refusal carries the reason of the step that
+    refuses, "exists" and "intent" among them (these two are refusal reasons only); the class at the base, the intent's
+    id and claim, the kind and the kind's template are no reasons of their own; the write step passes write_contract's
+    "exists" and "layout". A raise gives the reason the function's step variable holds at that point (the step last
+    entered), one of argument, clock, head, log, trace (only with a trace), write and append: "log" for a raise in the
+    exists check, the intent's id and claim, the dry run of eventlog.append and the kind (the class raises no
+    Exception: its failures give "class: ..." findings and the run goes on); for a raise while the kind's template is
+    filled, "log" without a trace and "trace" after a trace was read."""
     callees = (read, read_log, read_base, write_contract, append)
     step = 'argument'
     found = []
