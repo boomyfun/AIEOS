@@ -159,7 +159,7 @@
 # nothing else. (1) deterministic_rule: the package name aieos_runtime joins OWN, and the one path src/aieos_runtime/claude_starter.py may import subprocess (ALLOW), under a pattern rule
 # (check_starter) that accepts exactly one subprocess.run call whose only positional argument is the pinned ten-element list [EXE_PATH, '-p', PROMPT, '--permission-prompts', 'none', '--strict-mcp-
 # config', '--mcp-config', MCP_FILE, '--settings', SETTINGS_FILE], with keywords only from shell (the constant False), stdin (subprocess.DEVNULL), cwd, timeout (the constant 6600), env and check, and
-# no output capture; PROMPT, MCP_FILE, MCP_SHA256, SETTINGS_FILE and SETTINGS_SHA256 are pinned to their exact values (SETTINGS_SHA256 to one of two approved values in revision 32, D-7802, BT5 step 5a: the hash f7f835a2... or the hash c0f2e192...; a later revision returns it to one value; since revision 27, D-6528 E4, it had been one value, the hash f7f835a2...), EXE_PATH and EXE_SHA256 to their form only (a runtime file of the desktop app's
+# no output capture; PROMPT, MCP_FILE, MCP_SHA256, SETTINGS_FILE and SETTINGS_SHA256 are pinned to their exact values (SETTINGS_SHA256 to one value, the hash c0f2e192..., since revision 33, D-7802, BT5 step 5d; revision 32 had accepted two values for a window), EXE_PATH and EXE_SHA256 to their form only (a runtime file of the desktop app's
 # folder, and 64 lowercase hexadecimal characters). (2) static_security_analysis: that one file is run without B404 and B603 (not B607). The revision also ADDS checks: only src/aieos_bootstrap/cli.py,
 # inside its `if __name__ == '__main__':` block, may import aieos_runtime; a module under src/aieos_runtime/ may not import aieos_bootstrap; the only paths under src/aieos_runtime/ are __init__.py and
 # claude_starter.py. It grants no write access, uses no secret or token and changes no setting; the EVALUATOR lists are unchanged. Limits: the rules run over the files Git tracks under src/ at HEAD of
@@ -1699,11 +1699,8 @@ jobs:
               'MCP_FILE': 'C:\\Users\\Admin\\AIEOS-runtime\\claude-mcp.json',
               'MCP_SHA256': 'cbfc039cd668ca362c5713ad5498a3c18eeca7a59505363756e303c81035f882',
               'SETTINGS_FILE': 'C:\\Users\\Admin\\AIEOS-runtime\\claude-settings.json',
-              'SETTINGS_SHA256': 'f7f835a2bb07c0ec1bf09ace91ddde488c870133e3ed4e09bbd6d2032325d9ad',
+              'SETTINGS_SHA256': 'c0f2e19246889ac12dcc08e64c0c3edf281ffcdbc318ee2ba05e5be60c0094e1',
           }
-          # revision 32 (D-7802, BT5 step 5a; the two Edit allow rules for the two write-set files of the second real run): for a window the starter's SETTINGS_SHA256 may equal EITHER of two approved settings files: the one pinned above (f7f835a2..., the hooks, the seven mcp__aieos__ tools and ONE Edit allow rule) or the one pinned below (c0f2e192..., the same hooks and tools and TWO Edit allow rules, one per write-set file of the second real run);
-          # a later revision drops the first value again once the change has landed and the file is written; this is a loosening of the pin for that window and nothing else changes (decision D-7802, DM A66).
-          ALSO_ACCEPTED = {'SETTINGS_SHA256': 'c0f2e19246889ac12dcc08e64c0c3edf281ffcdbc318ee2ba05e5be60c0094e1'}
           FORMS = {'EXE_SHA256': HEX64}
           STARTER_NAMES = ('EXE_PATH', 'EXE_SHA256', 'PROMPT', 'MCP_FILE', 'MCP_SHA256', 'SETTINGS_FILE', 'SETTINGS_SHA256')
           # the argument list of the one call (contract AC3): a name is written NAME, a constant is written as its text
@@ -1812,7 +1809,7 @@ jobs:
                   elif name in FORMS:
                       if not FORMS[name].fullmatch(v.value):
                           findings.append('%s: %s is not in the pinned form (revision 20)' % (path, name))
-                  elif v.value != PINNED[name] and v.value != ALSO_ACCEPTED.get(name, PINNED[name]):
+                  elif v.value != PINNED[name]:
                       findings.append('%s: %s is not the pinned value (revision 20)' % (path, name))
 
 
